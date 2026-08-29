@@ -15,12 +15,22 @@
  */
 
 function grViewRent() {
+    // ⚠️ base_url خودش کاملِ مسیرِ bot_master_membership.php است
+    // (مثلا https://DOMAIN/bot_master_membership.php) — پس برای API فقط
+    // کوئری‌استرینگ اضافه می‌شود، ولی مانیفست باید روی ریشه‌ی دامنه باشد،
+    // نه کنارِ خودِ فایلِ php.
     $base = trim((string)(maCfg()['base_url'] ?? ''));
-    $manifest = $base !== '' ? rtrim($base, '/') . '/tonconnect-manifest.json' : '';
+    $root = '';
+    $p = @parse_url($base);
+    if (!empty($p['scheme']) && !empty($p['host']))
+        $root = $p['scheme'] . '://' . $p['host'] . (isset($p['port']) ? ':' . $p['port'] : '');
+
+    $manifest = $root !== '' ? $root . '/tonconnect-manifest.json' : '';
+    $api = $base !== '' ? $base . (str_contains($base, '?') ? '&' : '?') . 'rent_api=1' : '';
+
     return strtr(grTplRent(), [
         '__MANIFEST__' => json_encode($manifest, JSON_UNESCAPED_SLASHES),
-        '__API__'      => json_encode(($base !== '' ? rtrim($base, '/') : '') . '/bot_master_membership.php?rent_api=1',
-                                       JSON_UNESCAPED_SLASHES),
+        '__API__'      => json_encode($api, JSON_UNESCAPED_SLASHES),
     ]);
 }
 
