@@ -152,6 +152,20 @@ function pxDefaults() {
 function pxCfg() {
     $c = cfg()['prices'] ?? null;
     if (!is_array($c)) return pxDefaults();
+
+    // 🧹 مهاجرتِ یک‌بارهِ نصب‌های قدیمی: قبل از این‌که منبعِ دوم به کوین‌گکو
+    // عوض شود، آدرس/کلیدِ swapwallet.app (همان منبعِ کند/گاهی از‌کاراُفتاده)
+    // و کشِ ۱۰-۱۵ ثانیه‌ای مستقیم در فایل ذخیره شده بودند. چون این مقدارها
+    // صریحا ذخیره شده‌اند، پیش‌فرضِ تازه‌ی کد را دور می‌زدند و قیمت‌گیری
+    // هنوز هر ۱۰-۱۵ ثانیه پشتِ تایم‌اوتِ همان منبعِ قدیمی می‌ماند. یک‌بار
+    // پاک می‌کنیم تا پیش‌فرضِ جدید واقعا اثر کند.
+    if (str_contains((string)($c['api'] ?? ''), 'swapwallet.app') || (int)($c['ttl'] ?? 60) < 15) {
+        unset($c['api'], $c['key']);
+        $c['ttl'] = 60;
+        pxSet(function (&$x) { unset($x['api'], $x['key']); $x['ttl'] = 60; });
+        maCachePut('px_cool', 0);
+    }
+
     $out = array_replace_recursive(pxDefaults(), $c);
     // فهرست‌ها باید عینا همان چیزی باشند که ادمین ذخیره کرده — نه ادغام عمقی،
     // وگرنه حذف یک ردیف هیچ‌وقت اثر نمی‌کند.
@@ -1396,7 +1410,7 @@ function pxCard($symbol, $usd, $chgPct, $series = null) {
     imagefilledellipse($im, $lx, $ly, 12, 12, $acc);
     imagefilledellipse($im, $lx, $ly, 5, 5, $white);
 
-    $wm = trim((string)(cfg()['bot_username'] ?? ''));
+    $wm = trim((string)botUsername());
     $wm = $wm !== '' ? '@' . $wm : 'Live Market';
     pxText($im, 15, (int)(($W - pxTextW(15, $wm)) / 2), $H - $m - 22, $muted, $wm, false);
 
@@ -1891,7 +1905,7 @@ function pxHandleText($text, $chatId, $replyTo = null) {
             return true;
         }
         $chg = pxAssetChange($ak);
-        $ck  = 'a|' . $ak . '|' . $price . '|' . $chg . '|' . (string)(cfg()['bot_username'] ?? '');
+        $ck  = 'a|' . $ak . '|' . $price . '|' . $chg . '|' . botUsername();
         // کارت فقط وقتی ساخته می‌شود که شناسه‌ی فایلش را نداشته باشیم —
         // وگرنه اصلا رندر هم لازم نیست
         $png = (maCacheGet(pxPhotoIdKey($ck), 86400) ?? '') !== ''
@@ -1970,7 +1984,7 @@ function pxHandleText($text, $chatId, $replyTo = null) {
     $cap = pxCoinCaption($sym, $usd, $usd * $irtRate, $chg, $hi, $lo);
 
     // قیمت تومانی روی کارت — چون مخاطب ایرانی است
-    $ck  = 'c|' . $sym . '|' . round($usd * $irtRate) . '|' . $chg . '|' . (string)(cfg()['bot_username'] ?? '');
+    $ck  = 'c|' . $sym . '|' . round($usd * $irtRate) . '|' . $chg . '|' . botUsername();
     $png = (maCacheGet(pxPhotoIdKey($ck), 86400) ?? '') !== ''
          ? null
          : pxCardCached($ck, fn() => pxCoinCard($sym, $usd * $irtRate, 'تومان', $chg, $usd * $irtRate));
@@ -3567,7 +3581,7 @@ function pxAssetCard($name, $emoji, $price, $unit, $chgPct, $bg = ['334155', '0F
     imagefilledellipse($im, $lx, $ly, 9, 9, $C('FFFFFF'));
 
     // ── امضا ──
-    $wm = trim((string)(cfg()['bot_username'] ?? ''));
+    $wm = trim((string)botUsername());
     $wm = $wm !== '' ? '@' . $wm : 'Live Market';
     pxText($im, 20, (int)(($W - pxTextW(20, $wm)) / 2), $H - 34, $C('FFFFFF', 40), $wm);
 
