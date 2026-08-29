@@ -3266,10 +3266,11 @@ function botUsername() {
     static $u = null;
     if ($u !== null) return $u;
     $c = load('config');
-    if (!empty($c['bot_username'])) return $u = $c['bot_username'];
+    $tokHash = md5(BOT_TOKEN);
+    if (!empty($c['bot_username']) && ($c['bot_username_tok'] ?? '') === $tokHash) return $u = $c['bot_username'];
     $r = tg(BOT_TOKEN, 'getMe', [], 8);
     $u = $r['result']['username'] ?? '';
-    if ($u !== '') cfgSet(function (&$x) use ($u) { $x['bot_username'] = $u; });
+    if ($u !== '') cfgSet(function (&$x) use ($u, $tokHash) { $x['bot_username'] = $u; $x['bot_username_tok'] = $tokHash; });
     return $u;
 }
 
