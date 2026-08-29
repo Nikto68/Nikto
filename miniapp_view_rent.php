@@ -134,14 +134,17 @@ body{
   animation:pop .3s ease both;transition:transform .12s;
 }
 .gcard:active{transform:scale(.96)}
-.gimg-wrap{position:relative;aspect-ratio:1/1;background:
-  linear-gradient(120deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.10) 37%, rgba(255,255,255,.05) 63%);
-  background-size:200% 100%;animation:shimmer 1.6s linear infinite}
+/* ⚡ شیمرِ لودینگ فقط رو .loading اجراست، نه همیشه — با صدتا کارتِ هم‌زمان،
+   انیمیشنِ همیشگی روی هرکدوم دقیقاً همون چیزی بود که اسکرول رو سنگین می‌کرد */
+.gimg-wrap{position:relative;aspect-ratio:1/1;background:#22261F}
+.gimg-wrap.loading{
+  background:linear-gradient(120deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.10) 37%, rgba(255,255,255,.05) 63%);
+  background-size:200% 100%;animation:shimmer 1.6s linear infinite;
+}
 .gimg-wrap img{width:100%;height:100%;object-fit:cover;display:block;position:relative;z-index:1}
 .gfallback{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:28px;background:radial-gradient(circle at 50% 35%, var(--acc-dim), transparent 70%);
-  animation:glow 2.4s ease-in-out infinite;
 }
 .gbadge{
   position:absolute;top:6px;right:6px;z-index:2;width:22px;height:22px;border-radius:50%;
@@ -252,7 +255,6 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   <div class="searchbox">🔎<input id="search" placeholder="جستجوی گیفت…" oninput="renderGrid()"></div>
   <div class="iconbtn" id="filterBtn" onclick="toggleFilterPanel()">🎛</div>
   <div class="iconbtn" id="sortBtn" onclick="toggleSort()">↕️</div>
-  <div class="iconbtn" id="dbgBtn" onclick="toggleDebug()" style="display:none">🐞</div>
 </div>
 <div class="filter-panel" id="filterPanel" style="display:none"></div>
 <div class="countline" id="countLine"></div>
@@ -320,9 +322,11 @@ function makeImgBox(name, className) {
   const url = fragmentImgUrl(name);
   const fb = document.createElement('div'); fb.className = 'gfallback'; fb.textContent = '🎁';
   if (url) {
+    wrap.classList.add('loading');   // فقط تا وقتی عکس نیومده شیمر داره
     const img = document.createElement('img');
     img.loading = 'lazy'; img.alt = name;
-    img.onerror = function () { img.remove(); wrap.appendChild(fb); };
+    img.onload = function () { wrap.classList.remove('loading'); };
+    img.onerror = function () { wrap.classList.remove('loading'); img.remove(); wrap.appendChild(fb); };
     img.src = url;
     wrap.appendChild(img);
   } else {
@@ -343,16 +347,8 @@ function toggleSort() {
   renderGrid();
 }
 
-// دیباگ (فقط ادمین می‌بینه دکمه‌ش رو — چون فقط اونه که سرور اطلاعاتِ خام رو می‌فرسته)
-let debugMode = false;
-function toggleDebug() {
-  debugMode = !debugMode;
-  document.getElementById('dbgBtn').classList.toggle('on', debugMode);
-  renderGrid();
-}
-
 // ── فیلتر ──
-let activeFilters = { model: null, backdrop: null, symbol: null, maxPrice: null };
+let activeFilters = { backdrop: null, maxPrice: null };
 function attrVal(it, trait) {
   const a = (it.attributes || []).find(function (x) { return (x.trait_type || x.traitType || '') === trait; });
   return a ? String(a.value || '') : '';
@@ -363,7 +359,7 @@ function uniqueAttrValues(trait) {
   return Array.from(set).sort();
 }
 function filtersActiveCount() {
-  return ['model', 'backdrop', 'symbol', 'maxPrice'].filter(function (k) { return activeFilters[k]; }).length;
+  return ['backdrop', 'maxPrice'].filter(function (k) { return activeFilters[k]; }).length;
 }
 
 async function loadList() {
@@ -387,9 +383,7 @@ function renderGrid() {
   let items = currentItems
     .map(function (it, idx) { return Object.assign({ _idx: idx }, it); })
     .filter(function (it) { return !q || it.nft_name.toLowerCase().includes(q); })
-    .filter(function (it) { return !activeFilters.model || attrVal(it, 'Model') === activeFilters.model; })
     .filter(function (it) { return !activeFilters.backdrop || attrVal(it, 'Backdrop') === activeFilters.backdrop; })
-    .filter(function (it) { return !activeFilters.symbol || attrVal(it, 'Symbol') === activeFilters.symbol; })
     .filter(function (it) { return !activeFilters.maxPrice || it.price_day <= activeFilters.maxPrice; });
   items.sort(function (a, b) { return sortDir === 'asc' ? a.price_day - b.price_day : b.price_day - a.price_day; });
 
@@ -430,17 +424,6 @@ function renderGrid() {
     prices.appendChild(perDay); prices.appendChild(minP);
 
     info.appendChild(nameRow); info.appendChild(prices);
-
-    // 🔍 فقط وقتی دکمه‌ی 🐞 روشنه (و فقط ادمین اصلاً این دیتا رو از سرور می‌گیره)
-    if (it._dbg) {
-      document.getElementById('dbgBtn').style.display = '';
-      if (debugMode) {
-        const dbg = document.createElement('div');
-        dbg.style.cssText = 'font-size:8.5px;color:#E28B93;margin-top:4px;direction:ltr;text-align:right;word-break:break-all';
-        dbg.textContent = 'raw:' + it._dbg.raw + ' ton:' + it._dbg.ton + ' r1:' + it._dbg.ton_usdt + ' r2:' + it._dbg.usdt_irt;
-        info.appendChild(dbg);
-      }
-    }
 
     card.appendChild(imgBox); card.appendChild(info);
     el.appendChild(card);
@@ -620,13 +603,11 @@ function renderFilterPanel() {
     };
     bodyEl.appendChild(lbl); bodyEl.appendChild(slider);
   }));
-  panel.appendChild(accRow('مدل', 'model', function (b) { chipGroup(b, 'Model', 'model'); }));
   panel.appendChild(accRow('پس‌زمینه', 'backdrop', function (b) { chipGroup(b, 'Backdrop', 'backdrop'); }));
-  panel.appendChild(accRow('نماد', 'symbol', function (b) { chipGroup(b, 'Symbol', 'symbol'); }));
 
   const foot = document.createElement('div'); foot.className = 'filter-foot';
   const clearBtn = document.createElement('button'); clearBtn.className = 'btn-ghost'; clearBtn.textContent = 'پاک‌کردنِ همه';
-  clearBtn.onclick = function () { activeFilters = { model: null, backdrop: null, symbol: null, maxPrice: null }; renderGrid(); renderFilterPanel(); };
+  clearBtn.onclick = function () { activeFilters = { backdrop: null, maxPrice: null }; renderGrid(); renderFilterPanel(); };
   const closeBtn = document.createElement('button'); closeBtn.className = 'btn-main'; closeBtn.style.marginTop = '0';
   closeBtn.textContent = 'بستن';
   closeBtn.onclick = function () { toggleFilterPanel(); };

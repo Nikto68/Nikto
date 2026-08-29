@@ -158,15 +158,13 @@ function grDayTomanDebug($item) {
 
 function grDayToman($item) { return grDayTomanDebug($item)['toman']; }
 
-/** شکلِ عمومی — همان چیزی که مینی‌اپ می‌بیند. با isAdmin=true فیلدهای خام هم برای عیب‌یابی اضافه می‌شود. */
-function grPublicList($isAdmin = false) {
+/** شکلِ عمومی — همان چیزی که مینی‌اپ می‌بیند. */
+function grPublicList() {
     $out = [];
     foreach (grListRaw() as $it) {
-        $dbg = grDayTomanDebug($it);
-        $day = $dbg['toman'];
-        // نرخِ TON نیامده (یا مشکوکه) — نمایشش ندیم، مگه ادمین که برای عیب‌یابی می‌بینه
-        if ($day <= 0 && !$isAdmin) continue;
-        $row = [
+        $day = grDayToman($it);
+        if ($day <= 0) continue;   // نرخِ TON نیامده یا مشکوکه — نمایشش ندیم
+        $out[] = [
             'nft_address'  => $it['nft_address'],
             'nft_name'     => $it['nft_name'],
             'attributes'   => $it['attributes'],
@@ -174,10 +172,6 @@ function grPublicList($isAdmin = false) {
             'max_days'     => max(1, (int)round($it['max_duration'] / 86400)),
             'price_day'    => $day,
         ];
-        // 🔍 فقط برای ادمین — همون چیزی که برای پیدا کردنِ باگِ قیمت لازمه:
-        // عددِ خامِ خودِ marketapp، تبدیلِ TON، و نرخ‌هایی که استفاده شده.
-        if ($isAdmin) $row['_dbg'] = $dbg;
-        $out[] = $row;
     }
     return $out;
 }
@@ -332,8 +326,7 @@ function grApi() {
     }
 
     if ($action === 'list') {
-        $isAdm = function_exists('isAdmin') && isAdmin($uid);
-        grApiOut(['ok' => true, 'items' => grPublicList($isAdm)]);
+        grApiOut(['ok' => true, 'items' => grPublicList()]);
     }
 
     if ($action === 'order') {
