@@ -8071,7 +8071,16 @@ function bcStore($html, $ids, $from) {
     return [count($ids), ''];
 }
 
-/** یک دسته از صف را می‌فرستد. برگشت: چند نفر در این دسته */
+/**
+ * یک دسته از صف را می‌فرستد. برگشت: چند نفر در این دسته
+ *
+ * ⚠️ قبلا پیشرفت فقط بعد از کل حلقه ذخیره می‌شد. با محدودیتِ زمانِ
+ * اجرای PHP یا هر خطای دیگری وسطِ حلقه، کل دسته گم می‌شد — نه فقط
+ * گزارشش، بلکه شماره‌ی «تا کجا رفتیم»: تیکِ بعدی از همان نقطه‌ی قدیم
+ * دوباره شروع می‌کرد و همان‌هایی که پیام را گرفته بودند، دوباره
+ * می‌گرفتند. حالا هر چند پیام یک‌بار پیشرفت ذخیره می‌شود، پس یک قطعی
+ * وسط کار حداکثر همان چند نفر را دوباره می‌فرستد، نه کل دسته را.
+ */
 function bcTick($limit = 25) {
     $b = load('broadcast');
     if (!$b || !empty($b['done']) || empty($b['ids'])) return 0;
@@ -8084,7 +8093,19 @@ function bcTick($limit = 25) {
     $from = (array)($b['from'] ?? []);
     $tok  = [];                              // شناسه ربات ← توکن، یک بار خوانده می‌شود
 
-    $sent = 0; $fail = 0; $n = 0;
+    $saveEvery = 5;
+    $sent = 0; $fail = 0; $n = 0; $fin = false; $done = $i;
+    $flush = function () use (&$done, &$sent, &$fail, &$fin) {
+        mutate('broadcast', function (&$x) use ($done, $sent, $fail, &$fin) {
+            if (!is_array($x) || empty($x['ids'])) return;
+            $x['i']    = $done;
+            $x['sent'] = (int)($x['sent'] ?? 0) + $sent;
+            $x['fail'] = (int)($x['fail'] ?? 0) + $fail;
+            if ($done >= count($x['ids'])) { $x['done'] = true; $fin = true; }
+        });
+        $sent = 0; $fail = 0;
+    };
+
     for (; $i < count($ids) && $n < $limit; $i++, $n++) {
         $bid = (string)($from[$i] ?? '');
         if ($bid === '') {
@@ -8099,17 +8120,11 @@ function bcTick($limit = 25) {
         }
         $r = sendMsg($t, $ids[$i], $text);
         if (!empty($r['ok'])) $sent++; else $fail++;
+        $done = $i + 1;                      // این یکی قطعا رفت — نقطه‌ی امنِ ازسرگیری
+        if ($done % $saveEvery === 0) $flush();
         usleep(40000);                       // ~۲۵ پیام در ثانیه، زیر سقف تلگرام
     }
-
-    $fin = false;
-    mutate('broadcast', function (&$x) use ($i, $sent, $fail, &$fin) {
-        if (!is_array($x) || empty($x['ids'])) return;
-        $x['i']    = $i;
-        $x['sent'] = (int)($x['sent'] ?? 0) + $sent;
-        $x['fail'] = (int)($x['fail'] ?? 0) + $fail;
-        if ($i >= count($x['ids'])) { $x['done'] = true; $fin = true; }
-    });
+    $flush();
     if ($fin) bcFinish();
     return $n;
 }
