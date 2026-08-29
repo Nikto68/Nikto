@@ -585,3 +585,65 @@ function grServe() {
     echo grViewRent();
     exit;
 }
+
+/**
+ * 📄 tonconnect-manifest.json — پویا، از همینجا سرو می‌شود.
+ *
+ * ⚠️ چرا نه یک فایلِ استاتیک روی ریشه‌ی دامنه: قبلاً قرار بود این فایل
+ * دستی روی سرور آپلود شود، ولی این وابسته به هاست/دسترسیِ ادمین به
+ * فایل‌سیستمِ ریشه‌ی دامنه بود و همیشه سرِ راه بود («خطای بارگذاریِ
+ * dApp manifest» چون فایل اصلاً وجود نداشت). حالا کیف‌پول‌ها این آدرس
+ * را مستقیم از bot_master_membership.php می‌گیرند — هیچ آپلودِ دستی‌ای
+ * لازم نیست.
+ */
+function grManifestOut() {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Access-Control-Allow-Origin: *');
+    header('Cache-Control: public, max-age=3600');
+
+    $base = trim((string)(maCfg()['base_url'] ?? ''));
+    $root = '';
+    $p = @parse_url($base);
+    if (!empty($p['scheme']) && !empty($p['host']))
+        $root = $p['scheme'] . '://' . $p['host'] . (isset($p['port']) ? ':' . $p['port'] : '');
+
+    $iconUrl = $base !== ''
+        ? $base . (str_contains($base, '?') ? '&' : '?') . 'tonconnect_icon=1'
+        : ($root !== '' ? $root . '/?tonconnect_icon=1' : '');
+
+    $name = (string)(function_exists('botUsername') ? botUsername() : '');
+    $name = $name !== '' ? '@' . $name : 'فروشگاه';
+
+    echo json_encode([
+        'url'      => $root !== '' ? $root : $base,
+        'name'     => $name,
+        'iconUrl'  => $iconUrl,
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/** 🖼 آیکونِ manifest — تولیدِ محلی با GD، بدونِ وابستگی به فایلِ بیرونی. */
+function grIconOut() {
+    header('Cache-Control: public, max-age=86400');
+    header('Access-Control-Allow-Origin: *');
+
+    if (!function_exists('imagecreatetruecolor')) {
+        // بدونِ GD هم چیزی نشکند — یک پیکسلِ شفاف کافیست تا کیف‌پول بدونِ
+        // خطا رد شود (خودِ آیکون فقط تزئینی است).
+        header('Content-Type: image/gif');
+        echo base64_decode('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');
+        exit;
+    }
+
+    header('Content-Type: image/png');
+    $size = 180;
+    $im = imagecreatetruecolor($size, $size);
+    imagesavealpha($im, true);
+    $bg = imagecolorallocatealpha($im, 0x07, 0x09, 0x0A, 0);
+    imagefill($im, 0, 0, $bg);
+    $acc = imagecolorallocate($im, 0x4F, 0xA3, 0xFF);
+    imagefilledellipse($im, (int)($size / 2), (int)($size / 2), (int)($size * 0.62), (int)($size * 0.62), $acc);
+    imagepng($im);
+    imagedestroy($im);
+    exit;
+}

@@ -8,10 +8,11 @@
  *    giftrent.php برای همین یک صفحه، CSP جداگانه (شل‌تر) دارد؛ دو
  *    مینی‌اپِ دیگر دست‌نخورده می‌مانند.
  *
- * ⚠️ پیش‌نیازی که باید روی سرور جدا اضافه شود: یک فایلِ
- *    tonconnect-manifest.json (اسم/آیکون/آدرسِ ربات) که TonConnect
- *    موقعِ اتصال آن را می‌خواند. آدرسش پایین با MANIFEST مشخص شده —
- *    باید واقعاً روی همین دامنه ساخته و آپلود شود.
+ * ⚠️ tonconnect-manifest.json دیگر فایلِ استاتیک نیست — قبلاً باید دستی
+ *    روی ریشه‌ی دامنه آپلود می‌شد که همیشه سرِ راه بود («خطای بارگذاریِ
+ *    dApp manifest» چون فایل اصلاً وجود نداشت). حالا خودِ
+ *    bot_master_membership.php آن را می‌سازد (grManifestOut در
+ *    giftrent.php) — آدرسش پایین با MANIFEST مشخص شده.
  *
  * 🖼 عکسِ خودِ گیفت: marketapp.org آدرسِ عکس را در لیست نمی‌دهد، ولی
  *    هر گیفتِ آپگریدشده‌ی تلگرام دقیقاً همین الگوی عمومی و مستندِ
@@ -22,16 +23,10 @@
 
 function grViewRent() {
     // ⚠️ base_url خودش کاملِ مسیرِ bot_master_membership.php است
-    // (مثلا https://DOMAIN/bot_master_membership.php) — پس برای API فقط
-    // کوئری‌استرینگ اضافه می‌شود، ولی مانیفست باید روی ریشه‌ی دامنه باشد،
-    // نه کنارِ خودِ فایلِ php.
+    // (مثلا https://DOMAIN/bot_master_membership.php) — هم API هم
+    // manifest از همینجا (با کوئری‌استرینگِ متفاوت) سرو می‌شوند.
     $base = trim((string)(maCfg()['base_url'] ?? ''));
-    $root = '';
-    $p = @parse_url($base);
-    if (!empty($p['scheme']) && !empty($p['host']))
-        $root = $p['scheme'] . '://' . $p['host'] . (isset($p['port']) ? ':' . $p['port'] : '');
-
-    $manifest = $root !== '' ? $root . '/tonconnect-manifest.json' : '';
+    $manifest = $base !== '' ? $base . (str_contains($base, '?') ? '&' : '?') . 'tonconnect_manifest=1' : '';
     $api = $base !== '' ? $base . (str_contains($base, '?') ? '&' : '?') . 'rent_api=1' : '';
 
     return strtr(grTplRent(), [
