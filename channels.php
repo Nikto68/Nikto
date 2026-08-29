@@ -37,6 +37,7 @@ function chStreams() {
         'mem_ok'  => ['✅ ممبر اخلاقی', 'سفارش‌های ممبر اخلاقی.'],
         'mem_no'  => ['🔞 ممبر غیراخلاقی', 'سفارش‌های ممبر غیراخلاقی.'],
         'buy'     => ['🛒 بقیه‌ی فروش‌ها', 'هر فروشی که در دسته‌های بالا نیفتد.'],
+        'tech'    => ['🛠 گزارش فنی', 'خطا، افت سرعت، کمبود بودجه — هرچیزی که نشان می‌دهد ربات دارد مشکل پیدا می‌کند.'],
     ];
 }
 
@@ -111,11 +112,16 @@ function chDefaults() {
                 ['on' => 1, 'text' => '🤖 ربات', 'url' => '', 'color' => 'primary', 'icon' => ''],
             ],
         ],
+        'tech' => [
+            'on' => false, 'chat_id' => '', 'thread_id' => 0,
+            'text' => "🛠 <b>گزارش فنی</b>\n\n{text}\n\n🕓 {date}",
+            'photo' => false, 'buttons' => [],
+        ],
     ];
 
     // بقیه‌ی جریان‌ها همه فروشند و یک شکل دارند
     foreach (chStreams() as $k => [$label, $desc]) {
-        if ($k === 'topup') continue;
+        if ($k === 'topup' || $k === 'tech') continue;
         $out[$k] = [
             'on' => false, 'chat_id' => '', 'thread_id' => 0,
             'text' => $saleText, 'photo' => false, 'buttons' => $saleBtns,
@@ -424,7 +430,20 @@ function chAdminStream($chatId, $msgId, $k) {
 
 function chVarsOf($k) {
     if ($k === 'topup') return ['user', 'uid', 'amount', 'balance', 'code', 'receipt', 'date'];
+    if ($k === 'tech')  return ['text', 'date'];
     return ['user', 'uid', 'product', 'qty', 'amount', 'code', 'section', 'icon', 'date'];
+}
+
+/**
+ * 🛠 یک خبرِ فنی — خطا، افت سرعت، کمبود بودجه — به گروهِ گزارش فنی.
+ *
+ * اگر آن گروه تنظیم نشده، همان قبلی: پیام خصوصی به مدیرها. یعنی این
+ * یک لایه‌ی اضافه است، نه جایگزینِ notifyAdmins — چیزی گم نمی‌شود.
+ */
+function chTechAlert($text) {
+    $sent = chReady('tech') ? chSend('tech', ['text' => $text]) : false;
+    if (!$sent && function_exists('notifyAdmins')) notifyAdmins($text);
+    return $sent;
 }
 
 /** برگشت true یعنی این callback مال بخش کانال‌ها بود */
@@ -523,6 +542,7 @@ function chAdminCallback($data, $chatId, $msgId, $cbId) {
 function chSampleVars($k) {
     if ($k === 'topup') return ['user' => '@testuser', 'uid' => 123456789, 'amount' => fmtNum(500000),
                                 'balance' => fmtNum(750000), 'code' => 'TEST-1234', 'receipt' => 'آزمایشی'];
+    if ($k === 'tech')  return ['text' => '🧪 این یک گزارشِ فنیِ آزمایشی است.'];
     [$label] = chStreams()[$k] ?? ['🛒 فروش'];
     $icon = '🛒';
     if (preg_match('/^(\X)\s+(.*)$/u', $label, $m)) { $icon = $m[1]; $label = $m[2]; }

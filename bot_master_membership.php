@@ -3705,7 +3705,10 @@ function adminAlertOnce($key, $text, $everySeconds = 3600) {
         foreach ($a as $k => $t) if (time() - (int)$t > 86400 * 7) unset($a[$k]);
         return true;
     });
-    if ($fresh) notifyAdmins($text);
+    if ($fresh) {
+        if (function_exists('chTechAlert')) chTechAlert($text);
+        else notifyAdmins($text);
+    }
     return (bool)$fresh;
 }
 
@@ -9063,6 +9066,49 @@ function pxAnswerThenWarm($text, $chatId, $replyTo = null) {
 }
 
 /**
+ * 🩺 بررسیِ خودکارِ روزانه — همان چیزهایی که «⚡️ سرعت ربات» نشان می‌دهد،
+ * ولی بدون اینکه کسی صفحه را باز کند. هرچه مشکوک بود، به گزارشِ فنی می‌رود.
+ */
+function techHealthCheck() {
+    $warn = [];
+
+    if (function_exists('opcache_get_status')) {
+        $st = @opcache_get_status(false);
+        if (!is_array($st) || empty($st['opcache_enabled']))
+            $warn[] = '⚡️ opcache خاموش است — کدِ ربات در هر درخواست از نو کامپایل می‌شود.';
+        else {
+            $free = (float)($st['memory_usage']['free_memory'] ?? 0) / 1048576;
+            if ($free < 8) $warn[] = '⚡️ حافظه‌ی opcache دارد تمام می‌شود (' . number_format($free, 0) . ' مگابایت آزاد).';
+        }
+    }
+
+    $biggest = 0; $biggestName = '';
+    foreach ((glob(DATA_DIR . '/*.json') ?: []) as $f) {
+        $kb = @filesize($f) / 1024;
+        if ($kb > $biggest) { $biggest = $kb; $biggestName = basename($f, '.json'); }
+    }
+    if ($biggest > 2000)
+        $warn[] = '🗄 فایلِ «' . $biggestName . '» به ' . number_format($biggest / 1024, 1) .
+                   ' مگابایت رسیده — هر نوشتن روی آن کندتر می‌شود.';
+
+    $free = @disk_free_space(DATA_DIR);
+    if ($free !== false && $free < 100 * 1048576)
+        $warn[] = '💾 فضای دیسک کم مانده (' . number_format($free / 1048576, 0) . ' مگابایت آزاد).';
+
+    // 💰 موجودیِ حسابِ فروشنده‌ی شماره مجازی — اگر تمام شود، خریدها یکی
+    // یکی شکست می‌خورند و کسی بی‌آنکه بفهمد چرا، مشتری از دست می‌دهد.
+    if (function_exists('numReady') && function_exists('numBalanceDo') && numReady()) {
+        [$bal, $cur, $bErr] = numBalanceDo();
+        if ($bErr === '' && $bal < 1)
+            $warn[] = '☎️ موجودیِ حسابِ ' . (function_exists('numProvName') ? numProvName() : 'فروشنده') .
+                       ' رو به اتمام است: <b>' . fmtNum($bal) . '</b> ' . h($cur) . '.';
+    }
+
+    if ($warn && function_exists('chTechAlert'))
+        chTechAlert("🩺 <b>بررسیِ روزانه</b>\n\n" . implode("\n", $warn));
+}
+
+/**
  * ⚡️ سرعتِ ربات — نه حدس، اندازه.
  *
  * سه چیز سرعتِ این ربات را تعیین می‌کند و هر سه اینجا دیده می‌شوند:
@@ -9170,6 +9216,16 @@ function runBackgroundQueues() {
     if (function_exists('numTick') && time() - (@filemtime($nMark) ?: 0) >= 20) {
         @touch($nMark);
         numTick(10);
+    }
+
+    // 🩺 خودبررسیِ سلامت — یک بار در روز، بدون اینکه ادمین خودش پنل
+    //    سرعت را باز کند. صفحه‌ی «⚡️ سرعت ربات» فقط وقتی چیزی نشان
+    //    می‌دهد که ادمین آن را باز کند؛ این همان بررسی‌ها را خودکار و
+    //    پیش‌دستانه به گزارش فنی می‌فرستد.
+    $hMark = DATA_DIR . '/.health_at';
+    if (time() - (@filemtime($hMark) ?: 0) >= 86400) {
+        @touch($hMark);
+        techHealthCheck();
     }
 
     // 🔄 مهاجرت‌های یک‌باره
@@ -9352,7 +9408,15 @@ if (is_array($update)) {
         if ($botId) childHandle($botId, $update);
         else        masterHandle($update);
     } catch (Throwable $e) {
+        $where = basename($e->getFile()) . ':' . $e->getLine();
         error_log('[shop-bot] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+        // 🛠 قبلا این خطا فقط در لاگِ سرور می‌ماند و کسی نمی‌دید. حالا هم
+        // به گزارشِ فنی می‌رود — با throttle، تا یک باگِ تکرارشونده
+        // گروه را پر نکند.
+        if (function_exists('adminAlertOnce'))
+            adminAlertOnce('crash_' . md5($where),
+                "🔴 <b>خطای برنامه</b>\n\n<code>" . h(get_class($e)) . ': ' .
+                h(mb_substr($e->getMessage(), 0, 300)) . "</code>\n📍 <code>" . h($where) . '</code>', 600);
     }
 }
 
