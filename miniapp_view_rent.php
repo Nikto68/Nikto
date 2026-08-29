@@ -685,14 +685,17 @@ function getConnector() {
 /**
  * ⚠️ خودِ صفحه داخلِ WebViewِ تلگرامه — اگه لینکِ TonConnect رو با
  * tg.openLink باز کنیم، خودِ تلگرام قاپش می‌زنه و می‌بره تو صفحه‌ی
- * Fragmentِ داخلی‌اش (که manifest ما رو نمی‌شناسه و خطا می‌ده — دقیقاً
- * همون چیزی که دیده شد). راه‌حلِ درست این نوع مشکل تو مینی‌اپ‌های
- * تلگرام، نشون‌دادنِ خودِ QR داخلِ همین صفحه‌ست — کاربر با دوربینِ
- * TonKeeper اسکن می‌کنه، هیچ‌جا از مینی‌اپ بیرون نمی‌ره.
+ * Fragmentِ داخلی‌اش (که manifest ما رو نمی‌شناسه و خطا می‌ده). راه‌حل:
+ * یه تگِ <a> معمولی که مستقیم می‌ره سراغِ TonKeeper (showConnectLink پایین).
  */
 async function connectWallet(rentalId) {
   try {
     const tc = getConnector();
+    // ⚠️ اگه از تلاشِ قبلی یه اتصالِ نیمه‌کاره مونده باشه، connect()ِ دوباره
+    // خطا می‌ده («اتصالِ کیف‌پول شکست خورد» بدونِ هیچ جزئیاتی) — قبل از هر
+    // تلاشِ تازه، وضعیتِ قبلی رو کاملاً پاک می‌کنیم.
+    if (statusUnsub) { statusUnsub(); statusUnsub = null; }
+    if (tc.connected) { try { tc.disconnect(); } catch (e2) {} }
     const wallets = await tc.getWallets();
     const tonkeeper = wallets.find(function (w) { return (w.appName || '').toLowerCase() === 'tonkeeper'; });
     if (!tonkeeper) { toast('TonKeeper پیدا نشد — SDK آپدیت است؟'); return; }
@@ -712,7 +715,12 @@ async function connectWallet(rentalId) {
       else toast(r.message || 'اتصال ناموفق بود');
     });
   } catch (e) {
-    toast('اتصالِ کیف‌پول شکست خورد — دوباره امتحان کنید');
+    // ⚠️ عمداً متنِ خودِ خطا رو نشون می‌دیم (نه فقط یه پیامِ کلی) — چون
+    // بدونِ این، جایی که واقعاً خراب می‌شه (getWallets؟ connect؟ کدوم
+    // کیف‌پول؟) هیچ‌وقت از رو گوشیِ کاربر معلوم نمی‌شه.
+    const msg = (e && e.message) ? String(e.message) : String(e);
+    toast('اتصالِ کیف‌پول شکست خورد: ' + msg);
+    connector = null;
   }
 }
 
