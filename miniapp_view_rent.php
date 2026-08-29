@@ -103,6 +103,28 @@ body{
 .iconbtn.on{background:var(--acc-dim);color:var(--acc);border-color:rgba(79,163,255,.35)}
 .countline{color:var(--dim2);font-size:11px;margin:2px 2px 10px}
 
+/* ── پنلِ فیلتر — تاشو، زیرِ نوارِ جستجو ── */
+.filter-panel{
+  background:#14181680;border:1px solid var(--hair);border-radius:16px;padding:10px;margin-bottom:10px;
+  animation:pop .2s ease both;
+}
+.acc-row{border-radius:12px;overflow:hidden;margin-bottom:6px}
+.acc-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;cursor:pointer;
+  background:var(--glass)
+}
+.acc-head .t{font-size:12.5px;font-weight:600}
+.acc-head .r{display:flex;align-items:center;gap:8px}
+.acc-clear{font-size:11px;color:var(--acc)}
+.acc-chev{font-size:10px;color:var(--dim2);transition:transform .2s}
+.acc-row.open .acc-chev{transform:rotate(180deg)}
+.acc-body{display:none;padding:10px 12px 4px}
+.acc-row.open .acc-body{display:block}
+.acc-chips{display:flex;gap:7px;flex-wrap:wrap}
+.filter-foot{display:flex;gap:8px;margin-top:4px}
+.filter-foot button{flex:1;padding:10px}
+.btn-ghost{background:var(--glass);border:1px solid var(--hair);color:var(--ink)}
+
 /* ── گریدِ کارت‌ها ── */
 .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .gcard{
@@ -179,8 +201,9 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .navbar{
   position:fixed;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom, 0px) + 12px);
   height:var(--navh);display:flex;gap:6px;padding:6px;border-radius:22px;
-  background:rgba(15,20,18,.55);border:1px solid var(--hair);
-  backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);
+  /* بلورِ سنگین اینجا با شیت‌شیتِ پایین همزمان روی موبایل لگ می‌داد —
+     پس‌زمینه‌ی نیمه‌کدر جای بلور رو گرفته، ظاهر شیشه‌ای می‌مونه بدون هزینه‌ی رندر */
+  background:rgba(13,17,15,.86);border:1px solid var(--hair);
   box-shadow:0 10px 34px rgba(0,0,0,.45);z-index:6;
 }
 .navbtn{
@@ -192,17 +215,20 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .navbtn.on span{transform:translateY(-1px)}
 
 /* ── بات‌شیت ── */
-.sheet-bg{position:fixed;inset:0;background:rgba(2,4,3,.55);backdrop-filter:blur(2px);
-  opacity:0;pointer-events:none;transition:opacity .22s;z-index:8}
+.sheet-bg{position:fixed;inset:0;background:rgba(2,4,3,.6);
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:8}
 .sheet-bg.show{opacity:1;pointer-events:auto}
 .sheet{
+  /* ⚡ بدونِ backdrop-filter عمداً: بلورِ یه پنلِ تمام‌عرضِ متحرک، هم‌زمان
+     با کشیدنِ اسلایدرِ روز، رویِ موبایل کاملاً محسوس لگ می‌داد. پس‌زمینه‌ی
+     تقریباً کدر همون حسِ شیشه‌ای رو می‌ده بدونِ بارِ رندرِ مداوم. */
   position:fixed;left:0;right:0;bottom:0;z-index:9;
-  background:linear-gradient(180deg, #10161390, #0A0F0DF2);
+  background:linear-gradient(180deg, #101613F5, #0A0F0DFB);
   border:1px solid var(--hair);border-bottom:none;border-radius:24px 24px 0 0;
-  backdrop-filter:blur(26px) saturate(160%);-webkit-backdrop-filter:blur(26px) saturate(160%);
   padding:10px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
-  transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);
+  transform:translateY(105%);transition:transform .25s cubic-bezier(.2,.8,.2,1);
   box-shadow:0 -10px 40px rgba(0,0,0,.5);
+  will-change:transform;
 }
 .sheet.open{transform:translateY(0)}
 .sheet-handle{width:36px;height:4px;border-radius:3px;background:var(--hair);margin:4px auto 14px}
@@ -212,9 +238,8 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .sheet-img .gfallback{font-size:46px}
 .sheet h3{margin:0 0 2px;font-size:16px}
 .toast{position:fixed;bottom:calc(var(--navh) + env(safe-area-inset-bottom, 0px) + 24px);left:16px;right:16px;
-  background:var(--glass2);border:1px solid var(--hair);border-radius:14px;padding:13px;font-size:13px;
-  text-align:center;display:none;z-index:10;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  animation:pop .25s ease both}
+  background:rgba(20,24,22,.92);border:1px solid var(--hair);border-radius:14px;padding:13px;font-size:13px;
+  text-align:center;display:none;z-index:10;animation:pop .25s ease both}
 </style>
 </head>
 <body>
@@ -225,9 +250,10 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 
 <div class="filterbar">
   <div class="searchbox">🔎<input id="search" placeholder="جستجوی گیفت…" oninput="renderGrid()"></div>
-  <div class="iconbtn" id="filterBtn" onclick="openFilterSheet()">🎛</div>
+  <div class="iconbtn" id="filterBtn" onclick="toggleFilterPanel()">🎛</div>
   <div class="iconbtn" id="sortBtn" onclick="toggleSort()">↕️</div>
 </div>
+<div class="filter-panel" id="filterPanel" style="display:none"></div>
 <div class="countline" id="countLine"></div>
 
 <div id="viewList" class="grid"></div>
@@ -450,64 +476,91 @@ async function openAccountSheet() {
   document.getElementById('sheet').classList.add('open');
 }
 
-// ── بات‌شیتِ فیلتر ──
-function filterChipRow(label, trait, key) {
-  const wrap = document.createElement('div'); wrap.style.marginBottom = '14px';
-  const h = document.createElement('div'); h.className = 'dim'; h.style.marginBottom = '7px'; h.textContent = label;
-  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:7px;flex-wrap:wrap';
-  uniqueAttrValues(trait).forEach(function (val) {
-    const chip = document.createElement('span'); chip.className = 'pill';
-    chip.style.cursor = 'pointer';
+// ── پنلِ فیلتر — تاشو، درونِ صفحه (نه بات‌شیت) ──
+let openAccKey = null;
+function toggleFilterPanel() {
+  const p = document.getElementById('filterPanel');
+  const willOpen = p.style.display === 'none';
+  p.style.display = willOpen ? '' : 'none';
+  if (willOpen) renderFilterPanel();
+}
+
+function accRow(label, key, bodyBuilder) {
+  const row = document.createElement('div'); row.className = 'acc-row';
+  if (openAccKey === key) row.classList.add('open');
+  const head = document.createElement('div'); head.className = 'acc-head';
+  const t = document.createElement('div'); t.className = 't'; t.textContent = label;
+  const r = document.createElement('div'); r.className = 'r';
+  const hasVal = key === 'price' ? !!activeFilters.maxPrice : !!activeFilters[key];
+  if (hasVal) {
+    const clr = document.createElement('span'); clr.className = 'acc-clear'; clr.textContent = 'پاک‌کردن';
+    clr.onclick = function (e) {
+      e.stopPropagation();
+      if (key === 'price') activeFilters.maxPrice = null; else activeFilters[key] = null;
+      renderGrid(); renderFilterPanel();
+    };
+    r.appendChild(clr);
+  }
+  const chev = document.createElement('span'); chev.className = 'acc-chev'; chev.textContent = '▾';
+  r.appendChild(chev);
+  head.appendChild(t); head.appendChild(r);
+  head.onclick = function () { openAccKey = (openAccKey === key ? null : key); renderFilterPanel(); };
+
+  const bodyEl = document.createElement('div'); bodyEl.className = 'acc-body';
+  bodyBuilder(bodyEl);
+
+  row.appendChild(head); row.appendChild(bodyEl);
+  return row;
+}
+
+function chipGroup(container, trait, key) {
+  const vals = uniqueAttrValues(trait);
+  if (!vals.length) { container.innerHTML = '<div class="dim">موردی نیست.</div>'; return; }
+  const wrap = document.createElement('div'); wrap.className = 'acc-chips';
+  vals.forEach(function (val) {
+    const chip = document.createElement('span'); chip.className = 'pill'; chip.style.cursor = 'pointer';
     if (activeFilters[key] === val) chip.classList.add('active');
     chip.textContent = val;
     chip.onclick = function () {
       activeFilters[key] = activeFilters[key] === val ? null : val;
-      openFilterSheet();
+      renderGrid(); renderFilterPanel();
     };
-    row.appendChild(chip);
+    wrap.appendChild(chip);
   });
-  if (!row.children.length) return null;
-  wrap.appendChild(h); wrap.appendChild(row);
-  return wrap;
+  container.appendChild(wrap);
 }
 
-function openFilterSheet() {
-  const body = document.getElementById('sheetBody');
-  body.innerHTML = '';
+function renderFilterPanel() {
+  const panel = document.getElementById('filterPanel');
+  if (panel.style.display === 'none') return;
+  panel.innerHTML = '';
 
-  const title = document.createElement('h3'); title.textContent = '🎛 فیلترها';
-  title.style.marginBottom = '12px';
-  body.appendChild(title);
-
-  const priceMax = Math.max.apply(null, currentItems.map(function (it) { return it.price_day; }).concat([0]));
-  if (priceMax > 0) {
-    const pwrap = document.createElement('div'); pwrap.style.marginBottom = '14px';
-    const ph = document.createElement('div'); ph.className = 'dim'; ph.style.marginBottom = '6px';
+  panel.appendChild(accRow('قیمت', 'price', function (bodyEl) {
+    const priceMax = Math.ceil(Math.max.apply(null, currentItems.map(function (it) { return it.price_day; }).concat([0])));
+    if (priceMax <= 0) { bodyEl.innerHTML = '<div class="dim">موردی نیست.</div>'; return; }
+    const lbl = document.createElement('div'); lbl.className = 'dim'; lbl.style.marginBottom = '6px';
     const slider = document.createElement('input'); slider.type = 'range';
-    slider.min = 0; slider.max = Math.ceil(priceMax);
-    slider.value = activeFilters.maxPrice || priceMax;
-    ph.textContent = 'حداکثر قیمت: ' + fmt(slider.value) + ' تومان';
-    slider.oninput = function () { ph.textContent = 'حداکثر قیمت: ' + fmt(slider.value) + ' تومان'; };
-    slider.onchange = function () { activeFilters.maxPrice = parseInt(slider.value, 10) < priceMax ? parseInt(slider.value, 10) : null; };
-    pwrap.appendChild(ph); pwrap.appendChild(slider);
-    body.appendChild(pwrap);
-  }
+    slider.min = 0; slider.max = priceMax; slider.value = activeFilters.maxPrice || priceMax;
+    lbl.textContent = 'حداکثر: ' + fmt(slider.value) + ' تومان';
+    slider.oninput = function () { lbl.textContent = 'حداکثر: ' + fmt(slider.value) + ' تومان'; };
+    slider.onchange = function () {
+      activeFilters.maxPrice = parseInt(slider.value, 10) < priceMax ? parseInt(slider.value, 10) : null;
+      renderGrid();
+    };
+    bodyEl.appendChild(lbl); bodyEl.appendChild(slider);
+  }));
+  panel.appendChild(accRow('مدل', 'model', function (b) { chipGroup(b, 'Model', 'model'); }));
+  panel.appendChild(accRow('پس‌زمینه', 'backdrop', function (b) { chipGroup(b, 'Backdrop', 'backdrop'); }));
+  panel.appendChild(accRow('نماد', 'symbol', function (b) { chipGroup(b, 'Symbol', 'symbol'); }));
 
-  [['مدل', 'Model', 'model'], ['پس‌زمینه', 'Backdrop', 'backdrop'], ['نماد', 'Symbol', 'symbol']]
-    .forEach(function (t) { const row = filterChipRow(t[0], t[1], t[2]); if (row) body.appendChild(row); });
-
-  const actions = document.createElement('div'); actions.style.cssText = 'display:flex;gap:8px;margin-top:6px';
-  const clearBtn = document.createElement('button'); clearBtn.textContent = 'پاک‌کردنِ همه';
-  clearBtn.style.cssText = 'flex:1;background:var(--glass);border:1px solid var(--hair);color:var(--ink)';
-  clearBtn.onclick = function () { activeFilters = { model: null, backdrop: null, symbol: null, maxPrice: null }; renderGrid(); closeSheet(); };
-  const showBtn = document.createElement('button'); showBtn.className = 'btn-main'; showBtn.style.marginTop = '0';
-  showBtn.style.flex = '1'; showBtn.textContent = 'نمایشِ نتایج';
-  showBtn.onclick = function () { renderGrid(); closeSheet(); };
-  actions.appendChild(clearBtn); actions.appendChild(showBtn);
-  body.appendChild(actions);
-
-  document.getElementById('sheetBg').classList.add('show');
-  document.getElementById('sheet').classList.add('open');
+  const foot = document.createElement('div'); foot.className = 'filter-foot';
+  const clearBtn = document.createElement('button'); clearBtn.className = 'btn-ghost'; clearBtn.textContent = 'پاک‌کردنِ همه';
+  clearBtn.onclick = function () { activeFilters = { model: null, backdrop: null, symbol: null, maxPrice: null }; renderGrid(); renderFilterPanel(); };
+  const closeBtn = document.createElement('button'); closeBtn.className = 'btn-main'; closeBtn.style.marginTop = '0';
+  closeBtn.textContent = 'بستن';
+  closeBtn.onclick = function () { toggleFilterPanel(); };
+  foot.appendChild(clearBtn); foot.appendChild(closeBtn);
+  panel.appendChild(foot);
 }
 
 // ── بات‌شیتِ جزئیات + انتخابِ مدت ──
