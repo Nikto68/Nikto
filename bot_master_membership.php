@@ -9248,6 +9248,15 @@ function runBackgroundQueues() {
         numTick(10);
     }
 
+    // 🎁 کاتالوگِ اجاره‌ی گیفت — چندصفحه‌ای و ممکن است چند تماسِ شبکه بخواهد؛
+    // چون اینجا بعد از closeRequest() اجرا می‌شود، هیچ کاربری منتظرش نمی‌ماند.
+    $grMark = DATA_DIR . '/.gr_list_at';
+    if (function_exists('grListRefresh') && function_exists('grOn') && grOn() &&
+        time() - (@filemtime($grMark) ?: 0) >= 240) {
+        @touch($grMark);
+        grListRefresh();
+    }
+
     // 🩺 خودبررسیِ سلامت — یک بار در روز، بدون اینکه ادمین خودش پنل
     //    سرعت را باز کند. صفحه‌ی «⚡️ سرعت ربات» فقط وقتی چیزی نشان
     //    می‌دهد که ادمین آن را باز کند؛ این همان بررسی‌ها را خودکار و

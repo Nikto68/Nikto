@@ -95,26 +95,57 @@ function grListRaw($fresh = false) {
         $hit = maCacheGet($ck, 300);
         if (is_array($hit)) return $hit;
     }
-    [$resp, $err] = grApiCall('/v1/rent/gifts/?sort_by=price_per_day');
-    if (!is_array($resp) || !is_array($resp['items'] ?? null))
-        return (array)(maCacheGet($ck, 0) ?: []);
+    return grListRefresh();
+}
 
+/**
+ * 📄 کاتالوگ کامل — همه‌ی صفحه‌ها.
+ *
+ * قبلاً فقط اولین صفحه‌ی marketapp خوانده می‌شد — یعنی گیفت‌های
+ * معروف‌تر (که تعدادِ زیادی هم دارن) عملاً هیچ‌وقت به کشِ ما نمی‌رسیدن،
+ * پس نه تو لیست بودن نه تو جستجو. اینجا با cursor جلو می‌رود تا کاتالوگ
+ * واقعاً کامل شود.
+ *
+ * ⚠️ این تابع می‌تواند چند رفت‌وبرگشتِ شبکه بخواهد — به همین دلیل از
+ * runBackgroundQueues() هر چند دقیقه در پس‌زمینه (بعد از جواب‌دادن به
+ * تلگرام، بدونِ اینکه کاربری منتظرش بماند) صدا زده می‌شود. مسیرِ
+ * synchronous (اولین بارِ بدونِ کش) هم همین را صدا می‌زند، ولی آن‌وقت
+ * فقط یک‌بار در عمرِ نصب اتفاق می‌افتد.
+ */
+function grListRefresh() {
+    $ck = 'gr_list';
     $items = [];
-    foreach ($resp['items'] as $it) {
-        if (!is_array($it)) continue;
-        $addr = trim((string)($it['nft_address'] ?? ''));
-        if ($addr === '') continue;
-        $items[] = [
-            'nft_address'    => $addr,
-            'nft_name'       => (string)($it['nft_name'] ?? 'گیفت'),
-            'owner'          => (string)($it['owner'] ?? ''),
-            'attributes'     => is_array($it['attributes'] ?? null) ? $it['attributes'] : [],
-            'min_duration'   => (int)($it['min_duration'] ?? 86400),
-            'max_duration'   => (int)($it['max_duration'] ?? 86400),
-            'price_per_day'  => (string)($it['price_per_day'] ?? '0'),
-            'discount_pd'    => (float)($it['discount_per_day'] ?? 0),
-        ];
+    $seen  = [];
+    $cursor = '';
+    for ($page = 0; $page < 25; $page++) {
+        $path = '/v1/rent/gifts/?sort_by=price_per_day';
+        if ($cursor !== '') $path .= '&cursor=' . rawurlencode($cursor);
+        [$resp, $err] = grApiCall($path, 'GET', null, 12);
+        if (!is_array($resp) || !is_array($resp['items'] ?? null) || !$resp['items']) break;
+
+        foreach ($resp['items'] as $it) {
+            if (!is_array($it)) continue;
+            $addr = trim((string)($it['nft_address'] ?? ''));
+            if ($addr === '' || isset($seen[$addr])) continue;
+            $seen[$addr] = true;
+            $items[] = [
+                'nft_address'    => $addr,
+                'nft_name'       => (string)($it['nft_name'] ?? 'گیفت'),
+                'owner'          => (string)($it['owner'] ?? ''),
+                'attributes'     => is_array($it['attributes'] ?? null) ? $it['attributes'] : [],
+                'min_duration'   => (int)($it['min_duration'] ?? 86400),
+                'max_duration'   => (int)($it['max_duration'] ?? 86400),
+                'price_per_day'  => (string)($it['price_per_day'] ?? '0'),
+                'discount_pd'    => (float)($it['discount_per_day'] ?? 0),
+            ];
+        }
+
+        $next = trim((string)($resp['cursor'] ?? ''));
+        if ($next === '' || $next === $cursor) break;
+        $cursor = $next;
     }
+
+    if (!$items) return (array)(maCacheGet($ck, 0) ?: []);
     maCachePut($ck, $items);
     return $items;
 }
