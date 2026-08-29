@@ -1891,7 +1891,7 @@ function pxHandleText($text, $chatId, $replyTo = null) {
             return true;
         }
         $chg = pxAssetChange($ak);
-        $ck  = 'a|' . $ak . '|' . $price . '|' . $chg;
+        $ck  = 'a|' . $ak . '|' . $price . '|' . $chg . '|' . (string)(cfg()['bot_username'] ?? '');
         // کارت فقط وقتی ساخته می‌شود که شناسه‌ی فایلش را نداشته باشیم —
         // وگرنه اصلا رندر هم لازم نیست
         $png = (maCacheGet(pxPhotoIdKey($ck), 86400) ?? '') !== ''
@@ -1970,7 +1970,7 @@ function pxHandleText($text, $chatId, $replyTo = null) {
     $cap = pxCoinCaption($sym, $usd, $usd * $irtRate, $chg, $hi, $lo);
 
     // قیمت تومانی روی کارت — چون مخاطب ایرانی است
-    $ck  = 'c|' . $sym . '|' . round($usd * $irtRate) . '|' . $chg;
+    $ck  = 'c|' . $sym . '|' . round($usd * $irtRate) . '|' . $chg . '|' . (string)(cfg()['bot_username'] ?? '');
     $png = (maCacheGet(pxPhotoIdKey($ck), 86400) ?? '') !== ''
          ? null
          : pxCardCached($ck, fn() => pxCoinCard($sym, $usd * $irtRate, 'تومان', $chg, $usd * $irtRate));
