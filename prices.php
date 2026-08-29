@@ -32,9 +32,16 @@ function pxDefaults() {
         'wx_on'  => 1,
         'wx_url' => 'https://api.wallex.ir/v1/markets',
 
-        // منبع قیمت
-        'api' => 'https://swapwallet.app/api/v1/market/prices',
-        'key' => 'apikey-h8T5ufE73fILlDudXnPJp6CRYV9PSMKviBB0SxCXCAOzSFneGcBHaUa19am2kTIU',
+        // منبع دوم — کوین‌گکو، سراسری و بی‌کلید.
+        //
+        // منبعِ قبلی (swapwallet.app) دقیقا همان «۱ تا ۳ ثانیه، شاید
+        // بیشتر» بود: هرچند با والکس هم‌زمان گرفته می‌شد، تا جوابِ
+        // کندترین نمی‌آمد، هیچ عددی برنمی‌گشت — و برای نمادهایی که والکس
+        // ندارد (سولانا، آواکس، نیر…) همیشه منتظرِ همین منبع بودیم. حالا
+        // پیش‌فرض کوین‌گکوست: بدون کلید، پایدار، و اگر ادمین بعدا آدرس
+        // دیگری با کلید خواست، همان فیلد و همان کلید هنوز کار می‌کنند.
+        'api' => 'https://api.coingecko.com/api/v3/simple/price',
+        'key' => '',
         // ⏱ عمر کشِ قیمت.
         //
         // ۱۵ ثانیه بود و همین کندش می‌کرد: کارتِ قیمت با خودِ عدد کلید
@@ -521,10 +528,8 @@ function pxFetch($fresh = false) {
     if (!empty($c['wx_on']) && $wx !== '')
         $jobs['wx'] = ['url' => $wx, 'head' => 'Accept: application/json', 'timeout' => $to];
 
-    $url = trim((string)$c['api']);
-    if ($url !== '')
-        $jobs['api'] = ['url' => $url, 'timeout' => $to,
-                        'head' => 'x-api-key: ' . trim((string)$c['key']) . "\nAccept: application/json"];
+    $secondJob = pxSecondJob((string)$c['api'], (string)$c['key'], $to);
+    if ($secondJob) $jobs['api'] = $secondJob;
 
     if (!$jobs) return $mem = [];
     $res = pxGetMany($jobs, $to);
@@ -542,7 +547,7 @@ function pxFetch($fresh = false) {
     // 2️⃣ منبعِ دوم فقط جاهای خالی را پر می‌کند
     [$j, $err] = $res['api'] ?? [null, 'گرفته نشد'];
     if (is_array($j)) {
-        foreach (pxSwapPairs($j) as $k => $v)
+        foreach (pxSecondPairs($j) as $k => $v)
             if (!isset($out[$k])) $out[$k] = $v;
     } elseif (isset($jobs['api'])) {
         $wxErr[] = 'منبع دوم: ' . $err;
@@ -564,7 +569,52 @@ function pxFetch($fresh = false) {
 }
 
 /**
- * پاسخِ منبعِ دومِ دلاری → جفت‌ارزها.
+ * درخواستِ منبعِ دوم — اگر آدرس کوین‌گکو باشد، پارامترهایش خودکار
+ * ساخته می‌شود (کلید هم لازم نیست)؛ آدرسِ دیگری بدهید، عینِ قبل با
+ * هدرِ x-api-key فرستاده می‌شود.
+ */
+function pxSecondJob($url, $key, $to) {
+    $url = trim((string)$url);
+    if ($url === '') return null;
+    if (str_contains($url, 'coingecko.com')) {
+        $ids = implode(',', array_values(pxCoingeckoIds()));
+        $sep = str_contains($url, '?') ? '&' : '?';
+        $url .= $sep . 'ids=' . $ids . '&vs_currencies=usd&include_24hr_change=true';
+        return ['url' => $url, 'timeout' => $to, 'head' => 'Accept: application/json'];
+    }
+    return ['url' => $url, 'timeout' => $to,
+            'head' => 'x-api-key: ' . trim((string)$key) . "\nAccept: application/json"];
+}
+
+/** پاسخِ کوین‌گکو {"bitcoin":{"usd":..,"usd_24h_change":..}} → «BTC/USDT» */
+function pxCoingeckoPairs($j) {
+    if (!is_array($j)) return [];
+    $out = [];
+    foreach (array_flip(pxCoingeckoIds()) as $id => $sym) {
+        $row = $j[$id] ?? null;
+        if (!is_array($row)) continue;
+        $usd = pxToNum($row['usd'] ?? null);
+        if ($usd !== null && $usd > 0) $out[$sym . '/USDT'] = $usd;
+        $chg = pxToNum($row['usd_24h_change'] ?? null);
+        if ($chg !== null) $out[$sym . '/CHANGE24'] = $chg;
+    }
+    return $out;
+}
+
+/**
+ * پاسخِ منبعِ دوم را به جفت‌ارز تبدیل می‌کند — شکلِ پاسخِ کوین‌گکو
+ * (شیءهایی که کلیدشان شناسه‌ی کوین است) یا شکلِ قدیمیِ «BTC/USDT»:
+ * هرکدام که بود همان پارس می‌شود، تا آدرسِ دستیِ ادمین هم کار کند.
+ */
+function pxSecondPairs($j) {
+    if (!is_array($j)) return [];
+    $cg = pxCoingeckoPairs($j);
+    if ($cg) return $cg;
+    return pxSwapPairs($j);
+}
+
+/**
+ * پاسخِ منبعِ دومِ دلاری (شکلِ قدیمی) → جفت‌ارزها.
  * کلیدهایش خودشان «BTC/USDT» شکل‌اند؛ مقدار یا عدد است یا یک شیء.
  */
 function pxSwapPairs($j) {
@@ -1630,6 +1680,18 @@ function pxTryCard(callable $fn) {
 // 🗣 تشخیص پیام
 // ============================================================
 
+/** نماد → شناسه‌ی کوین‌گکو، برای همان فهرستِ نمادهایی که ربات می‌شناسد */
+function pxCoingeckoIds() {
+    return [
+        'BTC' => 'bitcoin', 'ETH' => 'ethereum', 'USDT' => 'tether', 'SOL' => 'solana',
+        'TON' => 'the-open-network', 'TRX' => 'tron', 'XRP' => 'ripple', 'BNB' => 'binancecoin',
+        'DOGE' => 'dogecoin', 'SHIB' => 'shiba-inu', 'NOT' => 'notcoin', 'ADA' => 'cardano',
+        'PEPE' => 'pepe', 'AVAX' => 'avalanche-2', 'MATIC' => 'matic-network', 'DOT' => 'polkadot',
+        'LINK' => 'chainlink', 'LTC' => 'litecoin', 'ATOM' => 'cosmos', 'NEAR' => 'near',
+        'XLM' => 'stellar',
+    ];
+}
+
 /** نام فارسی ارزها → نماد */
 function pxCoinMap() {
     return [
@@ -2288,14 +2350,12 @@ function pxProbeSources() {
                   'err' => is_array($j) ? ($p ? '' : 'پاسخ آمد ولی نمادی نداشت') : (string)$e];
     }
 
-    $api = trim((string)$c['api']);
-    if ($api !== '') {
+    $secondJob = pxSecondJob((string)$c['api'], (string)$c['key'], $to);
+    if ($secondJob) {
         $t0 = microtime(true);
-        [$j, $e] = pxGetMany(['api' => ['url' => $api, 'timeout' => $to,
-            'head' => 'x-api-key: ' . trim((string)$c['key']) . "\nAccept: application/json"]], $to)['api']
-            ?? [null, 'گرفته نشد'];
+        [$j, $e] = pxGetMany(['api' => $secondJob], $to)['api'] ?? [null, 'گرفته نشد'];
         $ms = (int)round((microtime(true) - $t0) * 1000);
-        $p  = is_array($j) ? pxSwapPairs($j) : [];
+        $p  = is_array($j) ? pxSecondPairs($j) : [];
         $out[] = ['name' => 'منبع دوم', 'ok' => (bool)$p, 'n' => count($p), 'ms' => $ms,
                   'err' => is_array($j) ? ($p ? '' : 'پاسخ آمد ولی جفت‌ارزی نداشت') : (string)$e];
     }
@@ -3170,9 +3230,17 @@ function pxFxFetch($fresh = false) {
             return $mem = (array)(maCacheGet('px_fx', 0) ?: []);
     }
 
+    // 🌐 هر سه آدرس هم‌زمان — قبلا پشتِ سرهم بودند، یعنی تا اولی
+    // تایم‌اوت نمی‌خورد نوبتِ دومی نمی‌رسید: دقیقا همان «۱ تا ۳ ثانیه،
+    // شاید بیشتر» که با هر آدرسِ کند یا از دسترس‌خارج تکرار می‌شد.
+    $to = (int)pxVal('timeout', 6);
+    $jobs = [];
+    foreach ($urls as $i => $u) $jobs['fx' . $i] = ['url' => $u, 'head' => 'Accept: application/json', 'timeout' => $to];
+    $res = pxGetMany($jobs, $to);
+
     $errs = [];
-    foreach ($urls as $u) {
-        [$j, $err] = maHttp($u, 'GET', "Accept: application/json", '', (int)pxVal('timeout', 6));
+    foreach ($urls as $i => $u) {
+        [$j, $err] = $res['fx' . $i] ?? [null, 'گرفته نشد'];
         // هر سه API شکل خروجی خودشان را دارند؛ هرکدام که بود بردار
         $rows = null;
         if (is_array($j)) {
