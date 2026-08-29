@@ -132,24 +132,41 @@ function grFindGift($nftAddress) {
  * بقیه‌ی این API) — با نرخِ لحظه‌ایِ TON (که خودِ ربات برای قیمت‌گیری هم
  * استفاده می‌کند) به تومان تبدیل می‌شود، بعد سودِ بخشِ «rent» رویش می‌نشیند.
  */
-function grDayToman($item) {
-    $ton = (float)(function_exists('nanoToTon') ? nanoToTon((string)$item['price_per_day']) : 0);
-    if ($ton <= 0) return 0.0;
+// ⚠️ حداقلِ منطقیِ قیمتِ روزانه — پایین‌تر از این یعنی جایی تو تبدیلِ
+// واحد (نانو-تون یا نرخ) خرابه، نه اینکه واقعاً همچین قیمتی درسته.
+// موقع کشف‌شدنش زیرِ ۲۰۰ تومان بود که باعثِ ضررِ خالص می‌شد — پس اینجا
+// به‌جای نمایشِ عددِ مشکوک، جنسِ «نرخ نداریم» برمی‌گردونه (grPublicList
+// خودش این آیتم رو قایم می‌کنه، دقیقاً مثلِ وقتی که واقعاً نرخِ TON نیست).
+define('GR_MIN_DAY_TOMAN', 500);
+
+function grDayTomanDebug($item) {
+    $raw = (string)($item['price_per_day'] ?? '0');
+    $ton = (float)(function_exists('nanoToTon') ? nanoToTon($raw) : 0);
     $p    = function_exists('pxFetch') ? pxFetch() : [];
     $usdt = (float)($p['TON/USDT'] ?? 0);
     $irt  = (float)($p['USDT/IRT'] ?? 0);
-    if ($usdt <= 0 || $irt <= 0) return 0.0;
-    $toman = $ton * $usdt * $irt;
-    return function_exists('pfApply') ? round(pfApply('rent', $toman), 0) : round($toman, 0);
+    $toman = ($ton > 0 && $usdt > 0 && $irt > 0) ? $ton * $usdt * $irt : 0.0;
+    $final = function_exists('pfApply') ? round(pfApply('rent', $toman), 0) : round($toman, 0);
+    if ($final > 0 && $final < GR_MIN_DAY_TOMAN) {
+        error_log('[giftrent] suspiciously low day price — raw=' . $raw . ' ton=' . $ton .
+                   ' ton_usdt=' . $usdt . ' usdt_irt=' . $irt . ' toman=' . $final .
+                   ' nft=' . (string)($item['nft_address'] ?? ''));
+        $final = 0.0;
+    }
+    return ['toman' => $final, 'raw' => $raw, 'ton' => $ton, 'ton_usdt' => $usdt, 'usdt_irt' => $irt];
 }
 
-/** شکلِ عمومی — همان چیزی که مینی‌اپ می‌بیند */
-function grPublicList() {
+function grDayToman($item) { return grDayTomanDebug($item)['toman']; }
+
+/** شکلِ عمومی — همان چیزی که مینی‌اپ می‌بیند. با isAdmin=true فیلدهای خام هم برای عیب‌یابی اضافه می‌شود. */
+function grPublicList($isAdmin = false) {
     $out = [];
     foreach (grListRaw() as $it) {
-        $day = grDayToman($it);
-        if ($day <= 0) continue;   // نرخِ TON نیامده — این لحظه نمایشش ندهیم بهتر از عددِ غلط
-        $out[] = [
+        $dbg = grDayTomanDebug($it);
+        $day = $dbg['toman'];
+        // نرخِ TON نیامده (یا مشکوکه) — نمایشش ندیم، مگه ادمین که برای عیب‌یابی می‌بینه
+        if ($day <= 0 && !$isAdmin) continue;
+        $row = [
             'nft_address'  => $it['nft_address'],
             'nft_name'     => $it['nft_name'],
             'attributes'   => $it['attributes'],
@@ -157,6 +174,10 @@ function grPublicList() {
             'max_days'     => max(1, (int)round($it['max_duration'] / 86400)),
             'price_day'    => $day,
         ];
+        // 🔍 فقط برای ادمین — همون چیزی که برای پیدا کردنِ باگِ قیمت لازمه:
+        // عددِ خامِ خودِ marketapp، تبدیلِ TON، و نرخ‌هایی که استفاده شده.
+        if ($isAdmin) $row['_dbg'] = $dbg;
+        $out[] = $row;
     }
     return $out;
 }
@@ -311,7 +332,8 @@ function grApi() {
     }
 
     if ($action === 'list') {
-        grApiOut(['ok' => true, 'items' => grPublicList()]);
+        $isAdm = function_exists('isAdmin') && isAdmin($uid);
+        grApiOut(['ok' => true, 'items' => grPublicList($isAdm)]);
     }
 
     if ($action === 'order') {

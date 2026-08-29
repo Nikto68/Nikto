@@ -415,6 +415,14 @@ function renderGrid() {
 
     info.appendChild(nameRow); info.appendChild(prices);
 
+    // 🔍 فقط برای ادمین — عددِ خامِ marketapp و نرخ‌ها، برای پیداکردنِ باگِ قیمت
+    if (it._dbg) {
+      const dbg = document.createElement('div');
+      dbg.style.cssText = 'font-size:8.5px;color:#E28B93;margin-top:4px;direction:ltr;text-align:right;word-break:break-all';
+      dbg.textContent = 'raw:' + it._dbg.raw + ' ton:' + it._dbg.ton + ' r1:' + it._dbg.ton_usdt + ' r2:' + it._dbg.usdt_irt;
+      info.appendChild(dbg);
+    }
+
     card.appendChild(imgBox); card.appendChild(info);
     el.appendChild(card);
   });
@@ -513,14 +521,41 @@ function accRow(label, key, bodyBuilder) {
   return row;
 }
 
+/** حدسِ رنگِ یه اسمِ پس‌زمینه (مثلِ «Aquamarine»، «Burnt Sienna») از روی کلمه‌کلیدی داخلِ اسمش */
+function guessColor(name) {
+  const n = String(name || '').toLowerCase();
+  const table = [
+    [/black/, '#1a1a1a'], [/white|ivory|pearl/, '#eee'], [/grey|gray|silver|steel|battleship/, '#9aa0a6'],
+    [/gold|amber|honey|mustard|caramel|butter|sand|straw/, '#e8b74a'],
+    [/orange|sienna|rust|copper|bronze|tangerine|pumpkin/, '#e07a3f'],
+    [/red|carmine|ruby|crimson|scarlet|cherry/, '#d64545'],
+    [/burgundy|maroon|wine/, '#7a2b3a'],
+    [/pink|rose|blush|magenta|fuchsia/, '#e57bb0'],
+    [/purple|violet|lavender|orchid|plum/, '#8a5cd6'],
+    [/blue|azure|navy|sapphire|cobalt|cyan|sky/, '#4a8fe0'],
+    [/teal|aquamarine|turquoise|mint|jade|emerald/, '#3fc7ab'],
+    [/green|olive|camo|forest|lime|pine/, '#5fb85a'],
+    [/brown|coffee|cappuccino|choco|walnut|umber|tan|beige/, '#8a6b4d'],
+    [/yellow|lemon|banana|canary/, '#e8d84a'],
+  ];
+  for (const [re, color] of table) if (re.test(n)) return color;
+  return '#5C6B64';
+}
+
 function chipGroup(container, trait, key) {
   const vals = uniqueAttrValues(trait);
   if (!vals.length) { container.innerHTML = '<div class="dim">موردی نیست.</div>'; return; }
   const wrap = document.createElement('div'); wrap.className = 'acc-chips';
   vals.forEach(function (val) {
     const chip = document.createElement('span'); chip.className = 'pill'; chip.style.cursor = 'pointer';
+    chip.style.display = 'inline-flex'; chip.style.alignItems = 'center'; chip.style.gap = '5px';
     if (activeFilters[key] === val) chip.classList.add('active');
-    chip.textContent = val;
+    if (trait === 'Backdrop') {
+      const sw = document.createElement('span');
+      sw.style.cssText = 'width:11px;height:11px;border-radius:4px;flex:none;background:' + guessColor(val);
+      chip.appendChild(sw);
+    }
+    chip.appendChild(document.createTextNode(val));
     chip.onclick = function () {
       activeFilters[key] = activeFilters[key] === val ? null : val;
       renderGrid(); renderFilterPanel();
