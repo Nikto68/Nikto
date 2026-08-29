@@ -388,7 +388,7 @@ function maDefaultTg() {
             ['id' => 'i_ton', 'cat' => 'c_coin', 'emoji' => '💎', 'name' => 'تون (TON)',
              'desc' => 'قیمت هر ۱ TON — تحویل مستقیم به ولت', 'price' => 210000, 'unit' => 'TON',
              'badge' => '', 'ask' => 'qty_wallet', 'min' => 1, 'max' => 5000, 'on' => true, 'order' => 1,
-             'rate_key' => 'ton'],
+             'rate_key' => 'ton', 'auto' => 'ton'],
             ['id' => 'i_trx', 'cat' => 'c_coin', 'emoji' => '🚀', 'name' => 'ترون (TRX)',
              'desc' => 'قیمت هر ۱ TRX — شبکه TRC20', 'price' => 21000, 'unit' => 'TRX',
              'badge' => '', 'ask' => 'qty_wallet', 'min' => 10, 'max' => 100000, 'on' => true, 'order' => 2,
@@ -1818,7 +1818,9 @@ function maAutoFulfill($orderId, $manual = false) {
 
     [$op, $vars] = maAutoOp($o);
     if (!$op) return [false, 'این سرویس تحویل خودکار ندارد'];
-    if (empty($f['on'])) return [false, 'تحویل خودکار خاموش است'];
+    // ⚠️ «تحویل خودکار خاموش است» فقط برای پنل‌های فروشِ بیرونی معنی
+    // دارد — تون از ولتِ خودمان می‌رود و به آن سوییچ ربطی ندارد.
+    if ($op !== 'ton' && empty($f['on'])) return [false, 'تحویل خودکار خاموش است'];
 
     // 🔒 قفل: فقط یک اجرا در لحظه — جلوی سفارش دوباره روی پنل را می‌گیرد
     $claimed = MaOrder::set($orderId, function (&$x) {
@@ -2012,7 +2014,10 @@ function maAutoFailNotice($orderId, $err) {
  */
 function maAutoQueue($limit = 5) {
     $f = maCfg()['fulfill'] ?? [];
-    if (empty($f['on'])) return 0;
+    // 👛 تون گیت خودش را دارد (ولت آماده است یا نه) — سوییچِ عمومیِ
+    // پنلِ فروش که مالِ APIهای بیرونی است رویش تاثیری ندارد.
+    $tonOn = function_exists('axWalletReady') && axWalletReady();
+    if (empty($f['on']) && !$tonOn) return 0;
 
     $max  = (int)($f['retry'] ?? 3);
     $done = 0;
@@ -2024,6 +2029,7 @@ function maAutoQueue($limit = 5) {
 
         [$op] = maAutoOp($o);
         if (!$op) continue;
+        if ($op !== 'ton' && empty($f['on'])) continue;
 
         $tries = (int)($o['tries'] ?? 0);
         if ($tries >= $max) continue;
@@ -3505,10 +3511,17 @@ function maDeliver($o) {
         return MaOrder::get($id);
     }
 
-    // 3️⃣ پنل فروش خودکار
+    // 3️⃣ پنل فروش خودکار — یا، برای تون، مستقیم از ولتِ خودمان
+    //
+    // ⚠️ «تون» یک «پنل فروشِ بیرونی» نیست؛ چیزی برای روشن/آدرس‌دهی در
+    // بخشِ «🤖 تحویل خودکار» ندارد. قبلا برای رسیدن به maTonFulfill()
+    // باید همان سوییچِ عمومیِ پنلِ فروش (که مالِ APIهای بیرونی است) هم
+    // روشن می‌شد — یعنی حتی با ولتِ کاملا آماده، تا آن سوییچِ بی‌ربط را
+    // نمی‌زدید، خرید تون هرگز خودکار نمی‌شد.
     [$op] = maAutoOp($o);
     $f = maCfg()['fulfill'] ?? [];
-    if ($op && !empty($f['on']) && !empty($f['auto_pay'])) {
+    $tonReady = $op === 'ton' && function_exists('axWalletReady') && axWalletReady();
+    if ($op && ($tonReady || (!empty($f['on']) && !empty($f['auto_pay'])))) {
         maAutoFulfill($id);                     // موفق یا ناموفق، ادمین خبردار می‌شود
         return MaOrder::get($id);
     }
@@ -3538,6 +3551,11 @@ function maAutoWhy($o) {
         return $i
             ? 'این محصول «عملیات خودکار» ندارد. پنل ← 🚀 مینی‌اپ‌ها ← محصول ← عملیات خودکار.'
             : 'محصول پیدا نشد.';
+    }
+    if ($op === 'ton') {
+        return (function_exists('axWalletReady') && axWalletReady())
+            ? ''
+            : '👛 ولت TON آماده نیست. ' . (function_exists('axWalletWhyNotReady') ? axWalletWhyNotReady() : '');
     }
     if (empty($f['on']))
         return 'پنل فروش خاموش است. پنل ← 🚀 مینی‌اپ‌ها ← 🤖 تحویل خودکار.';
