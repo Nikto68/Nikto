@@ -657,8 +657,16 @@ function dotMap() {
     return ['', '🔵', '🟢', '🔴', '🟡', '🟣', '🟠', '⚪️', '⚫️', '🟤'];
 }
 
-/** نقش دکمه شیشه‌ای → رنگ (همه از پنل قابل تنظیم) */
+/**
+ * نقش دکمه شیشه‌ای → رنگ (از پنل قابل تنظیم — به‌جز خودِ پنل).
+ *
+ * دکمه‌های داخل پنل ادمین («admin») عمدا همیشه بدون رنگ‌اند: هم چون
+ * رنگ‌دار کردن پرتردد‌ترین و حساس‌ترین بخشِ ربات ریسکِ بی‌خودی است، هم
+ * چون یک بخش از پنل با یک باگِ نامربوط (colorMap گم‌شده) کرش می‌کرد و
+ * اینجا ساده‌ترین جای ممکن برای اطمینان از رفتارِ یکدست است.
+ */
 function gs($role) {
+    if ($role === 'admin') return null;
     $c = cfg()['glass_colors'][$role] ?? 'none';
     return isStyle($c) ? $c : null;
 }
@@ -4388,7 +4396,7 @@ function admBtns($chatId, $msgId) {
     $text  = "🎨 <b>تنظیم دکمه‌ها</b>\n\n";
     $text .= "حالت فعلی: <b>" . ($c['ui']['mode'] === 'glass' ? 'شیشه‌ای (زیر پیام)' : 'منو (کیبورد پایین)') . "</b>\n\n";
     foreach ($c['buttons'] as $id => $b) {
-        $text .= (!empty($b['on']) ? '✅' : '❌') . ' ' . colorMap()[$b['color']] . ' ' . h($b['emoji'] . ' ' . $b['text']) . "\n";
+        $text .= (!empty($b['on']) ? '✅' : '❌') . ' ' . styleMap()[$b['color']] ?? '' . ' ' . h($b['emoji'] . ' ' . $b['text']) . "\n";
     }
     $text .= "\nبرای ویرایش دقیق‌تر از پنل وب استفاده کنید.";
 
@@ -4399,7 +4407,7 @@ function admBtns($chatId, $msgId) {
     foreach ($c['buttons'] as $id => $b) {
         $rows[] = [
             ['text' => (!empty($b['on']) ? '✅ ' : '❌ ') . $b['text'], 'callback_data' => 'adm_btog_' . $id],
-            ['text' => colorMap()[$b['color']] . ' رنگ', 'callback_data' => 'adm_bcol_' . $id],
+            ['text' => styleMap()[$b['color']] ?? '' . ' رنگ', 'callback_data' => 'adm_bcol_' . $id],
         ];
     }
     $rows[] = [['text' => UT('back'), 'callback_data' => 'adm_home', 'style' => gs('admin') ?: null]];
@@ -4516,11 +4524,12 @@ function uiTextLabels() {
     ];
 }
 
+/** نقشِ «admin» عمدا اینجا نیست — همیشه بدون رنگ است، رنگش قابل تنظیم نیست */
 function glassRoleLabels() {
     return [
         'buy' => '🛒 خرید محصول', 'confirm' => '✅ تایید', 'cancel' => '↩️ انصراف',
         'reject' => '🗑 رد و حذف', 'nav' => '◀️ بازگشت و منو', 'info' => 'ℹ️ اطلاعات',
-        'admin' => '👑 پنل', 'link' => '🔗 لینک محتوا', 'support' => '📞 پشتیبانی',
+        'link' => '🔗 لینک محتوا', 'support' => '📞 پشتیبانی',
         'join' => '📢 کانال', 'joined' => '✅ عضو شدم', 'upload' => '📤 آپلود',
     ];
 }
@@ -6623,7 +6632,7 @@ function masterHandle($update) {
 
         if (str_starts_with($data, 'adm_bcol_')) {
             $id = substr($data, 9);
-            $keys = array_keys(colorMap());
+            $keys = array_keys(styleMap());
             cfgSet(function (&$c) use ($id, $keys) {
                 if (!isset($c['buttons'][$id])) return;
                 $cur = array_search($c['buttons'][$id]['color'], $keys, true);
@@ -7437,10 +7446,12 @@ function masterHandle($update) {
         if ($askMid > 0) editMsg(BOT_TOKEN, $chatId, $askMid, T('receipt_ok'), null);
         else             sendMsg(BOT_TOKEN, $chatId, T('receipt_ok'));
 
-        notifyAdminOrder($oid);
-        // 📡 و یک نسخه هم روی کانالِ همان جریان
+        // 📡 اگر گروهِ «رسید شارژ حساب» وصل است، تایید/رد همان‌جا انجام
+        // می‌شود — چتِ خصوصیِ ربات شلوغ نمی‌شود. وگرنه، مثل همیشه خصوصی.
         $fresh = Order::get($oid);
-        if (($fresh['type'] ?? '') === 'topup') chTopupReceipt($fresh);
+        $sentToChannel = (($fresh['type'] ?? '') === 'topup') && function_exists('chTopupReceipt')
+            && chTopupReceipt($fresh);
+        if (!$sentToChannel) notifyAdminOrder($oid);
         return;
     }
 

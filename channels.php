@@ -169,9 +169,11 @@ function chReady($stream) {
 /**
  * یک گزارش را روی کانالِ همان جریان می‌فرستد.
  * $vars جای‌گذاری‌های {…}، $photo شناسه‌ی عکس (رسید) اگر داشت.
+ * $extraRows ردیف‌های اینلاینِ اضافه (مثلا تایید/رد) — جلوترِ دکمه‌های
+ * تنظیم‌شده‌ی خودِ ادمین می‌نشینند.
  * برگشت false یعنی نرفت — ولی هیچ‌وقت جریانِ اصلی را نمی‌شکند.
  */
-function chSend($stream, array $vars, $photo = null) {
+function chSend($stream, array $vars, $photo = null, array $extraRows = []) {
     if (!chReady($stream)) return false;
     $s = chOf($stream);
 
@@ -183,6 +185,10 @@ function chSend($stream, array $vars, $photo = null) {
     if ((int)$s['thread_id'] > 0) $extra['message_thread_id'] = (int)$s['thread_id'];
 
     $kb = chKeyboard($s);
+    if ($extraRows) {
+        $rows = array_merge($extraRows, $kb['inline_keyboard'] ?? []);
+        $kb   = ['inline_keyboard' => $rows];
+    }
 
     if ($photo !== null && !empty($s['photo'])) {
         $d = array_merge([
@@ -275,20 +281,34 @@ function chUser($uid, $uname = '', $fname = '') {
 // 🔔 قلاب‌ها — جاهایی که گزارش ساخته می‌شود
 // ============================================================
 
-/** رسید شارژ کیف پول رسید */
+/**
+ * رسید شارژ کیف پول.
+ *
+ * دکمه‌های ✅ تایید / ❌ رد همان دکمه‌های همیشگیِ سفارش‌ها هستند
+ * (aok_/ano_، دستِ همان قلابِ عمومی در masterHandle) — فقط این‌بار
+ * زیرِ همین پیامِ گروه/تاپیک می‌نشینند تا مدیر همان‌جا تصمیم بگیرد،
+ * بدون آنکه چیزی به چتِ خصوصیِ ربات بیاید.
+ *
+ * برگشتِ true یعنی رفت (پس دیگر لازم نیست خصوصی هم برای ادمین بفرستیم).
+ */
 function chTopupReceipt($order) {
-    if (!is_array($order)) return;
+    if (!is_array($order)) return false;
     $uid = (int)($order['user_id'] ?? 0);
     $u   = function_exists('getUser') ? (getUser($uid) ?: []) : [];
     $amt = (float)($order['amount'] ?? 0);
-    chSend('topup', [
+    $pending = ($order['status'] ?? '') === 'pending';
+    $rows = $pending ? [[
+        ['text' => function_exists('UT') ? UT('confirm') : '✅ تایید', 'callback_data' => 'aok_' . $order['id']],
+        ['text' => function_exists('UT') ? UT('reject')  : '❌ رد',   'callback_data' => 'ano_' . $order['id']],
+    ]] : [];
+    return chSend('topup', [
         'user'    => chUser($uid, $order['username'] ?? '', $u['name'] ?? ''),
         'uid'     => $uid,
         'amount'  => fmtNum($amt),
         'balance' => fmtNum((float)($u['balance'] ?? 0) + $amt),
         'code'    => (string)($order['id'] ?? ''),
         'receipt' => (string)($order['receipt_type'] ?? '') === 'text' ? (string)$order['receipt'] : 'تصویر',
-    ], ($order['receipt_type'] ?? '') === 'photo' ? ($order['receipt'] ?? null) : null);
+    ], ($order['receipt_type'] ?? '') === 'photo' ? ($order['receipt'] ?? null) : null, $rows);
 }
 
 /**
