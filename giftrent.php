@@ -428,23 +428,21 @@ function grSecurityHeaders() {
     header('Referrer-Policy: no-referrer');
     header('Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()');
     header('Cross-Origin-Opener-Policy: same-origin');
-    // ⚠️ برخلافِ مینی‌اپ‌های دیگر، اینجا TonConnect واقعاً لازم است — یعنی
-    // یک کتابخانه‌ی بیرونی (SDK رسمی) و یک اتصالِ شبکه به بریج‌های
-    // TonConnect. دست‌ساز پیاده‌سازی‌کردنِ آن یعنی رمزنگاریِ خودمان —
-    // خطرش از وابستگی به SDKِ رسمی بیشتر است. این سیاست فقط همین یک صفحه
-    // را شل می‌کند؛ بقیه‌ی مینی‌اپ‌ها (CSP سخت‌گیرشان) دست‌نخورده می‌مانند.
+    // ⚠️ اتصالِ کیف‌پول دیگه از خودِ این صفحه (با یک SDKِ بیرونی) انجام
+    // نمی‌شود — مشتری از طریقِ خودِ Fragment وصل می‌شود و فقط لینکِ نتیجه
+    // رو اینجا می‌چسبونه (چون marketapp این اتصال رو فقط وقتی قبول می‌کند
+    // که دامنه‌ی مانیفستش دقیقاً fragment.com باشد — چیزی که ما نمی‌توانیم
+    // و نباید ادعا کنیم). پس این صفحه هم مثلِ بقیه‌ی مینی‌اپ‌ها هیچ
+    // کتابخانه‌ی بیرونی‌ای بار نمی‌کند؛ تنها فرقش با CSPِ آن‌ها همین
+    // استثنای img-src برای عکسِ واقعیِ گیفت از سرورِ فرگمنت است.
     header(
         "Content-Security-Policy: " .
         "default-src 'none'; " .
-        "script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org " .
-            "https://cdn.jsdelivr.net; " .
+        "script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org; " .
         "style-src 'self' 'unsafe-inline'; " .
-        // عکسِ خودِ گیفت از سرورِ فرگمنت می‌آید — تنها استثنای img-src نسبت به
-        // مینی‌اپ‌های دیگر، چون کاتالوگ بدونِ عکسِ واقعیِ گیفت بی‌فایده است
         "img-src 'self' data: https://t.me https://*.telegram.org https://*.telesco.pe " .
             "https://nft.fragment.com; " .
-        "connect-src 'self' https://*.tonapi.io https://*.ton.org https://walletbot.me " .
-            "https://bridge.tonapi.io https://*.toncenter.com; " .
+        "connect-src 'self'; " .
         "base-uri 'none'; form-action 'none'; " .
         "frame-ancestors https://web.telegram.org https://*.telegram.org; " .
         "object-src 'none'"
@@ -586,64 +584,3 @@ function grServe() {
     exit;
 }
 
-/**
- * 📄 tonconnect-manifest.json — پویا، از همینجا سرو می‌شود.
- *
- * ⚠️ چرا نه یک فایلِ استاتیک روی ریشه‌ی دامنه: قبلاً قرار بود این فایل
- * دستی روی سرور آپلود شود، ولی این وابسته به هاست/دسترسیِ ادمین به
- * فایل‌سیستمِ ریشه‌ی دامنه بود و همیشه سرِ راه بود («خطای بارگذاریِ
- * dApp manifest» چون فایل اصلاً وجود نداشت). حالا کیف‌پول‌ها این آدرس
- * را مستقیم از bot_master_membership.php می‌گیرند — هیچ آپلودِ دستی‌ای
- * لازم نیست.
- */
-function grManifestOut() {
-    header('Content-Type: application/json; charset=utf-8');
-    header('Access-Control-Allow-Origin: *');
-    header('Cache-Control: public, max-age=3600');
-
-    $base = trim((string)(maCfg()['base_url'] ?? ''));
-    $root = '';
-    $p = @parse_url($base);
-    if (!empty($p['scheme']) && !empty($p['host']))
-        $root = $p['scheme'] . '://' . $p['host'] . (isset($p['port']) ? ':' . $p['port'] : '');
-
-    $iconUrl = $base !== ''
-        ? $base . (str_contains($base, '?') ? '&' : '?') . 'tonconnect_icon=1'
-        : ($root !== '' ? $root . '/?tonconnect_icon=1' : '');
-
-    $name = (string)(function_exists('botUsername') ? botUsername() : '');
-    $name = $name !== '' ? '@' . $name : 'فروشگاه';
-
-    echo json_encode([
-        'url'      => $root !== '' ? $root : $base,
-        'name'     => $name,
-        'iconUrl'  => $iconUrl,
-    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-/** 🖼 آیکونِ manifest — تولیدِ محلی با GD، بدونِ وابستگی به فایلِ بیرونی. */
-function grIconOut() {
-    header('Cache-Control: public, max-age=86400');
-    header('Access-Control-Allow-Origin: *');
-
-    if (!function_exists('imagecreatetruecolor')) {
-        // بدونِ GD هم چیزی نشکند — یک پیکسلِ شفاف کافیست تا کیف‌پول بدونِ
-        // خطا رد شود (خودِ آیکون فقط تزئینی است).
-        header('Content-Type: image/gif');
-        echo base64_decode('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');
-        exit;
-    }
-
-    header('Content-Type: image/png');
-    $size = 180;
-    $im = imagecreatetruecolor($size, $size);
-    imagesavealpha($im, true);
-    $bg = imagecolorallocatealpha($im, 0x07, 0x09, 0x0A, 0);
-    imagefill($im, 0, 0, $bg);
-    $acc = imagecolorallocate($im, 0x4F, 0xA3, 0xFF);
-    imagefilledellipse($im, (int)($size / 2), (int)($size / 2), (int)($size * 0.62), (int)($size * 0.62), $acc);
-    imagepng($im);
-    imagedestroy($im);
-    exit;
-}

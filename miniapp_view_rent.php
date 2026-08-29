@@ -2,17 +2,13 @@
 /**
  * 🎁 نمای مینی‌اپِ «اجاره‌ی گیفت» — کاملاً جدا از دو مینی‌اپِ دیگر.
  *
- * ⚠️ تنها مینی‌اپی که به یک کتابخانه‌ی بیرونی (TonConnect SDK) نیاز
- *    دارد — چون اتصالِ کیف‌پولِ واقعیِ مشتری یک پروتکلِ رمزنگاری‌شده است
- *    که دست‌ساز پیاده‌سازی‌کردنش خطرِ امنیتی دارد. به همین دلیل
- *    giftrent.php برای همین یک صفحه، CSP جداگانه (شل‌تر) دارد؛ دو
- *    مینی‌اپِ دیگر دست‌نخورده می‌مانند.
- *
- * ⚠️ tonconnect-manifest.json دیگر فایلِ استاتیک نیست — قبلاً باید دستی
- *    روی ریشه‌ی دامنه آپلود می‌شد که همیشه سرِ راه بود («خطای بارگذاریِ
- *    dApp manifest» چون فایل اصلاً وجود نداشت). حالا خودِ
- *    bot_master_membership.php آن را می‌سازد (grManifestOut در
- *    giftrent.php) — آدرسش پایین با MANIFEST مشخص شده.
+ * ⚠️ اتصالِ کیف‌پول اینجا از طریقِ SDKِ خودمان انجام نمی‌شود: marketapp
+ *    فقط تونکانکتی رو قبول می‌کند که مانیفستش دامنه‌اش دقیقاً fragment.com
+ *    باشد (تست‌شده — با مانیفستِ خودِ ما «Invalid — domain != fragment.com»
+ *    برمی‌گرداند). ادعاکردنِ این دامنه در مانیفستِ خودمان یعنی جازدنِ خود
+ *    به‌جای یک سرویسِ واقعیِ تلگرام جلوی کاربری که کیف‌پولِ واقعی‌اش رو
+ *    وصل می‌کند — این کار درست نیست. پس مشتری خودش مستقیم از طریقِ
+ *    Fragmentِ واقعی وصل می‌شود و فقط لینکِ نتیجه رو اینجا می‌چسبونه.
  *
  * 🖼 عکسِ خودِ گیفت: marketapp.org آدرسِ عکس را در لیست نمی‌دهد، ولی
  *    هر گیفتِ آپگریدشده‌ی تلگرام دقیقاً همین الگوی عمومی و مستندِ
@@ -22,16 +18,11 @@
  */
 
 function grViewRent() {
-    // ⚠️ base_url خودش کاملِ مسیرِ bot_master_membership.php است
-    // (مثلا https://DOMAIN/bot_master_membership.php) — هم API هم
-    // manifest از همینجا (با کوئری‌استرینگِ متفاوت) سرو می‌شوند.
     $base = trim((string)(maCfg()['base_url'] ?? ''));
-    $manifest = $base !== '' ? $base . (str_contains($base, '?') ? '&' : '?') . 'tonconnect_manifest=1' : '';
     $api = $base !== '' ? $base . (str_contains($base, '?') ? '&' : '?') . 'rent_api=1' : '';
 
     return strtr(grTplRent(), [
-        '__MANIFEST__' => json_encode($manifest, JSON_UNESCAPED_SLASHES),
-        '__API__'      => json_encode($api, JSON_UNESCAPED_SLASHES),
+        '__API__' => json_encode($api, JSON_UNESCAPED_SLASHES),
     ]);
 }
 
@@ -45,7 +36,6 @@ function grTplRent() {
 <meta name="color-scheme" content="dark">
 <title>اجاره‌ی گیفت</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tonconnect/sdk@3/dist/tonconnect-sdk.min.js"></script>
 <style>
 :root{
   --bg:#07090A;
@@ -280,7 +270,6 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 if (tg) { tg.ready(); tg.expand(); }
 const API = __API__;
-const MANIFEST = __MANIFEST__;
 const initData = tg ? tg.initData : '';
 let currentItems = [];
 
@@ -664,85 +653,57 @@ async function orderGift(nftAddress, days, btn) {
   if (!res.ok) { toast(res.message || 'پرداخت انجام نشد'); return; }
   closeSheet();
   toast('پرداخت شد — حالا کیف‌پولت رو وصل کن');
-  connectWallet(res.rental_id);
+  openConnectSheet(res.rental_id);
 }
 
-// ── TonConnect: اتصالِ کیف‌پولِ خودِ مشتری ──
-// ⚠️ این بخش روی یک دستگاهِ واقعی با یک TonKeeperِ واقعی تست نشده؛ بعد از
-//    هر تغییر باید واقعاً امتحان بشه — من از اینجا نمی‌تونم تستش کنم.
-//
-// عمداً فقط TonKeeper هدف‌گیری می‌شود، نه اولین کیف‌پولِ فهرست (که ممکن
-// بود «کیف‌پولِ تلگرام» باشد) — چون کیف‌پولِ تلگرام روی حساب‌های ایرانی
-// معمولاً کار نمی‌کند.
-let connector = null;
-let statusUnsub = null;
-function getConnector() {
-  if (connector) return connector;
-  connector = new TonConnectSDK.TonConnect({ manifestUrl: MANIFEST });
-  return connector;
-}
-
-/**
- * ⚠️ خودِ صفحه داخلِ WebViewِ تلگرامه — اگه لینکِ TonConnect رو با
- * tg.openLink باز کنیم، خودِ تلگرام قاپش می‌زنه و می‌بره تو صفحه‌ی
- * Fragmentِ داخلی‌اش (که manifest ما رو نمی‌شناسه و خطا می‌ده). راه‌حل:
- * یه تگِ <a> معمولی که مستقیم می‌ره سراغِ TonKeeper (showConnectLink پایین).
- */
-async function connectWallet(rentalId) {
-  try {
-    const tc = getConnector();
-    // ⚠️ اگه از تلاشِ قبلی یه اتصالِ نیمه‌کاره مونده باشه، connect()ِ دوباره
-    // خطا می‌ده («اتصالِ کیف‌پول شکست خورد» بدونِ هیچ جزئیاتی) — قبل از هر
-    // تلاشِ تازه، وضعیتِ قبلی رو کاملاً پاک می‌کنیم.
-    if (statusUnsub) { statusUnsub(); statusUnsub = null; }
-    if (tc.connected) { try { tc.disconnect(); } catch (e2) {} }
-    const wallets = await tc.getWallets();
-    const tonkeeper = wallets.find(function (w) { return (w.appName || '').toLowerCase() === 'tonkeeper'; });
-    if (!tonkeeper) { toast('TonKeeper پیدا نشد — SDK آپدیت است؟'); return; }
-
-    const link = await tc.connect({ universalLink: tonkeeper.universalLink, bridgeUrl: tonkeeper.bridgeUrl });
-    if (typeof link === 'string') showConnectLink(link);
-
-    if (statusUnsub) { statusUnsub(); statusUnsub = null; }
-    statusUnsub = tc.onStatusChange(async function (walletInfo) {
-      if (!walletInfo) return;
-      if (statusUnsub) { statusUnsub(); statusUnsub = null; }
-      // ⚠️ فیلدِ marketapp دقیقاً tonconnect_url نام‌گذاری شده — یعنی خودِ
-      // لینکِ TonConnect را می‌خواهد، نه آدرسِ کیف‌پول را؛ فرستادنِ آدرس
-      // («EQ...») همیشه «Invalid tonconnect URL» می‌داد چون اصلاً URL نیست.
-      const r = await call('connect', { rental_id: rentalId, tonconnect_url: link });
-      if (r.ok) { toast('گیفت وصل شد ✅'); closeSheet(); showTab('mine'); }
-      else toast(r.message || 'اتصال ناموفق بود');
-    });
-  } catch (e) {
-    // ⚠️ عمداً متنِ خودِ خطا رو نشون می‌دیم (نه فقط یه پیامِ کلی) — چون
-    // بدونِ این، جایی که واقعاً خراب می‌شه (getWallets؟ connect؟ کدوم
-    // کیف‌پول؟) هیچ‌وقت از رو گوشیِ کاربر معلوم نمی‌شه.
-    const msg = (e && e.message) ? String(e.message) : String(e);
-    toast('اتصالِ کیف‌پول شکست خورد: ' + msg);
-    connector = null;
-  }
-}
-
-/**
- * روی همین گوشی، بازکردنِ لینک با یه تگِ <a> معمولی — نه tg.openLink —
- * چون خودِ کلیکِ کاربر رو یه لینکِ ساده، برخلافِ tg.openLink، توسطِ
- * تلگرام قاپیده نمی‌شه و مستقیم می‌ره سراغِ TonKeeper. برای گوشیِ دومی هم
- * که کیف‌پول روش نصبه، همون متن رو کپی/بفرست.
- */
-function showConnectLink(link) {
+// ── اتصالِ کیف‌پول با Fragment ──
+// ⚠️ marketapp فقط اتصالی رو قبول می‌کند که مانیفستش دامنه‌اش دقیقاً
+// fragment.com باشه (تست‌شده — با مانیفستِ خودمون همیشه رد می‌شد:
+// «domain: <دامنه‌ی ما> != fragment.com»). ادعاکردنِ این دامنه در
+// مانیفستِ خودمون یعنی جازدنِ خود به‌جای فرگمنتِ واقعی جلوی کیف‌پولِ
+// کاربر — این کار درست نیست. پس این اتصال دیگه از تویِ همین صفحه با
+// SDK انجام نمی‌شه؛ مشتری خودش می‌ره تو خودِ Fragment وصل می‌شه و فقط
+// لینکِ نتیجه رو اینجا می‌چسبونه.
+function openConnectSheet(rentalId) {
   const body = document.getElementById('sheetBody');
   body.innerHTML = '';
-  const title = document.createElement('h3'); title.textContent = '👛 اتصالِ TonKeeper';
-  const sub = document.createElement('div'); sub.className = 'dim'; sub.style.marginBottom = '18px';
-  sub.textContent = 'اگه TonKeeper رو همین گوشی نصبه، دکمه‌ی زیر رو بزن.';
+  const title = document.createElement('h3'); title.textContent = '👛 اتصالِ کیف‌پول';
+  const sub = document.createElement('div'); sub.className = 'dim'; sub.style.marginBottom = '14px';
+  sub.textContent = 'این اتصال باید مستقیم از طریقِ خودِ Fragment انجام بشه:';
+
+  const steps = document.createElement('ol');
+  steps.style.cssText = 'padding-inline-start:20px;margin:0 0 16px;color:var(--dim);font-size:12.5px;line-height:2';
+  ['دکمه‌ی پایین رو بزن تا Fragment باز بشه.',
+   'اونجا کیف‌پولتو وصل کن (Connect Wallet).',
+   'لینکِ اتصال (Connect Link) رو کپی کن.',
+   'برگرد اینجا، تو کادرِ پایین بچسبون و «اتصال» رو بزن.'
+  ].forEach(function (t) { const li = document.createElement('li'); li.textContent = t; steps.appendChild(li); });
 
   const a = document.createElement('a');
-  a.href = link; a.target = '_blank'; a.rel = 'noopener';
+  a.href = 'https://fragment.com/'; a.target = '_blank'; a.rel = 'noopener';
   a.className = 'btn-tonkeeper';
-  a.textContent = '🔗 بازکردنِ TonKeeper';
+  a.textContent = '🌐 بازکردنِ Fragment';
 
-  body.appendChild(title); body.appendChild(sub); body.appendChild(a);
+  const input = document.createElement('textarea');
+  input.placeholder = 'لینکِ اتصال رو اینجا بچسبون…';
+  input.style.cssText = 'width:100%;box-sizing:border-box;min-height:64px;margin-top:14px;padding:12px;' +
+    'border-radius:14px;background:var(--glass);border:1px solid var(--hair);color:var(--ink);' +
+    'font-size:12px;direction:ltr;text-align:left;resize:vertical;font-family:inherit';
+
+  const submitBtn = document.createElement('button');
+  submitBtn.className = 'btn-main'; submitBtn.textContent = 'اتصال';
+  submitBtn.onclick = async function () {
+    const url = input.value.trim();
+    if (!url) { toast('اول لینک رو بچسبون'); return; }
+    submitBtn.disabled = true; submitBtn.textContent = 'در حالِ اتصال…';
+    const r = await call('connect', { rental_id: rentalId, tonconnect_url: url });
+    submitBtn.disabled = false; submitBtn.textContent = 'اتصال';
+    if (r.ok) { toast('گیفت وصل شد ✅'); closeSheet(); showTab('mine'); }
+    else toast(r.message || 'اتصال ناموفق بود');
+  };
+
+  body.appendChild(title); body.appendChild(sub); body.appendChild(steps);
+  body.appendChild(a); body.appendChild(input); body.appendChild(submitBtn);
 
   document.getElementById('sheetBg').classList.add('show');
   document.getElementById('sheet').classList.add('open');
@@ -772,7 +733,7 @@ async function loadMine() {
     bodyEl.appendChild(title); bodyEl.appendChild(pill); bodyEl.appendChild(sub);
     if (r.status === 'connect_wait') {
       const btn = document.createElement('button'); btn.className = 'btn-main btn-mini'; btn.textContent = 'اتصالِ کیف‌پول';
-      btn.onclick = function () { connectWallet(r.id); };
+      btn.onclick = function () { openConnectSheet(r.id); };
       bodyEl.appendChild(btn);
     }
     card.appendChild(thumb); card.appendChild(bodyEl);

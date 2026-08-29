@@ -8913,18 +8913,6 @@ if (isset($_GET['rent_api'])) {
     }
     exit;
 }
-// 📄 tonconnect-manifest.json + آیکونش — کیف‌پول‌ها بدونِ initData این‌هارو
-// می‌خونن، پس اینجا (نه پشتِ auth) و بدونِ نیاز به آپلودِ دستیِ فایل روی سرور
-if (isset($_GET['tonconnect_manifest'])) {
-    try { grManifestOut(); }
-    catch (Throwable $e) { error_log('[gr-manifest] ' . $e->getMessage()); http_response_code(500); }
-    exit;
-}
-if (isset($_GET['tonconnect_icon'])) {
-    try { grIconOut(); }
-    catch (Throwable $e) { error_log('[gr-icon] ' . $e->getMessage()); http_response_code(500); }
-    exit;
-}
 
 if (isset($_GET['api'])) {
     try { handleApi((string)$_GET['api']); }
