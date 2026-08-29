@@ -104,49 +104,42 @@ body{
 .countline{color:var(--dim2);font-size:11px;margin:2px 2px 10px}
 
 /* ── گریدِ کارت‌ها ── */
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .gcard{
-  position:relative;border-radius:18px;overflow:hidden;cursor:pointer;
-  background:linear-gradient(160deg, var(--glass2), var(--glass));
-  border:1px solid var(--hair);
-  box-shadow:0 6px 22px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+  position:relative;border-radius:14px;overflow:hidden;cursor:pointer;
+  background:#1A1D1B;border:1px solid var(--hair);
+  box-shadow:0 4px 16px rgba(0,0,0,.3);
   animation:pop .3s ease both;transition:transform .12s;
 }
-.gcard:active{transform:scale(.97)}
+.gcard:active{transform:scale(.96)}
 .gimg-wrap{position:relative;aspect-ratio:1/1;background:
   linear-gradient(120deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.10) 37%, rgba(255,255,255,.05) 63%);
   background-size:200% 100%;animation:shimmer 1.6s linear infinite}
 .gimg-wrap img{width:100%;height:100%;object-fit:cover;display:block;position:relative;z-index:1}
 .gfallback{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:34px;background:radial-gradient(circle at 50% 35%, var(--acc-dim), transparent 70%);
+  font-size:28px;background:radial-gradient(circle at 50% 35%, var(--acc-dim), transparent 70%);
   animation:glow 2.4s ease-in-out infinite;
 }
 .gbadge{
-  position:absolute;top:7px;right:7px;z-index:2;width:22px;height:22px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;font-size:11px;
-  background:rgba(10,14,12,.55);border:1px solid rgba(255,255,255,.12);
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  position:absolute;top:6px;right:6px;z-index:2;width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;
+  background:rgba(0,0,0,.5);
 }
-.gbar{
-  position:absolute;left:6px;right:6px;bottom:6px;z-index:2;display:flex;align-items:center;gap:5px;
+.gdays{
+  position:absolute;left:0;right:0;bottom:0;z-index:2;padding:5px 7px 6px;
+  font-size:9.5px;font-weight:600;color:#fff;
+  background:linear-gradient(0deg, rgba(0,0,0,.65), transparent);
 }
-.gprice{
-  flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 8px;border-radius:20px;
-  font-size:10.5px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  background:linear-gradient(135deg, rgba(79,163,255,.55), rgba(120,190,255,.4));
-  border:1px solid rgba(255,255,255,.35);
-  backdrop-filter:blur(10px) saturate(160%);-webkit-backdrop-filter:blur(10px) saturate(160%);
-  box-shadow:0 4px 14px rgba(79,163,255,.35), inset 0 1px 0 rgba(255,255,255,.4);
-  text-shadow:0 1px 2px rgba(0,0,0,.25);
-}
-.gcart{
-  width:28px;height:28px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:12px;background:rgba(255,255,255,.92);color:#0A0F0D;box-shadow:0 4px 12px rgba(0,0,0,.35);
-}
-.ginfo{padding:9px 10px 11px}
-.gname{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.gnum{font-size:10.5px;color:var(--dim2);margin-top:1px;direction:ltr;text-align:right}
+.ginfo{padding:8px 8px 9px}
+.gname-row{display:flex;align-items:baseline;gap:4px;margin-bottom:6px;overflow:hidden}
+.gname{font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gnum{font-size:10px;color:var(--dim2);flex:none;direction:ltr}
+.gprices{display:flex;gap:6px}
+.gprices>div{flex:1;min-width:0}
+.gprices .lbl{font-size:9px;color:var(--dim2);margin-bottom:2px;white-space:nowrap}
+.gprices .val{font-size:11px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:3px}
+.gprices .val .ic{color:var(--acc);font-size:10px}
 
 .empty{text-align:center;color:var(--dim);padding:52px 10px;font-size:13px;grid-column:1/-1}
 
@@ -376,18 +369,25 @@ function renderGrid() {
     card.onclick = function () { openSheet(it._idx); };
 
     const imgBox = makeImgBox(it.nft_name, 'gimg-wrap');
-    const badge = document.createElement('div'); badge.className = 'gbadge'; badge.textContent = '💎';
-    const bar = document.createElement('div'); bar.className = 'gbar';
-    const price = document.createElement('div'); price.className = 'gprice';
-    price.textContent = fmt(it.price_day) + ' تومان';
-    const cart = document.createElement('div'); cart.className = 'gcart'; cart.textContent = '🛍';
-    bar.appendChild(price); bar.appendChild(cart);
-    imgBox.appendChild(badge); imgBox.appendChild(bar);
+    const badge = document.createElement('div'); badge.className = 'gbadge'; badge.textContent = '🧺';
+    const days = document.createElement('div'); days.className = 'gdays';
+    days.textContent = 'روز: ' + it.min_days + ' – ' + it.max_days;
+    imgBox.appendChild(badge); imgBox.appendChild(days);
 
     const info = document.createElement('div'); info.className = 'ginfo';
+    const nameRow = document.createElement('div'); nameRow.className = 'gname-row';
     const nm = document.createElement('div'); nm.className = 'gname'; nm.textContent = base;
     const nu = document.createElement('div'); nu.className = 'gnum'; nu.textContent = num;
-    info.appendChild(nm); info.appendChild(nu);
+    nameRow.appendChild(nm); nameRow.appendChild(nu);
+
+    const prices = document.createElement('div'); prices.className = 'gprices';
+    const perDay = document.createElement('div');
+    perDay.innerHTML = '<div class="lbl">هر روز</div><div class="val"><span class="ic">👛</span>' + fmt(it.price_day) + '</div>';
+    const minP = document.createElement('div');
+    minP.innerHTML = '<div class="lbl">حداقل</div><div class="val"><span class="ic">👛</span>' + fmt(it.price_day * it.min_days) + '</div>';
+    prices.appendChild(perDay); prices.appendChild(minP);
+
+    info.appendChild(nameRow); info.appendChild(prices);
 
     card.appendChild(imgBox); card.appendChild(info);
     el.appendChild(card);
