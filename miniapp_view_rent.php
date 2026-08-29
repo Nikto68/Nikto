@@ -10,8 +10,14 @@
  *
  * ⚠️ پیش‌نیازی که باید روی سرور جدا اضافه شود: یک فایلِ
  *    tonconnect-manifest.json (اسم/آیکون/آدرسِ ربات) که TonConnect
- *    موقعِ اتصال آن را می‌خواند. آدرسش پایین با MANIFEST_URL مشخص شده —
+ *    موقعِ اتصال آن را می‌خواند. آدرسش پایین با MANIFEST مشخص شده —
  *    باید واقعاً روی همین دامنه ساخته و آپلود شود.
+ *
+ * 🖼 عکسِ خودِ گیفت: marketapp.org آدرسِ عکس را در لیست نمی‌دهد، ولی
+ *    هر گیفتِ آپگریدشده‌ی تلگرام دقیقاً همین الگوی عمومی و مستندِ
+ *    fragment.com را دارد: nft.fragment.com/gift/{اسم-بدونِ-فاصله}-{شماره}.medium.jpg
+ *    این الگو سمتِ کلاینت (جاوااسکریپت) از روی «اسمِ گیفت #شماره‌اش»
+ *    ساخته می‌شود؛ اگر عکس نبود (onerror)، آیکونِ جایگزین نشان داده می‌شود.
  */
 
 function grViewRent() {
@@ -48,94 +54,157 @@ function grTplRent() {
 <style>
 :root{
   /* سفید · سبز · مشکی — همه کم‌رنگ، هیچ‌جا اشباع بالا نیست */
-  --bg:#07090A; --bg2:#0C1210;
-  --glass:rgba(255,255,255,.045); --glass2:rgba(255,255,255,.075);
+  --bg:#07090A;
+  --glass:rgba(255,255,255,.045); --glass2:rgba(255,255,255,.08);
   --hair:rgba(255,255,255,.09);
   --ink:#F3F6F4; --dim:#8FA098; --dim2:#5C6B64;
-  --acc:#7FD9A6;            /* سبزِ کم‌جان — نه نئون */
-  --acc-dim:rgba(127,217,166,.16);
+  --acc:#7FD9A6; --acc-dim:rgba(127,217,166,.16);
   --ok:#7FD9A6; --bad:#E28B93;
   --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Vazirmatn,Tahoma,sans-serif;
+  --navh:64px;
 }
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{
-  margin:0;color:var(--ink);font-family:var(--ui);padding:16px;padding-bottom:96px;
+  margin:0;color:var(--ink);font-family:var(--ui);padding:14px;
+  padding-bottom:calc(var(--navh) + env(safe-area-inset-bottom, 0px) + 20px);
   background:
     radial-gradient(120% 60% at 15% -10%, rgba(127,217,166,.10), transparent 60%),
     radial-gradient(90% 50% at 100% 0%, rgba(255,255,255,.05), transparent 55%),
     var(--bg);
   background-attachment:fixed;
 }
-h1{font-size:17px;margin:4px 0 16px;display:flex;align-items:center;gap:8px;font-weight:700}
-h1 .ic{display:inline-block;animation:float 3.2s ease-in-out infinite}
 @keyframes float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-3px) rotate(-6deg)}}
 @keyframes glow{0%,100%{opacity:.55}50%{opacity:1}}
-@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 
-.tabs{display:flex;gap:8px;margin-bottom:16px}
-.tab{
-  flex:1;text-align:center;padding:10px;border-radius:14px;color:var(--dim);font-size:13px;
-  background:var(--glass);border:1px solid var(--hair);
-  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  transition:.2s;
-}
-.tab.on{background:var(--acc-dim);color:var(--acc);border-color:rgba(127,217,166,.35)}
+.topbar{display:flex;align-items:center;gap:8px;margin:2px 0 14px;font-weight:700;font-size:16px}
+.topbar .ic{display:inline-block;animation:float 3.2s ease-in-out infinite}
 
-/* ── کارتِ شیشه‌ای ── */
-.card{
-  position:relative;overflow:hidden;
+/* ── گریدِ کارت‌ها ── */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gcard{
+  position:relative;border-radius:18px;overflow:hidden;cursor:pointer;
   background:linear-gradient(160deg, var(--glass2), var(--glass));
-  border:1px solid var(--hair);border-radius:20px;padding:16px;margin-bottom:12px;
-  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
-  box-shadow:0 8px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
-  animation:pop .35s ease both;
+  border:1px solid var(--hair);
+  box-shadow:0 6px 22px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+  animation:pop .3s ease both;transition:transform .12s;
 }
-.card::before{
-  content:'';position:absolute;inset:-40% -40% auto auto;width:60%;height:60%;
-  background:radial-gradient(circle, rgba(127,217,166,.10), transparent 70%);
-  pointer-events:none;
+.gcard:active{transform:scale(.97)}
+.gimg-wrap{position:relative;aspect-ratio:1/1;background:
+  linear-gradient(120deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.10) 37%, rgba(255,255,255,.05) 63%);
+  background-size:200% 100%;animation:shimmer 1.6s linear infinite}
+.gimg-wrap img{width:100%;height:100%;object-fit:cover;display:block;position:relative;z-index:1}
+.gfallback{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:34px;background:radial-gradient(circle at 50% 35%, var(--acc-dim), transparent 70%);
+  animation:glow 2.4s ease-in-out infinite;
 }
-.card-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.gicon{
-  width:38px;height:38px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;
-  font-size:19px;background:var(--acc-dim);border:1px solid rgba(127,217,166,.25);
-  animation:glow 2.6s ease-in-out infinite;
-}
-.card h3{margin:0;font-size:15px;font-weight:700}
-.row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px}
-.price{font-weight:700;color:var(--acc)}
-.dim{color:var(--dim);font-size:12px}
-input[type=range]{width:100%;accent-color:var(--acc)}
-button{border:0;border-radius:14px;padding:12px 14px;font-family:inherit;font-size:14px;cursor:pointer;
-  transition:transform .12s, opacity .12s}
-button:active{transform:scale(.97)}
-.btn-main{
-  width:100%;margin-top:10px;color:#08130E;font-weight:700;
+.gprice{
+  position:absolute;left:7px;bottom:7px;z-index:2;
+  display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:20px;
+  font-size:11px;font-weight:700;color:#08130E;
   background:linear-gradient(135deg, var(--acc), #C9F5DC);
-  box-shadow:0 6px 20px rgba(127,217,166,.25);
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
 }
-.btn-main:disabled{opacity:.45;box-shadow:none}
-.pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;
+.ginfo{padding:9px 10px 11px}
+.gname{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gnum{font-size:10.5px;color:var(--dim2);margin-top:1px;direction:ltr;text-align:right}
+
+.empty{text-align:center;color:var(--dim);padding:52px 10px;font-size:13px;grid-column:1/-1}
+
+/* ── لیستِ «اجاره‌های من» ── */
+.rcard{
+  display:flex;align-items:center;gap:11px;
+  background:linear-gradient(160deg, var(--glass2), var(--glass));
+  border:1px solid var(--hair);border-radius:16px;padding:10px;margin-bottom:10px;
+  animation:pop .3s ease both;
+}
+.rcard .thumb{width:52px;height:52px;border-radius:12px;flex:none;overflow:hidden;position:relative;
+  background:var(--acc-dim)}
+.rcard .thumb img{width:100%;height:100%;object-fit:cover}
+.rcard .thumb .gfallback{font-size:22px}
+.rcard .body{flex:1;min-width:0}
+.rcard h4{margin:0 0 3px;font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10.5px;
   background:var(--glass);border:1px solid var(--hair)}
 .pill.active{background:var(--acc-dim);color:var(--ok);border-color:rgba(127,217,166,.35)}
 .pill.wait{background:rgba(255,255,255,.09);color:var(--ink)}
 .pill.failed{background:rgba(226,139,147,.16);color:var(--bad)}
-.empty{text-align:center;color:var(--dim);padding:48px 10px;font-size:13px}
-.toast{position:fixed;bottom:16px;left:16px;right:16px;background:var(--glass2);border:1px solid var(--hair);
-  border-radius:14px;padding:13px;font-size:13px;text-align:center;display:none;z-index:9;
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);animation:pop .25s ease both}
+.rcard .btn-mini{margin-top:6px;padding:7px 12px;font-size:12px}
+
+button{border:0;border-radius:14px;padding:12px 14px;font-family:inherit;font-size:14px;cursor:pointer;
+  transition:transform .12s, opacity .12s}
+button:active{transform:scale(.97)}
+.btn-main{
+  width:100%;margin-top:12px;color:#08130E;font-weight:700;
+  background:linear-gradient(135deg, var(--acc), #C9F5DC);
+  box-shadow:0 6px 20px rgba(127,217,166,.25);
+}
+.btn-main:disabled{opacity:.45;box-shadow:none}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.dim{color:var(--dim);font-size:12px}
+
+/* ── نوارِ پایینِ شیشه‌ای ── */
+.navbar{
+  position:fixed;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom, 0px) + 12px);
+  height:var(--navh);display:flex;gap:6px;padding:6px;border-radius:22px;
+  background:rgba(15,20,18,.55);border:1px solid var(--hair);
+  backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);
+  box-shadow:0 10px 34px rgba(0,0,0,.45);z-index:6;
+}
+.navbtn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  background:transparent;color:var(--dim);font-size:11px;border-radius:16px;
+}
+.navbtn span{font-size:18px;transition:transform .2s}
+.navbtn.on{background:var(--acc-dim);color:var(--acc)}
+.navbtn.on span{transform:translateY(-1px)}
+
+/* ── بات‌شیت ── */
+.sheet-bg{position:fixed;inset:0;background:rgba(2,4,3,.55);backdrop-filter:blur(2px);
+  opacity:0;pointer-events:none;transition:opacity .22s;z-index:8}
+.sheet-bg.show{opacity:1;pointer-events:auto}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:9;
+  background:linear-gradient(180deg, #10161390, #0A0F0DF2);
+  border:1px solid var(--hair);border-bottom:none;border-radius:24px 24px 0 0;
+  backdrop-filter:blur(26px) saturate(160%);-webkit-backdrop-filter:blur(26px) saturate(160%);
+  padding:10px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);
+  box-shadow:0 -10px 40px rgba(0,0,0,.5);
+}
+.sheet.open{transform:translateY(0)}
+.sheet-handle{width:36px;height:4px;border-radius:3px;background:var(--hair);margin:4px auto 14px}
+.sheet-img{width:100%;aspect-ratio:1.6/1;border-radius:16px;overflow:hidden;position:relative;margin-bottom:12px;
+  background:var(--acc-dim)}
+.sheet-img img{width:100%;height:100%;object-fit:cover}
+.sheet-img .gfallback{font-size:46px}
+.sheet h3{margin:0 0 2px;font-size:16px}
+.toast{position:fixed;bottom:calc(var(--navh) + env(safe-area-inset-bottom, 0px) + 24px);left:16px;right:16px;
+  background:var(--glass2);border:1px solid var(--hair);border-radius:14px;padding:13px;font-size:13px;
+  text-align:center;display:none;z-index:10;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  animation:pop .25s ease both}
 </style>
 </head>
 <body>
-<h1><span class="ic">🎁</span> اجاره‌ی گیفت</h1>
-<div class="tabs">
-  <div class="tab on" id="tabList" onclick="showTab('list')">لیست گیفت‌ها</div>
-  <div class="tab" id="tabMine" onclick="showTab('mine')">اجاره‌های من</div>
-</div>
-<div id="viewList"></div>
+<div class="topbar"><span class="ic">🎁</span> اجاره‌ی گیفت</div>
+
+<div id="viewList" class="grid"></div>
 <div id="viewMine" style="display:none"></div>
 <div class="toast" id="toast"></div>
+
+<div class="sheet-bg" id="sheetBg" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-handle"></div>
+  <div id="sheetBody"></div>
+</div>
+
+<nav class="navbar">
+  <button class="navbtn on" id="navList" onclick="showTab('list')"><span>🎁</span>گیفت‌ها</button>
+  <button class="navbtn" id="navMine" onclick="showTab('mine')"><span>👤</span>اجاره‌های من</button>
+</nav>
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -143,6 +212,7 @@ if (tg) { tg.ready(); tg.expand(); }
 const API = __API__;
 const MANIFEST = __MANIFEST__;
 const initData = tg ? tg.initData : '';
+let currentItems = [];
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -157,14 +227,48 @@ async function call(action, extra) {
 }
 
 function showTab(which) {
-  document.getElementById('tabList').classList.toggle('on', which === 'list');
-  document.getElementById('tabMine').classList.toggle('on', which === 'mine');
+  document.getElementById('navList').classList.toggle('on', which === 'list');
+  document.getElementById('navMine').classList.toggle('on', which === 'mine');
   document.getElementById('viewList').style.display = which === 'list' ? '' : 'none';
   document.getElementById('viewMine').style.display = which === 'mine' ? '' : 'none';
   if (which === 'mine') loadMine();
 }
 
 function fmt(n) { return Math.round(n).toLocaleString('fa-IR'); }
+
+/**
+ * 🖼 آدرسِ عکسِ گیفت — از روی الگویِ عمومیِ خودِ فرگمنت ساخته می‌شود:
+ * nft.fragment.com/gift/{اسم-بدونِ-فاصله-کوچک}-{شماره}.medium.jpg
+ * اگر اسم شکلِ «... #عدد» نداشت یا عکس نبود، آیکونِ جایگزین می‌ماند.
+ */
+function fragmentImgUrl(name) {
+  const m = /^(.*?)\s*#(\d+)\s*$/.exec(String(name || '').trim());
+  if (!m) return null;
+  const slug = m[1].toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!slug) return null;
+  return 'https://nft.fragment.com/gift/' + slug + '-' + m[2] + '.medium.jpg';
+}
+
+function makeImgBox(name, className) {
+  const wrap = document.createElement('div'); wrap.className = className;
+  const url = fragmentImgUrl(name);
+  const fb = document.createElement('div'); fb.className = 'gfallback'; fb.textContent = '🎁';
+  if (url) {
+    const img = document.createElement('img');
+    img.loading = 'lazy'; img.alt = name;
+    img.onerror = function () { img.remove(); wrap.appendChild(fb); };
+    img.src = url;
+    wrap.appendChild(img);
+  } else {
+    wrap.appendChild(fb);
+  }
+  return wrap;
+}
+
+function splitName(name) {
+  const m = /^(.*?)\s*#(\d+)\s*$/.exec(String(name || '').trim());
+  return m ? { base: m[1], num: '#' + m[2] } : { base: name, num: '' };
+}
 
 async function loadList() {
   const el = document.getElementById('viewList');
@@ -174,43 +278,67 @@ async function loadList() {
     el.innerHTML = '<div class="empty">فعلاً گیفتی برای اجاره موجود نیست.</div>';
     return;
   }
+  currentItems = res.items;
   el.innerHTML = '';
-  res.items.forEach(function (it) {
+  res.items.forEach(function (it, idx) {
+    const { base, num } = splitName(it.nft_name);
     const card = document.createElement('div');
-    card.className = 'card';
-    const days = document.createElement('input');
-    days.type = 'range'; days.min = it.min_days; days.max = it.max_days; days.value = it.min_days;
-    const dayLabel = document.createElement('span');
-    dayLabel.textContent = it.min_days + ' روز';
-    const totalLabel = document.createElement('span');
-    totalLabel.className = 'price';
-    const updateTotal = () => { totalLabel.textContent = fmt(it.price_day * days.value) + ' تومان'; dayLabel.textContent = days.value + ' روز'; };
-    days.oninput = updateTotal;
+    card.className = 'gcard';
+    card.onclick = function () { openSheet(idx); };
 
-    const icon = document.createElement('div'); icon.className = 'gicon'; icon.textContent = '🎁';
-    icon.style.animationDelay = (Math.random() * 1.2).toFixed(2) + 's';
-    const title = document.createElement('h3'); title.textContent = it.nft_name;
-    const head = document.createElement('div'); head.className = 'card-head';
-    head.appendChild(icon); head.appendChild(title);
+    const imgBox = makeImgBox(it.nft_name, 'gimg-wrap');
+    const price = document.createElement('div'); price.className = 'gprice';
+    price.textContent = '🛍 ' + fmt(it.price_day);
+    imgBox.appendChild(price);
 
-    const sub = document.createElement('div'); sub.className = 'dim';
-    sub.textContent = fmt(it.price_day) + ' تومان / روز';
+    const info = document.createElement('div'); info.className = 'ginfo';
+    const nm = document.createElement('div'); nm.className = 'gname'; nm.textContent = base;
+    const nu = document.createElement('div'); nu.className = 'gnum'; nu.textContent = num;
+    info.appendChild(nm); info.appendChild(nu);
 
-    const rangeRow = document.createElement('div'); rangeRow.appendChild(days);
-    const infoRow = document.createElement('div'); infoRow.className = 'row';
-    infoRow.appendChild(dayLabel); infoRow.appendChild(totalLabel);
-
-    const btn = document.createElement('button');
-    btn.className = 'btn-main'; btn.textContent = 'اجاره کن';
-    btn.onclick = function () { orderGift(it.nft_address, parseInt(days.value, 10), btn); };
-
-    card.appendChild(head); card.appendChild(sub);
-    if (it.max_days > it.min_days) { card.appendChild(rangeRow); card.appendChild(infoRow); }
-    else { totalLabel.textContent = fmt(it.price_day * it.min_days) + ' تومان'; card.appendChild(totalLabel); }
-    card.appendChild(btn);
+    card.appendChild(imgBox); card.appendChild(info);
     el.appendChild(card);
-    updateTotal();
   });
+}
+
+// ── بات‌شیتِ جزئیات + انتخابِ مدت ──
+function openSheet(idx) {
+  const it = currentItems[idx];
+  const { base, num } = splitName(it.nft_name);
+  const body = document.getElementById('sheetBody');
+  body.innerHTML = '';
+
+  const imgBox = makeImgBox(it.nft_name, 'sheet-img');
+  const title = document.createElement('h3'); title.textContent = base;
+  const sub = document.createElement('div'); sub.className = 'dim'; sub.textContent = num + '  ·  ' + fmt(it.price_day) + ' تومان / روز';
+
+  body.appendChild(imgBox); body.appendChild(title); body.appendChild(sub);
+
+  const days = document.createElement('input');
+  days.type = 'range'; days.min = it.min_days; days.max = it.max_days; days.value = it.min_days;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-top:8px';
+  const dayLabel = document.createElement('span'); dayLabel.className = 'dim';
+  const totalLabel = document.createElement('span'); totalLabel.style.cssText = 'font-weight:700;color:var(--acc)';
+  const updateTotal = () => { totalLabel.textContent = fmt(it.price_day * days.value) + ' تومان'; dayLabel.textContent = days.value + ' روز'; };
+  days.oninput = updateTotal;
+  row.appendChild(dayLabel); row.appendChild(totalLabel);
+
+  const btn = document.createElement('button');
+  btn.className = 'btn-main'; btn.textContent = 'اجاره کن';
+  btn.onclick = function () { orderGift(it.nft_address, parseInt(days.value, 10), btn); };
+
+  if (it.max_days > it.min_days) { body.appendChild(days); body.appendChild(row); }
+  else { totalLabel.textContent = fmt(it.price_day * it.min_days) + ' تومان'; row.appendChild(totalLabel); body.appendChild(row); }
+  body.appendChild(btn);
+  updateTotal();
+
+  document.getElementById('sheetBg').classList.add('show');
+  document.getElementById('sheet').classList.add('open');
+}
+function closeSheet() {
+  document.getElementById('sheetBg').classList.remove('show');
+  document.getElementById('sheet').classList.remove('open');
 }
 
 async function orderGift(nftAddress, days, btn) {
@@ -218,6 +346,7 @@ async function orderGift(nftAddress, days, btn) {
   const res = await call('order', { nft_address: nftAddress, days: days });
   btn.disabled = false; btn.textContent = 'اجاره کن';
   if (!res.ok) { toast(res.message || 'پرداخت انجام نشد'); return; }
+  closeSheet();
   toast('پرداخت شد — حالا کیف‌پولت رو وصل کن');
   connectWallet(res.rental_id);
 }
@@ -263,21 +392,22 @@ async function loadMine() {
   const labels = { paying: ['در حالِ پرداخت', 'wait'], connect_wait: ['منتظرِ اتصالِ کیف‌پول', 'wait'],
                    active: ['فعال', 'active'], failed: ['ناموفق', 'failed'], expired: ['تمام‌شده', ''] };
   res.rentals.forEach(function (r) {
-    const card = document.createElement('div'); card.className = 'card';
-    const icon = document.createElement('div'); icon.className = 'gicon'; icon.textContent = '🎁';
-    const title = document.createElement('h3'); title.textContent = r.nft_name;
-    const head = document.createElement('div'); head.className = 'card-head';
-    head.appendChild(icon); head.appendChild(title);
+    const { base, num } = splitName(r.nft_name);
+    const card = document.createElement('div'); card.className = 'rcard';
+    const thumb = makeImgBox(r.nft_name, 'thumb');
+    const bodyEl = document.createElement('div'); bodyEl.className = 'body';
+    const title = document.createElement('h4'); title.textContent = base;
     const lbl = labels[r.status] || [r.status, ''];
     const pill = document.createElement('span'); pill.className = 'pill ' + lbl[1]; pill.textContent = lbl[0];
     const sub = document.createElement('div'); sub.className = 'dim';
-    sub.textContent = fmt(r.toman_total) + ' تومان';
-    card.appendChild(head); card.appendChild(pill); card.appendChild(sub);
+    sub.textContent = num + (num ? '  ·  ' : '') + fmt(r.toman_total) + ' تومان';
+    bodyEl.appendChild(title); bodyEl.appendChild(pill); bodyEl.appendChild(sub);
     if (r.status === 'connect_wait') {
-      const btn = document.createElement('button'); btn.className = 'btn-main'; btn.textContent = 'اتصالِ کیف‌پول';
+      const btn = document.createElement('button'); btn.className = 'btn-main btn-mini'; btn.textContent = 'اتصالِ کیف‌پول';
       btn.onclick = function () { connectWallet(r.id); };
-      card.appendChild(btn);
+      bodyEl.appendChild(btn);
     }
+    card.appendChild(thumb); card.appendChild(bodyEl);
     el.appendChild(card);
   });
 }

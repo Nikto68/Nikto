@@ -389,7 +389,10 @@ function grSecurityHeaders() {
         "script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org " .
             "https://cdn.jsdelivr.net; " .
         "style-src 'self' 'unsafe-inline'; " .
-        "img-src 'self' data: https://t.me https://*.telegram.org https://*.telesco.pe; " .
+        // عکسِ خودِ گیفت از سرورِ فرگمنت می‌آید — تنها استثنای img-src نسبت به
+        // مینی‌اپ‌های دیگر، چون کاتالوگ بدونِ عکسِ واقعیِ گیفت بی‌فایده است
+        "img-src 'self' data: https://t.me https://*.telegram.org https://*.telesco.pe " .
+            "https://nft.fragment.com; " .
         "connect-src 'self' https://*.tonapi.io https://*.ton.org https://walletbot.me " .
             "https://bridge.tonapi.io https://*.toncenter.com; " .
         "base-uri 'none'; form-action 'none'; " .
