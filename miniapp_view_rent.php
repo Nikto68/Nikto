@@ -192,6 +192,13 @@ button:active{transform:scale(.97)}
   box-shadow:0 6px 20px rgba(79,163,255,.3);
 }
 .btn-main:disabled{opacity:.45;box-shadow:none}
+.btn-tonkeeper{
+  display:block;width:100%;margin-top:10px;text-align:center;text-decoration:none;
+  box-sizing:border-box;padding:24px 20px;font-size:18px;font-weight:800;color:#08130E;
+  border-radius:32px;background:linear-gradient(135deg, var(--acc), #A9D6FF);
+  box-shadow:0 12px 28px rgba(79,163,255,.4), inset 0 1px 0 rgba(255,255,255,.4);
+}
+.btn-tonkeeper:active{transform:scale(.97)}
 input[type=range]{width:100%;accent-color:var(--acc)}
 .dim{color:var(--dim);font-size:12px}
 
@@ -697,8 +704,10 @@ async function connectWallet(rentalId) {
     statusUnsub = tc.onStatusChange(async function (walletInfo) {
       if (!walletInfo) return;
       if (statusUnsub) { statusUnsub(); statusUnsub = null; }
-      const addr = (walletInfo.account && walletInfo.account.address) ? walletInfo.account.address : '';
-      const r = await call('connect', { rental_id: rentalId, tonconnect_url: addr || JSON.stringify(walletInfo) });
+      // ⚠️ فیلدِ marketapp دقیقاً tonconnect_url نام‌گذاری شده — یعنی خودِ
+      // لینکِ TonConnect را می‌خواهد، نه آدرسِ کیف‌پول را؛ فرستادنِ آدرس
+      // («EQ...») همیشه «Invalid tonconnect URL» می‌داد چون اصلاً URL نیست.
+      const r = await call('connect', { rental_id: rentalId, tonconnect_url: link });
       if (r.ok) { toast('گیفت وصل شد ✅'); closeSheet(); showTab('mine'); }
       else toast(r.message || 'اتصال ناموفق بود');
     });
@@ -717,24 +726,15 @@ function showConnectLink(link) {
   const body = document.getElementById('sheetBody');
   body.innerHTML = '';
   const title = document.createElement('h3'); title.textContent = '👛 اتصالِ TonKeeper';
-  const sub = document.createElement('div'); sub.className = 'dim'; sub.style.marginBottom = '14px';
+  const sub = document.createElement('div'); sub.className = 'dim'; sub.style.marginBottom = '18px';
   sub.textContent = 'اگه TonKeeper رو همین گوشی نصبه، دکمه‌ی زیر رو بزن.';
 
   const a = document.createElement('a');
   a.href = link; a.target = '_blank'; a.rel = 'noopener';
-  a.className = 'btn-main'; a.style.cssText += 'display:block;text-align:center;text-decoration:none';
+  a.className = 'btn-tonkeeper';
   a.textContent = '🔗 بازکردنِ TonKeeper';
 
-  const copyRow = document.createElement('div');
-  copyRow.style.cssText = 'margin-top:14px;padding:10px;border-radius:12px;background:var(--glass);' +
-    'font-size:10px;word-break:break-all;direction:ltr;text-align:left;color:var(--dim)';
-  copyRow.textContent = link;
-  const copyHint = document.createElement('div'); copyHint.className = 'dim';
-  copyHint.style.cssText = 'margin-top:8px;text-align:center;font-size:11.5px';
-  copyHint.textContent = 'یا این متن رو کپی کن و تو TonKeeپرِ یه گوشیِ دیگه (بخشِ Connect) بچسبون.';
-
   body.appendChild(title); body.appendChild(sub); body.appendChild(a);
-  body.appendChild(copyHint); body.appendChild(copyRow);
 
   document.getElementById('sheetBg').classList.add('show');
   document.getElementById('sheet').classList.add('open');
