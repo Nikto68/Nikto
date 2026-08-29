@@ -1857,13 +1857,21 @@ function pxCoinName($sym) {
  */
 function pxWaitReact($chatId, $msgId, $on = true) {
     if (!$msgId) return;
-    tg(BOT_TOKEN, 'setMessageReaction', [
+    $r = tg(BOT_TOKEN, 'setMessageReaction', [
         'chat_id'    => $chatId,
         'message_id' => $msgId,
         'reaction'   => $on
             ? json_encode([['type' => 'custom_emoji', 'custom_emoji_id' => '5116476703002068797']])
             : json_encode([]),
     ], 4);
+    // 🔔 فقط روی زدنِ ری‌اکشن (نه پاک‌کردنش) خبر بده — وگرنه یک شکست، دو هشدار می‌شود
+    if ($on && function_exists('adminAlertOnce') && empty($r['ok'])) {
+        adminAlertOnce('px_react_fail',
+            '⚠️ ری‌اکشنِ ایموجی پریمیومِ قیمت روی هیچ پیامی نمی‌نشیند:' . "\n" .
+            '<code>' . h((string)($r['description'] ?? 'پاسخ نامشخص')) . '</code>' . "\n\n" .
+            'معمولا یعنی توی گروه، تنظیمِ Reactions روی «فقط ایموجی‌های پایه» است — ' .
+            'از تنظیمات گروه ← Reactions ← «All Reactions» را انتخاب کنید.');
+    }
 }
 
 /**
