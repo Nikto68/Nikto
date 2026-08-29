@@ -51,7 +51,6 @@ function grTplRent() {
 <title>اجاره‌ی گیفت</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tonconnect/sdk@3/dist/tonconnect-sdk.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
 :root{
   --bg:#07090A;
@@ -697,7 +696,7 @@ async function connectWallet(rentalId) {
     if (!tonkeeper) { toast('TonKeeper پیدا نشد — SDK آپدیت است؟'); return; }
 
     const link = await tc.connect({ universalLink: tonkeeper.universalLink, bridgeUrl: tonkeeper.bridgeUrl });
-    if (typeof link === 'string') showConnectQr(link);
+    if (typeof link === 'string') showConnectLink(link);
 
     if (statusUnsub) { statusUnsub(); statusUnsub = null; }
     statusUnsub = tc.onStatusChange(async function (walletInfo) {
@@ -713,19 +712,34 @@ async function connectWallet(rentalId) {
   }
 }
 
-function showConnectQr(link) {
+/**
+ * روی همین گوشی، بازکردنِ لینک با یه تگِ <a> معمولی — نه tg.openLink —
+ * چون خودِ کلیکِ کاربر رو یه لینکِ ساده، برخلافِ tg.openLink، توسطِ
+ * تلگرام قاپیده نمی‌شه و مستقیم می‌ره سراغِ TonKeeper. برای گوشیِ دومی هم
+ * که کیف‌پول روش نصبه، همون متن رو کپی/بفرست.
+ */
+function showConnectLink(link) {
   const body = document.getElementById('sheetBody');
   body.innerHTML = '';
-  const title = document.createElement('h3'); title.textContent = '📷 اسکن با TonKeeper';
-  const sub = document.createElement('div'); sub.className = 'dim'; sub.style.marginBottom = '12px';
-  sub.textContent = 'برنامه‌ی TonKeeper رو باز کن، از بخشِ اسکنر همین کد رو بگیر.';
-  const canvasWrap = document.createElement('div');
-  canvasWrap.style.cssText = 'display:flex;justify-content:center;background:#fff;border-radius:16px;padding:14px;margin-bottom:10px';
-  const canvas = document.createElement('canvas');
-  canvasWrap.appendChild(canvas);
-  body.appendChild(title); body.appendChild(sub); body.appendChild(canvasWrap);
-  try { QRCode.toCanvas(canvas, link, { width: 220, margin: 1 }); }
-  catch (e) { canvasWrap.textContent = 'ساختِ QR شکست خورد.'; }
+  const title = document.createElement('h3'); title.textContent = '👛 اتصالِ TonKeeper';
+  const sub = document.createElement('div'); sub.className = 'dim'; sub.style.marginBottom = '14px';
+  sub.textContent = 'اگه TonKeeper رو همین گوشی نصبه، دکمه‌ی زیر رو بزن.';
+
+  const a = document.createElement('a');
+  a.href = link; a.target = '_blank'; a.rel = 'noopener';
+  a.className = 'btn-main'; a.style.cssText += 'display:block;text-align:center;text-decoration:none';
+  a.textContent = '🔗 بازکردنِ TonKeeper';
+
+  const copyRow = document.createElement('div');
+  copyRow.style.cssText = 'margin-top:14px;padding:10px;border-radius:12px;background:var(--glass);' +
+    'font-size:10px;word-break:break-all;direction:ltr;text-align:left;color:var(--dim)';
+  copyRow.textContent = link;
+  const copyHint = document.createElement('div'); copyHint.className = 'dim';
+  copyHint.style.cssText = 'margin-top:8px;text-align:center;font-size:11.5px';
+  copyHint.textContent = 'یا این متن رو کپی کن و تو TonKeeپرِ یه گوشیِ دیگه (بخشِ Connect) بچسبون.';
+
+  body.appendChild(title); body.appendChild(sub); body.appendChild(a);
+  body.appendChild(copyHint); body.appendChild(copyRow);
 
   document.getElementById('sheetBg').classList.add('show');
   document.getElementById('sheet').classList.add('open');

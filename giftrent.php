@@ -95,7 +95,11 @@ function grListRaw($fresh = false) {
         $hit = maCacheGet($ck, 300);
         if (is_array($hit)) return $hit;
     }
-    return grListRefresh();
+    // ⚠️ اینجا کاربرِ واقعی منتظرِ جواب است — پیجینیشِن عمیق (که چند
+    // رفت‌وبرگشتِ کند می‌خواهد) فقط حقِ runBackgroundQueues() است.
+    // اینجا فقط چند صفحه‌ی اول را می‌گیریم تا صفحه هرگز بالانیاید،
+    // و کاملِ کاتالوگ را به رفرشِ پس‌زمینه می‌سپاریم.
+    return grListRefresh(5);
 }
 
 /**
@@ -112,12 +116,12 @@ function grListRaw($fresh = false) {
  * synchronous (اولین بارِ بدونِ کش) هم همین را صدا می‌زند، ولی آن‌وقت
  * فقط یک‌بار در عمرِ نصب اتفاق می‌افتد.
  */
-function grListRefresh() {
+function grListRefresh($maxPages = 25) {
     $ck = 'gr_list';
     $items = [];
     $seen  = [];
     $cursor = '';
-    for ($page = 0; $page < 25; $page++) {
+    for ($page = 0; $page < $maxPages; $page++) {
         $path = '/v1/rent/gifts/?sort_by=price_per_day';
         if ($cursor !== '') $path .= '&cursor=' . rawurlencode($cursor);
         [$resp, $err] = grApiCall($path, 'GET', null, 12);
