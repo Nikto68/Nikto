@@ -25,12 +25,25 @@
 
 if (!defined('PF_LIB')) define('PF_LIB', 1);
 
+/**
+ * 💰 سود، به دو شکل.
+ *
+ * تا حالا سود فقط درصد بود. ولی «۵۰۰۰ تومان روی هر پک استارز» معنی‌اش
+ * روشن‌تر از «۱۲٪» است، مخصوصا برای چیزهایی که نرخشان لحظه‌ای عوض
+ * می‌شود (استارز، پریمیوم، تون) — درصد رویشان می‌لرزد، عددِ ثابت نه.
+ * پس هر بخش («عمومی»، «خرید ممبر»، «مینی‌اپ‌ها») حالا یک حالت
+ * (mode: pct | fixed) و یک عدد دارد.
+ *
+ * ⚠️ شماره مجازی و قیمت‌گیری همچنان فقط درصد را می‌شناسند — موتورِ
+ *    قیمت‌شان خودشان است و اینجا کاری‌شان نداریم؛ برای همان یک دلیلِ
+ *    قدیمی: دو منبعِ حقیقت برای یک عدد یعنی یکی‌شان دروغ است.
+ */
 function pfDefaults() {
     return [
         'on'     => false,
-        'all'    => 0.0,     // درصدِ عمومی
-        'member' => null,    // null یعنی «از عمومی پیروی کن»
-        'ma'     => null,
+        'all'    => ['mode' => 'pct', 'v' => 0.0],   // عمومی
+        'member' => ['mode' => null,  'v' => null],  // null یعنی «از عمومی پیروی کن»
+        'ma'     => ['mode' => null,  'v' => null],
     ];
 }
 
@@ -38,7 +51,13 @@ function pfCfg() {
     $c = cfg()['profit'] ?? null;
     $d = pfDefaults();
     if (!is_array($c)) return $d;
-    return array_replace($d, array_intersect_key($c, $d));
+    $out = array_replace($d, array_intersect_key($c, $d));
+    // سازگاری با نسخه‌ی قدیمی‌تر که این سه فقط یک عددِ درصدِ خام بودند
+    foreach (['all', 'member', 'ma'] as $k) {
+        if (isset($c[$k]) && !is_array($c[$k]))
+            $out[$k] = ['mode' => 'pct', 'v' => $c[$k]];
+    }
+    return $out;
 }
 
 function pfVal($k, $default = null) {
@@ -55,26 +74,47 @@ function pfSet(callable $fn) {
 
 function pfOn() { return !empty(pfVal('on')); }
 
-/**
- * درصدِ سودِ یک بخش.
- *
- * ترتیب: عددِ خودِ بخش → عددِ عمومی → صفر.
- * خاموش که باشد، همیشه صفر — تا یک عددِ فراموش‌شده بی‌خبر روی
- * قیمت‌ها ننشیند.
- */
-function pfPct($sec) {
-    if (!pfOn()) return 0.0;
-    $own = pfVal($sec, null);
-    if ($own !== null && $own !== '') return (float)$own;
-    return (float)pfVal('all', 0);
+function pfSecSet($sec, $mode, $v) {
+    pfSet(function (&$c) use ($sec, $mode, $v) { $c[$sec] = ['mode' => $mode, 'v' => $v]; });
 }
 
-/** قیمت + سودِ آن بخش */
+/**
+ * حالت و عددِ مؤثرِ یک بخش — ['mode' => 'pct'|'fixed', 'v' => float]
+ * ترتیب: خودِ بخش → عمومی → صفر (خاموش).
+ */
+function pfEffective($sec) {
+    if (!pfOn()) return ['mode' => 'pct', 'v' => 0.0];
+    $own = (array)pfVal($sec, []);
+    if (!empty($own['mode']) && $own['v'] !== null && $own['v'] !== '')
+        return ['mode' => (string)$own['mode'], 'v' => (float)$own['v']];
+    $all = (array)pfVal('all', []);
+    return ['mode' => (string)($all['mode'] ?? 'pct'), 'v' => (float)($all['v'] ?? 0)];
+}
+
+/** فقط برای جاهایی که همیشه درصد می‌خواهند (مثلا axMarginOf) */
+function pfPct($sec) {
+    $e = pfEffective($sec);
+    return $e['mode'] === 'pct' ? $e['v'] : 0.0;
+}
+
+/** فقط برای جاهایی که به تومانِ ثابت هم رسیدگی می‌کنند */
+function pfFixed($sec) {
+    $e = pfEffective($sec);
+    return $e['mode'] === 'fixed' ? $e['v'] : 0.0;
+}
+
+/** قیمت + سودِ آن بخش — درصد یا تومانِ ثابت، هرکدام که مُدِ مؤثرش باشد */
 function pfApply($sec, $price) {
     $p = (float)$price;
     if ($p <= 0) return $p;
-    $m = pfPct($sec);
-    return $m == 0.0 ? $p : $p * (1 + $m / 100);
+    $e = pfEffective($sec);
+    if ($e['v'] == 0.0) return $p;
+    return $e['mode'] === 'fixed' ? ($p + $e['v']) : ($p * (1 + $e['v'] / 100));
+}
+
+/** نمایشِ خوانا: «۱۲٪» یا «۵٬۰۰۰ تومان» */
+function pfAmountStr($e) {
+    return $e['mode'] === 'fixed' ? (fmtNum($e['v']) . ' تومان') : pfPctStr($e['v']);
 }
 
 /**
@@ -94,28 +134,29 @@ function pfProduct($p) {
 /**
  * 📊 همه‌ی سودهای ربات، در یک نگاه.
  *
- * هر ردیف: [کلید, برچسب, درصدِ مؤثر, آیا عددِ خودش را دارد, کجا تنظیم می‌شود]
+ * هر ردیف: [کلید, برچسب, ['mode'=>,'v'=>] مؤثر, آیا عددِ خودش را دارد, کجا تنظیم می‌شود]
  */
 function pfRows() {
+    $own = function ($sec) { $o = (array)pfVal($sec, []); return !empty($o['mode']) && $o['v'] !== null && $o['v'] !== ''; };
     $rows = [
-        ['member', '🎯 خرید ممبر', pfPct('member'), pfVal('member') !== null, 'pf_member'],
-        ['ma',     '🚀 مینی‌اپ‌ها', pfPct('ma'),     pfVal('ma')     !== null, 'pf_ma'],
+        ['member', '🎯 خرید ممبر', pfEffective('member'), $own('member'), 'pf_member'],
+        ['ma',     '🚀 مینی‌اپ‌ها', pfEffective('ma'),     $own('ma'),     'pf_ma'],
     ];
     if (function_exists('numVal'))
-        $rows[] = ['num', '☎️ شماره مجازی', (float)numVal('markup', 0), true, 'num_home'];
+        $rows[] = ['num', '☎️ شماره مجازی', ['mode' => 'pct', 'v' => (float)numVal('markup', 0)], true, 'num_home'];
     if (function_exists('pxVal'))
-        $rows[] = ['px',  '💹 قیمت‌گیری ارز', (float)pxVal('margin', 0), true, 'px_home'];
+        $rows[] = ['px',  '💹 قیمت‌گیری ارز', ['mode' => 'pct', 'v' => (float)pxVal('margin', 0)], true, 'px_home'];
     return $rows;
 }
 
-/** یک درصد را در هر چهار جا بنشان */
+/** یک درصد را در هر چهار جا بنشان — شماره مجازی و قیمت‌گیری فقط درصد می‌شناسند */
 function pfSetAll($pct) {
     $pct = max(0.0, min(1000.0, (float)$pct));
     pfSet(function (&$c) use ($pct) {
         $c['on']     = true;
-        $c['all']    = $pct;
-        $c['member'] = null;      // همه از عمومی پیروی کنند
-        $c['ma']     = null;
+        $c['all']    = ['mode' => 'pct', 'v' => $pct];
+        $c['member'] = ['mode' => null, 'v' => null];      // همه از عمومی پیروی کنند
+        $c['ma']     = ['mode' => null, 'v' => null];
     });
     if (function_exists('numSet')) numSet(function (&$c) use ($pct) { $c['markup'] = $pct; });
     if (function_exists('pxSet'))  pxSet(function (&$c) use ($pct)  { $c['margin'] = $pct; });
@@ -133,11 +174,11 @@ function pfHome($chatId, $msgId = null) {
 
     $t  = "📈 <b>سود روی محصولات</b>\n\n";
     $t .= 'وضعیت: ' . ($on ? '✅ روشن' : '❌ خاموش') . "\n";
-    $t .= '📊 سودِ عمومی: <b>' . pfPctStr(pfVal('all', 0)) . "</b>\n\n";
+    $t .= '📊 سودِ عمومی: <b>' . pfAmountStr(pfEffective('all')) . "</b>\n\n";
 
     $t .= "<b>الان روی هر بخش:</b>\n";
-    foreach (pfRows() as [$k, $lbl, $pct, $own, $_]) {
-        $t .= $lbl . ': <b>' . pfPctStr($pct) . '</b>' .
+    foreach (pfRows() as [$k, $lbl, $eff, $own, $_]) {
+        $t .= $lbl . ': <b>' . pfAmountStr($eff) . '</b>' .
               ($own ? '' : ' <i>(از عمومی)</i>') . "\n";
     }
 
@@ -237,14 +278,37 @@ function pfCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
         return true;
     }
 
-    if (in_array($data, ['pf_all', 'pf_member', 'pf_ma'], true)) {
-        $lbl = ['pf_all' => 'سودِ عمومی', 'pf_member' => 'سودِ خرید ممبر',
-                'pf_ma' => 'سودِ مینی‌اپ‌ها'][$data];
-        setState($uid, $data, []);
+    // 📈 «سودِ عمومی/ممبر/مینی‌اپ» — اول بپرس درصد یا تومانِ ثابت
+    $secLbl = ['pf_all' => 'سودِ عمومی', 'pf_member' => 'سودِ خرید ممبر', 'pf_ma' => 'سودِ مینی‌اپ‌ها'];
+    if (isset($secLbl[$data])) {
+        $sec = substr($data, 3);
         $ack();
-        sendMsg(BOT_TOKEN, $chatId,
-            '📈 <b>' . $lbl . "</b>\n\nچند درصد؟ مثلا <code>25</code>" .
-            ($data === 'pf_all' ? '' : "\n\n<code>-</code> بفرستید تا از سودِ عمومی پیروی کند."),
+        $t = '📈 <b>' . $secLbl[$data] . "</b>\n\nبه چه شکل حساب شود؟\n\n" .
+             "📊 <b>درصد</b> — مثلا ۱۲٪ روی قیمتِ پایه\n" .
+             "💰 <b>تومانِ ثابت</b> — مثلا همیشه ۵٬۰۰۰ تومان اضافه، صرفِ نظر از قیمتِ پایه";
+        $rows = [[btnCb('📊 درصد', 'pfm_' . $sec . '_pct', 'admin'),
+                  btnCb('💰 تومانِ ثابت', 'pfm_' . $sec . '_fixed', 'admin')]];
+        if ($sec !== 'all') $rows[] = [btnCb('⚪️ از عمومی پیروی کند', 'pfm_' . $sec . '_off', 'info')];
+        $rows[] = [btnCb('🔙 بی‌خیال', 'pf_home', 'nav')];
+        editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+        return true;
+    }
+
+    if (preg_match('/^pfm_(all|member|ma)_(pct|fixed|off)$/', $data, $m)) {
+        [$_, $sec, $mode] = $m;
+        if ($mode === 'off') {
+            pfSecSet($sec, null, null);
+            $ack('⚪️ از عمومی پیروی می‌کند');
+            pfHome($chatId, $msgId);
+            return true;
+        }
+        setState($uid, 'pf_set', ['sec' => $sec, 'mode' => $mode]);
+        $ack();
+        $ask = $mode === 'pct'
+            ? "چند درصد؟ مثلا <code>25</code>"
+            : "چند تومان همیشه اضافه شود؟ مثلا <code>5000</code>";
+        sendMsg(BOT_TOKEN, $chatId, '📈 <b>' . $secLbl['pf_' . $sec] . '</b>' .
+            ($mode === 'fixed' ? ' — تومانِ ثابت' : ' — درصد') . "\n\n" . $ask,
             inlineKb([[btnCb('🔙 بی‌خیال', 'pf_home', 'nav')]]));
         return true;
     }
@@ -254,10 +318,9 @@ function pfCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
 }
 
 function pfStateHandle($action, $msg, $uid, $chatId) {
-    if (!in_array((string)$action, ['pf_all', 'pf_member', 'pf_ma', 'pf_every'], true)) return false;
+    if (!in_array((string)$action, ['pf_set', 'pf_every'], true)) return false;
 
     $plain = trim((string)($msg['text'] ?? ''));
-    $blank = ($plain === '-' || $plain === '—');
     $back  = inlineKb([[btnCb('📈 سود', 'pf_home', 'admin')]]);
     $num   = function ($s) {
         $s = strtr((string)$s, ['۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5',
@@ -274,21 +337,18 @@ function pfStateHandle($action, $msg, $uid, $chatId) {
         return true;
     }
 
-    $key = ['pf_all' => 'all', 'pf_member' => 'member', 'pf_ma' => 'ma'][$action];
-    if ($key === 'all') {
-        $v = max(0.0, min(1000.0, $num($plain)));
-        pfSet(function (&$c) use ($v) { $c['all'] = $v; });
-        clearState($uid);
-        sendMsg(BOT_TOKEN, $chatId, '✅ سودِ عمومی: <b>' . pfPctStr($v) . '</b>' .
-            (pfOn() ? '' : "\n\n⚠️ بخشِ سود خاموش است — تا روشنش نکنید نمی‌نشیند."), $back);
-        return true;
-    }
+    // pf_set: هم درصد را می‌پذیرد هم تومانِ ثابت — با همان مُدی که قبلا انتخاب شد
+    $st  = getState($uid);
+    $sd  = $st['data'] ?? [];
+    $sec = (string)($sd['sec'] ?? '');
+    $mode = (string)($sd['mode'] ?? 'pct');
+    if (!in_array($sec, ['all', 'member', 'ma'], true)) { clearState($uid); return true; }
 
-    $v = $blank ? null : max(0.0, min(1000.0, $num($plain)));
-    pfSet(function (&$c) use ($key, $v) { $c[$key] = $v; });
+    $v = $mode === 'pct' ? max(0.0, min(1000.0, $num($plain))) : max(0.0, $num($plain));
+    pfSecSet($sec, $mode, $v);
     clearState($uid);
-    sendMsg(BOT_TOKEN, $chatId,
-        $v === null ? '✅ از سودِ عمومی پیروی می‌کند — الان <b>' . pfPctStr(pfPct($key)) . '</b>'
-                    : '✅ ثبت شد: <b>' . pfPctStr($v) . '</b>', $back);
+    $lbl = ['all' => 'سودِ عمومی', 'member' => 'سودِ خرید ممبر', 'ma' => 'سودِ مینی‌اپ‌ها'][$sec];
+    sendMsg(BOT_TOKEN, $chatId, '✅ ' . $lbl . ': <b>' . pfAmountStr(['mode' => $mode, 'v' => $v]) . '</b>' .
+        (pfOn() ? '' : "\n\n⚠️ بخشِ سود خاموش است — تا روشنش نکنید نمی‌نشیند."), $back);
     return true;
 }
