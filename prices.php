@@ -1850,6 +1850,23 @@ function pxCoinName($sym) {
 }
 
 /**
+ * ⏳ روی پیامِ کاربر یک ری‌اکشنِ ایموجی پریمیوم می‌زند تا وقتی کارت در
+ * حالِ ساخته‌شدن/آپلود است، حسِ «بی‌جواب موندن» نده. Best-effort است —
+ * اگر چت اجازه‌ی ری‌اکشنِ سفارشی ندهد یا تایم‌اوت بخورد، بی‌صدا رد می‌شود
+ * و هیچ‌جای مسیرِ اصلیِ جواب‌دادن را کند یا متوقف نمی‌کند.
+ */
+function pxWaitReact($chatId, $msgId, $on = true) {
+    if (!$msgId) return;
+    tg(BOT_TOKEN, 'setMessageReaction', [
+        'chat_id'    => $chatId,
+        'message_id' => $msgId,
+        'reaction'   => $on
+            ? json_encode([['type' => 'custom_emoji', 'custom_emoji_id' => '5116476703002068797']])
+            : json_encode([]),
+    ], 4);
+}
+
+/**
  * پیام را می‌بیند و اگر مربوط به قیمت بود، جواب می‌دهد.
  * برگشت true یعنی رسیدگی شد و بقیه‌ی ربات نباید دستش بزند.
  */
@@ -1908,12 +1925,15 @@ function pxHandleText($text, $chatId, $replyTo = null) {
         $ck  = 'a|' . $ak . '|' . $price . '|' . $chg . '|' . botUsername();
         // کارت فقط وقتی ساخته می‌شود که شناسه‌ی فایلش را نداشته باشیم —
         // وگرنه اصلا رندر هم لازم نیست
-        $png = (maCacheGet(pxPhotoIdKey($ck), 86400) ?? '') !== ''
-             ? null
-             : pxCardCached($ck, fn() => pxAssetCard($a['name'], $a['emoji'], $price, $a['unit'], $chg, $a['bg']));
+        $needsRender = (maCacheGet(pxPhotoIdKey($ck), 86400) ?? '') === '';
+        if ($needsRender) pxWaitReact($chatId, $replyTo, true);
+        $png = $needsRender
+             ? pxCardCached($ck, fn() => pxAssetCard($a['name'], $a['emoji'], $price, $a['unit'], $chg, $a['bg']))
+             : null;
         pxDeliver($chatId, $png,
             pxAssetCaption($a['name'], $price, $a['unit'], $chg, $a['emoji'] ?? '', $ak),
             $kb, $replyTo, $ck);
+        if ($needsRender) pxWaitReact($chatId, $replyTo, false);
         return true;
     }
 
@@ -1937,10 +1957,12 @@ function pxHandleText($text, $chatId, $replyTo = null) {
                     $d = pxUsdtIrt();
                     if ($d > 0) $usdEq = $val / $d;
                 }
+                pxWaitReact($chatId, $replyTo, true);
                 $png = pxTryCard(fn() => pxAssetCard($ttl, $as['emoji'], $val, $as['unit'], $chg,
                                                      $as['bg'], pxSeries($val, $chg, 110)));
                 pxDeliver($chatId, $png,
                     pxConvAssetCaption($ttl, $val, $as['unit'], $usdEq, $chg), $kb, $replyTo);
+                pxWaitReact($chatId, $replyTo, false);
                 return true;
             }
         }
@@ -1959,11 +1981,13 @@ function pxHandleText($text, $chatId, $replyTo = null) {
             // معادل دلاری همیشه نوشته می‌شود — حتی وقتی خروجی تومان است
             $usdEq = ($unit === 'دلار') ? null : $amount * $fromUsd;
             // رنگِ قالب از خودِ ارزِ مبدا می‌آید، پس هر ارز رنگ خودش را دارد
+            pxWaitReact($chatId, $replyTo, true);
             $png = pxTryCard(fn() => pxAssetCard(pxNum($amount) . ' ' . pxCoinName($from), '●',
                                                  $val, $unit, $chg, pxCoinColors($from),
                                                  pxSeries($val, $chg, 110)));
             pxDeliver($chatId, $png,
                 pxConvCaption($amount, $from, $val, $unit, $usdEq, $chg), $kb, $replyTo);
+            pxWaitReact($chatId, $replyTo, false);
             return true;
         }
     }
@@ -1985,10 +2009,13 @@ function pxHandleText($text, $chatId, $replyTo = null) {
 
     // قیمت تومانی روی کارت — چون مخاطب ایرانی است
     $ck  = 'c|' . $sym . '|' . round($usd * $irtRate) . '|' . $chg . '|' . botUsername();
-    $png = (maCacheGet(pxPhotoIdKey($ck), 86400) ?? '') !== ''
-         ? null
-         : pxCardCached($ck, fn() => pxCoinCard($sym, $usd * $irtRate, 'تومان', $chg, $usd * $irtRate));
+    $needsRender = (maCacheGet(pxPhotoIdKey($ck), 86400) ?? '') === '';
+    if ($needsRender) pxWaitReact($chatId, $replyTo, true);
+    $png = $needsRender
+         ? pxCardCached($ck, fn() => pxCoinCard($sym, $usd * $irtRate, 'تومان', $chg, $usd * $irtRate))
+         : null;
     pxDeliver($chatId, $png, $cap, $kb, $replyTo, $ck);
+    if ($needsRender) pxWaitReact($chatId, $replyTo, false);
     return true;
 }
 
