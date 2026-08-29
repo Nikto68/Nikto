@@ -4616,7 +4616,8 @@ function edSubs($chatId, $msgId, $bid) {
         : "هنوز دکمه‌ای اضافه نکرده‌اید.";
 
     // 🚀 دکمه‌های مینی‌اپ عضو همین لیست‌اند — پیش‌نمایش واقعی ردیف‌ها
-    if ($bid === 'buy' && function_exists('maSubItems') && maSubItems()) {
+    $grItem = ($bid === 'buy' && function_exists('grSubItem')) ? grSubItem() : null;
+    if ($bid === 'buy' && ((function_exists('maSubItems') && maSubItems()) || $grItem)) {
         $lines = [];
         foreach (subRows('buy') as $r) {
             $cells = [];
@@ -4646,6 +4647,12 @@ function edSubs($chatId, $msgId, $bid) {
             $rows[] = [btnCb('🚀 ' . trim(($mi['emoji'] ?? '') . ' ' . $mi['text']) . '  ' . mb_substr($col, 0, 2),
                              'maadm_btn_' . $key, 'link')];
         }
+    }
+    // 🎁 دکمه‌ی اجاره‌ی گیفت هم همین‌جا — می‌زند به پنلِ خودش که ترتیب/ردیف را دارد
+    if ($grItem) {
+        $col = styleMap()[$grItem['color'] ?? 'none'] ?? '';
+        $rows[] = [btnCb('🎁 ' . trim(($grItem['emoji'] ?? '') . ' ' . $grItem['text']) . '  ' . mb_substr($col, 0, 2),
+                         'gr_home', 'link')];
     }
     $rows[] = [btnCb('➕ افزودن دکمه شیشه‌ای', 'sbnew_' . $bid, 'confirm'),
                btnCb('📐 چیدمان', 'sblay_' . $bid, 'admin')];

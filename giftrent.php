@@ -484,13 +484,18 @@ function grHome($chatId, $msgId = null) {
     $on = !empty($c['on']);
     $t  = "🎁 <b>اجاره‌ی گیفت</b>\n\n";
     $t .= 'وضعیت: ' . ($on ? '✅ روشن' : '❌ خاموش') . "\n";
-    $t .= 'دکمه: ' . h(trim($b['emoji'] . ' ' . $b['text'])) . ($b['icon'] !== '' ? ' 💎' : '') . "\n\n";
+    $t .= 'دکمه: ' . h(trim($b['emoji'] . ' ' . $b['text'])) . ($b['icon'] !== '' ? ' 💎' : '') . "\n";
+    $t .= 'ترتیب: <b>' . $b['order'] . '</b> · ردیف: <b>' . $b['row'] . '</b>' .
+          ($b['row'] === 0 ? ' (خودکار)' : '') . "\n\n";
     $t .= "این یک مینی‌اپِ جداست — باز-فروشِ اجاره‌ی گیفتِ NFT (بدون مالکیتِ واقعیِ شما).\n" .
-          "دکمه‌اش کنارِ محصولاتِ «ثـبـت سـفـارش» می‌نشیند.";
+          "دکمه‌اش کنارِ محصولاتِ «ثـبـت سـفـارش» می‌نشیند — همون زیردکمه‌هایی که «ممبر فیک» و بقیه توشن؛ " .
+          "ترتیب و ردیف رو با همون منطقِ اون‌ها می‌شه چید.";
     $rows = [
         [btnCb($on ? '❌ خاموش کن' : '✅ روشن کن', 'gr_tog', 'info')],
         [btnCb('✏️ متنِ دکمه', 'gr_text', 'admin'), btnCb('🙂 ایموجیِ ساده', 'gr_emoji', 'admin')],
         [btnCb('💎 ایموجیِ پریمیوم', 'gr_icon', 'admin')],
+        [btnCb('🔢 ترتیبِ نمایش', 'gr_order', 'admin'), btnCb('📍 شماره‌ی ردیف', 'gr_row', 'admin')],
+        [btnCb('📐 چیدمانِ زیردکمه‌های ثبتِ سفارش', 'sbs_buy', 'nav')],
         [btnCb('📈 سودِ اجاره', 'pf_rent', 'nav')],
         [btnCb('🔙 بازگشت', 'adm_home', 'nav')],
     ];
@@ -512,13 +517,15 @@ function grCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
         return true;
     }
 
-    if (in_array($data, ['gr_text', 'gr_emoji', 'gr_icon'], true)) {
+    if (in_array($data, ['gr_text', 'gr_emoji', 'gr_icon', 'gr_order', 'gr_row'], true)) {
         $ack();
         setState($uid, $data, []);
         $hint = [
             'gr_text'  => '✏️ متنِ دکمه را بفرستید — مثلا <code>اجاره‌ی گیفت</code>',
             'gr_emoji' => '🙂 یک ایموجیِ معمولی بفرستید — مثلا 🎁',
             'gr_icon'  => '💎 یک پیامِ حاویِ همان ایموجیِ پریمیوم بفرستید — خودش برداشته می‌شود.',
+            'gr_order' => "🔢 ترتیبِ نمایش (عدد):\n\nعددِ کوچک‌تر یعنی بالاتر. زیردکمه‌های ثبتِ سفارش هم همین «ترتیب» را دارند، پس با عدد می‌توانید این دکمه را بینِ آن‌ها جابه‌جا کنید.",
+            'gr_row'   => '📍 شماره‌ی ردیف (عدد):' . "\n\n" . 'اگر عدد بدهید، این دکمه حتماً در همان ردیف می‌نشیند. ۰ یعنی خودکار (طبقِ چیدمان).',
         ][$data];
         sendMsg(BOT_TOKEN, $chatId, $hint, inlineKb([[btnCb('🔙 بی‌خیال', 'gr_home', 'nav')]]));
         return true;
@@ -529,7 +536,7 @@ function grCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
 }
 
 function grStateHandle($action, $msg, $uid, $chatId) {
-    if (!in_array((string)$action, ['gr_text', 'gr_emoji', 'gr_icon'], true)) return false;
+    if (!in_array((string)$action, ['gr_text', 'gr_emoji', 'gr_icon', 'gr_order', 'gr_row'], true)) return false;
     $back = inlineKb([[btnCb('🎁 اجاره‌ی گیفت', 'gr_home', 'admin')]]);
 
     if ($action === 'gr_icon') {
@@ -537,6 +544,15 @@ function grStateHandle($action, $msg, $uid, $chatId) {
         if (!$ids) { sendMsg(BOT_TOKEN, $chatId, '⚠️ ایموجیِ پریمیومی توی پیام پیدا نشد.', $back); clearState($uid); return true; }
         $ic = $ids[0];
         grSet(function (&$c) use ($ic) { $c['btn_icon'] = $ic; });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, '✅ ثبت شد.', $back);
+        return true;
+    }
+
+    if ($action === 'gr_order' || $action === 'gr_row') {
+        $n = (int)preg_replace('/[^0-9]/', '', (string)($msg['text'] ?? ''));
+        if ($action === 'gr_order') grSet(function (&$c) use ($n) { $c['btn_order'] = max(1, $n); });
+        else                        grSet(function (&$c) use ($n) { $c['btn_row']   = max(0, $n); });
         clearState($uid);
         sendMsg(BOT_TOKEN, $chatId, '✅ ثبت شد.', $back);
         return true;
