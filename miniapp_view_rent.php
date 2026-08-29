@@ -51,6 +51,7 @@ function grTplRent() {
 <title>اجاره‌ی گیفت</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tonconnect/sdk@3/dist/tonconnect-sdk.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
 :root{
   --bg:#07090A;
@@ -680,6 +681,14 @@ function getConnector() {
   return connector;
 }
 
+/**
+ * ⚠️ خودِ صفحه داخلِ WebViewِ تلگرامه — اگه لینکِ TonConnect رو با
+ * tg.openLink باز کنیم، خودِ تلگرام قاپش می‌زنه و می‌بره تو صفحه‌ی
+ * Fragmentِ داخلی‌اش (که manifest ما رو نمی‌شناسه و خطا می‌ده — دقیقاً
+ * همون چیزی که دیده شد). راه‌حلِ درست این نوع مشکل تو مینی‌اپ‌های
+ * تلگرام، نشون‌دادنِ خودِ QR داخلِ همین صفحه‌ست — کاربر با دوربینِ
+ * TonKeeper اسکن می‌کنه، هیچ‌جا از مینی‌اپ بیرون نمی‌ره.
+ */
 async function connectWallet(rentalId) {
   try {
     const tc = getConnector();
@@ -688,7 +697,7 @@ async function connectWallet(rentalId) {
     if (!tonkeeper) { toast('TonKeeper پیدا نشد — SDK آپدیت است؟'); return; }
 
     const link = await tc.connect({ universalLink: tonkeeper.universalLink, bridgeUrl: tonkeeper.bridgeUrl });
-    if (typeof link === 'string') { if (tg && tg.openLink) tg.openLink(link); else window.open(link, '_blank'); }
+    if (typeof link === 'string') showConnectQr(link);
 
     if (statusUnsub) { statusUnsub(); statusUnsub = null; }
     statusUnsub = tc.onStatusChange(async function (walletInfo) {
@@ -696,12 +705,30 @@ async function connectWallet(rentalId) {
       if (statusUnsub) { statusUnsub(); statusUnsub = null; }
       const addr = (walletInfo.account && walletInfo.account.address) ? walletInfo.account.address : '';
       const r = await call('connect', { rental_id: rentalId, tonconnect_url: addr || JSON.stringify(walletInfo) });
-      if (r.ok) { toast('گیفت وصل شد ✅'); showTab('mine'); }
+      if (r.ok) { toast('گیفت وصل شد ✅'); closeSheet(); showTab('mine'); }
       else toast(r.message || 'اتصال ناموفق بود');
     });
   } catch (e) {
     toast('اتصالِ کیف‌پول شکست خورد — دوباره امتحان کنید');
   }
+}
+
+function showConnectQr(link) {
+  const body = document.getElementById('sheetBody');
+  body.innerHTML = '';
+  const title = document.createElement('h3'); title.textContent = '📷 اسکن با TonKeeper';
+  const sub = document.createElement('div'); sub.className = 'dim'; sub.style.marginBottom = '12px';
+  sub.textContent = 'برنامه‌ی TonKeeper رو باز کن، از بخشِ اسکنر همین کد رو بگیر.';
+  const canvasWrap = document.createElement('div');
+  canvasWrap.style.cssText = 'display:flex;justify-content:center;background:#fff;border-radius:16px;padding:14px;margin-bottom:10px';
+  const canvas = document.createElement('canvas');
+  canvasWrap.appendChild(canvas);
+  body.appendChild(title); body.appendChild(sub); body.appendChild(canvasWrap);
+  try { QRCode.toCanvas(canvas, link, { width: 220, margin: 1 }); }
+  catch (e) { canvasWrap.textContent = 'ساختِ QR شکست خورد.'; }
+
+  document.getElementById('sheetBg').classList.add('show');
+  document.getElementById('sheet').classList.add('open');
 }
 
 async function loadMine() {
