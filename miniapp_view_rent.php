@@ -252,6 +252,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   <div class="searchbox">🔎<input id="search" placeholder="جستجوی گیفت…" oninput="renderGrid()"></div>
   <div class="iconbtn" id="filterBtn" onclick="toggleFilterPanel()">🎛</div>
   <div class="iconbtn" id="sortBtn" onclick="toggleSort()">↕️</div>
+  <div class="iconbtn" id="dbgBtn" onclick="toggleDebug()" style="display:none">🐞</div>
 </div>
 <div class="filter-panel" id="filterPanel" style="display:none"></div>
 <div class="countline" id="countLine"></div>
@@ -342,6 +343,14 @@ function toggleSort() {
   renderGrid();
 }
 
+// دیباگ (فقط ادمین می‌بینه دکمه‌ش رو — چون فقط اونه که سرور اطلاعاتِ خام رو می‌فرسته)
+let debugMode = false;
+function toggleDebug() {
+  debugMode = !debugMode;
+  document.getElementById('dbgBtn').classList.toggle('on', debugMode);
+  renderGrid();
+}
+
 // ── فیلتر ──
 let activeFilters = { model: null, backdrop: null, symbol: null, maxPrice: null };
 function attrVal(it, trait) {
@@ -384,7 +393,14 @@ function renderGrid() {
     .filter(function (it) { return !activeFilters.maxPrice || it.price_day <= activeFilters.maxPrice; });
   items.sort(function (a, b) { return sortDir === 'asc' ? a.price_day - b.price_day : b.price_day - a.price_day; });
 
-  document.getElementById('countLine').textContent = items.length + ' گیفت';
+  const totalCount = items.length;
+  const CAP = 100;
+  const capped = items.length > CAP;
+  if (capped) items = items.slice(0, CAP);
+
+  document.getElementById('countLine').textContent = capped
+    ? ('نمایشِ ' + CAP + ' از ' + totalCount + ' گیفت — بقیه رو با 🎛 فیلتر پیدا کن')
+    : (totalCount + ' گیفت');
   if (!items.length) { el.innerHTML = '<div class="empty">چیزی پیدا نشد.</div>'; return; }
 
   el.innerHTML = '';
@@ -415,12 +431,15 @@ function renderGrid() {
 
     info.appendChild(nameRow); info.appendChild(prices);
 
-    // 🔍 فقط برای ادمین — عددِ خامِ marketapp و نرخ‌ها، برای پیداکردنِ باگِ قیمت
+    // 🔍 فقط وقتی دکمه‌ی 🐞 روشنه (و فقط ادمین اصلاً این دیتا رو از سرور می‌گیره)
     if (it._dbg) {
-      const dbg = document.createElement('div');
-      dbg.style.cssText = 'font-size:8.5px;color:#E28B93;margin-top:4px;direction:ltr;text-align:right;word-break:break-all';
-      dbg.textContent = 'raw:' + it._dbg.raw + ' ton:' + it._dbg.ton + ' r1:' + it._dbg.ton_usdt + ' r2:' + it._dbg.usdt_irt;
-      info.appendChild(dbg);
+      document.getElementById('dbgBtn').style.display = '';
+      if (debugMode) {
+        const dbg = document.createElement('div');
+        dbg.style.cssText = 'font-size:8.5px;color:#E28B93;margin-top:4px;direction:ltr;text-align:right;word-break:break-all';
+        dbg.textContent = 'raw:' + it._dbg.raw + ' ton:' + it._dbg.ton + ' r1:' + it._dbg.ton_usdt + ' r2:' + it._dbg.usdt_irt;
+        info.appendChild(dbg);
+      }
     }
 
     card.appendChild(imgBox); card.appendChild(info);
@@ -545,17 +564,34 @@ function guessColor(name) {
 function chipGroup(container, trait, key) {
   const vals = uniqueAttrValues(trait);
   if (!vals.length) { container.innerHTML = '<div class="dim">موردی نیست.</div>'; return; }
+
+  // پس‌زمینه‌ها لیستِ عمودیِ ردیفی‌اند (سطرِ رنگ + اسم)، بقیه چیپِ کنارِ‌هم
+  if (trait === 'Backdrop') {
+    const list = document.createElement('div'); list.style.cssText = 'display:flex;flex-direction:column;gap:4px';
+    vals.forEach(function (val) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:9px;padding:8px 6px;border-radius:10px;cursor:pointer';
+      if (activeFilters[key] === val) row.style.background = 'var(--acc-dim)';
+      const sw = document.createElement('span');
+      sw.style.cssText = 'width:16px;height:16px;border-radius:5px;flex:none;background:' + guessColor(val);
+      const lbl = document.createElement('span'); lbl.style.fontSize = '12px'; lbl.textContent = val;
+      if (activeFilters[key] === val) lbl.style.color = 'var(--acc)';
+      row.appendChild(sw); row.appendChild(lbl);
+      row.onclick = function () {
+        activeFilters[key] = activeFilters[key] === val ? null : val;
+        renderGrid(); renderFilterPanel();
+      };
+      list.appendChild(row);
+    });
+    container.appendChild(list);
+    return;
+  }
+
   const wrap = document.createElement('div'); wrap.className = 'acc-chips';
   vals.forEach(function (val) {
     const chip = document.createElement('span'); chip.className = 'pill'; chip.style.cursor = 'pointer';
-    chip.style.display = 'inline-flex'; chip.style.alignItems = 'center'; chip.style.gap = '5px';
     if (activeFilters[key] === val) chip.classList.add('active');
-    if (trait === 'Backdrop') {
-      const sw = document.createElement('span');
-      sw.style.cssText = 'width:11px;height:11px;border-radius:4px;flex:none;background:' + guessColor(val);
-      chip.appendChild(sw);
-    }
-    chip.appendChild(document.createTextNode(val));
+    chip.textContent = val;
     chip.onclick = function () {
       activeFilters[key] = activeFilters[key] === val ? null : val;
       renderGrid(); renderFilterPanel();
