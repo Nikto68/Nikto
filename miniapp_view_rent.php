@@ -666,9 +666,14 @@ async function orderGift(nftAddress, days, btn) {
 }
 
 // ── TonConnect: اتصالِ کیف‌پولِ خودِ مشتری ──
-// ⚠️ این بخش روی یک دستگاهِ واقعی با یک کیف‌پولِ TON واقعی تست نشده؛
-//    قبل از رفتنِ به تولید حتماً با Tonkeeper/MyTonWallet واقعی امتحان شود.
+// ⚠️ این بخش روی یک دستگاهِ واقعی با یک TonKeeperِ واقعی تست نشده؛ بعد از
+//    هر تغییر باید واقعاً امتحان بشه — من از اینجا نمی‌تونم تستش کنم.
+//
+// عمداً فقط TonKeeper هدف‌گیری می‌شود، نه اولین کیف‌پولِ فهرست (که ممکن
+// بود «کیف‌پولِ تلگرام» باشد) — چون کیف‌پولِ تلگرام روی حساب‌های ایرانی
+// معمولاً کار نمی‌کند.
 let connector = null;
+let statusUnsub = null;
 function getConnector() {
   if (connector) return connector;
   connector = new TonConnectSDK.TonConnect({ manifestUrl: MANIFEST });
@@ -679,13 +684,18 @@ async function connectWallet(rentalId) {
   try {
     const tc = getConnector();
     const wallets = await tc.getWallets();
-    const wallet = wallets[0];
-    const url = await tc.connect({ jsBridgeKey: wallet.jsBridgeKey } || wallets[0].universalLink ? wallets[0] : wallets[0]);
-    if (typeof url === 'string' && tg && tg.openLink) tg.openLink(url);
+    const tonkeeper = wallets.find(function (w) { return (w.appName || '').toLowerCase() === 'tonkeeper'; });
+    if (!tonkeeper) { toast('TonKeeper پیدا نشد — SDK آپدیت است؟'); return; }
 
-    tc.onStatusChange(async function (walletInfo) {
+    const link = await tc.connect({ universalLink: tonkeeper.universalLink, bridgeUrl: tonkeeper.bridgeUrl });
+    if (typeof link === 'string') { if (tg && tg.openLink) tg.openLink(link); else window.open(link, '_blank'); }
+
+    if (statusUnsub) { statusUnsub(); statusUnsub = null; }
+    statusUnsub = tc.onStatusChange(async function (walletInfo) {
       if (!walletInfo) return;
-      const r = await call('connect', { rental_id: rentalId, tonconnect_url: JSON.stringify(walletInfo) });
+      if (statusUnsub) { statusUnsub(); statusUnsub = null; }
+      const addr = (walletInfo.account && walletInfo.account.address) ? walletInfo.account.address : '';
+      const r = await call('connect', { rental_id: rentalId, tonconnect_url: addr || JSON.stringify(walletInfo) });
       if (r.ok) { toast('گیفت وصل شد ✅'); showTab('mine'); }
       else toast(r.message || 'اتصال ناموفق بود');
     });
