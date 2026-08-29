@@ -133,9 +133,12 @@ body{
 }
 .gprice{
   flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 8px;border-radius:20px;
-  font-size:11px;font-weight:700;color:#fff;
-  background:linear-gradient(135deg, var(--acc), #7FC2FF);
-  box-shadow:0 4px 14px rgba(79,163,255,.35);
+  font-size:10.5px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  background:linear-gradient(135deg, rgba(79,163,255,.55), rgba(120,190,255,.4));
+  border:1px solid rgba(255,255,255,.35);
+  backdrop-filter:blur(10px) saturate(160%);-webkit-backdrop-filter:blur(10px) saturate(160%);
+  box-shadow:0 4px 14px rgba(79,163,255,.35), inset 0 1px 0 rgba(255,255,255,.4);
+  text-shadow:0 1px 2px rgba(0,0,0,.25);
 }
 .gcart{
   width:28px;height:28px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -224,11 +227,12 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 <body>
 <div class="topbar">
   <div class="brand"><span class="ic">🎁</span> اجاره‌ی گیفت</div>
-  <div class="balance" id="balancePill">💎 —</div>
+  <div class="balance" id="balancePill" onclick="openAccountSheet()">👛 —</div>
 </div>
 
 <div class="filterbar">
   <div class="searchbox">🔎<input id="search" placeholder="جستجوی گیفت…" oninput="renderGrid()"></div>
+  <div class="iconbtn" id="filterBtn" onclick="openFilterSheet()">🎛</div>
   <div class="iconbtn" id="sortBtn" onclick="toggleSort()">↕️</div>
 </div>
 <div class="countline" id="countLine"></div>
@@ -319,6 +323,21 @@ function toggleSort() {
   renderGrid();
 }
 
+// ── فیلتر ──
+let activeFilters = { model: null, backdrop: null, symbol: null, maxPrice: null };
+function attrVal(it, trait) {
+  const a = (it.attributes || []).find(function (x) { return (x.trait_type || x.traitType || '') === trait; });
+  return a ? String(a.value || '') : '';
+}
+function uniqueAttrValues(trait) {
+  const set = new Set();
+  currentItems.forEach(function (it) { const v = attrVal(it, trait); if (v) set.add(v); });
+  return Array.from(set).sort();
+}
+function filtersActiveCount() {
+  return ['model', 'backdrop', 'symbol', 'maxPrice'].filter(function (k) { return activeFilters[k]; }).length;
+}
+
 async function loadList() {
   const el = document.getElementById('viewList');
   el.innerHTML = '<div class="empty">در حال بارگذاری…</div>';
@@ -336,9 +355,14 @@ async function loadList() {
 function renderGrid() {
   const el = document.getElementById('viewList');
   const q = (document.getElementById('search').value || '').trim().toLowerCase();
+  document.getElementById('filterBtn').classList.toggle('on', filtersActiveCount() > 0);
   let items = currentItems
     .map(function (it, idx) { return Object.assign({ _idx: idx }, it); })
-    .filter(function (it) { return !q || it.nft_name.toLowerCase().includes(q); });
+    .filter(function (it) { return !q || it.nft_name.toLowerCase().includes(q); })
+    .filter(function (it) { return !activeFilters.model || attrVal(it, 'Model') === activeFilters.model; })
+    .filter(function (it) { return !activeFilters.backdrop || attrVal(it, 'Backdrop') === activeFilters.backdrop; })
+    .filter(function (it) { return !activeFilters.symbol || attrVal(it, 'Symbol') === activeFilters.symbol; })
+    .filter(function (it) { return !activeFilters.maxPrice || it.price_day <= activeFilters.maxPrice; });
   items.sort(function (a, b) { return sortDir === 'asc' ? a.price_day - b.price_day : b.price_day - a.price_day; });
 
   document.getElementById('countLine').textContent = items.length + ' گیفت';
@@ -355,7 +379,7 @@ function renderGrid() {
     const badge = document.createElement('div'); badge.className = 'gbadge'; badge.textContent = '💎';
     const bar = document.createElement('div'); bar.className = 'gbar';
     const price = document.createElement('div'); price.className = 'gprice';
-    price.textContent = fmt(it.price_day) + ' ت';
+    price.textContent = fmt(it.price_day) + ' تومان';
     const cart = document.createElement('div'); cart.className = 'gcart'; cart.textContent = '🛍';
     bar.appendChild(price); bar.appendChild(cart);
     imgBox.appendChild(badge); imgBox.appendChild(bar);
@@ -370,10 +394,120 @@ function renderGrid() {
   });
 }
 
+let lastMe = null;
 async function loadBalance() {
   const res = await call('me');
+  if (res.ok) lastMe = res;
   const el = document.getElementById('balancePill');
-  el.textContent = res.ok ? '💎 ' + fmt(res.balance) : '💎 —';
+  el.textContent = res.ok ? '👛 ' + fmt(res.balance) : '👛 —';
+}
+
+// ── بات‌شیتِ حساب من ──
+async function openAccountSheet() {
+  const res = await call('me');
+  if (res.ok) lastMe = res;
+  const u = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || {};
+  const body = document.getElementById('sheetBody');
+  body.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:14px';
+  const avaWrap = document.createElement('div');
+  avaWrap.style.cssText = 'width:52px;height:52px;border-radius:50%;overflow:hidden;flex:none;' +
+    'background:var(--acc-dim);display:flex;align-items:center;justify-content:center;font-size:22px';
+  if (u.photo_url) {
+    const img = document.createElement('img');
+    img.src = u.photo_url; img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+    avaWrap.textContent = ''; avaWrap.appendChild(img);
+  } else { avaWrap.textContent = '👤'; }
+  const nameBox = document.createElement('div');
+  const nm = document.createElement('div'); nm.style.cssText = 'font-weight:700;font-size:15px';
+  nm.textContent = [u.first_name, u.last_name].filter(Boolean).join(' ') || 'حساب من';
+  const un = document.createElement('div'); un.className = 'dim';
+  un.textContent = u.username ? '@' + u.username : '';
+  nameBox.appendChild(nm); nameBox.appendChild(un);
+  head.appendChild(avaWrap); head.appendChild(nameBox);
+
+  const balBox = document.createElement('div');
+  balBox.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:14px 16px;' +
+    'border-radius:16px;background:var(--acc-dim);border:1px solid rgba(79,163,255,.3);margin-bottom:10px';
+  const balLbl = document.createElement('div'); balLbl.className = 'dim'; balLbl.textContent = 'موجودیِ کیف‌پول';
+  const balVal = document.createElement('div'); balVal.style.cssText = 'font-weight:800;font-size:17px;color:var(--acc)';
+  balVal.textContent = '👛 ' + fmt(res.ok ? res.balance : 0) + ' تومان';
+  balBox.appendChild(balLbl); balBox.appendChild(balVal);
+
+  const rentBox = document.createElement('div'); rentBox.className = 'dim';
+  const activeCount = res.ok ? (res.rentals || []).filter(function (r) { return r.status === 'active'; }).length : 0;
+  rentBox.textContent = '🎁 ' + activeCount + ' گیفتِ فعال';
+  rentBox.style.margin = '2px 2px 10px';
+
+  const note = document.createElement('div'); note.className = 'dim';
+  note.style.cssText = 'text-align:center;margin-top:8px;font-size:11.5px';
+  note.textContent = 'برای شارژِ کیف‌پول از منوی اصلیِ ربات استفاده کنید.';
+
+  body.appendChild(head); body.appendChild(balBox); body.appendChild(rentBox); body.appendChild(note);
+  document.getElementById('sheetBg').classList.add('show');
+  document.getElementById('sheet').classList.add('open');
+}
+
+// ── بات‌شیتِ فیلتر ──
+function filterChipRow(label, trait, key) {
+  const wrap = document.createElement('div'); wrap.style.marginBottom = '14px';
+  const h = document.createElement('div'); h.className = 'dim'; h.style.marginBottom = '7px'; h.textContent = label;
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:7px;flex-wrap:wrap';
+  uniqueAttrValues(trait).forEach(function (val) {
+    const chip = document.createElement('span'); chip.className = 'pill';
+    chip.style.cursor = 'pointer';
+    if (activeFilters[key] === val) chip.classList.add('active');
+    chip.textContent = val;
+    chip.onclick = function () {
+      activeFilters[key] = activeFilters[key] === val ? null : val;
+      openFilterSheet();
+    };
+    row.appendChild(chip);
+  });
+  if (!row.children.length) return null;
+  wrap.appendChild(h); wrap.appendChild(row);
+  return wrap;
+}
+
+function openFilterSheet() {
+  const body = document.getElementById('sheetBody');
+  body.innerHTML = '';
+
+  const title = document.createElement('h3'); title.textContent = '🎛 فیلترها';
+  title.style.marginBottom = '12px';
+  body.appendChild(title);
+
+  const priceMax = Math.max.apply(null, currentItems.map(function (it) { return it.price_day; }).concat([0]));
+  if (priceMax > 0) {
+    const pwrap = document.createElement('div'); pwrap.style.marginBottom = '14px';
+    const ph = document.createElement('div'); ph.className = 'dim'; ph.style.marginBottom = '6px';
+    const slider = document.createElement('input'); slider.type = 'range';
+    slider.min = 0; slider.max = Math.ceil(priceMax);
+    slider.value = activeFilters.maxPrice || priceMax;
+    ph.textContent = 'حداکثر قیمت: ' + fmt(slider.value) + ' تومان';
+    slider.oninput = function () { ph.textContent = 'حداکثر قیمت: ' + fmt(slider.value) + ' تومان'; };
+    slider.onchange = function () { activeFilters.maxPrice = parseInt(slider.value, 10) < priceMax ? parseInt(slider.value, 10) : null; };
+    pwrap.appendChild(ph); pwrap.appendChild(slider);
+    body.appendChild(pwrap);
+  }
+
+  [['مدل', 'Model', 'model'], ['پس‌زمینه', 'Backdrop', 'backdrop'], ['نماد', 'Symbol', 'symbol']]
+    .forEach(function (t) { const row = filterChipRow(t[0], t[1], t[2]); if (row) body.appendChild(row); });
+
+  const actions = document.createElement('div'); actions.style.cssText = 'display:flex;gap:8px;margin-top:6px';
+  const clearBtn = document.createElement('button'); clearBtn.textContent = 'پاک‌کردنِ همه';
+  clearBtn.style.cssText = 'flex:1;background:var(--glass);border:1px solid var(--hair);color:var(--ink)';
+  clearBtn.onclick = function () { activeFilters = { model: null, backdrop: null, symbol: null, maxPrice: null }; renderGrid(); closeSheet(); };
+  const showBtn = document.createElement('button'); showBtn.className = 'btn-main'; showBtn.style.marginTop = '0';
+  showBtn.style.flex = '1'; showBtn.textContent = 'نمایشِ نتایج';
+  showBtn.onclick = function () { renderGrid(); closeSheet(); };
+  actions.appendChild(clearBtn); actions.appendChild(showBtn);
+  body.appendChild(actions);
+
+  document.getElementById('sheetBg').classList.add('show');
+  document.getElementById('sheet').classList.add('open');
 }
 
 // ── بات‌شیتِ جزئیات + انتخابِ مدت ──
