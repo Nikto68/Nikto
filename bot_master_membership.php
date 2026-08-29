@@ -127,8 +127,6 @@ require_once __DIR__ . '/diamond.php';
 require_once __DIR__ . '/channels.php';
 require_once __DIR__ . '/games.php';
 require_once __DIR__ . '/profit.php';
-require_once __DIR__ . '/giftrent.php';
-require_once __DIR__ . '/miniapp_view_rent.php';
 
 // ============================================================
 // 📚 ذخیره‌سازی اتمیک
@@ -4062,7 +4060,6 @@ function admGroups() {
         'mini' => ['🚀 <b>مینی‌اپ‌ها</b>', 'ظاهر، محصول‌ها و قیمت‌ها.', [
             [['🚀 تنظیمات مینی‌اپ‌ها', 'maadm_home']],
             [['☎️ شماره مجازی', 'num_home']],
-            [['🎁 اجاره‌ی گیفت', 'gr_home']],
             [['🧩 مخزن تحویل و سود', 'ax_home']],
         ]],
         'up' => ['🤖 <b>ربات‌های اپلودر</b>', 'ربات‌های زیرمجموعه و کانال‌هایشان.', [
@@ -4616,8 +4613,7 @@ function edSubs($chatId, $msgId, $bid) {
         : "هنوز دکمه‌ای اضافه نکرده‌اید.";
 
     // 🚀 دکمه‌های مینی‌اپ عضو همین لیست‌اند — پیش‌نمایش واقعی ردیف‌ها
-    $grItem = ($bid === 'buy' && function_exists('grSubItem')) ? grSubItem() : null;
-    if ($bid === 'buy' && ((function_exists('maSubItems') && maSubItems()) || $grItem)) {
+    if ($bid === 'buy' && function_exists('maSubItems') && maSubItems()) {
         $lines = [];
         foreach (subRows('buy') as $r) {
             $cells = [];
@@ -4647,12 +4643,6 @@ function edSubs($chatId, $msgId, $bid) {
             $rows[] = [btnCb('🚀 ' . trim(($mi['emoji'] ?? '') . ' ' . $mi['text']) . '  ' . mb_substr($col, 0, 2),
                              'maadm_btn_' . $key, 'link')];
         }
-    }
-    // 🎁 دکمه‌ی اجاره‌ی گیفت هم همین‌جا — می‌زند به پنلِ خودش که ترتیب/ردیف را دارد
-    if ($grItem) {
-        $col = styleMap()[$grItem['color'] ?? 'none'] ?? '';
-        $rows[] = [btnCb('🎁 ' . trim(($grItem['emoji'] ?? '') . ' ' . $grItem['text']) . '  ' . mb_substr($col, 0, 2),
-                         'gr_home', 'link')];
     }
     $rows[] = [btnCb('➕ افزودن دکمه شیشه‌ای', 'sbnew_' . $bid, 'confirm'),
                btnCb('📐 چیدمان', 'sblay_' . $bid, 'admin')];
@@ -5435,7 +5425,6 @@ function masterHandle($update) {
         if (axCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin)) return;
         if (numCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin)) return;
         if (pfCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin)) return;
-        if (function_exists('grCallback') && grCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin)) return;
 
         // --- دکمه‌های منو در حالت شیشه‌ای ---
         if ($data === 'tariff') { answerCb(BOT_TOKEN, $cbId); showTariff($uid, $chatId); return; }
@@ -6945,7 +6934,6 @@ function masterHandle($update) {
     if (axStateHandle($action, $sd, $msg, $uid, $chatId)) return;
     if (numStateHandle($action, $msg, $uid, $chatId)) return;
     if (pfStateHandle($action, $msg, $uid, $chatId)) return;
-    if (function_exists('grStateHandle') && grStateHandle($action, $msg, $uid, $chatId)) return;
 
     if ($action === 'sb_code') {
         $pid = $sd['pid'] ?? '';
@@ -8265,11 +8253,6 @@ function subRows($btnId) {
     if ($btnId === 'buy' && function_exists('maMergeOn') && maMergeOn()) {
         foreach (maSubItems() as $mi) $items[] = $mi;
     }
-    // 🎁 دکمه‌ی اجاره‌ی گیفت — همان مکانیزم، کاملاً مستقل از مینی‌اپ‌های بالا
-    if ($btnId === 'buy' && function_exists('grSubItem')) {
-        $gi = grSubItem();
-        if ($gi) $items[] = $gi;
-    }
 
     if (!$items) return [];
     usort($items, fn($x, $y) => ((int)($x['order'] ?? 99)) <=> ((int)($y['order'] ?? 99)));
@@ -8895,25 +8878,6 @@ if (isset($_GET['mapi'])) {
     exit;
 }
 
-// 🎁 مینی‌اپِ جداگانه‌ی اجاره‌ی گیفت — کاملاً مستقل از maServe/maApi
-if (isset($_GET['rent'])) {
-    try { grServe(); }
-    catch (Throwable $e) {
-        error_log('[giftrent] ' . $e->getMessage());
-        http_response_code(500);
-        echo 'server error';
-    }
-    exit;
-}
-if (isset($_GET['rent_api'])) {
-    try { grApi(); }
-    catch (Throwable $e) {
-        error_log('[giftrent-api] ' . $e->getMessage());
-        grApiOut(['ok' => false, 'error' => 'server_error', 'message' => 'خطای سرور — دوباره تلاش کنید.'], 500);
-    }
-    exit;
-}
-
 if (isset($_GET['api'])) {
     try { handleApi((string)$_GET['api']); }
     catch (Throwable $e) {
@@ -9253,15 +9217,6 @@ function runBackgroundQueues() {
     if (function_exists('numTick') && time() - (@filemtime($nMark) ?: 0) >= 20) {
         @touch($nMark);
         numTick(10);
-    }
-
-    // 🎁 کاتالوگِ اجاره‌ی گیفت — چندصفحه‌ای و ممکن است چند تماسِ شبکه بخواهد؛
-    // چون اینجا بعد از closeRequest() اجرا می‌شود، هیچ کاربری منتظرش نمی‌ماند.
-    $grMark = DATA_DIR . '/.gr_list_at';
-    if (function_exists('grListRefresh') && function_exists('grOn') && grOn() &&
-        time() - (@filemtime($grMark) ?: 0) >= 240) {
-        @touch($grMark);
-        grListRefresh();
     }
 
     // 🩺 خودبررسیِ سلامت — یک بار در روز، بدون اینکه ادمین خودش پنل

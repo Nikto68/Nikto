@@ -44,7 +44,6 @@ function pfDefaults() {
         'all'    => ['mode' => 'pct', 'v' => 0.0],   // عمومی
         'member' => ['mode' => null,  'v' => null],  // null یعنی «از عمومی پیروی کن»
         'ma'     => ['mode' => null,  'v' => null],
-        'rent'   => ['mode' => null,  'v' => null],  // اجاره‌ی گیفت
     ];
 }
 
@@ -54,7 +53,7 @@ function pfCfg() {
     if (!is_array($c)) return $d;
     $out = array_replace($d, array_intersect_key($c, $d));
     // سازگاری با نسخه‌ی قدیمی‌تر که این سه فقط یک عددِ درصدِ خام بودند
-    foreach (['all', 'member', 'ma', 'rent'] as $k) {
+    foreach (['all', 'member', 'ma'] as $k) {
         if (isset($c[$k]) && !is_array($c[$k]))
             $out[$k] = ['mode' => 'pct', 'v' => $c[$k]];
     }
@@ -142,7 +141,6 @@ function pfRows() {
     $rows = [
         ['member', '🎯 خرید ممبر', pfEffective('member'), $own('member'), 'pf_member'],
         ['ma',     '🚀 مینی‌اپ‌ها', pfEffective('ma'),     $own('ma'),     'pf_ma'],
-        ['rent',   '🎁 اجاره‌ی گیفت', pfEffective('rent'), $own('rent'), 'pf_rent'],
     ];
     if (function_exists('numVal'))
         $rows[] = ['num', '☎️ شماره مجازی', ['mode' => 'pct', 'v' => (float)numVal('markup', 0)], true, 'num_home'];
@@ -202,7 +200,6 @@ function pfHome($chatId, $msgId = null) {
         [btnCb('📊 سودِ عمومی', 'pf_all', 'admin')],
         [btnCb('🎯 سودِ خرید ممبر', 'pf_member', 'admin'),
          btnCb('🚀 سودِ مینی‌اپ‌ها', 'pf_ma', 'admin')],
-        [btnCb('🎁 سودِ اجاره‌ی گیفت', 'pf_rent', 'admin')],
         [btnCb('🎯 روی همه بنشان', 'pf_every', 'confirm')],
         [btnCb('☎️ سودِ شماره مجازی', 'num_home', 'nav'),
          btnCb('💹 سودِ قیمت‌گیری', 'px_home', 'nav')],
@@ -282,8 +279,7 @@ function pfCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
     }
 
     // 📈 «سودِ عمومی/ممبر/مینی‌اپ» — اول بپرس درصد یا تومانِ ثابت
-    $secLbl = ['pf_all' => 'سودِ عمومی', 'pf_member' => 'سودِ خرید ممبر', 'pf_ma' => 'سودِ مینی‌اپ‌ها',
-               'pf_rent' => 'سودِ اجاره‌ی گیفت'];
+    $secLbl = ['pf_all' => 'سودِ عمومی', 'pf_member' => 'سودِ خرید ممبر', 'pf_ma' => 'سودِ مینی‌اپ‌ها'];
     if (isset($secLbl[$data])) {
         $sec = substr($data, 3);
         $ack();
@@ -298,7 +294,7 @@ function pfCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
         return true;
     }
 
-    if (preg_match('/^pfm_(all|member|ma|rent)_(pct|fixed|off)$/', $data, $m)) {
+    if (preg_match('/^pfm_(all|member|ma)_(pct|fixed|off)$/', $data, $m)) {
         [$_, $sec, $mode] = $m;
         if ($mode === 'off') {
             pfSecSet($sec, null, null);
@@ -346,12 +342,12 @@ function pfStateHandle($action, $msg, $uid, $chatId) {
     $sd  = $st['data'] ?? [];
     $sec = (string)($sd['sec'] ?? '');
     $mode = (string)($sd['mode'] ?? 'pct');
-    if (!in_array($sec, ['all', 'member', 'ma', 'rent'], true)) { clearState($uid); return true; }
+    if (!in_array($sec, ['all', 'member', 'ma'], true)) { clearState($uid); return true; }
 
     $v = $mode === 'pct' ? max(0.0, min(1000.0, $num($plain))) : max(0.0, $num($plain));
     pfSecSet($sec, $mode, $v);
     clearState($uid);
-    $lbl = ['all' => 'سودِ عمومی', 'member' => 'سودِ خرید ممبر', 'ma' => 'سودِ مینی‌اپ‌ها', 'rent' => 'سودِ اجاره‌ی گیفت'][$sec];
+    $lbl = ['all' => 'سودِ عمومی', 'member' => 'سودِ خرید ممبر', 'ma' => 'سودِ مینی‌اپ‌ها'][$sec];
     sendMsg(BOT_TOKEN, $chatId, '✅ ' . $lbl . ': <b>' . pfAmountStr(['mode' => $mode, 'v' => $v]) . '</b>' .
         (pfOn() ? '' : "\n\n⚠️ بخشِ سود خاموش است — تا روشنش نکنید نمی‌نشیند."), $back);
     return true;
