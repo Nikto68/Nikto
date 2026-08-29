@@ -53,12 +53,12 @@ function grTplRent() {
 <script src="https://cdn.jsdelivr.net/npm/@tonconnect/sdk@3/dist/tonconnect-sdk.min.js"></script>
 <style>
 :root{
-  /* سفید · سبز · مشکی — همه کم‌رنگ، هیچ‌جا اشباع بالا نیست */
   --bg:#07090A;
   --glass:rgba(255,255,255,.045); --glass2:rgba(255,255,255,.08);
   --hair:rgba(255,255,255,.09);
   --ink:#F3F6F4; --dim:#8FA098; --dim2:#5C6B64;
-  --acc:#7FD9A6; --acc-dim:rgba(127,217,166,.16);
+  /* آبیِ قیمت — دقیقاً هم‌رنگِ پیلِ قیمتِ مارکت‌های گیفت */
+  --acc:#4FA3FF; --acc-dim:rgba(79,163,255,.18);
   --ok:#7FD9A6; --bad:#E28B93;
   --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Vazirmatn,Tahoma,sans-serif;
   --navh:64px;
@@ -79,8 +79,29 @@ body{
 @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 
-.topbar{display:flex;align-items:center;gap:8px;margin:2px 0 14px;font-weight:700;font-size:16px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 12px}
+.topbar .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
 .topbar .ic{display:inline-block;animation:float 3.2s ease-in-out infinite}
+.balance{
+  display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:20px;font-size:12px;font-weight:700;
+  background:var(--glass2);border:1px solid var(--hair);color:var(--ink);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+
+/* ── نوارِ جستجو/فیلتر ── */
+.filterbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.searchbox{
+  flex:1;display:flex;align-items:center;gap:6px;padding:9px 12px;border-radius:14px;
+  background:var(--glass);border:1px solid var(--hair);color:var(--dim);font-size:12.5px;
+}
+.searchbox input{flex:1;background:transparent;border:0;outline:0;color:var(--ink);font:inherit;min-width:0}
+.searchbox input::placeholder{color:var(--dim2)}
+.iconbtn{
+  width:34px;height:34px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  background:var(--glass);border:1px solid var(--hair);color:var(--dim);font-size:14px;
+}
+.iconbtn.on{background:var(--acc-dim);color:var(--acc);border-color:rgba(79,163,255,.35)}
+.countline{color:var(--dim2);font-size:11px;margin:2px 2px 10px}
 
 /* ── گریدِ کارت‌ها ── */
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -101,12 +122,24 @@ body{
   font-size:34px;background:radial-gradient(circle at 50% 35%, var(--acc-dim), transparent 70%);
   animation:glow 2.4s ease-in-out infinite;
 }
+.gbadge{
+  position:absolute;top:7px;right:7px;z-index:2;width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+  background:rgba(10,14,12,.55);border:1px solid rgba(255,255,255,.12);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+.gbar{
+  position:absolute;left:6px;right:6px;bottom:6px;z-index:2;display:flex;align-items:center;gap:5px;
+}
 .gprice{
-  position:absolute;left:7px;bottom:7px;z-index:2;
-  display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:20px;
-  font-size:11px;font-weight:700;color:#08130E;
-  background:linear-gradient(135deg, var(--acc), #C9F5DC);
-  box-shadow:0 4px 14px rgba(0,0,0,.35);
+  flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 8px;border-radius:20px;
+  font-size:11px;font-weight:700;color:#fff;
+  background:linear-gradient(135deg, var(--acc), #7FC2FF);
+  box-shadow:0 4px 14px rgba(79,163,255,.35);
+}
+.gcart{
+  width:28px;height:28px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:12px;background:rgba(255,255,255,.92);color:#0A0F0D;box-shadow:0 4px 12px rgba(0,0,0,.35);
 }
 .ginfo{padding:9px 10px 11px}
 .gname{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -139,8 +172,8 @@ button{border:0;border-radius:14px;padding:12px 14px;font-family:inherit;font-si
 button:active{transform:scale(.97)}
 .btn-main{
   width:100%;margin-top:12px;color:#08130E;font-weight:700;
-  background:linear-gradient(135deg, var(--acc), #C9F5DC);
-  box-shadow:0 6px 20px rgba(127,217,166,.25);
+  background:linear-gradient(135deg, var(--acc), #A9D6FF);
+  box-shadow:0 6px 20px rgba(79,163,255,.3);
 }
 .btn-main:disabled{opacity:.45;box-shadow:none}
 input[type=range]{width:100%;accent-color:var(--acc)}
@@ -189,7 +222,16 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 </style>
 </head>
 <body>
-<div class="topbar"><span class="ic">🎁</span> اجاره‌ی گیفت</div>
+<div class="topbar">
+  <div class="brand"><span class="ic">🎁</span> اجاره‌ی گیفت</div>
+  <div class="balance" id="balancePill">💎 —</div>
+</div>
+
+<div class="filterbar">
+  <div class="searchbox">🔎<input id="search" placeholder="جستجوی گیفت…" oninput="renderGrid()"></div>
+  <div class="iconbtn" id="sortBtn" onclick="toggleSort()">↕️</div>
+</div>
+<div class="countline" id="countLine"></div>
 
 <div id="viewList" class="grid"></div>
 <div id="viewMine" style="display:none"></div>
@@ -270,26 +312,53 @@ function splitName(name) {
   return m ? { base: m[1], num: '#' + m[2] } : { base: name, num: '' };
 }
 
+let sortDir = 'asc';
+function toggleSort() {
+  sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  document.getElementById('sortBtn').classList.toggle('on', sortDir === 'desc');
+  renderGrid();
+}
+
 async function loadList() {
   const el = document.getElementById('viewList');
   el.innerHTML = '<div class="empty">در حال بارگذاری…</div>';
   const res = await call('list');
   if (!res.ok || !res.items || !res.items.length) {
+    currentItems = [];
     el.innerHTML = '<div class="empty">فعلاً گیفتی برای اجاره موجود نیست.</div>';
+    document.getElementById('countLine').textContent = '';
     return;
   }
   currentItems = res.items;
+  renderGrid();
+}
+
+function renderGrid() {
+  const el = document.getElementById('viewList');
+  const q = (document.getElementById('search').value || '').trim().toLowerCase();
+  let items = currentItems
+    .map(function (it, idx) { return Object.assign({ _idx: idx }, it); })
+    .filter(function (it) { return !q || it.nft_name.toLowerCase().includes(q); });
+  items.sort(function (a, b) { return sortDir === 'asc' ? a.price_day - b.price_day : b.price_day - a.price_day; });
+
+  document.getElementById('countLine').textContent = items.length + ' گیفت';
+  if (!items.length) { el.innerHTML = '<div class="empty">چیزی پیدا نشد.</div>'; return; }
+
   el.innerHTML = '';
-  res.items.forEach(function (it, idx) {
+  items.forEach(function (it) {
     const { base, num } = splitName(it.nft_name);
     const card = document.createElement('div');
     card.className = 'gcard';
-    card.onclick = function () { openSheet(idx); };
+    card.onclick = function () { openSheet(it._idx); };
 
     const imgBox = makeImgBox(it.nft_name, 'gimg-wrap');
+    const badge = document.createElement('div'); badge.className = 'gbadge'; badge.textContent = '💎';
+    const bar = document.createElement('div'); bar.className = 'gbar';
     const price = document.createElement('div'); price.className = 'gprice';
-    price.textContent = '🛍 ' + fmt(it.price_day);
-    imgBox.appendChild(price);
+    price.textContent = fmt(it.price_day) + ' ت';
+    const cart = document.createElement('div'); cart.className = 'gcart'; cart.textContent = '🛍';
+    bar.appendChild(price); bar.appendChild(cart);
+    imgBox.appendChild(badge); imgBox.appendChild(bar);
 
     const info = document.createElement('div'); info.className = 'ginfo';
     const nm = document.createElement('div'); nm.className = 'gname'; nm.textContent = base;
@@ -299,6 +368,12 @@ async function loadList() {
     card.appendChild(imgBox); card.appendChild(info);
     el.appendChild(card);
   });
+}
+
+async function loadBalance() {
+  const res = await call('me');
+  const el = document.getElementById('balancePill');
+  el.textContent = res.ok ? '💎 ' + fmt(res.balance) : '💎 —';
 }
 
 // ── بات‌شیتِ جزئیات + انتخابِ مدت ──
@@ -413,6 +488,7 @@ async function loadMine() {
 }
 
 loadList();
+loadBalance();
 </script>
 </body>
 </html>
