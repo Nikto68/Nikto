@@ -122,6 +122,8 @@ function gmDefaults() {
             'open_max'   => "⛔️ شما <b>{n}</b> بازی باز دارید.\n\nاول همان‌ها تمام یا لغو شوند، بعد بازی تازه بسازید.",
             'expired'    => "⏳ <b>کسی وارد نشد</b>\n\nشرط به سازنده برگشت.",
             'idle'       => "⏳ <b>بازی نیمه‌کاره ماند</b>\n\nکسی نوبتش را نزد؛ شرط هر دو نفر برگشت.",
+            // نفر دوم که پیوست و صفحه‌ی دوز باز شد — یعنی بازی واقعا شروع شده
+            'in_progress'=> "<tg-emoji emoji-id=\"5116476703002068797\">🎮</tg-emoji> بــازی شــما در حــال انـجـام هـسـتـش",
             'lbl_cancel_duel' => "چالش لغو شد",
             'lbl_cancel_rand' => "بازی لغو شد",
         ],
@@ -1046,6 +1048,10 @@ function gmCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
             return true;
         }
 
+        // 🎮 نفر دوم پیوست و صفحه‌ی دوز باز شد — همین لحظه بازی واقعا شروع می‌شود
+        if ($g && $g['kind'] === 'duel' && $g['status'] === 'playing')
+            sendMsg(BOT_TOKEN, $chatId, gmT('in_progress'));
+
         gmShow($g);
         // مهلت همین حالا تمام شد؟ منتظر تیکِ بعدی نمان
         if ($g && $g['kind'] === 'rand' && $g['status'] === 'open'
@@ -1182,6 +1188,7 @@ function gmLabels() {
         'idle'      => 'بازی نیمه‌کاره (رهاشده)',
         'lbl_cancel_duel' => 'دکمه‌ی «چالش لغو شد»',
         'lbl_cancel_rand' => 'دکمه‌ی «بازی لغو شد»',
+        'in_progress' => 'پیامِ «بازی در حال انجام است»',
     ];
 }
 
