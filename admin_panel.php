@@ -634,6 +634,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ---- قیمت‌گذاری دکمه‌های فروش (خودِ دکمه = محصول) ----
+    // ---- افزودن/حذفِ یک ردیفِ سرعت/پلن — برای زمانی که ۳۰/۹۰ روزه‌ی ثابت کافی نیست ----
+    if ($a === 'add_speed') {
+        $bid = $_POST['bid'] ?? ''; $sid = $_POST['sid'] ?? '';
+        if (!findSub($bid, $sid)) go('دکمه پیدا نشد.', 'err');
+        $txt = trim($_POST['new_sp_text'] ?? '');
+        if ($txt === '') go('یک متن برای پلنِ جدید بنویس.', 'err');
+        subMutate($bid, $sid, function (&$x) use ($txt) {
+            if (!is_array($x['flow'] ?? null)) $x['flow'] = defaultFlow();
+            if (!is_array($x['flow']['speeds'] ?? null)) $x['flow']['speeds'] = [];
+            $x['flow']['speeds'][] = [
+                'id' => uid('sp'), 'text' => $txt, 'emoji' => trim($_POST['new_sp_emoji'] ?? ''),
+                'mult' => 1, 'per_day' => 0, 'color' => 'none', 'icon' => '', 'on' => true, 'smm_service' => '',
+            ];
+        });
+        go('✅ پلنِ جدید اضافه شد — پایینِ همون دکمه، براش رنگ/سرویس/متن تنظیم کن.');
+    }
+    if ($a === 'del_speed') {
+        $bid = $_POST['bid'] ?? ''; $sid = $_POST['sid'] ?? ''; $spid = $_POST['spid'] ?? '';
+        if (!findSub($bid, $sid)) go('دکمه پیدا نشد.', 'err');
+        subMutate($bid, $sid, function (&$x) use ($spid) {
+            if (!is_array($x['flow']['speeds'] ?? null)) return;
+            $x['flow']['speeds'] = array_values(array_filter($x['flow']['speeds'], fn($s) => ($s['id'] ?? '') !== $spid));
+        });
+        go('پلن حذف شد.');
+    }
+
     if ($a === 'save_btn_price') {
         $bid = $_POST['bid'] ?? ''; $sid = $_POST['sid'] ?? '';
         if (!findSub($bid, $sid)) go('دکمه پیدا نشد.', 'err');
@@ -1585,7 +1611,7 @@ foreach ($tabs as $k => $l): ?>
         <div style="margin-top:16px"><label>⚡️ سرعت‌ها / پلن‌ها</label>
           <table style="margin-top:6px">
             <tr><th>ایموجی</th><th>متن دکمه</th><th>ضریب</th><th>نفر در روز</th>
-                <th>قیمت هر <?= number_format((int)$f['per']) ?></th><th>رنگ</th><th>روشن</th></tr>
+                <th>قیمت هر <?= number_format((int)$f['per']) ?></th><th>رنگ</th><th>روشن</th><th>حذف</th></tr>
             <?php foreach ($f['speeds'] as $sp): ?>
               <tr>
                 <td><input name="spemoji[<?= h($sp['id']) ?>]" value="<?= h($sp['emoji'] ?? '') ?>"
@@ -1603,15 +1629,21 @@ foreach ($tabs as $k => $l): ?>
                   <?php endforeach; ?></select></td>
                 <td><input type="checkbox" name="spon[<?= h($sp['id']) ?>]" value="1" style="width:auto"
                            <?= (!isset($sp['on']) || !empty($sp['on'])) ? 'checked' : '' ?>></td>
+                <td>
+                  <button type="submit" form="delSpeedForm_<?= h($bid . '_' . $sid) ?>"
+                    onclick="document.getElementById('del_spid_<?= h($bid . '_' . $sid) ?>').value='<?= h($sp['id']) ?>';
+                             return confirm('این پلن حذف شود؟');"
+                    class="btn r sm">🗑</button>
+                </td>
               </tr>
               <tr>
                 <td class="muted">توضیح</td>
-                <td colspan="6"><input name="spdesc[<?= h($sp['id']) ?>]" value="<?= h($sp['desc'] ?? '') ?>"
+                <td colspan="7"><input name="spdesc[<?= h($sp['id']) ?>]" value="<?= h($sp['desc'] ?? '') ?>"
                        placeholder="یک خط توضیح — زیر متن انتخاب سرعت به مشتری نشان داده می‌شود"></td>
               </tr>
               <tr>
                 <td class="muted">🤖 سرویسِ این گزینه</td>
-                <td colspan="6">
+                <td colspan="7">
                   <?php
                     $svcList = function_exists('smmServicesCached') ? smmServicesCached() : [];
                     $spCur = (string)($sp['smm_service'] ?? '');
@@ -1666,6 +1698,28 @@ foreach ($tabs as $k => $l): ?>
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn g">ذخیره قیمت‌گذاری</button>
         </div>
+      </form>
+
+      <!-- فرم حذفِ یک پلن — جدا از فرمِ اصلی چون تو در تو کردنِ form مجاز نیست؛
+           دکمه‌های 🗑 بالا با ویژگیِ form="…" مستقیم به همین فرم وصل می‌شوند -->
+      <form method="post" id="delSpeedForm_<?= h($bid . '_' . $sid) ?>" style="display:none">
+        <input type="hidden" name="csrf" value="<?= h($CSRF) ?>">
+        <input type="hidden" name="tab" value="products">
+        <input type="hidden" name="action" value="del_speed">
+        <input type="hidden" name="bid" value="<?= h($bid) ?>">
+        <input type="hidden" name="sid" value="<?= h($sid) ?>">
+        <input type="hidden" name="spid" id="del_spid_<?= h($bid . '_' . $sid) ?>" value="">
+      </form>
+
+      <form method="post" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="hidden" name="csrf" value="<?= h($CSRF) ?>">
+        <input type="hidden" name="tab" value="products">
+        <input type="hidden" name="action" value="add_speed">
+        <input type="hidden" name="bid" value="<?= h($bid) ?>">
+        <input type="hidden" name="sid" value="<?= h($sid) ?>">
+        <input name="new_sp_emoji" placeholder="ایموجی" style="text-align:center;max-width:70px">
+        <input name="new_sp_text" placeholder="متنِ زمانِ جدید — مثلا «۹۰ روزه»" style="min-width:180px;flex:1">
+        <button class="btn b sm">➕ افزودنِ پلن/زمانِ جدید</button>
       </form>
 
       <?php $rp = reportOf($sb); ?>
