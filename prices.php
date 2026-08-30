@@ -1432,7 +1432,7 @@ function pxCard($symbol, $usd, $chgPct, $series = null) {
  */
 function pxPhotoIdKey($cacheKey) { return 'pxfid_' . substr(md5((string)$cacheKey), 0, 16); }
 
-function pxSendPhotoById($chatId, $fileId, $caption, $markup = null, $replyTo = null) {
+function pxSendPhotoById($chatId, $fileId, $caption, $markup = null, $replyTo = null, $timeout = 20) {
     $post = [
         'chat_id'    => $chatId,
         'photo'      => $fileId,
@@ -1441,7 +1441,7 @@ function pxSendPhotoById($chatId, $fileId, $caption, $markup = null, $replyTo = 
     ];
     if ($markup)  $post['reply_markup'] = is_string($markup) ? $markup : json_encode($markup);
     if ($replyTo) $post['reply_to_message_id'] = $replyTo;
-    return tg(BOT_TOKEN, 'sendPhoto', $post, 20);
+    return tg(BOT_TOKEN, 'sendPhoto', $post, $timeout);
 }
 
 /** شناسه‌ی فایل را از پاسخ تلگرام درمی‌آورد */

@@ -846,9 +846,10 @@ function defaultConfig() {
                               "{content}\n{note}",
             'order_status' => "<b>وضعیت سفارش</b>\n\nکد پیگیری: <code>{code}</code>\nوضعیت: <b>{status}</b>\n\n<b>{product}</b>\n{link_line}{qty_line}{perday_line}{eta_line}{progress}\nمبلغ: <b>{amount} {currency}</b>\nثبت: {created}\n{approved_line}\n{hint}",
             'orders_head'  => "📊 <b>سفارش‌های شما</b>\n",
-            'referral'     => "👥 <b>داشبورد زیرمجموعه</b>\n\nبا دعوت دوستان خود <b>{percent}%</b> از هر خرید آن‌ها را دریافت کنید.\n\n👥 تعداد زیرمجموعه: <b>{referrals}</b>\n💵 درآمد شما: <b>{ref_earned}</b> تومان",
+            'referral'     => "👥 <b>داشبورد زیرمجموعه</b>\n\nبا دعوت دوستان خود <b>{percent}%</b> از هر خرید آن‌ها را دریافت کنید.\n\n👥 تعداد زیرمجموعه: <b>{referrals}</b>\n💵 کل درآمد: <b>{ref_earned}</b> تومان\n💰 قابل برداشت: <b>{ref_pending}</b> تومان",
             'referral_link'=> "🔗 <b>لینک دعوت شما</b>\n\n{link}\n\nاین لینک را با دوستانتان به اشتراک بگذارید.",
-            'referral_wallet' => "💠 <b>کیف‌پول‌های فروشگاه</b>\n\nهمین آدرس‌ها برای واریزهای فروشگاه استفاده می‌شود:",
+            'referral_wallet_none' => "💼 <b>برداشت پورسانت</b>\n\nهنوز چیزی برای برداشت جمع نشده.",
+            'referral_wallet_ok'   => "✅ <b>{amount}</b> تومان به کیف‌پولِ شما (داخلِ ربات) واریز شد.",
             'referral_hist_head' => "🧾 <b>تاریخچه‌ی پورسانت</b>\n",
             'referral_hist_row'  => "▪️ {date} — از خرید <b>{amount}</b> تومانی: <b>+{commission}</b> تومان\n",
             'referral_hist_none' => "هنوز پورسانتی ثبت نشده است.",
@@ -914,7 +915,7 @@ function defaultConfig() {
             'btns' => [
                 'link'   => ['emoji' => '🔗', 'text' => 'ساخت لینک دعوت',   'color' => 'success', 'icon' => ''],
                 'hist'   => ['emoji' => '🧾', 'text' => 'تاریخچه پورسانت', 'color' => 'primary', 'icon' => ''],
-                'wallet' => ['emoji' => '💠', 'text' => 'اتصال به کیف پول', 'color' => 'primary', 'icon' => ''],
+                'wallet' => ['emoji' => '💼', 'text' => 'برداشت پورسانت', 'color' => 'primary', 'icon' => ''],
             ],
         ],
 
@@ -1214,10 +1215,14 @@ function payReferralCommission($buyerId, $amount) {
     if (empty($c['on'])) return;
     $commission = round((float)$amount * ((float)$c['percent'] / 100), 2);
     if ($commission <= 0) return;
-    addBalance($u['referrer'], $commission);
+    // 💠 دیگر خودکار به موجودی واریز نمی‌شود — تا خودِ کاربر «برداشت
+    // پورسانت» را نزند، توی ref_pending می‌ماند. ref_earned همچنان
+    // مجموعِ کلِ تاریخیِ درآمد است (فقط برای نمایش، دست‌نخورده).
     mutate('users', function (&$users) use ($u, $commission) {
         $k = (string)$u['referrer'];
-        if (isset($users[$k])) $users[$k]['ref_earned'] = round((float)($users[$k]['ref_earned'] ?? 0) + $commission, 2);
+        if (!isset($users[$k])) return;
+        $users[$k]['ref_earned']  = round((float)($users[$k]['ref_earned'] ?? 0) + $commission, 2);
+        $users[$k]['ref_pending'] = round((float)($users[$k]['ref_pending'] ?? 0) + $commission, 2);
     });
     // 🧾 تاریخچه‌ی پورسانت — هر ردیف: خرید کدام زیرمجموعه، چه مبلغی، کِی.
     //    فقط ۵۰ ردیفِ آخرِ هر معرف نگه داشته می‌شود، وگرنه بی‌نهایت بزرگ می‌شود.
@@ -1228,7 +1233,8 @@ function payReferralCommission($buyerId, $amount) {
         $a[$k] = array_slice($a[$k], 0, 50);
     });
     sendMsg(BOT_TOKEN, $u['referrer'],
-        "🎉 یکی از زیرمجموعه‌های شما خرید کرد!\n💵 پورسانت شما: <b>" . fmtNum($commission) . "</b> تومان");
+        "🎉 یکی از زیرمجموعه‌های شما خرید کرد!\n💵 پورسانت شما: <b>" . fmtNum($commission) . "</b> تومان\n\n" .
+        "برای واریز به کیف‌پولتان، از 👥 زیرمجموعه ← 💼 برداشت پورسانت استفاده کنید.");
 }
 
 // ============================================================
@@ -2767,9 +2773,10 @@ function refInviteLink($uid) {
 function showReferral($uid, $chatId, $extra = [], $replyTo = null) {
     $u = getUser($uid) ?: [];
     $refText = T('referral', [
-        'percent'    => cfg()['referral']['percent'],
-        'referrals'  => countReferrals($uid),
-        'ref_earned' => fmtNum($u['ref_earned'] ?? 0),
+        'percent'     => cfg()['referral']['percent'],
+        'referrals'   => countReferrals($uid),
+        'ref_earned'  => fmtNum($u['ref_earned'] ?? 0),
+        'ref_pending' => fmtNum($u['ref_pending'] ?? 0),
     ]);
     $rows = [
         [refBtn('link', 'ref_link')],
@@ -2938,7 +2945,7 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         $media = ['type' => 'photo', 'media' => $fid, 'caption' => $caption, 'parse_mode' => 'HTML'];
         $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
         if ($rm !== null) $data['reply_markup'] = $rm;
-        $r = tg(BOT_TOKEN, 'editMessageMedia', $data);
+        $r = tg(BOT_TOKEN, 'editMessageMedia', $data, 8);
         // ⚠️ اگه محتوا/دکمه‌ها دقیقا همان چیزیه که همین الان رو پیام
         // هست (مثلا کاربر دوباره همان دکمه را زده)، تلگرام این را خطا
         // حساب می‌کند — ولی درواقع همه‌چی درسته و پیام دقیقا همان چیزیه
@@ -2950,8 +2957,12 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         // ساختنِ کارتِ تازه (که به GD/فونت نیاز دارد)؛ ولی چون
         // فایل‌شناسه را داریم، اول ارزان‌تر امتحان می‌کنیم: همین
         // فایل‌شناسه را در یک پیامِ کاملا تازه بفرست — نه آپلودی، نه GD.
+        //
+        // ⏱ همه‌ی این تایم‌اوت‌ها عمدا کوتاهند: قبلا این زنجیره تا ۴ تلاشِ
+        // پشتِ‌سرهم می‌رفت و هرکدام تا ۴۰ ثانیه صبر می‌کرد — یعنی روی
+        // یک اتصالِ کند، کاربر تا ۲ دقیقه هیچی نمی‌دید.
         if (function_exists('pxSendPhotoById')) {
-            $resend = pxSendPhotoById($chatId, $fid, $caption, $rm, null);
+            $resend = pxSendPhotoById($chatId, $fid, $caption, $rm, null, 8);
             if (!empty($resend['ok'])) {
                 $nid = $resend['result']['message_id'] ?? null;
                 if ($nid) slotSet($uid, 'refcard', $nid);
@@ -2995,7 +3006,7 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         }
         curl_setopt_array($ch, [
             CURLOPT_POST => true, CURLOPT_POSTFIELDS => $post, CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 40, CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 12, CURLOPT_CONNECTTIMEOUT => 5,
         ]);
         $res = curl_exec($ch);
         $err = curl_error($ch);
@@ -3066,18 +3077,26 @@ function showReferralHistory($uid, $chatId) {
     panelShow($uid, $chatId, 'menu', $t, inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
 }
 
-/** 💠 آدرس‌های کیف‌پولِ خودِ فروشگاه — همان‌هایی که برای واریز استفاده می‌شود */
-function showReferralWallet($uid, $chatId) {
-    $t = T('referral_wallet') . "\n\n";
-    $any = false;
-    foreach (['USDT', 'TRX', 'CARD'] as $cur) {
-        [$label, $addr] = walletFor($cur);
-        if ($addr === 'تنظیم نشده') continue;
-        $t .= '💠 <b>' . h($label) . "</b>\n<code>" . h($addr) . "</code>\n\n";
-        $any = true;
+/**
+ * 💼 برداشت پورسانت — هرچه از رفرال جمع شده (ref_pending) را همین الان
+ * به موجودیِ داخلِ ربات (کیف‌پولِ خودِ کاربر، همان‌جایی که برای خرید
+ * استفاده می‌شود) واریز می‌کند.
+ */
+function refWithdraw($uid, $chatId) {
+    $u = getUser($uid) ?: [];
+    $pending = round((float)($u['ref_pending'] ?? 0), 2);
+    if ($pending <= 0) {
+        panelShow($uid, $chatId, 'menu', T('referral_wallet_none'),
+            inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
+        return;
     }
-    if (!$any) $t .= 'هنوز هیچ آدرسی از پنل تنظیم نشده است.';
-    panelShow($uid, $chatId, 'menu', trim($t), inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
+    addBalance($uid, $pending);
+    mutate('users', function (&$users) use ($uid) {
+        $k = (string)$uid;
+        if (isset($users[$k])) $users[$k]['ref_pending'] = 0;
+    });
+    panelShow($uid, $chatId, 'menu', T('referral_wallet_ok', ['amount' => fmtNum($pending)]),
+        inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
 }
 
 function supMainBtn($which, $cb) {
@@ -5262,7 +5281,7 @@ function edRefButtons($chatId, $msgId) {
 function edRefButtonOne($chatId, $msgId, $which) {
     if (!in_array($which, ['link', 'hist', 'wallet'], true)) { edRefButtons($chatId, $msgId); return; }
     $m   = cfg()['referral']['btns'][$which] ?? [];
-    $lbl = ['link' => 'ساخت لینک دعوت', 'hist' => 'تاریخچه پورسانت', 'wallet' => 'اتصال به کیف پول'][$which];
+    $lbl = ['link' => 'ساخت لینک دعوت', 'hist' => 'تاریخچه پورسانت', 'wallet' => 'برداشت پورسانت'][$which];
 
     $t  = "🔘 <b>" . h($lbl) . "</b>\n\n";
     $t .= 'متن: ' . h(trim((string)($m['text'] ?? '')) ?: '—') . "\n";
@@ -5957,7 +5976,7 @@ function masterHandle($update) {
         // --- 👥 داشبورد زیرمجموعه ---
         if ($data === 'ref_link')   { answerCb(BOT_TOKEN, $cbId); showReferralLink($uid, $chatId); return; }
         if ($data === 'ref_hist')   { answerCb(BOT_TOKEN, $cbId); showReferralHistory($uid, $chatId); return; }
-        if ($data === 'ref_wallet') { answerCb(BOT_TOKEN, $cbId); showReferralWallet($uid, $chatId); return; }
+        if ($data === 'ref_wallet') { answerCb(BOT_TOKEN, $cbId); refWithdraw($uid, $chatId); return; }
 
         if ($data === 'trnop') { answerCb(BOT_TOKEN, $cbId); return; }
         if ($data === 'tr_cancel') {
