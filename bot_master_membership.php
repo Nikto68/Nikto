@@ -2919,7 +2919,7 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
             $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
             if ($rm !== null) $data['reply_markup'] = $rm;
             $out = __tgHook(BOT_TOKEN, 'editMessageMedia', $data);
-            return !empty($out['ok']);
+            return !empty($out['ok']) || isNotModified($out);
         }
         $data = ['chat_id' => $chatId, 'caption' => $caption, 'photo_len' => 999];
         if ($rm !== null) $data['reply_markup'] = $rm;
@@ -2938,7 +2938,11 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
         if ($rm !== null) $data['reply_markup'] = $rm;
         $r = tg(BOT_TOKEN, 'editMessageMedia', $data);
-        if (!empty($r['ok'])) return true;
+        // ⚠️ اگه محتوا/دکمه‌ها دقیقا همان چیزیه که همین الان رو پیام
+        // هست (مثلا کاربر دوباره همان دکمه را زده)، تلگرام این را خطا
+        // حساب می‌کند — ولی درواقع همه‌چی درسته و پیام دقیقا همان چیزیه
+        // که باید باشد. این را شکست حساب نکن.
+        if (!empty($r['ok']) || isNotModified($r)) return true;
         // فایل‌شناسه دیگر معتبر نیست — از نو می‌سازیم
     }
 
@@ -2994,6 +2998,8 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         if ($nid) slotSet($uid, 'refcard', $nid);
         return true;
     }
+    // ⚠️ همان استثنای «محتوا دقیقا همینه که هست» — خطا نیست
+    if (isNotModified($j)) return true;
 
     // 🔴 آپلود رفت ولی تلگرام قبول نکرد (یا اصلا شبکه قطع بود) — این هم
     // قبلا کاملا بی‌صدا بود. حالا دلیلِ دقیق را به ادمین می‌گوید.
