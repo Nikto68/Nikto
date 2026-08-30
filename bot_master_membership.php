@@ -2827,28 +2827,43 @@ function refCardBytes($link, $uid) {
     }
 
     // 🔵🔴🟡 نوارِ سه‌رنگِ بالا — آبی، قرمز، طلایی
-    imagefilledrectangle($im, 0, 0, (int)($W * 0.34), 8, imagecolorallocate($im, 52, 120, 246));
-    imagefilledrectangle($im, (int)($W * 0.34), 0, (int)($W * 0.67), 8, imagecolorallocate($im, 214, 40, 57));
-    imagefilledrectangle($im, (int)($W * 0.67), 0, $W, 8, imagecolorallocate($im, 212, 175, 55));
+    imagefilledrectangle($im, 0, 0, (int)($W * 0.34), 10, imagecolorallocate($im, 52, 120, 246));
+    imagefilledrectangle($im, (int)($W * 0.34), 0, (int)($W * 0.67), 10, imagecolorallocate($im, 214, 40, 57));
+    imagefilledrectangle($im, (int)($W * 0.67), 0, $W, 10, imagecolorallocate($im, 212, 175, 55));
 
     $white = imagecolorallocate($im, 255, 255, 255);
-    $gold  = imagecolorallocate($im, 212, 175, 55);
+    $gold  = imagecolorallocate($im, 230, 190, 70);
     $gray  = imagecolorallocate($im, 175, 175, 195);
     $dark  = imagecolorallocate($im, 20, 20, 32);
+    $blue  = imagecolorallocate($im, 52, 120, 246);
+    $red   = imagecolorallocate($im, 214, 40, 57);
+    $shadow = imagecolorallocate($im, 0, 0, 0);
 
     $center = function ($size, $text) use ($font, $W) {
         $bb = imagettfbbox($size, 0, $font, $text);
         return (int)(($W - abs($bb[2] - $bb[0])) / 2);
     };
 
-    // عنوان
-    $title = 'INVITE & EARN';
-    imagettftext($im, 24, 0, $center(24, $title), 62, $gold, $font, $title);
+    // ✨ نقطه‌های تزئینی کنارِ عنوان — حس جشن/پفکی
+    foreach ([[70, 50, 5, $blue], [90, 75, 3, $gold], [$W - 70, 50, 5, $red], [$W - 90, 75, 3, $gold]] as $dot)
+        imagefilledellipse($im, $dot[0], $dot[1], $dot[2] * 2, $dot[2] * 2, $dot[3]);
 
-    // چیپِ سفیدِ گردگوشه برای لینک — اگر خیلی بلند بود، فونت کوچک‌تر می‌شود
-    $chipX1 = 40; $chipY1 = 140; $chipX2 = $W - 40; $chipY2 = 232;
-    if (function_exists('pxRoundRect')) pxRoundRect($im, $chipX1, $chipY1, $chipX2, $chipY2, 18, $white);
-    else imagefilledrectangle($im, $chipX1, $chipY1, $chipX2, $chipY2, $white);
+    // عنوان — با سایه‌ی نرمِ زیرش تا حسِ برجسته/پفکی بدهد
+    $title = 'INVITE & EARN';
+    $tx = $center(30, $title);
+    imagettftext($im, 30, 0, $tx + 2, 66, $shadow, $font, $title);
+    imagettftext($im, 30, 0, $tx, 63, $gold, $font, $title);
+
+    // 🖼 قابِ سه‌رنگِ دورِ چیپ — یک لایه‌ی رنگی بزرگ‌تر زیرِ چیپِ سفید،
+    //    که از هر طرف چند پیکسل بیرون می‌زند و رنگش دیده می‌شود
+    $chipX1 = 40; $chipY1 = 148; $chipX2 = $W - 40; $chipY2 = 236;
+    if (function_exists('pxRoundRect')) {
+        pxRoundRect($im, $chipX1 - 4, $chipY1 - 4, $chipX2 + 4, $chipY2 + 4, 22, $gold);
+        pxRoundRect($im, $chipX1, $chipY1, $chipX2, $chipY2, 18, $white);
+    } else {
+        imagefilledrectangle($im, $chipX1 - 4, $chipY1 - 4, $chipX2 + 4, $chipY2 + 4, $gold);
+        imagefilledrectangle($im, $chipX1, $chipY1, $chipX2, $chipY2, $white);
+    }
 
     $size = 22;
     while ($size > 11) {
@@ -2858,9 +2873,13 @@ function refCardBytes($link, $uid) {
     }
     imagettftext($im, $size, 0, $center($size, $link), (int)(($chipY1 + $chipY2) / 2) + 7, $dark, $font, $link);
 
-    // کدِ دعوت — پایینِ کارت
+    // کدِ دعوت — پایینِ کارت، با یک خطِ کوتاهِ تزئینی هر طرف
     $code = 'CODE: ' . $uid;
-    imagettftext($im, 16, 0, $center(16, $code), $H - 34, $gray, $font, $code);
+    $cw = abs(imagettfbbox(16, 0, $font, $code)[2] - imagettfbbox(16, 0, $font, $code)[0]);
+    $cx = $center(16, $code);
+    imagettftext($im, 16, 0, $cx, $H - 34, $gray, $font, $code);
+    imagefilledrectangle($im, $cx - 46, $H - 39, $cx - 16, $H - 37, $gray);
+    imagefilledrectangle($im, $cx + $cw + 16, $H - 39, $cx + $cw + 46, $H - 37, $gray);
 
     ob_start();
     imagepng($im);
@@ -2913,7 +2932,16 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
     }
 
     $bytes = refCardBytes($link, $uid);
-    if ($bytes === '') return;   // GD/فونت نبود — بی‌صدا صرف‌نظر
+    if ($bytes === '') {
+        // 🔴 قبلا اینجا کاملا بی‌صدا صرف‌نظر می‌شد — یعنی اگر روی سرور
+        // GD یا فونت نبود، کارت هیچ‌وقت نمی‌آمد و هیچ‌کس نمی‌فهمید چرا.
+        // حالا لااقل یک‌بار در ساعت به ادمین می‌گوید مشکل دقیقا کجاست.
+        if (function_exists('adminAlertOnce') && function_exists('pxCardWhy')) {
+            $why = pxCardWhy();
+            if ($why !== '') adminAlertOnce('refcard_broken', '🖼 <b>کارتِ دعوت ساخته نمی‌شود</b>' . "\n\n" . $why);
+        }
+        return;
+    }
 
     $dir = rtrim(DATA_DIR, '/') . '/tmp';
     if (!is_dir($dir)) @mkdir($dir, 0755, true);
@@ -2997,10 +3025,11 @@ function supMainBtn($which, $cb) {
 function showSupport($uid, $chatId, $extra = [], $replyTo = null) {
     $d = supMainBtn('direct', 'sup_direct');
     $i = supMainBtn('indirect', 'sup_list');
-    // چیدمان دکمه‌های شیشه‌ای پشتیبانی — از پنل ← 🧩 افزونه ← ✍️ متن‌ها
-    $rows = (function_exists('axVal') && empty(axVal('labels.sup_stack')))
-        ? [[$d, $i]]                       // کنار هم
-        : [[$d], [$i]];                    // زیر هم
+    // 🔒 چیدمان ثابت: دو دکمه‌ی اول کنار هم، بالا — سوییچِ قدیمیِ
+    // labels.sup_stack دیگر اینجا خوانده نمی‌شود، چون مقدارش رو دیسکِ
+    // خیلی از نصب‌ها از قبل «زیر هم» ذخیره شده بود و پیش‌فرضِ تازه‌ی کد
+    // را دور می‌زد.
+    $rows = [[$d, $i]];
     // 👥 دکمه‌ی گروه — تا لینکش را از پنل نگذارید، اصلا نشان داده نمی‌شود
     if (trim((string)(cfg()['support_main']['group']['value'] ?? '')) !== '')
         $rows[] = [supMainBtn('group', 'sup_group')];
@@ -4381,7 +4410,7 @@ function admGroups() {
             [['🎨 دکمه‌ها', 'ebuttons'], ['📝 متن‌ها', 'etexts']],
             [['💠 رنگ دکمه‌های شیشه‌ای', 'eglass']],
             [['📞 دکمه‌های پشتیبانی', 'esup']],
-            [['📋 قوانین شارژ', 'etr_home']],
+            [['📋 قوانین شارژ', 'etop_home']],
             [['👥 دکمه‌های زیرمجموعه', 'eref_home']],
         ]],
         'rep' => ['📢 <b>گزارش و پیام همگانی</b>', 'اعلام فروش و پیام به همه.', [
@@ -5192,10 +5221,10 @@ function edTopupRules($chatId, $msgId) {
     $t .= "متن فعلی:\n" . (string)($c['text'] ?? '');
 
     editMsg(BOT_TOKEN, $chatId, $msgId, mb_substr($t, 0, 3800), inlineKb([
-        [btnCb(!empty($c['on']) ? '✅ روشن' : '❌ خاموش', 'etrx', 'info')],
-        [btnCb('✏️ متن قوانین', 'etrm', 'admin')],
-        [btnCb('🔘 دکمه‌ی لغو', 'etrb_cancel', 'admin'), btnCb('🔘 دکمه‌ی تایید', 'etrb_ok', 'admin')],
-        [btnCb('🔘 دکمه‌ی «تایید شده»', 'etrb_done', 'admin')],
+        [btnCb(!empty($c['on']) ? '✅ روشن' : '❌ خاموش', 'etopx', 'info')],
+        [btnCb('✏️ متن قوانین', 'etopm', 'admin')],
+        [btnCb('🔘 دکمه‌ی لغو', 'etopb_cancel', 'admin'), btnCb('🔘 دکمه‌ی تایید', 'etopb_ok', 'admin')],
+        [btnCb('🔘 دکمه‌ی «تایید شده»', 'etopb_done', 'admin')],
         [btnUI('back', 'ag_look', 'nav')],
     ]));
 }
@@ -5214,11 +5243,11 @@ function edTopupRulesBtn($chatId, $msgId, $which) {
     $t .= 'رنگ: ' . (styleMap()[$m['color'] ?? 'none'] ?? '—') . "\n";
 
     editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb([
-        [btnCb('✏️ متن', 'etrbt_' . $which, 'admin'),
-         btnCb('😀 ایموجی معمولی', 'etrbe_' . $which, 'admin')],
-        [btnCb('✨ ایموجی پریمیوم', 'etrbi_' . $which, 'admin'),
-         btnCb('🎨 رنگ', 'etrbc_' . $which, 'admin')],
-        [btnUI('back', 'etr_home', 'nav')],
+        [btnCb('✏️ متن', 'etopbt_' . $which, 'admin'),
+         btnCb('😀 ایموجی معمولی', 'etopbe_' . $which, 'admin')],
+        [btnCb('✨ ایموجی پریمیوم', 'etopbi_' . $which, 'admin'),
+         btnCb('🎨 رنگ', 'etopbc_' . $which, 'admin')],
+        [btnUI('back', 'etop_home', 'nav')],
     ]));
 }
 
@@ -7199,30 +7228,32 @@ function masterHandle($update) {
         }
 
         // 📋 قوانینِ افزایش موجودی
-        if ($data === 'etr_home') { answerCb(BOT_TOKEN, $cbId); edTopupRules($chatId, $msgId); return; }
-        if ($data === 'etrx') {
+        // ⚠️ پیشوندِ 'etr_' نه — قبلا برای «بازگردانی متن به پیش‌فرض»
+        // (خط ۶۹۷۷) اشغال شده بود و این بخش را می‌بلعید. اینجا 'etop_'.
+        if ($data === 'etop_home') { answerCb(BOT_TOKEN, $cbId); edTopupRules($chatId, $msgId); return; }
+        if ($data === 'etopx') {
             cfgSet(function (&$c) { $c['topup_rules']['on'] = empty($c['topup_rules']['on']); });
             answerCb(BOT_TOKEN, $cbId, '✅'); edTopupRules($chatId, $msgId); return;
         }
-        if ($data === 'etrm') {
+        if ($data === 'etopm') {
             answerCb(BOT_TOKEN, $cbId);
             setState($uid, 'tr_text', []);
             sendMsg(BOT_TOKEN, $chatId,
                 "✏️ متنِ تازه‌ی قوانین را بفرستید.\n\n✨ ایموجی پریمیوم و <code>&lt;blockquote&gt;</code> هم می‌پذیرد.",
-                inlineKb([[btnUI('cancel', 'etr_home', 'cancel')]]));
+                inlineKb([[btnUI('cancel', 'etop_home', 'cancel')]]));
             return;
         }
-        if (str_starts_with($data, 'etrb_')) {
+        if (str_starts_with($data, 'etopb_')) {
             answerCb(BOT_TOKEN, $cbId);
-            edTopupRulesBtn($chatId, $msgId, substr($data, 5));
+            edTopupRulesBtn($chatId, $msgId, substr($data, 6));
             return;
         }
-        if (preg_match('/^etrb([teic])_(ok|cancel|done)$/', $data, $em)) {
+        if (preg_match('/^etopb([teic])_(ok|cancel|done)$/', $data, $em)) {
             if ($em[1] === 'c') {
                 answerCb(BOT_TOKEN, $cbId);
                 $rows = [];
-                foreach (styleMap() as $sk => $sl) $rows[] = [btnCb($sl, 'etrbC_' . $em[2] . '_' . $sk, 'info')];
-                $rows[] = [btnUI('back', 'etrb_' . $em[2], 'nav')];
+                foreach (styleMap() as $sk => $sl) $rows[] = [btnCb($sl, 'etopbC_' . $em[2] . '_' . $sk, 'info')];
+                $rows[] = [btnUI('back', 'etopb_' . $em[2], 'nav')];
                 editMsg(BOT_TOKEN, $chatId, $msgId, "🎨 <b>رنگ دکمه</b>", inlineKb($rows));
                 return;
             }
@@ -7235,10 +7266,10 @@ function masterHandle($update) {
             [$txt, $st] = $trAsk[$em[1]];
             setState($uid, $st, ['which' => $em[2]]);
             answerCb(BOT_TOKEN, $cbId);
-            sendMsg(BOT_TOKEN, $chatId, $txt, inlineKb([[btnUI('cancel', 'etrb_' . $em[2], 'cancel')]]));
+            sendMsg(BOT_TOKEN, $chatId, $txt, inlineKb([[btnUI('cancel', 'etopb_' . $em[2], 'cancel')]]));
             return;
         }
-        if (preg_match('/^etrbC_(ok|cancel|done)_(\w+)$/', $data, $em)) {
+        if (preg_match('/^etopbC_(ok|cancel|done)_(\w+)$/', $data, $em)) {
             $col = isStyle($em[2]) ? $em[2] : 'none';
             cfgSet(function (&$c) use ($em, $col) { $c['topup_rules']['btns'][$em[1]]['color'] = $col; });
             answerCb(BOT_TOKEN, $cbId, '✅');
@@ -7572,7 +7603,7 @@ function masterHandle($update) {
         if (trim($html) === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی نمی‌شود."); return; }
         cfgSet(function (&$c) use ($html) { $c['topup_rules']['text'] = $html; });
         clearState($uid);
-        sendMsg(BOT_TOKEN, $chatId, '✅ ثبت شد.', inlineKb([[btnCb('📋 قوانین شارژ', 'etr_home', 'admin')]]));
+        sendMsg(BOT_TOKEN, $chatId, '✅ ثبت شد.', inlineKb([[btnCb('📋 قوانین شارژ', 'etop_home', 'admin')]]));
         return;
     }
     if (str_starts_with($action, 'tr_b')) {
@@ -7581,7 +7612,7 @@ function masterHandle($update) {
         if (!in_array($which, ['ok', 'cancel', 'done'], true)) { clearState($uid); return; }
         $plain = trim((string)($msg['text'] ?? ''));
         $blank = ($plain === '-' || $plain === '—');
-        $back  = inlineKb([[btnCb('📋 قوانین شارژ', 'etr_home', 'admin')]]);
+        $back  = inlineKb([[btnCb('📋 قوانین شارژ', 'etop_home', 'admin')]]);
 
         if ($action === 'tr_btext') {
             if ($plain === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ یک متن بفرستید."); return; }
