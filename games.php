@@ -838,14 +838,6 @@ function gmHandleText($text, $uid, $chatId, $name, $uname = '', $replyTo = null,
 
     $thread = (int)($msg['message_thread_id'] ?? 0);
     $g = gmCreate($kind, $stake, $uid, $chatId, $name, $uname, $thread);
-    // 🎮 فقط «بازی» (rand) — نه «چالش» (duel). چالش با پیوستنِ نفرِ دوم
-    // یا فوری نتیجه می‌دهد یا صفحه‌ی دوزِ خودش را دارد؛ این پیام مالِ
-    // بازیِ ساده‌ی قرعه‌ای است که تا کشیدنِ قرعه (gmDraw) صبر می‌کند.
-    if ($kind === 'rand') {
-        $extra2 = [];
-        if ($thread > 0) $extra2['message_thread_id'] = $thread;
-        sendMsg(BOT_TOKEN, $chatId, gmT('in_progress'), null, $extra2);
-    }
     gmShow($g, $replyTo);
     gmPruneMsgs($uid, $chatId);
     return true;
@@ -1042,6 +1034,15 @@ function gmCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
         }
         answerCb(BOT_TOKEN, $cbId, '✅');
         $g = gmGet($gid);
+
+        // 🎮 «بازی» (rand) — دکمه‌ی پیوستن زده شد. برخلافِ «چالش» که یا
+        // فوری نتیجه می‌دهد یا صفحه‌ی دوزِ خودش را دارد، اینجا بازی تا
+        // کشیدنِ قرعه (gmDraw) باز می‌ماند، پس همین لحظه بگو در حال انجام است.
+        if ($g && $g['kind'] === 'rand') {
+            $extra2 = [];
+            if ((int)($g['thread'] ?? 0) > 0) $extra2['message_thread_id'] = (int)$g['thread'];
+            sendMsg(BOT_TOKEN, $chatId, gmT('in_progress'), null, $extra2);
+        }
 
         // ⚡ چالش: همین که نفر دوم آمد، نتیجه همان لحظه معلوم می‌شود.
         //    نه تیک بعدی، نه نوبت‌بازی — کمتر از یک ثانیه.
