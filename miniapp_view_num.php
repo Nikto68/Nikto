@@ -616,14 +616,21 @@ const TG = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : 
 if (TG) { try { TG.ready(); TG.expand(); TG.setHeaderColor && TG.setHeaderColor(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()); } catch (e) {} }
 
 /* خوش‌آمدگویی تا جوابِ api('me') برسه (یا حداکثر ۴ ثانیه) پنهان می‌مونه */
+const splashStart = Date.now();
 let splashGone = false;
+// ⚠️ عمداً حداقل ۴ ثانیه نگه داشته می‌شه — سریع‌تر جواب بدن هم فرقی نداره،
+// همون ۴ ثانیه هم کف‌شه هم سقف (سقف برای شبکه‌ی کند).
+const SPLASH_MIN = 4000;
 function hideSplash() {
   if (splashGone) return; splashGone = true;
-  const s = document.getElementById('splash'); if (!s) return;
-  s.classList.add('hide');
-  setTimeout(() => s.remove(), 400);
+  const wait = Math.max(0, SPLASH_MIN - (Date.now() - splashStart));
+  setTimeout(() => {
+    const s = document.getElementById('splash'); if (!s) return;
+    s.classList.add('hide');
+    setTimeout(() => s.remove(), 400);
+  }, wait);
 }
-setTimeout(hideSplash, 4000);
+setTimeout(hideSplash, SPLASH_MIN);
 
 /* 🎨 رنگِ هر کشور.
    همه از یک خانواده‌اند — آبیِ پریده تا سبزِ پریده — تا شبکه یکدست و

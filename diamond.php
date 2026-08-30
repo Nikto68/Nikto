@@ -327,7 +327,8 @@ function dmHit($uid, $name, $username = '') {
     $res = dmUserSet($uid, function (&$x) use ($name, $username, $now) {
         // 🔒 قفل دوم داخل خودِ نوشتن — دو پیام همزمان نباید دوبار امتیاز بدهد
         $cd = max(5, (int)dmVal('cooldown', 300));
-        if ($now - (int)($x['last'] ?? 0) < $cd) return null;
+        $waitLeft = $cd - ($now - (int)($x['last'] ?? 0));
+        if ($waitLeft > 0) return ['wait' => true, 'left' => $waitLeft];
 
         $level  = dmLevel((float)($x['points'] ?? 0));
         $reward = dmReward($level);
@@ -344,8 +345,13 @@ function dmHit($uid, $name, $username = '') {
                 'total' => $x['total'], 'level' => $newLevel, 'up' => $newLevel > $level];
     });
 
-    if (!is_array($res)) {
-        return [dmT('wait', ['name' => $name, 'm' => 0, 's' => $cd, 'left' => $cd]), false];
+    // ⚠️ قبلاً اینجا وقتی قفلِ دوم رد می‌شد (دو پیامِ تقریباً هم‌زمان)، به‌جای
+    // زمانِ واقعیِ باقی‌مانده، همیشه کلِ cooldown نشان داده می‌شد — یعنی
+    // گاهی کاربر یک پیام «۱ دقیقه مانده» می‌دید و بلافاصله پیامِ بعدی
+    // می‌گفت «۵۵ دقیقه مانده». همینه که در گزارش‌ها به چشم آمده بود.
+    if (!empty($res['wait'])) {
+        $left = max(0, (int)$res['left']);
+        return [dmT('wait', ['name' => $name, 'm' => intdiv($left, 60), 's' => $left % 60, 'left' => $left]), false];
     }
 
     // {progress} دیگر در متنِ پیش‌فرض نیست، ولی اگر ادمین خودش

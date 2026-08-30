@@ -275,14 +275,22 @@ if (__GRAIN__) document.body.classList.add('grain-on');
 /* خوش‌آمدگویی تا جوابِ api('me') برسه (یا حداکثر ۴ ثانیه، که یه
    شبکه‌ی کند اسیرمون نکنه) پنهان می‌مونه — یه‌بار که مخفی شد، دیگه
    برنمی‌گرده، چون فقط لحظه‌ی اولِ ورود معنی داره. */
+var splashStart = Date.now();
 var splashGone = false;
+// ⚠️ عمداً حداقل ۴ ثانیه نگه داشته می‌شه — اگه api('me') زودتر جواب بده،
+// همچنان تا رسیدن به این حداقل صبر می‌کنه؛ اگه دیرتر جواب بده، همون لحظه
+// (بدون معطلیِ اضافه) بسته می‌شه. یعنی سقفِ ۴ ثانیه، هم کف‌شه هم سقف.
+var SPLASH_MIN = 4000;
 function hideSplash(){
   if (splashGone) return; splashGone = true;
-  var s = $('splash'); if (!s) return;
-  s.classList.add('hide');
-  setTimeout(function(){ s.remove(); }, 400);
+  var wait = Math.max(0, SPLASH_MIN - (Date.now() - splashStart));
+  setTimeout(function(){
+    var s = $('splash'); if (!s) return;
+    s.classList.add('hide');
+    setTimeout(function(){ s.remove(); }, 400);
+  }, wait);
 }
-setTimeout(hideSplash, 4000);
+setTimeout(hideSplash, SPLASH_MIN);
 
 if (TG) {
   try { TG.ready(); TG.expand(); } catch(e){}

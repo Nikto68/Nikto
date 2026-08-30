@@ -3246,7 +3246,24 @@ function pxAltFetch($fresh = false) {
     }
     maCachePut('px_alterr', implode(' · ', $errs));
     maCachePut('px_altcool', time());
-    return $mem = (array)(maCacheGet('px_alt', 0) ?: []);
+
+    $stale = (array)(maCacheGet('px_alt', 0) ?: []);
+    // ⚠️ قبلاً وقتی این منبع می‌خوابید، قیمتِ کهنه بی‌سروصدا برای همیشه
+    // نشان داده می‌شد — همان چیزی که «قیمتِ طلا اصلاً عوض نمی‌شود» به‌نظر
+    // می‌رسید، بدون اینکه هیچ‌جا خطایی دیده شود. اگر خیلی وقته کهنه‌ست،
+    // یک‌بار در ساعت به ادمین خبر بده.
+    if ($stale && function_exists('adminAlertOnce')) {
+        $rawAt = (int)(load('ma_cache')['px_alt']['at'] ?? 0);
+        $age = $rawAt > 0 ? time() - $rawAt : 0;
+        if ($age > 3600) {
+            adminAlertOnce('px_alt_stale',
+                "⚠️ <b>منبعِ دوم (طلا/سکه/پولِ کشورها) بیش از " . intdiv($age, 3600) . " ساعته جواب نمی‌دهد</b>\n\n" .
+                "قیمت‌هایی که الان نشان داده می‌شوند، منجمد و کهنه‌اند.\n" .
+                "خطا: <code>" . h(implode(' · ', $errs) ?: '—') . "</code>\n\n" .
+                "پنل ← 💹 قیمت ← 🥇 طلا، دلار، سکه — آدرسِ منبعِ دوم را چک کنید.");
+        }
+    }
+    return $mem = $stale;
 }
 
 /** یک رشته‌ی چندخطی/کاما‌دار را به فهرست آدرس تمیز تبدیل می‌کند */
