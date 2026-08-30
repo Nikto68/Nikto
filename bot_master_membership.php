@@ -2919,10 +2919,12 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
             $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
             if ($rm !== null) $data['reply_markup'] = $rm;
             $out = __tgHook(BOT_TOKEN, 'editMessageMedia', $data);
-            return !empty($out['ok']) || isNotModified($out);
+            if (!empty($out['ok']) || isNotModified($out)) return true;
+            // 🔴 پیامِ قبلی دیگر وجود ندارد — با همان فایل‌شناسه، تازه بفرست
         }
         $data = ['chat_id' => $chatId, 'caption' => $caption, 'photo_len' => 999];
         if ($rm !== null) $data['reply_markup'] = $rm;
+        if ($fid !== '') $data['reused_fid'] = $fid;
         $out = __tgHook(BOT_TOKEN, 'sendPhoto', $data);
         if (empty($out['ok'])) return false;
         $nid = $out['result']['message_id'] ?? null;
@@ -2943,7 +2945,21 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         // حساب می‌کند — ولی درواقع همه‌چی درسته و پیام دقیقا همان چیزیه
         // که باید باشد. این را شکست حساب نکن.
         if (!empty($r['ok']) || isNotModified($r)) return true;
-        // فایل‌شناسه دیگر معتبر نیست — از نو می‌سازیم
+
+        // 🔴 خودِ پیام دیگر وجود ندارد (کاربر پاکش کرده، یا هرچه) — نه
+        // فقط فایل‌شناسه‌اش خراب بوده. قبلا اینجا مستقیم می‌رفت سراغِ
+        // ساختنِ کارتِ تازه (که به GD/فونت نیاز دارد)؛ ولی چون
+        // فایل‌شناسه را داریم، اول ارزان‌تر امتحان می‌کنیم: همین
+        // فایل‌شناسه را در یک پیامِ کاملا تازه بفرست — نه آپلودی، نه GD.
+        if (function_exists('pxSendPhotoById')) {
+            $resend = pxSendPhotoById($chatId, $fid, $caption, $rm, null);
+            if (!empty($resend['ok'])) {
+                $nid = $resend['result']['message_id'] ?? null;
+                if ($nid) slotSet($uid, 'refcard', $nid);
+                return true;
+            }
+        }
+        // فایل‌شناسه هم دیگر معتبر نیست — از نو می‌سازیم
     }
 
     $bytes = refCardBytes($link, $uid);
@@ -2960,52 +2976,75 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
 
     $dir = rtrim(DATA_DIR, '/') . '/tmp';
     if (!is_dir($dir)) @mkdir($dir, 0755, true);
-    $tmp = $dir . '/refcard_' . bin2hex(random_bytes(6)) . '.png';
-    if (@file_put_contents($tmp, $bytes) === false) return false;
 
     $base = defined('TG_API_BASE') ? TG_API_BASE : 'https://api.telegram.org';
-    if ($mid) {
-        $post = ['chat_id' => $chatId, 'message_id' => $mid,
-            'media' => json_encode(['type' => 'photo', 'media' => 'attach://photo',
-                'caption' => $caption, 'parse_mode' => 'HTML']),
-            'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
-        if ($rm !== null) $post['reply_markup'] = $rm;
-        $ch = curl_init($base . '/bot' . BOT_TOKEN . '/editMessageMedia');
-    } else {
-        $post = ['chat_id' => $chatId, 'caption' => $caption, 'parse_mode' => 'HTML',
-            'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
-        if ($rm !== null) $post['reply_markup'] = $rm;
-        $ch = curl_init($base . '/bot' . BOT_TOKEN . '/sendPhoto');
-    }
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true, CURLOPT_POSTFIELDS => $post, CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 40, CURLOPT_CONNECTTIMEOUT => 10,
-    ]);
-    $res = curl_exec($ch);
-    $curlErr = curl_error($ch);
-    curl_close($ch);
-    @unlink($tmp);
+    $upload = function ($asEdit) use ($base, $chatId, $mid, $caption, $rm, $dir, $bytes) {
+        $tmp = $dir . '/refcard_' . bin2hex(random_bytes(6)) . '.png';
+        if (@file_put_contents($tmp, $bytes) === false) return [false, '', ''];
+        if ($asEdit) {
+            $post = ['chat_id' => $chatId, 'message_id' => $mid,
+                'media' => json_encode(['type' => 'photo', 'media' => 'attach://photo',
+                    'caption' => $caption, 'parse_mode' => 'HTML']),
+                'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
+            if ($rm !== null) $post['reply_markup'] = $rm;
+            $ch = curl_init($base . '/bot' . BOT_TOKEN . '/editMessageMedia');
+        } else {
+            $post = ['chat_id' => $chatId, 'caption' => $caption, 'parse_mode' => 'HTML',
+                'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
+            if ($rm !== null) $post['reply_markup'] = $rm;
+            $ch = curl_init($base . '/bot' . BOT_TOKEN . '/sendPhoto');
+        }
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true, CURLOPT_POSTFIELDS => $post, CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 40, CURLOPT_CONNECTTIMEOUT => 10,
+        ]);
+        $res = curl_exec($ch);
+        $err = curl_error($ch);
+        curl_close($ch);
+        @unlink($tmp);
+        return [true, $res, $err];
+    };
 
-    $j = json_decode((string)$res, true);
-    if (!empty($j['ok'])) {
+    $applyResult = function ($j) use ($uid) {
         $ph = $j['result']['photo'] ?? [];
         if ($ph) {
             $last = end($ph);
             if (!empty($last['file_id']) && function_exists('maCachePut'))
                 maCachePut(refCardPhotoIdKey($uid), $last['file_id']);
         }
-        $nid = $j['result']['message_id'] ?? $mid;
+        $nid = $j['result']['message_id'] ?? null;
         if ($nid) slotSet($uid, 'refcard', $nid);
-        return true;
+    };
+
+    [$wrote, $res, $curlErr] = $upload((bool)$mid);
+    if (!$wrote) return false;
+    $j = json_decode((string)$res, true);
+
+    if (!empty($j['ok'])) { $applyResult($j); return true; }
+    if (isNotModified($j)) return true;   // محتوا همینه که هست — خطا نیست
+
+    // ⚠️ اگر داشتیم پیامِ قبلی را ویرایش می‌کردیم و شکست خورد، شاید خودِ
+    // آن پیام دیگر وجود ندارد (کاربر پاکش کرده، یا هرچه) — نه فقط
+    // فایل‌شناسه‌اش خراب بوده. یک‌بار دیگر، این‌بار به‌شکلِ پیامِ کاملا
+    // تازه، امتحان می‌کنیم؛ وگرنه تا ابد گیرِ همان پیامِ مرده می‌ماند.
+    if ($mid) {
+        [$wrote2, $res2] = $upload(false);
+        if ($wrote2) {
+            $j2 = json_decode((string)$res2, true);
+            if (!empty($j2['ok'])) { $applyResult($j2); return true; }
+        }
     }
-    // ⚠️ همان استثنای «محتوا دقیقا همینه که هست» — خطا نیست
-    if (isNotModified($j)) return true;
 
     // 🔴 آپلود رفت ولی تلگرام قبول نکرد (یا اصلا شبکه قطع بود) — این هم
     // قبلا کاملا بی‌صدا بود. حالا دلیلِ دقیق را به ادمین می‌گوید.
+    //
+    // ⚠️ کلید هشدار را از رویِ خودِ متنِ خطا می‌سازیم، نه یک کلیدِ ثابت —
+    // وگرنه یک خطای قدیمی (مثلا همان «not modified» که قبلا رخ داده)
+    // برای یک ساعت جلوی هر خطای تازه و کاملا متفاوت را هم می‌گرفت.
     if (function_exists('adminAlertOnce')) {
         $desc = $curlErr !== '' ? $curlErr : (string)($j['description'] ?? 'پاسخ نامعتبر از تلگرام');
-        adminAlertOnce('refcard_upload_fail', '🖼 <b>آپلودِ کارتِ دعوت رد شد</b>' . "\n\n" . h($desc));
+        adminAlertOnce('refcard_upload_fail_' . substr(md5($desc), 0, 10),
+            '🖼 <b>آپلودِ کارتِ دعوت رد شد</b>' . "\n\n" . h($desc));
     }
     return false;
 }
