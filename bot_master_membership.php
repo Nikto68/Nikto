@@ -2790,6 +2790,151 @@ function showReferralLink($uid, $chatId) {
     }
     $rows[] = [btnUI('back', 'menu_referral', 'nav')];
     panelShow($uid, $chatId, 'menu', $text, inlineKb($rows));
+    if ($link !== '') refCardShow($uid, $chatId);
+}
+
+// ============================================================
+// 🖼 کارتِ گرافیکیِ دعوت — ۶۴۰×۳۶۰، کنارِ لینکِ دعوت فرستاده می‌شود
+// ============================================================
+//
+// از همان زیرساختِ فونت/رنگِ کارتِ قیمت (prices.php: pxFont, pxRoundRect)
+// استفاده می‌کند — اگر آن‌جا فونت پیدا شده، همین‌جا هم کار می‌کند؛ اگر
+// نه، همان راهنماییِ «یک ttf برای ربات بفرستید» آن‌جا هست.
+
+/** بایت‌های PNG کارت — یا رشته‌ی خالی اگر GD/فونت نبود */
+function refCardBytes($link, $uid) {
+    if (!function_exists('imagecreatetruecolor') || !function_exists('imagettftext')) return '';
+    $font = function_exists('pxFont') ? pxFont(true) : '';
+    if ($font === '') return '';
+
+    $W = 640; $H = 360;
+    $im = imagecreatetruecolor($W, $H);
+
+    // 🎨 پس‌زمینه: گرادیانِ مشکی → سرمه‌ای، از بالا به پایین
+    $top = [10, 10, 20]; $bot = [28, 22, 48];
+    for ($y = 0; $y < $H; $y++) {
+        $t = $y / $H;
+        imageline($im, 0, $y, $W, $y, imagecolorallocate($im,
+            (int)($top[0] + ($bot[0] - $top[0]) * $t),
+            (int)($top[1] + ($bot[1] - $top[1]) * $t),
+            (int)($top[2] + ($bot[2] - $top[2]) * $t)));
+    }
+
+    // 🔵🔴🟡 نوارِ سه‌رنگِ بالا — آبی، قرمز، طلایی
+    imagefilledrectangle($im, 0, 0, (int)($W * 0.34), 8, imagecolorallocate($im, 52, 120, 246));
+    imagefilledrectangle($im, (int)($W * 0.34), 0, (int)($W * 0.67), 8, imagecolorallocate($im, 214, 40, 57));
+    imagefilledrectangle($im, (int)($W * 0.67), 0, $W, 8, imagecolorallocate($im, 212, 175, 55));
+
+    $white = imagecolorallocate($im, 255, 255, 255);
+    $gold  = imagecolorallocate($im, 212, 175, 55);
+    $gray  = imagecolorallocate($im, 175, 175, 195);
+    $dark  = imagecolorallocate($im, 20, 20, 32);
+
+    $center = function ($size, $text) use ($font, $W) {
+        $bb = imagettfbbox($size, 0, $font, $text);
+        return (int)(($W - abs($bb[2] - $bb[0])) / 2);
+    };
+
+    // عنوان
+    $title = 'INVITE & EARN';
+    imagettftext($im, 24, 0, $center(24, $title), 62, $gold, $font, $title);
+
+    // چیپِ سفیدِ گردگوشه برای لینک — اگر خیلی بلند بود، فونت کوچک‌تر می‌شود
+    $chipX1 = 40; $chipY1 = 140; $chipX2 = $W - 40; $chipY2 = 232;
+    if (function_exists('pxRoundRect')) pxRoundRect($im, $chipX1, $chipY1, $chipX2, $chipY2, 18, $white);
+    else imagefilledrectangle($im, $chipX1, $chipY1, $chipX2, $chipY2, $white);
+
+    $size = 22;
+    while ($size > 11) {
+        $bb = imagettfbbox($size, 0, $font, $link);
+        if (abs($bb[2] - $bb[0]) <= ($chipX2 - $chipX1 - 40)) break;
+        $size--;
+    }
+    imagettftext($im, $size, 0, $center($size, $link), (int)(($chipY1 + $chipY2) / 2) + 7, $dark, $font, $link);
+
+    // کدِ دعوت — پایینِ کارت
+    $code = 'CODE: ' . $uid;
+    imagettftext($im, 16, 0, $center(16, $code), $H - 34, $gray, $font, $code);
+
+    ob_start();
+    imagepng($im);
+    $bytes = (string)ob_get_clean();
+    imagedestroy($im);
+    return $bytes;
+}
+
+function refCardPhotoIdKey($uid) { return 'refcard_fid_' . (int)$uid; }
+
+/**
+ * کارت را می‌فرستد یا (اگر قبلا برای همین کاربر فرستاده شده) همان
+ * پیامِ عکسِ قبلی را ویرایش می‌کند — نه پیامِ تازه، نه آپلودِ دوباره
+ * اگر فایل‌شناسه‌اش را هنوز داریم.
+ */
+function refCardShow($uid, $chatId) {
+    $link = refInviteLink($uid);
+    if ($link === '') return;
+    $mid = slotGet($uid, 'refcard');
+    $fid = function_exists('maCacheGet') ? (string)(maCacheGet(refCardPhotoIdKey($uid), 2592000) ?? '') : '';
+
+    if (function_exists('__tgHook')) {
+        if ($mid && $fid !== '') {
+            __tgHook(BOT_TOKEN, 'editMessageMedia', ['chat_id' => $chatId, 'message_id' => $mid,
+                'media' => json_encode(['type' => 'photo', 'media' => $fid])]);
+            return;
+        }
+        $out = __tgHook(BOT_TOKEN, 'sendPhoto', ['chat_id' => $chatId, 'photo_len' => 999]);
+        $nid = $out['result']['message_id'] ?? null;
+        if ($nid) slotSet($uid, 'refcard', $nid);
+        $newFid = $out['result']['photo'][0]['file_id'] ?? ('TESTFID_' . $uid);
+        if (function_exists('maCachePut')) maCachePut(refCardPhotoIdKey($uid), $newFid);
+        return;
+    }
+
+    // ⚡ فایل‌شناسه را داریم؟ نه آپلودی، نه ساختنِ کارتِ تازه — فقط جاگذاری
+    if ($mid && $fid !== '') {
+        $r = tg(BOT_TOKEN, 'editMessageMedia', ['chat_id' => $chatId, 'message_id' => $mid,
+            'media' => json_encode(['type' => 'photo', 'media' => $fid])]);
+        if (!empty($r['ok'])) return;
+        // فایل‌شناسه دیگر معتبر نیست — از نو می‌سازیم
+    }
+
+    $bytes = refCardBytes($link, $uid);
+    if ($bytes === '') return;   // بی‌صدا صرف‌نظر — متنِ لینک قبلا جدا فرستاده شده
+
+    $dir = rtrim(DATA_DIR, '/') . '/tmp';
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $tmp = $dir . '/refcard_' . bin2hex(random_bytes(6)) . '.png';
+    if (@file_put_contents($tmp, $bytes) === false) return;
+
+    $base = defined('TG_API_BASE') ? TG_API_BASE : 'https://api.telegram.org';
+    if ($mid) {
+        $post = ['chat_id' => $chatId, 'message_id' => $mid,
+            'media' => json_encode(['type' => 'photo', 'media' => 'attach://photo']),
+            'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
+        $ch = curl_init($base . '/bot' . BOT_TOKEN . '/editMessageMedia');
+    } else {
+        $post = ['chat_id' => $chatId, 'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
+        $ch = curl_init($base . '/bot' . BOT_TOKEN . '/sendPhoto');
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true, CURLOPT_POSTFIELDS => $post, CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 40, CURLOPT_CONNECTTIMEOUT => 10,
+    ]);
+    $res = curl_exec($ch);
+    curl_close($ch);
+    @unlink($tmp);
+
+    $j = json_decode((string)$res, true);
+    if (!empty($j['ok'])) {
+        $ph = $j['result']['photo'] ?? [];
+        if ($ph) {
+            $last = end($ph);
+            if (!empty($last['file_id']) && function_exists('maCachePut'))
+                maCachePut(refCardPhotoIdKey($uid), $last['file_id']);
+        }
+        $nid = $j['result']['message_id'] ?? $mid;
+        if ($nid) slotSet($uid, 'refcard', $nid);
+    }
 }
 
 /** 🧾 آخرین ردیف‌های پورسانتِ این کاربر */
