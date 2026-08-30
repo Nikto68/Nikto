@@ -1770,6 +1770,21 @@ function smmAutoBasePrice($serviceId, $per) {
 }
 
 /**
+ * جزئیاتِ نرخِ زنده‌ی همان قیمتِ خودکار — برای نمایشِ شفاف در فاکتور
+ * («نرخِ دلار»، «نرخِ سرویس») نه فقط عددِ نهاییِ تومانی.
+ * وقتی گزینه‌ی موردنظر قیمتِ خودکار ندارد (سرویس تعریف نشده یا
+ * قیمتِ خودکار خاموش است)، هر دو null برمی‌گردند.
+ */
+function speedFxInfo($p, $sp) {
+    $service = trim((string)($sp['smm_service'] ?? ''));
+    if ($service === '' || empty($p['smm_auto_price'])) return ['usd_rate' => null, 'usdt_irt' => null];
+    $rate = smmServiceRate($service);
+    $usdtIrt = function_exists('pxUsdtIrt') ? pxUsdtIrt() : 0;
+    if ($rate <= 0 || $usdtIrt <= 0) return ['usd_rate' => null, 'usdt_irt' => null];
+    return ['usd_rate' => $rate, 'usdt_irt' => $usdtIrt];
+}
+
+/**
  * 🔘 خودِ دکمه شیشه‌ای = محصول
  * هیچ رکورد محصولی لازم نیست؛ قیمت و جریان روی خود دکمه ذخیره می‌شود.
  * شناسه: btn:<شناسه‌دکمه>|<شناسه‌زیردکمه>
@@ -1866,21 +1881,26 @@ function boostQuickSetup($bid, $sid) {
         $x['sale_cat'] = 'boost';
         $x['smm_auto_price'] = true;
         $x['flow_texts'] = [
-            'flow_link' => "🎯 <b>مقصدِ بوست را ارسال کنید</b>\n\n" .
-                "لینکِ کانال یا یوزرنیمِ تلگرام را بفرستید.\n" .
-                "لینکِ عمومیِ کانال یا لینکِ بوست را وارد کنید — لینکِ خصوصی پذیرفته نمی‌شود.",
-            'flow_link_bad' => "❌ لینک معتبر نیست.\nلینکِ کانال یا یوزرنیم را دوباره بفرستید.",
-            'flow_qty' => "🔢 لطفاً تعدادِ موردنیاز را بین <b>{min}</b> و <b>{max}</b> وارد کنید.",
-            'flow_qty_bad' => "❌ عددِ واردشده معتبر نیست.\nحداقل <b>{min}</b> و حداکثر <b>{max}</b>.",
-            'flow_speed' => "📅 لطفاً مدتِ بوستِ موردنظر را انتخاب کنید:",
-            'flow_invoice' => "🚀 <b>فاکتورِ خریدِ بوستِ تلگرام</b>\n\n" .
+            'flow_link' => "🎯 <b>مقصد بوست را ارسال کنید</b>\n\n" .
+                "🔗 لینک کانال یا یوزرنیم تلگرام را ارسال کنید.\n" .
+                "⚠️ لینک عمومی کانال یا لینک بوست را وارد کنید. لینک خصوصی پذیرفته نمی‌شود.",
+            'flow_link_bad' => "❌ لینک معتبر نیست.\nلینک کانال یا یوزرنیم را دوباره بفرستید.",
+            'flow_qty' => "🔢 لطفاً تعداد موردنیاز را بین <b>{min}</b> و <b>{max}</b> وارد کنید.",
+            'flow_qty_bad' => "❌ عدد واردشده معتبر نیست.\nحداقل <b>{min}</b> و حداکثر <b>{max}</b>.",
+            'flow_speed' => "⚡️ با ارتقای سطح کانال یا گروه خود، امکانات ویژه‌ای مثل فعال شدن استوری، " .
+                "واکنش‌های خاص و قابلیت‌های جذاب‌تر برای اعضا را دریافت کنید ⚡️\n\n" .
+                "📅 یکی از پلن‌های زیر را انتخاب کنید:",
+            'flow_invoice' => "📢 <b>فاکتور خرید بوست تلگرام</b>\n\n" .
+                "📈 سرویس: {product}\n" .
+                "⏳ مدت: {speed}\n" .
                 "🎯 مقصد: <code>{link}</code>\n" .
-                "📅 مدت: {speed}\n" .
                 "🔢 تعداد: <b>{qty}</b>\n" .
-                "💵 قیمتِ هر عدد: <b>{rate}</b>\n\n" .
-                "💳 مبلغ قابلِ پرداخت: <b>{total} {currency}</b>\n\n" .
-                "❗️ سفارش‌ها بلافاصله و به‌صورتِ سیستمی ثبت می‌شوند.\n\n" .
-                "👇 در صورتِ تایید، دکمه‌ی زیر را بزنید.",
+                "💵 قیمت هر عدد: <b>{rate} {currency}</b>\n" .
+                "⭐ نرخ سرویس (پنل): <b>{usd_rate} / 1000</b>\n" .
+                "⭐ نرخ لحظه‌ای تتر: <b>{usdt_irt}</b>\n\n" .
+                "💳 مبلغ قابل پرداخت: <b>{total} {currency}</b>\n\n" .
+                "❗️ قیمت‌ها لحظه‌ای و مستقیم از پنل و نرخ تتر محاسبه می‌شوند — سفارش‌ها بلافاصله و به‌صورت سیستمی ثبت می‌شوند.\n\n" .
+                "✅ قبل از تایید، مقصد و تعداد را بررسی کنید.",
         ];
         if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
         $x['flow'] = array_merge(defaultFlow(), $x['flow'], [
@@ -4079,6 +4099,9 @@ function flowNext($uid, $chatId, $step) {
             $sd['data']['eta']         = speedEta($one, (int)($sd['data']['qty'] ?? 0));
             $sd['data']['smm_service'] = trim((string)($one['smm_service'] ?? ''));
             $sd['data']['rate']        = speedRate($p, $one);
+            $fx = speedFxInfo($p, $one);
+            $sd['data']['usd_rate']    = $fx['usd_rate'];
+            $sd['data']['usdt_irt']    = $fx['usdt_irt'];
             setState($uid, 'flow', $sd);
             flowNext($uid, $chatId, 'admin');
             return;
@@ -4251,6 +4274,8 @@ function flowInvoice($uid, $chatId) {
         ? T('flow_admin_ok', ['title' => h($sd['data']['chat_title'] ?? '—')]) . "\n\n"
         : '';
 
+    $usdRate = $sd['data']['usd_rate'] ?? null;
+    $usdtIrt = $sd['data']['usdt_irt'] ?? null;
     $text = $okLine . flowT('flow_invoice', $p, [
         'link'     => h($sd['data']['link'] ?? '—'),
         'qty'      => number_format($qty),
@@ -4262,6 +4287,9 @@ function flowInvoice($uid, $chatId) {
         'rate'     => fmtNum($rate),
         'total'    => fmtNum($total),
         'currency' => h($p['currency']),
+        // نرخِ زنده‌ی همان لحظه — فقط وقتی قیمتِ خودکار از پنل روشن است
+        'usd_rate' => $usdRate !== null ? ('$' . rtrim(rtrim(number_format($usdRate, 4), '0'), '.')) : '—',
+        'usdt_irt' => $usdtIrt !== null ? (number_format($usdtIrt) . ' تومان') : '—',
     ]);
     panelShow($uid, $chatId, 'shop', $text, inlineKb([
         [btnCb('✅ موافقم، نهایی سازی سفارش', 'fok', 'confirm')],
@@ -6578,6 +6606,9 @@ function masterHandle($update) {
             $sd['data']['eta']         = speedEta($chosen, (int)($sd['data']['qty'] ?? 0));
             $sd['data']['smm_service'] = trim((string)($chosen['smm_service'] ?? ''));
             $sd['data']['rate']        = speedRate($p, $chosen);
+            $fx = speedFxInfo($p, $chosen);
+            $sd['data']['usd_rate']    = $fx['usd_rate'];
+            $sd['data']['usdt_irt']    = $fx['usdt_irt'];
             setState($uid, 'flow', $sd);
             answerCb(BOT_TOKEN, $cbId);
             flowNext($uid, $chatId, 'admin');
