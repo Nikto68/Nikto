@@ -1656,11 +1656,15 @@ function productSetSmmService($pid, $serviceId) {
  * تا دستی پیگیری کند.
  */
 function smmAutoFulfill($order, $product) {
-    $sid = productSmmService($product);
+    $meta = $order['meta'] ?? [];
+    // اگر گزینه‌ی سرعت/پلنی که مشتری انتخاب کرد سرویسِ خودش را داشت
+    // (مثلا «۹۰ روزه» یک سرویسِ جدا از «۳۰ روزه»)، همان سرویس اولویت
+    // دارد — نه سرویسِ پیش‌فرضِ خودِ محصول.
+    $sid = trim((string)($meta['smm_service'] ?? ''));
+    if ($sid === '') $sid = productSmmService($product);
     if ($sid === '') return;                         // این محصول به پنلی وصل نشده
     if (empty(cfg()['smm']['on'])) return;
 
-    $meta = $order['meta'] ?? [];
     $link = trim((string)($meta['link'] ?? ''));
     $qty  = (int)($meta['qty'] ?? 0);
     if ($link === '' || $qty <= 0) return;            // این سفارش لینک/تعداد نداشت
@@ -3990,10 +3994,12 @@ function flowNext($uid, $chatId, $step) {
 
         if (count($speeds) < 2) {
             $one = $speeds[0] ?? [];
-            $sd['data']['speed']   = speedLabel($one);
-            $sd['data']['mult']    = (float)($one['mult'] ?? 1);
-            $sd['data']['per_day'] = (int)($one['per_day'] ?? 0);
-            $sd['data']['eta']     = speedEta($one, (int)($sd['data']['qty'] ?? 0));
+            $sd['data']['speed']       = speedLabel($one);
+            $sd['data']['mult']        = (float)($one['mult'] ?? 1);
+            $sd['data']['per_day']     = (int)($one['per_day'] ?? 0);
+            $sd['data']['eta']         = speedEta($one, (int)($sd['data']['qty'] ?? 0));
+            $sd['data']['smm_service'] = trim((string)($one['smm_service'] ?? ''));
+            $sd['data']['rate']        = speedRate($p, $one);
             setState($uid, 'flow', $sd);
             flowNext($uid, $chatId, 'admin');
             return;
@@ -4119,10 +4125,29 @@ function speedBtnLabel($sp) {
     return $pd > 0 ? $l . ' — ' . number_format($pd) . '/روز' : $l;
 }
 
-/** محاسبه مبلغ نهایی */
-function flowTotal($p, $qty, $mult) {
+/**
+ * 💱 نرخِ نهاییِ یک ردیفِ سرعت — به‌ازای همان «per» محصول.
+ *
+ * پیش‌فرض: قیمتِ محصول × ضریبِ همان سرعت (رفتارِ همیشگی).
+ * ولی اگر خودِ همین ردیفِ سرعت به یک سرویسِ پنلِ SMM وصل باشد (مثلا
+ * «۳۰ روزه» به یک سرویس، «۹۰ روزه» به سرویسِ دیگر — هرکدام قیمتِ
+ * واقعیِ خودشان را از پنل دارند)، نرخ از رویِ همان سرویسِ خودش حساب
+ * می‌شود، نه ضربِ ساده — چون هر گزینه قیمتِ پایه‌ی جداگانه‌ای دارد.
+ */
+function speedRate($p, $sp) {
+    $service = trim((string)($sp['smm_service'] ?? ''));
+    if ($service !== '' && !empty($p['smm_auto_price'])) {
+        $per = max(1, (int)($p['flow']['per'] ?? 1000));
+        $auto = smmAutoBasePrice($service, $per);
+        if ($auto !== null) return round(pfApply('member', $auto), 2);
+    }
+    return round((float)$p['price'] * (float)($sp['mult'] ?? 1), 2);
+}
+
+/** محاسبه مبلغ نهایی — rate همان نرخِ هر «per» واحد است (خروجیِ speedRate) */
+function flowTotal($p, $qty, $rate) {
     $per = max(1, (int)($p['flow']['per'] ?? 1000));
-    return round(((float)$p['price'] * $mult) * ($qty / $per), 2);
+    return round((float)$rate * ($qty / $per), 2);
 }
 
 function flowInvoice($uid, $chatId) {
@@ -4132,10 +4157,13 @@ function flowInvoice($uid, $chatId) {
     $p  = Product::get($sd['pid']);
     if (!$p) { clearState($uid); return; }
 
-    $qty   = (int)($sd['data']['qty'] ?? 0);
-    $mult  = (float)($sd['data']['mult'] ?? 1);
-    $rate  = round((float)$p['price'] * $mult, 2);
-    $total = $qty > 0 ? flowTotal($p, $qty, $mult) : $rate;
+    $qty  = (int)($sd['data']['qty'] ?? 0);
+    // «rate» از روی همان ردیفِ سرعتی که کاربر انتخاب کرد قفل شده — اگر
+    // به هر دلیلی نبود (حالتِ قدیمیِ میانِ‌راه)، مثلِ قبل با ضرب حساب کن
+    $rate  = isset($sd['data']['rate'])
+           ? (float)$sd['data']['rate']
+           : round((float)$p['price'] * (float)($sd['data']['mult'] ?? 1), 2);
+    $total = $qty > 0 ? flowTotal($p, $qty, $rate) : $rate;
 
     $sd['data']['total'] = $total;
     setState($uid, 'flow', $sd);
@@ -4203,6 +4231,7 @@ function flowFinish($uid, $chatId, $uname) {
             'chat_id'    => $sd['data']['chat_id'] ?? '',
             'chat_title' => $sd['data']['chat_title'] ?? '',
             'admin_ok'   => !empty($sd['data']['admin_ok']),
+            'smm_service'=> $sd['data']['smm_service'] ?? '',
             'test'       => true,
         ];
         clearState($uid);
@@ -4253,6 +4282,7 @@ function flowFinish($uid, $chatId, $uname) {
         'chat_id'    => $sd['data']['chat_id'] ?? '',
         'chat_title' => $sd['data']['chat_title'] ?? '',
         'admin_ok'   => !empty($sd['data']['admin_ok']),
+        'smm_service'=> $sd['data']['smm_service'] ?? '',
     ];
     $note = trim($meta['link'] . ' · ' . number_format($meta['qty']) . ' نفر · ' . $meta['speed'] .
                  ($meta['eta'] ? ' · ' . $meta['eta'] : ''));
@@ -6463,10 +6493,12 @@ function masterHandle($update) {
             $chosen = null;
             foreach (($p['flow']['speeds'] ?? []) as $sp) if ($sp['id'] === $sid) $chosen = $sp;
             if (!$chosen) { answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return; }
-            $sd['data']['speed']   = speedLabel($chosen);
-            $sd['data']['mult']    = (float)$chosen['mult'];
-            $sd['data']['per_day'] = (int)($chosen['per_day'] ?? 0);
-            $sd['data']['eta']     = speedEta($chosen, (int)($sd['data']['qty'] ?? 0));
+            $sd['data']['speed']       = speedLabel($chosen);
+            $sd['data']['mult']        = (float)$chosen['mult'];
+            $sd['data']['per_day']     = (int)($chosen['per_day'] ?? 0);
+            $sd['data']['eta']         = speedEta($chosen, (int)($sd['data']['qty'] ?? 0));
+            $sd['data']['smm_service'] = trim((string)($chosen['smm_service'] ?? ''));
+            $sd['data']['rate']        = speedRate($p, $chosen);
             setState($uid, 'flow', $sd);
             answerCb(BOT_TOKEN, $cbId);
             flowNext($uid, $chatId, 'admin');

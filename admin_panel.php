@@ -634,6 +634,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $x['flow']['speeds'][$i]['desc'] = trim((string)$post['spdesc'][$id]);
                 if (isset($post['spcolor'][$id]))
                     $x['flow']['speeds'][$i]['color'] = isStyle($post['spcolor'][$id]) ? $post['spcolor'][$id] : 'none';
+                if (isset($post['spsmm'][$id]))
+                    $x['flow']['speeds'][$i]['smm_service'] = trim((string)$post['spsmm'][$id]);
                 $x['flow']['speeds'][$i]['on'] = !empty($post['spon'][$id]);
             }
         });
@@ -1465,7 +1467,7 @@ foreach ($tabs as $k => $l): ?>
                            style="direction:ltr;max-width:90px"></td>
                 <td><input name="perday[<?= h($sp['id']) ?>]" type="number" min="0"
                            value="<?= (int)($sp['per_day'] ?? 0) ?>" style="direction:ltr;max-width:120px"></td>
-                <td class="muted"><?= h(number_format((float)$sb['price'] * (float)$sp['mult']) . ' ' . $sb['currency']) ?></td>
+                <td class="muted"><?= h(number_format(function_exists('speedRate') ? speedRate($sb, $sp) : ((float)$sb['price'] * (float)$sp['mult'])) . ' ' . $sb['currency']) ?></td>
                 <td><select name="spcolor[<?= h($sp['id']) ?>]" style="max-width:120px">
                   <?php foreach (styleMap() as $sk => $sl): ?>
                     <option value="<?= h($sk) ?>" <?= ($sp['color'] ?? 'none') === $sk ? 'selected' : '' ?>><?= h($sl) ?></option>
@@ -1477,6 +1479,34 @@ foreach ($tabs as $k => $l): ?>
                 <td class="muted">توضیح</td>
                 <td colspan="6"><input name="spdesc[<?= h($sp['id']) ?>]" value="<?= h($sp['desc'] ?? '') ?>"
                        placeholder="یک خط توضیح — زیر متن انتخاب سرعت به مشتری نشان داده می‌شود"></td>
+              </tr>
+              <tr>
+                <td class="muted">🤖 سرویسِ این گزینه</td>
+                <td colspan="6">
+                  <?php
+                    $svcList = function_exists('smmServicesCached') ? smmServicesCached() : [];
+                    $spCur = (string)($sp['smm_service'] ?? '');
+                  ?>
+                  <?php if ($svcList): ?>
+                  <select name="spsmm[<?= h($sp['id']) ?>]" style="max-width:100%">
+                    <option value="">— مشترک با بقیه، ضریبِ بالا حساب می‌شود —</option>
+                    <?php foreach ($svcList as $s): $ssid = (string)($s['service'] ?? ''); if ($ssid === '') continue; ?>
+                      <option value="<?= h($ssid) ?>" <?= $spCur === $ssid ? 'selected' : '' ?>>
+                        <?= h(trim(($s['name'] ?? 'سرویس ' . $ssid) . ' — ' . ($s['rate'] ?? '?') . '/1000')) ?>
+                      </option>
+                    <?php endforeach; ?>
+                    <?php if ($spCur !== '' && !in_array($spCur, array_map(fn($s) => (string)($s['service'] ?? ''), $svcList), true)): ?>
+                      <option value="<?= h($spCur) ?>" selected>سرویسِ فعلی (<?= h($spCur) ?>) — دیگر در لیست نیست</option>
+                    <?php endif; ?>
+                  </select>
+                  <?php else: ?>
+                    <input name="spsmm[<?= h($sp['id']) ?>]" value="<?= h($spCur) ?>" placeholder="خالی = مشترک"
+                           style="direction:ltr">
+                  <?php endif; ?>
+                  <small class="muted">اگه اینجا یه سرویس انتخاب کنی و بالا «قیمتِ خودکار از پنل» روشن باشه،
+                    قیمتِ همین گزینه مستقل از بقیه، از نرخِ واقعیِ همون سرویس حساب می‌شود — مثلا برای
+                    «۳۰ روزه» و «۹۰ روزه» که هرکدام سرویسِ جداگانه‌ای رو پنل دارند.</small>
+                </td>
               </tr>
             <?php endforeach; ?>
           </table>
@@ -1492,11 +1522,12 @@ foreach ($tabs as $k => $l): ?>
           $fast  = null;
           foreach ($f['speeds'] as $sp) if (!isset($sp['on']) || !empty($sp['on'])) { $fast = $sp; break; }
         ?>
-        <?php if ($fast && (float)$sb['price'] > 0): ?>
+        <?php $fastRate = $fast ? speedRate($sb, $fast) : 0; ?>
+        <?php if ($fast && $fastRate > 0): ?>
           <div class="note" style="margin-top:14px">
             🧾 نمونه فاکتور — <?= number_format($exQty) ?> نفر با
             «<?= h(trim(($fast['emoji'] ?? '') . ' ' . $fast['text'])) ?>»:
-            <b><?= h(number_format(round((float)$sb['price'] * (float)$fast['mult'] * ($exQty / max(1, (int)$f['per'])))) . ' ' . $sb['currency']) ?></b>
+            <b><?= h(number_format(round($fastRate * ($exQty / max(1, (int)$f['per'])))) . ' ' . $sb['currency']) ?></b>
             <?php if ((int)($fast['per_day'] ?? 0) > 0): ?>
               · ⏳ <?= h(speedEta($fast, $exQty)) ?>
             <?php endif; ?>
