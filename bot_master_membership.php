@@ -2796,7 +2796,11 @@ function showReferralLink($uid, $chatId) {
         if ($sb = axShareButton($link)) $rows[] = [$sb];
     }
     $rows[] = [btnUI('back', 'menu_referral', 'nav')];
-    refCardShow($uid, $chatId, T('referral_link', ['link' => $link]), inlineKb($rows));
+    $caption = T('referral_link', ['link' => $link]);
+    $ok = refCardShow($uid, $chatId, $caption, inlineKb($rows));
+    // 🛟 کارتِ گرافیکی هر دلیلی داشته باشد که نشد (فونت، شبکه، هرچه)،
+    // کاربر نباید از این دکمه دست‌خالی بماند — لااقل خودِ لینک را بده.
+    if (!$ok) panelShow($uid, $chatId, 'menu', $caption, inlineKb($rows));
 }
 
 // ============================================================
@@ -2896,9 +2900,15 @@ function refCardPhotoIdKey($uid) { return 'refcard_fid_' . (int)$uid; }
  * اگر قبلا برای همین کاربر فرستاده شده، همان پیام (عکس+کپشن+دکمه)
  * ویرایش می‌شود — نه پیامِ تازه، نه آپلودِ دوباره اگر فایل‌شناسه را داریم.
  */
+/**
+ * برگشتِ true یعنی کارت واقعا فرستاده/ویرایش شد. false یعنی هر دلیلی
+ * (GD نبود، فونت نبود، تلگرام رد کرد، شبکه قطع بود) — و در این حالت
+ * صدا زننده باید لااقل لینک را به‌شکل متن ساده نشان بدهد، وگرنه کاربر
+ * از این دکمه هیچ‌چی نمی‌بیند.
+ */
 function refCardShow($uid, $chatId, $caption = '', $markup = null) {
     $link = refInviteLink($uid);
-    if ($link === '') return;
+    if ($link === '') return false;
     $mid = slotGet($uid, 'refcard');
     $fid = function_exists('maCacheGet') ? (string)(maCacheGet(refCardPhotoIdKey($uid), 2592000) ?? '') : '';
     $rm  = $markup ? (is_string($markup) ? $markup : json_encode($markup)) : null;
@@ -2908,17 +2918,18 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
             $media = ['type' => 'photo', 'media' => $fid, 'caption' => $caption, 'parse_mode' => 'HTML'];
             $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
             if ($rm !== null) $data['reply_markup'] = $rm;
-            __tgHook(BOT_TOKEN, 'editMessageMedia', $data);
-            return;
+            $out = __tgHook(BOT_TOKEN, 'editMessageMedia', $data);
+            return !empty($out['ok']);
         }
         $data = ['chat_id' => $chatId, 'caption' => $caption, 'photo_len' => 999];
         if ($rm !== null) $data['reply_markup'] = $rm;
         $out = __tgHook(BOT_TOKEN, 'sendPhoto', $data);
+        if (empty($out['ok'])) return false;
         $nid = $out['result']['message_id'] ?? null;
         if ($nid) slotSet($uid, 'refcard', $nid);
         $newFid = $out['result']['photo'][0]['file_id'] ?? ('TESTFID_' . $uid);
         if (function_exists('maCachePut')) maCachePut(refCardPhotoIdKey($uid), $newFid);
-        return;
+        return true;
     }
 
     // ⚡ فایل‌شناسه را داریم؟ نه آپلودی، نه ساختنِ کارتِ تازه — فقط جاگذاری
@@ -2927,7 +2938,7 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
         if ($rm !== null) $data['reply_markup'] = $rm;
         $r = tg(BOT_TOKEN, 'editMessageMedia', $data);
-        if (!empty($r['ok'])) return;
+        if (!empty($r['ok'])) return true;
         // فایل‌شناسه دیگر معتبر نیست — از نو می‌سازیم
     }
 
@@ -2940,13 +2951,13 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
             $why = pxCardWhy();
             if ($why !== '') adminAlertOnce('refcard_broken', '🖼 <b>کارتِ دعوت ساخته نمی‌شود</b>' . "\n\n" . $why);
         }
-        return;
+        return false;
     }
 
     $dir = rtrim(DATA_DIR, '/') . '/tmp';
     if (!is_dir($dir)) @mkdir($dir, 0755, true);
     $tmp = $dir . '/refcard_' . bin2hex(random_bytes(6)) . '.png';
-    if (@file_put_contents($tmp, $bytes) === false) return;
+    if (@file_put_contents($tmp, $bytes) === false) return false;
 
     $base = defined('TG_API_BASE') ? TG_API_BASE : 'https://api.telegram.org';
     if ($mid) {
@@ -2967,6 +2978,7 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         CURLOPT_TIMEOUT => 40, CURLOPT_CONNECTTIMEOUT => 10,
     ]);
     $res = curl_exec($ch);
+    $curlErr = curl_error($ch);
     curl_close($ch);
     @unlink($tmp);
 
@@ -2980,7 +2992,16 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         }
         $nid = $j['result']['message_id'] ?? $mid;
         if ($nid) slotSet($uid, 'refcard', $nid);
+        return true;
     }
+
+    // 🔴 آپلود رفت ولی تلگرام قبول نکرد (یا اصلا شبکه قطع بود) — این هم
+    // قبلا کاملا بی‌صدا بود. حالا دلیلِ دقیق را به ادمین می‌گوید.
+    if (function_exists('adminAlertOnce')) {
+        $desc = $curlErr !== '' ? $curlErr : (string)($j['description'] ?? 'پاسخ نامعتبر از تلگرام');
+        adminAlertOnce('refcard_upload_fail', '🖼 <b>آپلودِ کارتِ دعوت رد شد</b>' . "\n\n" . h($desc));
+    }
+    return false;
 }
 
 /** 🧾 آخرین ردیف‌های پورسانتِ این کاربر */
@@ -3029,10 +3050,10 @@ function showSupport($uid, $chatId, $extra = [], $replyTo = null) {
     // labels.sup_stack دیگر اینجا خوانده نمی‌شود، چون مقدارش رو دیسکِ
     // خیلی از نصب‌ها از قبل «زیر هم» ذخیره شده بود و پیش‌فرضِ تازه‌ی کد
     // را دور می‌زد.
-    $rows = [[$d, $i]];
-    // 👥 دکمه‌ی گروه — تا لینکش را از پنل نگذارید، اصلا نشان داده نمی‌شود
-    if (trim((string)(cfg()['support_main']['group']['value'] ?? '')) !== '')
-        $rows[] = [supMainBtn('group', 'sup_group')];
+    // 👥 دکمه‌ی گروه — همیشه زیرِ آن دو دکمه ثابت می‌ماند، حتی قبل از
+    // اینکه لینکش را از پنل بگذارید (تا لینک نداشته باشد، زدنش فقط یک
+    // یادآوریِ کوتاه می‌دهد، نه اینکه کلا غیبش بزند)
+    $rows = [[$d, $i], [supMainBtn('group', 'sup_group')]];
     foreach ($extra as $r) $rows[] = $r;
     panelShow($uid, $chatId, 'menu', T('support'), inlineKb($rows), $replyTo);
 }
@@ -5135,7 +5156,7 @@ function edSupMain($chatId, $msgId) {
         if ($k === 'direct' || $k === 'group')
             $t .= '   لینک: ' . (trim((string)($m['value'] ?? '')) !== ''
                   ? '<code>' . h($m['value']) . '</code>' : '<b>ثبت نشده' .
-                    ($k === 'group' ? ' — تا لینک نگذارید نمایش داده نمی‌شود' : '') . '</b>') . "\n";
+                    ($k === 'group' ? ' — تا لینک نگذارید، زدنش فقط یک یادآوری می‌دهد' : '') . '</b>') . "\n";
         $t .= "\n";
     }
     $t .= "💡 برای ایموجی پریمیوم، خودِ ایموجی را بفرستید — شناسه‌اش خودکار خوانده می‌شود.\n";
@@ -5876,7 +5897,13 @@ function masterHandle($update) {
             return;
         }
         if ($data === 'sup_direct') { answerCb(BOT_TOKEN, $cbId); return; }
-        if ($data === 'sup_group')  { answerCb(BOT_TOKEN, $cbId); return; }
+        if ($data === 'sup_group')  {
+            // این فقط وقتی می‌رسد که ادمین هنوز لینکِ گروه را نگذاشته —
+            // چون تا وقتی لینک هست، خودِ دکمه از نوع url است و اصلا
+            // callback نمی‌فرستد.
+            answerCb(BOT_TOKEN, $cbId, 'لینکِ گروه هنوز تنظیم نشده.', true);
+            return;
+        }
 
         // --- 📋 قوانینِ افزایش موجودی ---
         // --- 👥 داشبورد زیرمجموعه ---
