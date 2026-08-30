@@ -64,8 +64,52 @@ function maTplBody() {
 <link rel="stylesheet" media="print" onload="this.media='all'"
       href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800;900&display=swap">
 __SKIN__
+<style>
+/* ═══ اسپلش/خوش‌آمدگویی ═══
+   دقیقه‌ای که کاربر روی صفحه‌ی لودینگِ خودِ تلگرام مونده تحتِ کنترلِ ما
+   نیست (قبل از هر کدی از خودِ ما نشون داده می‌شه)، ولی از همون لحظه‌ای
+   که صفحه‌ی ما شروع به لود شدن می‌کنه تا وقتی جوابِ api('me') برسه، به‌جای
+   یه صفحه‌ی خام، همین رو نشون می‌دیم. رنگ‌هاش از رویِ متغیرهای همون
+   اسکینه (--c1/--c2/--bg) — پس با هر اپ و هر تمِ رنگی خودش رو تطبیق می‌ده.
+   فقط transform/opacity انیمیت می‌شه، طبقِ قاعده‌ی بالای فایل. */
+#splash{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;
+  background:var(--bg);transition:opacity .35s ease,visibility .35s ease}
+#splash.hide{opacity:0;visibility:hidden;pointer-events:none}
+.splash-card{display:flex;flex-direction:column;align-items:center;gap:14px;
+  padding:34px 30px;border-radius:36px;text-align:center;
+  background:color-mix(in srgb,var(--pane, #150F2E) 88%,transparent);
+  box-shadow:0 22px 60px -20px color-mix(in srgb,var(--c1) 55%,transparent),
+             inset 0 1px 0 rgba(255,255,255,.06);
+  animation:splashPop .55s cubic-bezier(.2,1.4,.4,1) both}
+.splash-badge{width:66px;height:66px;border-radius:24px;display:flex;align-items:center;justify-content:center;
+  font-size:30px;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2));
+  box-shadow:0 10px 26px -8px color-mix(in srgb,var(--c2) 60%,transparent);
+  animation:splashFloat 2.4s ease-in-out infinite}
+.splash-hi{font-size:19px;font-weight:800;color:var(--ink,#fff);
+  background:linear-gradient(90deg,var(--c1),var(--c2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.splash-sub{font-size:12.5px;color:var(--dim,#a79fc6)}
+.splash-dots{display:flex;gap:6px;margin-top:2px}
+.splash-dots i{width:6px;height:6px;border-radius:50%;background:var(--c2);
+  animation:splashDot 1.1s ease-in-out infinite}
+.splash-dots i:nth-child(2){animation-delay:.15s}
+.splash-dots i:nth-child(3){animation-delay:.3s}
+@keyframes splashPop{from{opacity:0;transform:scale(.82) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes splashFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes splashDot{0%,80%,100%{opacity:.25;transform:scale(.85)}40%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){
+  .splash-card,.splash-badge,.splash-dots i{animation:none!important}
+}
+</style>
 </head>
 <body>
+<div class="splash" id="splash">
+  <div class="splash-card">
+    <div class="splash-badge">★</div>
+    <div class="splash-hi">خوش آمدید</div>
+    <div class="splash-sub">__TITLE__</div>
+    <div class="splash-dots"><i></i><i></i><i></i></div>
+  </div>
+</div>
 <div class="sky"></div>
 <canvas id="stars"></canvas>
 <div class="veil"></div><div class="grain"></div>
@@ -227,6 +271,18 @@ var $  = function(id){ return document.getElementById(id); };
 document.body.classList.add('fx' + FX);
 if (__GLOW__)  document.body.classList.add('glow-on');
 if (__GRAIN__) document.body.classList.add('grain-on');
+
+/* خوش‌آمدگویی تا جوابِ api('me') برسه (یا حداکثر ۴ ثانیه، که یه
+   شبکه‌ی کند اسیرمون نکنه) پنهان می‌مونه — یه‌بار که مخفی شد، دیگه
+   برنمی‌گرده، چون فقط لحظه‌ی اولِ ورود معنی داره. */
+var splashGone = false;
+function hideSplash(){
+  if (splashGone) return; splashGone = true;
+  var s = $('splash'); if (!s) return;
+  s.classList.add('hide');
+  setTimeout(function(){ s.remove(); }, 400);
+}
+setTimeout(hideSplash, 4000);
 
 if (TG) {
   try { TG.ready(); TG.expand(); } catch(e){}
@@ -533,9 +589,11 @@ api('me', {}, function(j){
   });
   if (j.admin) document.body.classList.add('is-admin');
   if (S.page === 'ord') drawOrders();
+  hideSplash();
 }, function(j){
   setBal(0);
   if (j && j.message) toast(j.message);
+  hideSplash();
 });
 
 /* ── میان‌بر دسته‌ها ── */

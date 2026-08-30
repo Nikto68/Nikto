@@ -494,9 +494,45 @@ body::before{
 .sk{border-radius:var(--r-md);background:linear-gradient(100deg,var(--s1) 30%,var(--s2) 50%,var(--s1) 70%);
   background-size:220% 100%;animation:sh 1.3s infinite;min-height:150px}
 @keyframes sh{from{background-position:200% 0}to{background-position:-40% 0}}
+
+/* ═══ اسپلش/خوش‌آمدگویی ═══ — تا جوابِ api('me') برسه، به‌جای صفحه‌ی
+   خام همین رو نشون می‌دیم. رنگ‌ها از رویِ متغیرهای همین صفحه‌ن، پس با
+   تمِ رنگیِ خودش هماهنگه. */
+#splash{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;
+  background:var(--bg);transition:opacity .35s ease,visibility .35s ease}
+#splash.hide{opacity:0;visibility:hidden;pointer-events:none}
+.splash-card{display:flex;flex-direction:column;align-items:center;gap:14px;
+  padding:34px 30px;border-radius:32px;text-align:center;background:var(--s1);
+  box-shadow:0 22px 60px -20px color-mix(in srgb,var(--c1) 45%,transparent),
+             inset 0 1px 0 rgba(255,255,255,.05);
+  animation:splashPop .55s cubic-bezier(.2,1.4,.4,1) both}
+.splash-badge{width:66px;height:66px;border-radius:22px;display:flex;align-items:center;justify-content:center;
+  font-size:28px;background:linear-gradient(135deg,var(--c1),var(--c2));
+  box-shadow:0 10px 26px -8px color-mix(in srgb,var(--c2) 55%,transparent);
+  animation:splashFloat 2.4s ease-in-out infinite}
+.splash-hi{font-size:19px;font-weight:800;
+  background:linear-gradient(90deg,var(--c1),var(--c2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.splash-sub{font-size:12.5px;color:var(--dim)}
+.splash-dots{display:flex;gap:6px;margin-top:2px}
+.splash-dots i{width:6px;height:6px;border-radius:50%;background:var(--c2);
+  animation:splashDot 1.1s ease-in-out infinite}
+.splash-dots i:nth-child(2){animation-delay:.15s}
+.splash-dots i:nth-child(3){animation-delay:.3s}
+@keyframes splashPop{from{opacity:0;transform:scale(.82) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes splashFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes splashDot{0%,80%,100%{opacity:.25;transform:scale(.85)}40%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.splash-card,.splash-badge,.splash-dots i{animation:none!important}}
 </style>
 </head>
 <body>
+<div class="splash" id="splash">
+  <div class="splash-card">
+    <div class="splash-badge">☎️</div>
+    <div class="splash-hi">خوش آمدید</div>
+    <div class="splash-sub">__TITLE__</div>
+    <div class="splash-dots"><i></i><i></i><i></i></div>
+  </div>
+</div>
 <div class="wrap">
 
   <header class="top">
@@ -578,6 +614,16 @@ body::before{
 const B = __BOOT__;
 const TG = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 if (TG) { try { TG.ready(); TG.expand(); TG.setHeaderColor && TG.setHeaderColor(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()); } catch (e) {} }
+
+/* خوش‌آمدگویی تا جوابِ api('me') برسه (یا حداکثر ۴ ثانیه) پنهان می‌مونه */
+let splashGone = false;
+function hideSplash() {
+  if (splashGone) return; splashGone = true;
+  const s = document.getElementById('splash'); if (!s) return;
+  s.classList.add('hide');
+  setTimeout(() => s.remove(), 400);
+}
+setTimeout(hideSplash, 4000);
 
 /* 🎨 رنگِ هر کشور.
    همه از یک خانواده‌اند — آبیِ پریده تا سبزِ پریده — تا شبکه یکدست و
@@ -1325,22 +1371,26 @@ function setBal(v) {
 }
 
 async function loadMe() {
-  const r = await api('me');
-  if (!r.ok) { if (r.message) toast(r.message, 'bad'); return; }
-  S.me = r;
-  setBal(r.balance || 0);
-  $('#uname').textContent = r.name || '';
-  $('#uhandle').textContent = r.uname ? '@' + r.uname : '';
-  $('#meName').textContent = r.name || '';
-  $('#meId').textContent = String(r.uid || '');
-  if (r.photo) {
-    const img = document.createElement('img');
-    img.className = 'ava'; img.src = r.photo; img.alt = '';
-    img.onerror = () => {};
-    $('#ava').replaceWith(img); img.id = 'ava';
+  try {
+    const r = await api('me');
+    if (!r.ok) { if (r.message) toast(r.message, 'bad'); return; }
+    S.me = r;
+    setBal(r.balance || 0);
+    $('#uname').textContent = r.name || '';
+    $('#uhandle').textContent = r.uname ? '@' + r.uname : '';
+    $('#meName').textContent = r.name || '';
+    $('#meId').textContent = String(r.uid || '');
+    if (r.photo) {
+      const img = document.createElement('img');
+      img.className = 'ava'; img.src = r.photo; img.alt = '';
+      img.onerror = () => {};
+      $('#ava').replaceWith(img); img.id = 'ava';
+    }
+    paintOrders(r.orders || []);
+    if (S.page !== 'notes') noteDot(r.notes_n || 0);
+  } finally {
+    hideSplash();
   }
-  paintOrders(r.orders || []);
-  if (S.page !== 'notes') noteDot(r.notes_n || 0);
 }
 
 async function loadLive() {
