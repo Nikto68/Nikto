@@ -2780,17 +2780,23 @@ function showReferral($uid, $chatId, $extra = [], $replyTo = null) {
     panelShow($uid, $chatId, 'menu', $refText, inlineKb($rows), $replyTo);
 }
 
-/** 🔗 لینکِ دعوت — همان اسلاتِ پیامِ داشبورد ویرایش می‌شود، نه پیامِ تازه */
+/**
+ * 🔗 لینکِ دعوت — متن + دکمه‌ها روی خودِ کارتِ گرافیکی می‌نشینند، نه
+ * یک پیامِ متنیِ جدا. یعنی یک پیام (عکس با کپشن)، نه دو تا.
+ */
 function showReferralLink($uid, $chatId) {
     $link = refInviteLink($uid);
-    $text = $link !== '' ? T('referral_link', ['link' => $link]) : '⚠️ لینک هنوز آماده نیست.';
+    if ($link === '') {
+        panelShow($uid, $chatId, 'menu', '⚠️ لینک هنوز آماده نیست.',
+            inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
+        return;
+    }
     $rows = [];
-    if ($link !== '' && function_exists('axShareButton')) {
+    if (function_exists('axShareButton')) {
         if ($sb = axShareButton($link)) $rows[] = [$sb];
     }
     $rows[] = [btnUI('back', 'menu_referral', 'nav')];
-    panelShow($uid, $chatId, 'menu', $text, inlineKb($rows));
-    if ($link !== '') refCardShow($uid, $chatId);
+    refCardShow($uid, $chatId, T('referral_link', ['link' => $link]), inlineKb($rows));
 }
 
 // ============================================================
@@ -2866,23 +2872,29 @@ function refCardBytes($link, $uid) {
 function refCardPhotoIdKey($uid) { return 'refcard_fid_' . (int)$uid; }
 
 /**
- * کارت را می‌فرستد یا (اگر قبلا برای همین کاربر فرستاده شده) همان
- * پیامِ عکسِ قبلی را ویرایش می‌کند — نه پیامِ تازه، نه آپلودِ دوباره
- * اگر فایل‌شناسه‌اش را هنوز داریم.
+ * کارت را با متن و دکمه‌هایش، در یک پیام (نه دو تا) می‌فرستد — کپشنِ
+ * خودِ عکس همان متنِ لینک است، دکمه‌ها هم روی همان پیامِ عکس می‌نشینند.
+ * اگر قبلا برای همین کاربر فرستاده شده، همان پیام (عکس+کپشن+دکمه)
+ * ویرایش می‌شود — نه پیامِ تازه، نه آپلودِ دوباره اگر فایل‌شناسه را داریم.
  */
-function refCardShow($uid, $chatId) {
+function refCardShow($uid, $chatId, $caption = '', $markup = null) {
     $link = refInviteLink($uid);
     if ($link === '') return;
     $mid = slotGet($uid, 'refcard');
     $fid = function_exists('maCacheGet') ? (string)(maCacheGet(refCardPhotoIdKey($uid), 2592000) ?? '') : '';
+    $rm  = $markup ? (is_string($markup) ? $markup : json_encode($markup)) : null;
 
     if (function_exists('__tgHook')) {
         if ($mid && $fid !== '') {
-            __tgHook(BOT_TOKEN, 'editMessageMedia', ['chat_id' => $chatId, 'message_id' => $mid,
-                'media' => json_encode(['type' => 'photo', 'media' => $fid])]);
+            $media = ['type' => 'photo', 'media' => $fid, 'caption' => $caption, 'parse_mode' => 'HTML'];
+            $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
+            if ($rm !== null) $data['reply_markup'] = $rm;
+            __tgHook(BOT_TOKEN, 'editMessageMedia', $data);
             return;
         }
-        $out = __tgHook(BOT_TOKEN, 'sendPhoto', ['chat_id' => $chatId, 'photo_len' => 999]);
+        $data = ['chat_id' => $chatId, 'caption' => $caption, 'photo_len' => 999];
+        if ($rm !== null) $data['reply_markup'] = $rm;
+        $out = __tgHook(BOT_TOKEN, 'sendPhoto', $data);
         $nid = $out['result']['message_id'] ?? null;
         if ($nid) slotSet($uid, 'refcard', $nid);
         $newFid = $out['result']['photo'][0]['file_id'] ?? ('TESTFID_' . $uid);
@@ -2892,14 +2904,16 @@ function refCardShow($uid, $chatId) {
 
     // ⚡ فایل‌شناسه را داریم؟ نه آپلودی، نه ساختنِ کارتِ تازه — فقط جاگذاری
     if ($mid && $fid !== '') {
-        $r = tg(BOT_TOKEN, 'editMessageMedia', ['chat_id' => $chatId, 'message_id' => $mid,
-            'media' => json_encode(['type' => 'photo', 'media' => $fid])]);
+        $media = ['type' => 'photo', 'media' => $fid, 'caption' => $caption, 'parse_mode' => 'HTML'];
+        $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
+        if ($rm !== null) $data['reply_markup'] = $rm;
+        $r = tg(BOT_TOKEN, 'editMessageMedia', $data);
         if (!empty($r['ok'])) return;
         // فایل‌شناسه دیگر معتبر نیست — از نو می‌سازیم
     }
 
     $bytes = refCardBytes($link, $uid);
-    if ($bytes === '') return;   // بی‌صدا صرف‌نظر — متنِ لینک قبلا جدا فرستاده شده
+    if ($bytes === '') return;   // GD/فونت نبود — بی‌صدا صرف‌نظر
 
     $dir = rtrim(DATA_DIR, '/') . '/tmp';
     if (!is_dir($dir)) @mkdir($dir, 0755, true);
@@ -2909,11 +2923,15 @@ function refCardShow($uid, $chatId) {
     $base = defined('TG_API_BASE') ? TG_API_BASE : 'https://api.telegram.org';
     if ($mid) {
         $post = ['chat_id' => $chatId, 'message_id' => $mid,
-            'media' => json_encode(['type' => 'photo', 'media' => 'attach://photo']),
+            'media' => json_encode(['type' => 'photo', 'media' => 'attach://photo',
+                'caption' => $caption, 'parse_mode' => 'HTML']),
             'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
+        if ($rm !== null) $post['reply_markup'] = $rm;
         $ch = curl_init($base . '/bot' . BOT_TOKEN . '/editMessageMedia');
     } else {
-        $post = ['chat_id' => $chatId, 'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
+        $post = ['chat_id' => $chatId, 'caption' => $caption, 'parse_mode' => 'HTML',
+            'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
+        if ($rm !== null) $post['reply_markup'] = $rm;
         $ch = curl_init($base . '/bot' . BOT_TOKEN . '/sendPhoto');
     }
     curl_setopt_array($ch, [
