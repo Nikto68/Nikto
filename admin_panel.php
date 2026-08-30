@@ -565,6 +565,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('اتصال پنل ممبر ذخیره شد.');
     }
 
+    // ---- تست اتصال به پنل SMM — فقط موجودی را می‌خواند، پولی خرج نمی‌شود ----
+    if ($a === 'smm_test') {
+        [$ok, $res, $err] = smmCall('balance');
+        if (!$ok) go('❌ اتصال برقرار نشد: ' . $err, 'err');
+        $bal = $res['balance'] ?? '—';
+        $cur = $res['currency'] ?? '';
+        go('✅ اتصال برقرار است. موجودی پنل: ' . $bal . ' ' . $cur);
+    }
+
     // ---- قیمت‌گذاری دکمه‌های فروش (خودِ دکمه = محصول) ----
     if ($a === 'save_btn_price') {
         $bid = $_POST['bid'] ?? ''; $sid = $_POST['sid'] ?? '';
@@ -1251,6 +1260,13 @@ foreach ($tabs as $k => $l): ?>
       </div>
       <div style="margin-top:14px"><button class="btn g">ذخیره اتصال</button></div>
     </form>
+    <?php if (!empty($SM['on']) && trim((string)($SM['base'] ?? '')) !== '' && trim((string)($SM['key'] ?? '')) !== ''): ?>
+    <form method="post" style="margin-top:10px">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
+      <input type="hidden" name="action" value="smm_test">
+      <button class="btn b sm">🔌 تست اتصال (فقط موجودی — پولی خرج نمی‌شود)</button>
+    </form>
+    <?php endif; ?>
   </div></div>
 
   <?php $TF = cfg()['tariff'] ?? []; ?>
