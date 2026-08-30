@@ -77,8 +77,8 @@ function axDefaults() {
 
         // ---------- 📊 گزارش مینی‌اپ‌ها ----------
         'report' => [
-            'tg'  => axDefaultReport('🛰 <b>فروش خدمات تلگرام</b>'),
-            'num' => axDefaultReport('☎️ <b>شماره مجازی</b>'),
+            'tg'  => axDefaultReport('<b>فروش خدمات تلگرام</b>'),
+            'num' => axDefaultReport('<b>شماره مجازی</b>'),
         ],
 
         // ---------- 💵 سود و قیمت ----------
@@ -170,15 +170,18 @@ function axDefaultReport($head) {
         'on'        => false,
         'chat_id'   => '',
         'thread_id' => 0,
+        // ⚠️ عمداً بدون هیچ ایموجیِ معمولی — تنها ایموجی‌ای که اینجا دیده
+        // می‌شود، ایموجیِ پریمیومِ خودِ همان محصول است (اگر ادمین برایش
+        // تنظیم کرده باشد)، که axReportOrder جلوی {item} می‌گذارد.
         'text'      => $head . "\n\n" .
-                       "📦 محصول: <b>{item}</b>\n" .
-                       "🔢 تعداد: <b>{qty}</b>\n" .
-                       "🎯 گیرنده: <code>{field}</code>\n" .
-                       "👤 خریدار: {user}\n" .
-                       "💰 مبلغ: <b>{amount} {currency}</b>\n" .
-                       "💳 پرداخت: {pay}\n" .
-                       "🧾 کد: <code>{code}</code>\n" .
-                       "📅 {date}",
+                       "محصول: <b>{item}</b>\n" .
+                       "تعداد: <b>{qty}</b>\n" .
+                       "گیرنده: <code>{field}</code>\n" .
+                       "خریدار: {user}\n" .
+                       "مبلغ: <b>{amount} {currency}</b>\n" .
+                       "پرداخت: {pay}\n" .
+                       "کد: <code>{code}</code>\n" .
+                       "تاریخ: {date}",
         'buttons'   => [
             ['text' => 'ثبت سفارش', 'url' => '', 'color' => 'success', 'icon' => '', 'on' => true],
             ['text' => 'پشتیبانی',  'url' => '', 'color' => 'primary', 'icon' => '', 'on' => true],
@@ -561,6 +564,23 @@ function axManualDone($orderId, $adminId, $adminName = '') {
 // 📊 گزارش سفارش مینی‌اپ‌ها — هر مینی‌اپ جدا
 // ============================================================
 
+/**
+ * عنوانِ محصول برای گزارش‌ها — بدونِ هیچ ایموجیِ معمولی، فقط اگر ادمین
+ * برای همین محصول یک ایموجیِ پریمیوم تنظیم کرده باشد (فیلدِ
+ * report_emoji روی خودِ محصول، از پنلِ سرویس‌های مینی‌اپ)، همان جلوی
+ * نامش می‌آید. وگرنه فقط نامِ خالی.
+ */
+function axItemTitle($order) {
+    $name = h((string)($order['item_name'] ?? '—'));
+    $it = function_exists('maFindItem')
+        ? maFindItem((string)($order['app'] ?? ''), (string)($order['item_id'] ?? ''))
+        : null;
+    $pid = trim((string)($it['report_emoji'] ?? ''));
+    if ($pid === '' || !ctype_digit($pid)) return $name;
+    $fallback = trim((string)($it['emoji'] ?? '')) ?: '🎁';
+    return '<tg-emoji emoji-id="' . $pid . '">' . h($fallback) . '</tg-emoji> ' . $name;
+}
+
 /** $when: 'paid' یا 'done' */
 function axReportOrder($order, $when = 'paid') {
     $app = (string)($order['app'] ?? '');
@@ -587,7 +607,8 @@ function axReportOrder($order, $when = 'paid') {
     $extra = [];
     if ((int)$r['thread_id'] > 0) $extra['message_thread_id'] = (int)$r['thread_id'];
 
-    $res = sendMsg(BOT_TOKEN, $chat, axFill($r['text'], $order), $rows ? inlineKb($rows) : null, $extra);
+    $res = sendMsg(BOT_TOKEN, $chat, axFill($r['text'], $order, ['{item}' => axItemTitle($order)]),
+        $rows ? inlineKb($rows) : null, $extra);
     if (empty($res['ok'])) {
         if (class_exists('MaOrder')) MaOrder::set($order['id'], function (&$x) use ($when) { unset($x['reported'][$when]); });
         axNotifyAdmin("⚠️ <b>گزارش مینی‌اپ ارسال نشد</b>\n\n" .
@@ -1052,7 +1073,9 @@ function axReportHome($chatId, $msgId, $app) {
           ? '<code>' . h((string)$r['chat_id']) . '</code>' . ((int)$r['thread_id'] > 0 ? ' · تاپیک ' . (int)$r['thread_id'] : '')
           : '<i>تنظیم نشده</i>') . "\n\n";
     $t .= "<b>متن فعلی:</b>\n" . $r['text'] . "\n\n";
-    $t .= "<i>کلیدها: {item} {qty} {field} {user} {user_id} {amount} {currency} {pay} {code} {app} {date} {status}</i>";
+    $t .= "<i>کلیدها: {item} {qty} {field} {user} {user_id} {amount} {currency} {pay} {code} {app} {date} {status}</i>\n\n";
+    $t .= "🌟 <i>ایموجیِ جلوی {item} خودکار می‌آید — از روی ایموجیِ پریمیومی که برای همان محصول، " .
+          "تو ✏️ ویرایشِ سرویس‌های همین مینی‌اپ گذاشته‌اید. اگر چیزی نگذاشته باشید، بدونِ ایموجی می‌ماند.</i>";
 
     axShow($chatId, $msgId, $t, [
         [btnCb((!empty($r['on']) ? '🟢 روشن' : '🔴 خاموش'), 'axrtog_' . $app, 'admin'),
@@ -1060,6 +1083,7 @@ function axReportHome($chatId, $msgId, $app) {
         [btnCb('📢 مقصد گزارش', 'axrchat_' . $app, 'admin')],
         [btnCb('✍️ متن گزارش', 'axrtxt_' . $app, 'admin')],
         [btnCb('🧪 ارسال آزمایشی', 'axrtest_' . $app, 'admin')],
+        [btnCb('🔄 بازنشانی متن به پیش‌فرض', 'axrreset_' . $app, 'confirm')],
         [btnCb('🔙 بازگشت', 'ax_home', 'nav')],
     ]);
 }
@@ -1468,6 +1492,17 @@ function axCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
         return true;
     }
 
+    if (str_starts_with($data, 'axrreset_')) {
+        $app = substr($data, 9);
+        if (!in_array($app, ['tg', 'num'], true)) { $ack(); return true; }
+        $head = $app === 'tg' ? '<b>فروش خدمات تلگرام</b>' : '<b>شماره مجازی</b>';
+        $def  = axDefaultReport($head);
+        axSet(function (&$c) use ($app, $def) { $c['report'][$app]['text'] = $def['text']; });
+        $ack('✅ بازنشانی شد');
+        axReportHome($chatId, $msgId, $app);
+        return true;
+    }
+
     if (str_starts_with($data, 'axrtest_')) {
         $app = substr($data, 8);
         $ack('⏳');
@@ -1480,7 +1515,8 @@ function axCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
         if ($chat === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ اول مقصد گزارش را تنظیم کنید."); return true; }
         $rows = axButtonRows($r['buttons'] ?? [], !empty($r['btn_row']));
         $extra = (int)$r['thread_id'] > 0 ? ['message_thread_id' => (int)$r['thread_id']] : [];
-        $res = sendMsg(BOT_TOKEN, $chat, axFill($r['text'], $fake), $rows ? inlineKb($rows) : null, $extra);
+        $res = sendMsg(BOT_TOKEN, $chat, axFill($r['text'], $fake, ['{item}' => axItemTitle($fake)]),
+            $rows ? inlineKb($rows) : null, $extra);
         sendMsg(BOT_TOKEN, $chatId, !empty($res['ok'])
             ? "✅ گزارش آزمایشی ارسال شد."
             : "❌ ارسال نشد:\n<code>" . h($res['description'] ?? '—') . "</code>\n\nربات را در آن گروه ادمین کنید.");

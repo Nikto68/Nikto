@@ -4281,11 +4281,15 @@ function maAdmItem($chatId, $msgId, $key, $iid) {
         $text .= '📐 واحد: ' . h($i['unit'] ?: '—') . "\n";
     }
     $text .= '🔢 ترتیب: ' . (int)($i['order'] ?? 99) . "\n";
+    $repEmoji = trim((string)($i['report_emoji'] ?? ''));
+    $text .= '🌟 ایموجیِ گزارش: ' . ($repEmoji !== '' ? '<tg-emoji emoji-id="' . h($repEmoji) . '">' .
+              h($i['emoji'] ?: '🎁') . '</tg-emoji> تنظیم‌شده' : 'تنظیم‌نشده') . "\n";
     $text .= 'وضعیت: ' . (!empty($i['on']) ? '✅ روشن' : '❌ خاموش');
 
     $p = $key . '|' . $iid;
     $rows = [
         [btnCb('✏️ نام', 'maadm_in_' . $p, 'admin'), btnCb('😀 ایموجی', 'maadm_ie_' . $p, 'admin')],
+        [btnCb('🌟 ایموجیِ گزارش (پریمیوم)', 'maadm_ire_' . $p, 'admin')],
         [btnCb('💰 قیمت', 'maadm_ip_' . $p, 'admin'), btnCb('📝 توضیح', 'maadm_id_' . $p, 'admin')],
         [btnCb('🏷 برچسب', 'maadm_ib_' . $p, 'admin'), btnCb('📂 دسته', 'maadm_ic_' . $p, 'admin')],
         [btnCb('❓ نوع سوال', 'maadm_ia_' . $p, 'admin'), btnCb('📐 واحد', 'maadm_iu_' . $p, 'admin')],
@@ -5487,6 +5491,13 @@ function maAdminCallback($data, $uid, $chatId, $msgId, $cbId) {
             [$f, $title, $hint] = $map[$op];
             maAskState($uid, $chatId, 'ma_item_field', ['k' => $key, 'i' => $arg, 'f' => $f], $title, $hint);
             return true;
+        case 'ire':
+            answerCb(BOT_TOKEN, $cbId);
+            maAskState($uid, $chatId, 'ma_item_remoji', ['k' => $key, 'i' => $arg],
+                '🌟 ایموجیِ پریمیومِ این محصول را بفرستید — فقط همین جلوی نامش در گزارش‌ها می‌نشیند.',
+                'یک پیام حاوی همان ایموجی بفرستید، یا کدِ عددی‌اش را (با <code>/emoji</code> در ربات می‌گیریدش).\n' .
+                'برای برداشتن، یک خط تیره <code>-</code> بفرستید.');
+            return true;
         case 'ic':
             answerCb(BOT_TOKEN, $cbId);
             $rows = [];
@@ -5855,6 +5866,25 @@ function maAdminState($action, $sd, $msg, $uid, $chatId, $plain, $ids) {
         clearState($uid);
         sendMsg(BOT_TOKEN, $chatId, $v === '' ? '✅ حذف شد.' : '✅ ثبت شد.',
             inlineKb([[btnCb('💠 دکمه‌های شیشه‌ای', 'maadm_gl_' . $key, 'admin')]]));
+        return true;
+    }
+
+    // 🌟 ایموجیِ پریمیومِ گزارش — فقط همین برای این محصول جلوی نامش
+    // در متنِ گزارش‌ها می‌نشیند (axItemTitle در admin_ext.php).
+    if ($action === 'ma_item_remoji') {
+        $iid = (string)($sd['i'] ?? '');
+        if (!maFindItem($key, $iid)) { clearState($uid); return true; }
+        $v = $ids ? $ids[0] : ($dash ? '' : preg_replace('/\D/', '', norm_fa_digits($plain)));
+        if (!$dash && $v === '') {
+            sendMsg(BOT_TOKEN, $chatId,
+                "⚠️ ایموجی پیدا نشد. یک پیام با همان ایموجی بفرستید، یا کد عددی‌اش را.\n" .
+                "برای برداشتنش خط تیره بفرستید.");
+            return true;
+        }
+        maItemMutate($key, $iid, function (&$i) use ($v) { $i['report_emoji'] = $v; });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, $v === '' ? '✅ حذف شد.' : '✅ ثبت شد.',
+            inlineKb([[btnCb('🛒 سرویس', 'maadm_item_' . $key . '|' . $iid, 'admin')]]));
         return true;
     }
 
