@@ -566,6 +566,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('اتصال پنل ممبر ذخیره شد.');
     }
 
+    // ---- سود روی محصولات — یک‌جا برای همه‌ی بخش‌ها ----
+    if ($a === 'save_profit') {
+        $numOnly = fn($k) => (float)str_replace([',', '،'], '', $_POST[$k] ?? 0);
+        pfSet(function (&$c) use ($numOnly) {
+            $c['on']  = !empty($_POST['pf_on']);
+            $c['all'] = ['mode' => ($_POST['pf_all_mode'] ?? 'pct') === 'fixed' ? 'fixed' : 'pct',
+                         'v' => $numOnly('pf_all_v')];
+            foreach (['member', 'ma'] as $sec) {
+                $mode = $_POST['pf_' . $sec . '_mode'] ?? 'off';
+                if ($mode === 'off') { $c[$sec] = ['mode' => null, 'v' => null]; continue; }
+                $c[$sec] = ['mode' => $mode === 'fixed' ? 'fixed' : 'pct', 'v' => $numOnly('pf_' . $sec . '_v')];
+            }
+        });
+        if (function_exists('numSet')) numSet(function (&$c) use ($numOnly) { $c['markup'] = $numOnly('num_markup'); });
+        if (function_exists('pxSet'))  pxSet(function (&$c) use ($numOnly)  { $c['margin'] = $numOnly('px_margin'); });
+        go('تنظیمات سود ذخیره شد.');
+    }
+    if ($a === 'profit_every') {
+        $pct = (float)str_replace([',', '،'], '', $_POST['every_pct'] ?? 0);
+        if (function_exists('pfSetAll')) pfSetAll($pct);
+        go('✅ ' . rtrim(rtrim(number_format($pct, 1), '0'), '.') . '٪ روی همه‌ی بخش‌ها نشست.');
+    }
+
     // ---- تست اتصال به پنل SMM — فقط موجودی را می‌خواند، پولی خرج نمی‌شود ----
     if ($a === 'smm_test') {
         [$ok, $res, $err] = smmCall('balance');
@@ -1157,6 +1180,7 @@ $tabs = [
   'dashboard' => '📊 داشبورد',
   'orders'    => '🧾 سفارش‌ها' . (count($pending) ? ' (' . count($pending) . ')' : ''),
   'products'  => '🛒 محصولات',
+  'profit'    => '📈 سود',
   'support'   => '📞 پشتیبانی',
   'bots'      => '🤖 ربات‌های اپلودر',
   'channels'  => '📢 کانال‌ها',
@@ -1749,6 +1773,97 @@ foreach ($tabs as $k => $l): ?>
   </div></div>
   <?php endforeach; ?>
   <?php if (!$products): ?><div class="card"><div class="body"><div class="empty">محصولی نساخته‌اید.</div></div></div><?php endif; ?>
+
+<?php // ================= سود ================= ?>
+<?php elseif ($tab === 'profit'): ?>
+  <?php
+    $PF = function_exists('pfCfg') ? pfCfg() : ['on' => false, 'all' => ['mode' => 'pct', 'v' => 0], 'member' => ['mode' => null, 'v' => null], 'ma' => ['mode' => null, 'v' => null]];
+    $secLbl = ['member' => '🎯 خرید ممبر (ممبر فیک، بوست، ممبر اخلاقی)', 'ma' => '🚀 مینی‌اپ‌ها (خدمات مجازی)'];
+  ?>
+  <div class="card"><h2>📈 سود — وضعیتِ کلی <?= !empty($PF['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?></h2><div class="body">
+    <div class="note">
+      یک‌جا برای همه‌ی جاهایی که سود روی قیمت می‌نشیند: خرید ممبر (فیک، بوست، اخلاقی —
+      هرکدوم دکمه‌ی خودشو داره ولی همه از همین سود پیروی می‌کنن مگه اینکه پایین‌تر
+      عددِ جدا براش بذاری)، مینی‌اپ‌ها، شماره مجازی، و قیمت‌گیریِ ارز.
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="profit">
+      <input type="hidden" name="action" value="save_profit">
+      <div style="margin:10px 0">
+        <label style="font-weight:500"><input type="checkbox" name="pf_on" style="width:auto"
+          <?= !empty($PF['on']) ? 'checked' : '' ?>> سود روشن باشد
+          (تا روشن نشه، هیچ‌کدوم از بخش‌های زیر روی قیمت اثر نمی‌ذارن)</label>
+      </div>
+      <h3 style="font-size:13.5px;margin:14px 0 9px">📊 سودِ عمومی — هرجا عددِ جدا نذاری، همین می‌شینه</h3>
+      <div class="grid2">
+        <div><label>نوع</label><select name="pf_all_mode">
+          <option value="pct" <?= ($PF['all']['mode'] ?? 'pct') === 'pct' ? 'selected' : '' ?>>📊 درصد</option>
+          <option value="fixed" <?= ($PF['all']['mode'] ?? '') === 'fixed' ? 'selected' : '' ?>>💰 تومانِ ثابت</option>
+        </select></div>
+        <div><label>مقدار</label>
+          <input name="pf_all_v" value="<?= h(fmtNum((float)($PF['all']['v'] ?? 0))) ?>" style="direction:ltr"></div>
+      </div>
+
+      <?php foreach (['member', 'ma'] as $sec): $s = $PF[$sec] ?? ['mode' => null, 'v' => null]; ?>
+      <h3 style="font-size:13.5px;margin:18px 0 9px"><?= $secLbl[$sec] ?></h3>
+      <div class="grid2">
+        <div><label>نوع</label><select name="pf_<?= $sec ?>_mode">
+          <option value="off" <?= empty($s['mode']) ? 'selected' : '' ?>>⚪️ از سودِ عمومی پیروی کند</option>
+          <option value="pct" <?= ($s['mode'] ?? '') === 'pct' ? 'selected' : '' ?>>📊 درصدِ جدا</option>
+          <option value="fixed" <?= ($s['mode'] ?? '') === 'fixed' ? 'selected' : '' ?>>💰 تومانِ ثابتِ جدا</option>
+        </select></div>
+        <div><label>مقدار (اگه «جدا» انتخاب شد)</label>
+          <input name="pf_<?= $sec ?>_v" value="<?= h(fmtNum((float)($s['v'] ?? 0))) ?>" style="direction:ltr"></div>
+      </div>
+      <?php endforeach; ?>
+
+      <h3 style="font-size:13.5px;margin:18px 0 9px">☎️ شماره مجازی / 💹 قیمت‌گیریِ ارز — این دوتا فقط درصد می‌شناسن</h3>
+      <div class="grid2">
+        <div><label>☎️ درصدِ سودِ شماره مجازی</label>
+          <input name="num_markup" value="<?= h(fmtNum((float)(function_exists('numVal') ? numVal('markup', 0) : 0))) ?>" style="direction:ltr"></div>
+        <div><label>💹 درصدِ سودِ قیمت‌گیریِ ارز</label>
+          <input name="px_margin" value="<?= h(fmtNum((float)(function_exists('pxVal') ? pxVal('margin', 0) : 0))) ?>" style="direction:ltr"></div>
+      </div>
+
+      <div style="margin-top:14px"><button class="btn g">ذخیره‌ی همه</button></div>
+    </form>
+
+    <form method="post" style="margin-top:14px;padding-top:14px;border-top:1px solid #edf2f7;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="profit">
+      <input type="hidden" name="action" value="profit_every">
+      <div style="flex:1;min-width:200px"><label>🎯 روی همه بنشان — یک درصد، هر ۴ بخش (شامل شماره مجازی و قیمت‌گیری)</label>
+        <input name="every_pct" placeholder="مثلا 25" style="direction:ltr"></div>
+      <button class="btn b">اعمال روی همه</button>
+    </form>
+  </div></div>
+
+  <div class="card"><h2>👀 نمونه‌ی قیمت‌ها — قبل و بعدِ سود</h2><div class="body">
+    <?php
+      $peekRows = [];
+      if (class_exists('Product')) {
+        $pn = 0;
+        foreach (Product::all() as $pp) {
+          if (++$pn > 8) break;
+          $base = (float)($pp['price_base'] ?? $pp['price']);
+          $peekRows[] = ['🎯', mb_substr((string)$pp['name'], 0, 30), $base, (float)$pp['price'], (string)($pp['currency'] ?? '')];
+        }
+      }
+    ?>
+    <?php if ($peekRows): ?>
+      <table>
+        <tr><th></th><th>محصول</th><th>قیمتِ پایه</th><th>با سود</th></tr>
+        <?php foreach ($peekRows as [$em, $name, $base, $withProfit, $cur]): ?>
+          <tr>
+            <td><?= $em ?></td><td><?= h($name) ?></td>
+            <td class="muted"><?= h(fmtNum($base)) ?> <?= h($cur) ?></td>
+            <td><b><?= h(fmtNum($withProfit)) ?> <?= h($cur) ?></b></td>
+          </tr>
+        <?php endforeach; ?>
+      </table>
+    <?php else: ?>
+      <div class="empty">هنوز محصولِ ممبری نساخته‌اید.</div>
+    <?php endif; ?>
+  </div></div>
 
 <?php // ================= پشتیبانی ================= ?>
 <?php elseif ($tab === 'support'): ?>
