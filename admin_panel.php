@@ -574,6 +574,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ اتصال برقرار است. موجودی پنل: ' . $bal . ' ' . $cur);
     }
 
+    // ---- گرفتنِ دوبارهٔ فهرستِ سرویس‌های پنل ----
+    if ($a === 'smm_refresh_services') {
+        [$ok, $n] = smmServicesRefresh();
+        if (!$ok) go('❌ لیست گرفته نشد: ' . $n, 'err');
+        go("✅ {$n} سرویس از پنل گرفته شد — پایین همین صفحه، توی هر محصول قابل انتخاب است.");
+    }
+
     // ---- قیمت‌گذاری دکمه‌های فروش (خودِ دکمه = محصول) ----
     if ($a === 'save_btn_price') {
         $bid = $_POST['bid'] ?? ''; $sid = $_POST['sid'] ?? '';
@@ -1003,6 +1010,34 @@ foreach ($users as $u) $totalBalance += (float)($u['balance'] ?? 0);
 $tab    = $_GET['tab'] ?? 'dashboard';
 $curBot = $_GET['bot'] ?? '';
 
+/**
+ * فیلدِ انتخابِ سرویسِ پنلِ SMM — اگر لیست از قبل گرفته شده باشد یک
+ * <select> واقعی نشان می‌دهد (نام + قیمتِ هر ۱۰۰۰ تا)، وگرنه یک ورودیِ
+ * متنیِ ساده برای واردکردنِ دستیِ شماره — تا وقتی هنوز لیستی نگرفته‌ای
+ * هم چیزی خراب نشود.
+ */
+function smmServiceField($current) {
+    $list = function_exists('smmServicesCached') ? smmServicesCached() : [];
+    if (!$list) {
+        echo '<input name="smm_service" value="' . h($current) . '" placeholder="مثلا 1234" style="direction:ltr">';
+        echo '<small class="muted">لیستِ سرویس‌ها هنوز گرفته نشده — بالای همین تب، «🔄 بروزرسانی لیست سرویس‌ها» را بزن.</small>';
+        return;
+    }
+    echo '<select name="smm_service"><option value="">— دستی نیست، وصل نکن —</option>';
+    foreach ($list as $s) {
+        $sid = (string)($s['service'] ?? '');
+        if ($sid === '') continue;
+        $label = trim(($s['name'] ?? 'سرویس ' . $sid) . ' — ' . ($s['rate'] ?? '?') . '/1000');
+        echo '<option value="' . h($sid) . '"' . ((string)$current === $sid ? ' selected' : '') . '>' .
+             h($label) . '</option>';
+    }
+    // اگر شماره‌ی فعلی توی لیستِ تازه نبود (مثلا از پنلی دیگر یا حذف شده)، گمش نکن
+    if ($current !== '' && !in_array($current, array_map(fn($s) => (string)($s['service'] ?? ''), $list), true)) {
+        echo '<option value="' . h($current) . '" selected>سرویسِ فعلی (' . h($current) . ') — دیگر در لیست نیست</option>';
+    }
+    echo '</select>';
+}
+
 function uLabel($users, $id) {
     $u = $users[(string)$id] ?? null;
     if ($u && !empty($u['username']))   return '@' . $u['username'];
@@ -1261,11 +1296,21 @@ foreach ($tabs as $k => $l): ?>
       <div style="margin-top:14px"><button class="btn g">ذخیره اتصال</button></div>
     </form>
     <?php if (!empty($SM['on']) && trim((string)($SM['base'] ?? '')) !== '' && trim((string)($SM['key'] ?? '')) !== ''): ?>
-    <form method="post" style="margin-top:10px">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
-      <input type="hidden" name="action" value="smm_test">
-      <button class="btn b sm">🔌 تست اتصال (فقط موجودی — پولی خرج نمی‌شود)</button>
-    </form>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
+        <input type="hidden" name="action" value="smm_test">
+        <button class="btn b sm">🔌 تست اتصال (فقط موجودی — پولی خرج نمی‌شود)</button>
+      </form>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
+        <input type="hidden" name="action" value="smm_refresh_services">
+        <button class="btn sm">🔄 بروزرسانی لیست سرویس‌ها</button>
+      </form>
+    </div>
+    <?php $svcList = smmServicesCached(); if ($svcList): ?>
+      <div class="muted" style="margin-top:8px">📋 <?= count($svcList) ?> سرویس گرفته‌شده — پایین همین صفحه، توی هر محصول قابل انتخاب است.</div>
+    <?php endif; ?>
     <?php endif; ?>
   </div></div>
 
@@ -1396,7 +1441,7 @@ foreach ($tabs as $k => $l): ?>
           <div><label>توضیح کوتاه (اختیاری)</label>
             <input name="desc" value="<?= h($sb['desc'] ?? '') ?>" placeholder="تحویل تدریجی"></div>
           <div><label>🤖 سرویسِ پنلِ SMM (خالی = دستی می‌ماند)</label>
-            <input name="smm_service" value="<?= h($sb['smm_service'] ?? '') ?>" placeholder="مثلا 1234" style="direction:ltr"></div>
+            <?php smmServiceField((string)($sb['smm_service'] ?? '')); ?></div>
         </div>
 
         <div style="margin-top:16px"><label>⚡️ سرعت‌ها</label>
@@ -1643,7 +1688,7 @@ foreach ($tabs as $k => $l): ?>
           <?php endforeach; ?></select></div>
         <div><label>کد لینک محتوا</label><input name="link_code" value="<?= h($p['link_code'] ?? '') ?>"></div>
         <div><label>🤖 سرویسِ پنلِ SMM (خالی = دستی می‌ماند)</label>
-          <input name="smm_service" value="<?= h($p['smm_service'] ?? '') ?>" placeholder="مثلا 1234" style="direction:ltr"></div>
+          <?php smmServiceField((string)($p['smm_service'] ?? '')); ?></div>
       </div>
       <div style="margin-top:14px"><button class="btn g">ذخیره</button></div>
     </form>
