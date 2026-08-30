@@ -846,7 +846,13 @@ function defaultConfig() {
                               "{content}\n{note}",
             'order_status' => "<b>وضعیت سفارش</b>\n\nکد پیگیری: <code>{code}</code>\nوضعیت: <b>{status}</b>\n\n<b>{product}</b>\n{link_line}{qty_line}{perday_line}{eta_line}{progress}\nمبلغ: <b>{amount} {currency}</b>\nثبت: {created}\n{approved_line}\n{hint}",
             'orders_head'  => "📊 <b>سفارش‌های شما</b>\n",
-            'referral'     => "👥 <b>زیر مجموعه گیری</b>\n\nبا دعوت دوستان خود <b>{percent}%</b> از هر خرید آن‌ها را دریافت کنید.\n\n🔗 لینک اختصاصی شما:\n{link}\n\n👥 تعداد زیرمجموعه: <b>{referrals}</b>\n💵 درآمد شما: <b>{ref_earned}</b> تومان",
+            'referral'     => "👥 <b>داشبورد زیرمجموعه</b>\n\nبا دعوت دوستان خود <b>{percent}%</b> از هر خرید آن‌ها را دریافت کنید.\n\n👥 تعداد زیرمجموعه: <b>{referrals}</b>\n💵 درآمد شما: <b>{ref_earned}</b> تومان",
+            'referral_link'=> "🔗 <b>لینک دعوت شما</b>\n\n{link}\n\nاین لینک را با دوستانتان به اشتراک بگذارید.",
+            'referral_wallet' => "💠 <b>اتصال به کیف پول</b>\n\nآدرس کیف پولی که می‌خواهید پورسانتتان به آن واریز شود را بفرستید.",
+            'referral_wallet_ok' => "✅ آدرس کیف پول ثبت شد:\n<code>{address}</code>",
+            'referral_hist_head' => "🧾 <b>تاریخچه‌ی پورسانت</b>\n",
+            'referral_hist_row'  => "▪️ {date} — از خرید <b>{amount}</b> تومانی: <b>+{commission}</b> تومان\n",
+            'referral_hist_none' => "هنوز پورسانتی ثبت نشده است.",
             'topup'        => "➕ <b>افزایش موجودی</b>\n\nمبلغ مورد نظر را به تومان وارد کنید (فقط عدد):",
             // ✅ پیامی که بعد از تایید شارژ به کاربر می‌رسد.
             // ایموجی پریمیوم و <blockquote> هم می‌شود گذاشت.
@@ -878,12 +884,16 @@ function defaultConfig() {
             'quote_hint'   => "",
         ],
 
-        // دو دکمه اصلی پشتیبانی
+        // دکمه‌های اصلی پشتیبانی
         'support_main' => [
             'direct' => ['emoji' => '💬', 'text' => 'ارتباط مستقیم', 'color' => 'success',
                          'icon' => '', 'value' => 'https://t.me/malakeBTC'],
             'indirect' => ['emoji' => '📨', 'text' => 'ارتباط غیر مستقیم', 'color' => 'primary',
                            'icon' => '', 'value' => ''],
+            // 👥 دکمه‌ی گروه — زیرِ دو دکمه‌ی بالا؛ تا لینک نگذارید نمایش
+            // داده نمی‌شود (دکمه‌ی بی‌لینک به دردی نمی‌خورد)
+            'group' => ['emoji' => '👥', 'text' => 'گروه ما', 'color' => 'primary',
+                        'icon' => '', 'value' => ''],
         ],
 
         // روش‌های زیرمجموعه «ارتباط غیر مستقیم»
@@ -900,7 +910,29 @@ function defaultConfig() {
             ['on' => false, 'kind' => 'indirect', 'type' => 'text',   'emoji' => '📋', 'label' => 'قوانین',             'value' => ''],
         ],
 
-        'referral' => ['on' => true, 'percent' => 10],
+        'referral' => [
+            'on' => true, 'percent' => 2,
+            'btns' => [
+                'link'   => ['emoji' => '🔗', 'text' => 'ساخت لینک دعوت',   'color' => 'success', 'icon' => ''],
+                'hist'   => ['emoji' => '🧾', 'text' => 'تاریخچه پورسانت', 'color' => 'primary', 'icon' => ''],
+                'wallet' => ['emoji' => '💠', 'text' => 'اتصال به کیف پول', 'color' => 'primary', 'icon' => ''],
+            ],
+        ],
+
+        // 📋 قوانینِ افزایش موجودی — اولین بار که کاربر می‌رود «افزایش
+        // موجودی»، این متن با دو دکمه‌ی لغو/تایید پین می‌شود؛ فقط یک‌بار.
+        'topup_rules' => [
+            'on'   => true,
+            'text' => "📋 <b>قوانین افزایش موجودی</b>\n\nبا ادامه دادن، شرایط زیر را می‌پذیرید:\n\n" .
+                      "▪️ موجودیِ شارژشده فقط برای خرید از همین ربات قابل استفاده است.\n" .
+                      "▪️ درست واردکردن مبلغ و ارسال رسیدِ صحیح با شماست.\n" .
+                      "▪️ بازگشت وجه فقط طبق قوانینِ پشتیبانی انجام می‌شود.",
+            'btns' => [
+                'ok'     => ['emoji' => '✅', 'text' => 'تایید',       'color' => 'success', 'icon' => ''],
+                'cancel' => ['emoji' => '❌', 'text' => 'لغو',         'color' => 'danger',  'icon' => ''],
+                'done'   => ['emoji' => '✅', 'text' => 'تایید شده',  'color' => 'primary', 'icon' => ''],
+            ],
+        ],
 
         'wallets' => [
             'usdt' => '', 'trx' => '', 'card' => '', 'card_name' => '',
@@ -1187,6 +1219,14 @@ function payReferralCommission($buyerId, $amount) {
     mutate('users', function (&$users) use ($u, $commission) {
         $k = (string)$u['referrer'];
         if (isset($users[$k])) $users[$k]['ref_earned'] = round((float)($users[$k]['ref_earned'] ?? 0) + $commission, 2);
+    });
+    // 🧾 تاریخچه‌ی پورسانت — هر ردیف: خرید کدام زیرمجموعه، چه مبلغی، کِی.
+    //    فقط ۵۰ ردیفِ آخرِ هر معرف نگه داشته می‌شود، وگرنه بی‌نهایت بزرگ می‌شود.
+    mutate('ref_log', function (&$a) use ($u, $amount, $commission) {
+        $k = (string)$u['referrer'];
+        if (!isset($a[$k]) || !is_array($a[$k])) $a[$k] = [];
+        array_unshift($a[$k], ['amount' => (float)$amount, 'commission' => $commission, 'at' => nowStr()]);
+        $a[$k] = array_slice($a[$k], 0, 50);
     });
     sendMsg(BOT_TOKEN, $u['referrer'],
         "🎉 یکی از زیرمجموعه‌های شما خرید کرد!\n💵 پورسانت شما: <b>" . fmtNum($commission) . "</b> تومان");
@@ -2710,39 +2750,87 @@ function showOrderStatus($uid, $chatId, $code, $replyTo = null) {
     return true;
 }
 
-function showReferral($uid, $chatId, $extra = [], $replyTo = null) {
-    $u  = getUser($uid) ?: [];
+function refBtn($which, $cb) {
+    $m = cfg()['referral']['btns'][$which] ?? [];
+    $b = ['text' => trim(($m['emoji'] ?? '') . ' ' . ($m['text'] ?? '')), 'callback_data' => $cb];
+    if (isStyle($m['color'] ?? '')) $b['style'] = $m['color'];
+    if (!empty($m['icon'])) $b['icon_custom_emoji_id'] = (string)$m['icon'];
+    return $b;
+}
+
+function refInviteLink($uid) {
     $me = tg(BOT_TOKEN, 'getMe', []);
     $un = $me['result']['username'] ?? '';
-    $link = $un ? "https://t.me/{$un}?start=ref{$uid}" : '—';
+    return $un ? "https://t.me/{$un}?start=ref{$uid}" : '';
+}
 
+/** داشبورد زیرمجموعه — لینک و تاریخچه و کیف‌پول، هرکدام پشتِ دکمه‌ی خودش */
+function showReferral($uid, $chatId, $extra = [], $replyTo = null) {
+    $u = getUser($uid) ?: [];
     $refText = T('referral', [
         'percent'    => cfg()['referral']['percent'],
-        'link'       => $link,
         'referrals'  => countReferrals($uid),
         'ref_earned' => fmtNum($u['ref_earned'] ?? 0),
     ]);
-    // 📤 دکمه شیشه‌ای «ارسال به دوستان و گروه‌ها» — تلگرام فهرست چت‌ها را باز می‌کند
+    $rows = [
+        [refBtn('link', 'ref_link')],
+        [refBtn('hist', 'ref_hist'), refBtn('wallet', 'ref_wallet')],
+    ];
+    foreach ($extra as $r) $rows[] = $r;
+    panelShow($uid, $chatId, 'menu', $refText, inlineKb($rows), $replyTo);
+}
+
+/** 🔗 لینکِ دعوت — همان اسلاتِ پیامِ داشبورد ویرایش می‌شود، نه پیامِ تازه */
+function showReferralLink($uid, $chatId) {
+    $link = refInviteLink($uid);
+    $text = $link !== '' ? T('referral_link', ['link' => $link]) : '⚠️ لینک هنوز آماده نیست.';
     $rows = [];
-    if ($un !== '' && function_exists('axShareButton')) {
+    if ($link !== '' && function_exists('axShareButton')) {
         if ($sb = axShareButton($link)) $rows[] = [$sb];
     }
-    foreach ($extra as $r) $rows[] = $r;
+    $rows[] = [btnUI('back', 'menu_referral', 'nav')];
+    panelShow($uid, $chatId, 'menu', $text, inlineKb($rows));
+}
 
-    panelShow($uid, $chatId, 'menu', $refText, $rows ? inlineKb($rows) : null, $replyTo);
+/** 🧾 آخرین ردیف‌های پورسانتِ این کاربر */
+function showReferralHistory($uid, $chatId) {
+    $rows = (array)(load('ref_log')[(string)$uid] ?? []);
+    $t = T('referral_hist_head');
+    if (!$rows) {
+        $t .= "\n" . T('referral_hist_none');
+    } else {
+        foreach (array_slice($rows, 0, 20) as $r) {
+            $t .= T('referral_hist_row', [
+                'date'       => (string)($r['at'] ?? ''),
+                'amount'     => fmtNum((float)($r['amount'] ?? 0)),
+                'commission' => fmtNum((float)($r['commission'] ?? 0)),
+            ]);
+        }
+    }
+    panelShow($uid, $chatId, 'menu', $t, inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
+}
+
+/** 💠 آدرسِ کیف‌پولِ ثبت‌شده برای دریافتِ پورسانت را نشان بده و بگیرد */
+function showReferralWallet($uid, $chatId) {
+    $u = getUser($uid) ?: [];
+    $addr = trim((string)($u['ref_wallet'] ?? ''));
+    $t = T('referral_wallet');
+    if ($addr !== '') $t .= "\n\nآدرسِ فعلی:\n<code>" . h($addr) . '</code>';
+    setState($uid, 'ref_wallet');
+    panelShow($uid, $chatId, 'menu', $t, inlineKb([[btnUI('cancel', 'menu_referral', 'cancel')]]));
 }
 
 function supMainBtn($which, $cb) {
     $m = cfg()['support_main'][$which] ?? [];
     $b = ['text' => trim(($m['emoji'] ?? '') . ' ' . ($m['text'] ?? ''))];
-    if ($which === 'direct' && !empty($m['value'])) $b['url'] = $m['value'];
+    if (in_array($which, ['direct', 'group'], true) && !empty($m['value'])) $b['url'] = $m['value'];
     else $b['callback_data'] = $cb;
     if (isStyle($m['color'] ?? '')) $b['style'] = $m['color'];
     if (!empty($m['icon'])) $b['icon_custom_emoji_id'] = (string)$m['icon'];
     return $b;
 }
 
-/** پشتیبانی — فقط دو دکمه: مستقیم و غیر مستقیم */
+/** پشتیبانی — مستقیم و غیر مستقیم، و یک دکمه‌ی گروه اگر لینکش تنظیم شده */
 function showSupport($uid, $chatId, $extra = [], $replyTo = null) {
     $d = supMainBtn('direct', 'sup_direct');
     $i = supMainBtn('indirect', 'sup_list');
@@ -2750,6 +2838,9 @@ function showSupport($uid, $chatId, $extra = [], $replyTo = null) {
     $rows = (function_exists('axVal') && empty(axVal('labels.sup_stack')))
         ? [[$d, $i]]                       // کنار هم
         : [[$d], [$i]];                    // زیر هم
+    // 👥 دکمه‌ی گروه — تا لینکش را از پنل نگذارید، اصلا نشان داده نمی‌شود
+    if (trim((string)(cfg()['support_main']['group']['value'] ?? '')) !== '')
+        $rows[] = [supMainBtn('group', 'sup_group')];
     foreach ($extra as $r) $rows[] = $r;
     panelShow($uid, $chatId, 'menu', T('support'), inlineKb($rows), $replyTo);
 }
@@ -2761,7 +2852,56 @@ function showSupportIndirect($uid, $chatId, $msgId = null) {
         inlineKb([[btnUI('cancel', 'menu_support', 'cancel')]]));
 }
 
+// ============================================================
+// 📋 قوانینِ افزایش موجودی — اولین بار پین می‌شود، فقط یک‌بار
+// ============================================================
+
+/** نام فارسیِ هرکدام از سه دکمه — لغو، تایید، تایید شده */
+function trBtnLabel($which) { return ['ok' => 'تایید', 'cancel' => 'لغو', 'done' => 'تایید شده'][$which] ?? $which; }
+
+function trBtn($which, $cb = null) {
+    $m = cfg()['topup_rules']['btns'][$which] ?? [];
+    $b = ['text' => trim(($m['emoji'] ?? '') . ' ' . ($m['text'] ?? trBtnLabel($which)))];
+    if ($cb !== null) $b['callback_data'] = $cb;
+    if (isStyle($m['color'] ?? '')) $b['style'] = $m['color'];
+    if (!empty($m['icon'])) $b['icon_custom_emoji_id'] = (string)$m['icon'];
+    return $b;
+}
+
+/**
+ * دروازه‌ی «افزایش موجودی» — اگر کاربر قوانین را قبول نکرده، به‌جایِ
+ * صفحه‌ی شارژ، همان قوانین را نشان می‌دهد (و اگر تازه‌ست، پین می‌کند).
+ * برگشتِ true یعنی راه باز است — startTopup ادامه بدهد.
+ */
+function topupRulesGate($uid, $chatId, $replyTo = null) {
+    if (empty(cfg()['topup_rules']['on'])) return true;
+    $u = getUser($uid);
+    if (!empty($u['topup_rules_ok'])) return true;
+
+    // قبلا فرستاده شده و هنوز تایید نکرده؟ دوباره کلِ متن را نفرست —
+    // فقط یادآوری کوتاه، همان یک پیامِ پین‌شده کافی‌ست.
+    if (!empty($u['topup_rules_msg'])) {
+        sendMsg(BOT_TOKEN, $chatId,
+            '📌 برای افزایش موجودی، اول باید قوانین را در پیامِ پین‌شده تایید کنید.');
+        return false;
+    }
+
+    $rows = [[trBtn('cancel', 'tr_cancel'), trBtn('ok', 'tr_ok')]];
+    $res = sendMsg(BOT_TOKEN, $chatId, (string)cfg()['topup_rules']['text'], inlineKb($rows),
+        $replyTo ? ['reply_to_message_id' => $replyTo] : []);
+    $mid = (int)($res['result']['message_id'] ?? 0);
+    if ($mid) {
+        tg(BOT_TOKEN, 'pinChatMessage', ['chat_id' => $chatId, 'message_id' => $mid, 'disable_notification' => true]);
+        mutate('users', function (&$users) use ($uid, $mid) {
+            $k = (string)$uid;
+            if (isset($users[$k])) $users[$k]['topup_rules_msg'] = $mid;
+        });
+    }
+    return false;
+}
+
 function startTopup($uid, $chatId, $replyTo = null, $need = 0, $total = 0, $bal = null) {
+    if (!topupRulesGate($uid, $chatId, $replyTo)) return;
     setState($uid, 'topup_amount');
     $bal = $bal === null ? (float)(getUser($uid)['balance'] ?? 0) : (float)$bal;
 
@@ -4078,6 +4218,8 @@ function admGroups() {
             [['🎨 دکمه‌ها', 'ebuttons'], ['📝 متن‌ها', 'etexts']],
             [['💠 رنگ دکمه‌های شیشه‌ای', 'eglass']],
             [['📞 دکمه‌های پشتیبانی', 'esup']],
+            [['📋 قوانین شارژ', 'etr_home']],
+            [['👥 دکمه‌های زیرمجموعه', 'eref_home']],
         ]],
         'rep' => ['📢 <b>گزارش و پیام همگانی</b>', 'اعلام فروش و پیام به همه.', [
             [['📢 گزارش خرید در گروه', 'adm_reports']],
@@ -4790,7 +4932,7 @@ function edReportBtn($chatId, $msgId, $pid, $i) {
 function edSupMain($chatId, $msgId) {
     $c = cfg()['support_main'] ?? [];
     $t = "📞 <b>دکمه‌های پشتیبانی</b>\n\n";
-    foreach (['direct' => 'ارتباط مستقیم', 'indirect' => 'ارتباط غیر مستقیم'] as $k => $lbl) {
+    foreach (['direct' => 'ارتباط مستقیم', 'indirect' => 'ارتباط غیر مستقیم', 'group' => 'گروه'] as $k => $lbl) {
         $m = $c[$k] ?? [];
         $t .= '🔘 <b>' . $lbl . "</b>\n";
         $t .= '   نمایش: ' . h(trim((string)($m['emoji'] ?? '') . ' ' . (string)($m['text'] ?? ''))) . "\n";
@@ -4798,9 +4940,10 @@ function edSupMain($chatId, $msgId) {
               ? h($m['emoji']) : '<b>ندارد</b>') . "\n";
         $t .= '   ✨ پریمیوم: ' . (!empty($m['icon']) ? '<code>' . h($m['icon']) . '</code>' : '—') . "\n";
         $t .= '   رنگ: ' . (styleMap()[$m['color'] ?? 'none'] ?? '—') . "\n";
-        if ($k === 'direct')
+        if ($k === 'direct' || $k === 'group')
             $t .= '   لینک: ' . (trim((string)($m['value'] ?? '')) !== ''
-                  ? '<code>' . h($m['value']) . '</code>' : '<b>ثبت نشده</b>') . "\n";
+                  ? '<code>' . h($m['value']) . '</code>' : '<b>ثبت نشده' .
+                    ($k === 'group' ? ' — تا لینک نگذارید نمایش داده نمی‌شود' : '') . '</b>') . "\n";
         $t .= "\n";
     }
     $t .= "💡 برای ایموجی پریمیوم، خودِ ایموجی را بفرستید — شناسه‌اش خودکار خوانده می‌شود.\n";
@@ -4810,16 +4953,17 @@ function edSupMain($chatId, $msgId) {
     editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb([
         [btnCb('🔘 ارتباط مستقیم', 'esup_direct', 'admin')],
         [btnCb('🔘 ارتباط غیر مستقیم', 'esup_indirect', 'admin')],
+        [btnCb('🔘 گروه', 'esup_group', 'admin')],
         [btnCb('🧹 پاک کردن همه‌ی ایموجی‌های معمولی', 'esupclr', 'reject')],
         [btnUI('back', 'ag_look', 'nav')],
     ]));
 }
 
-/** 📞 ویرایش یکی از دو دکمه‌ی پشتیبانی */
+/** 📞 ویرایش یکی از دکمه‌های پشتیبانی */
 function edSupOne($chatId, $msgId, $which) {
-    if (!in_array($which, ['direct', 'indirect'], true)) { edSupMain($chatId, $msgId); return; }
+    if (!in_array($which, ['direct', 'indirect', 'group'], true)) { edSupMain($chatId, $msgId); return; }
     $m   = cfg()['support_main'][$which] ?? [];
-    $lbl = $which === 'direct' ? 'ارتباط مستقیم' : 'ارتباط غیر مستقیم';
+    $lbl = ['direct' => 'ارتباط مستقیم', 'indirect' => 'ارتباط غیر مستقیم', 'group' => 'گروه'][$which];
 
     $t  = "🔘 <b>" . $lbl . "</b>\n\n";
     $t .= 'متن: ' . h(trim((string)($m['text'] ?? '')) ?: '—') . "\n";
@@ -4827,7 +4971,7 @@ function edSupOne($chatId, $msgId, $which) {
           ? h($m['emoji']) : '<b>ندارد</b>') . "\n";
     $t .= '✨ پریمیوم: ' . (!empty($m['icon']) ? '<code>' . h($m['icon']) . '</code>' : '—') . "\n";
     $t .= 'رنگ: ' . (styleMap()[$m['color'] ?? 'none'] ?? '—') . "\n";
-    if ($which === 'direct')
+    if ($which === 'direct' || $which === 'group')
         $t .= 'لینک: ' . (trim((string)($m['value'] ?? '')) !== ''
               ? '<code>' . h($m['value']) . '</code>' : '<b>ثبت نشده</b>') . "\n";
 
@@ -4837,9 +4981,82 @@ function edSupOne($chatId, $msgId, $which) {
         [btnCb('✨ ایموجی پریمیوم', 'esupi_' . $which, 'admin'),
          btnCb('🎨 رنگ', 'esupc_' . $which, 'admin')],
     ];
-    if ($which === 'direct') $rows[] = [btnCb('🔗 لینک', 'esupu_' . $which, 'admin')];
+    if ($which === 'direct' || $which === 'group') $rows[] = [btnCb('🔗 لینک', 'esupu_' . $which, 'admin')];
     $rows[] = [btnUI('back', 'esup', 'nav')];
     editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+/** 👥 صفحه‌ی دکمه‌های زیرمجموعه */
+function edRefButtons($chatId, $msgId) {
+    $t = "👥 <b>دکمه‌های زیرمجموعه</b>\n\nهرکدام را ویرایش کنید — متن، ایموجی معمولی، ایموجی پریمیوم، رنگ.";
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb([
+        [btnCb('🔗 ساخت لینک دعوت', 'eref_link', 'admin')],
+        [btnCb('🧾 تاریخچه پورسانت', 'eref_hist', 'admin')],
+        [btnCb('💠 اتصال به کیف پول', 'eref_wallet', 'admin')],
+        [btnUI('back', 'ag_look', 'nav')],
+    ]));
+}
+
+/** 👥 ویرایش یکی از سه دکمه‌ی زیرمجموعه */
+function edRefButtonOne($chatId, $msgId, $which) {
+    if (!in_array($which, ['link', 'hist', 'wallet'], true)) { edRefButtons($chatId, $msgId); return; }
+    $m   = cfg()['referral']['btns'][$which] ?? [];
+    $lbl = ['link' => 'ساخت لینک دعوت', 'hist' => 'تاریخچه پورسانت', 'wallet' => 'اتصال به کیف پول'][$which];
+
+    $t  = "🔘 <b>" . h($lbl) . "</b>\n\n";
+    $t .= 'متن: ' . h(trim((string)($m['text'] ?? '')) ?: '—') . "\n";
+    $t .= 'ایموجی معمولی: ' . (trim((string)($m['emoji'] ?? '')) !== ''
+          ? h($m['emoji']) : '<b>ندارد</b>') . "\n";
+    $t .= '✨ پریمیوم: ' . (!empty($m['icon']) ? '<code>' . h($m['icon']) . '</code>' : '—') . "\n";
+    $t .= 'رنگ: ' . (styleMap()[$m['color'] ?? 'none'] ?? '—') . "\n";
+
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb([
+        [btnCb('✏️ متن', 'erefbt_' . $which, 'admin'),
+         btnCb('😀 ایموجی معمولی', 'erefbe_' . $which, 'admin')],
+        [btnCb('✨ ایموجی پریمیوم', 'erefbi_' . $which, 'admin'),
+         btnCb('🎨 رنگ', 'erefbc_' . $which, 'admin')],
+        [btnUI('back', 'eref_home', 'nav')],
+    ]));
+}
+
+/** 📋 صفحه‌ی قوانینِ افزایش موجودی */
+function edTopupRules($chatId, $msgId) {
+    $c = cfg()['topup_rules'] ?? [];
+    $t  = "📋 <b>قوانین افزایش موجودی</b>\n\n";
+    $t .= "اولین‌باری که کاربر می‌رود «افزایش موجودی»، این متن با دکمه‌های لغو/تایید پین می‌شود — " .
+          "فقط همان یک‌بار؛ بعد از تایید دیگر نشان داده نمی‌شود.\n\n";
+    $t .= 'وضعیت: ' . (!empty($c['on']) ? '✅ روشن' : '❌ خاموش') . "\n\n";
+    $t .= "متن فعلی:\n" . (string)($c['text'] ?? '');
+
+    editMsg(BOT_TOKEN, $chatId, $msgId, mb_substr($t, 0, 3800), inlineKb([
+        [btnCb(!empty($c['on']) ? '✅ روشن' : '❌ خاموش', 'etrx', 'info')],
+        [btnCb('✏️ متن قوانین', 'etrm', 'admin')],
+        [btnCb('🔘 دکمه‌ی لغو', 'etrb_cancel', 'admin'), btnCb('🔘 دکمه‌ی تایید', 'etrb_ok', 'admin')],
+        [btnCb('🔘 دکمه‌ی «تایید شده»', 'etrb_done', 'admin')],
+        [btnUI('back', 'ag_look', 'nav')],
+    ]));
+}
+
+/** 📋 ویرایش یکی از سه دکمه‌ی قوانین */
+function edTopupRulesBtn($chatId, $msgId, $which) {
+    if (!in_array($which, ['ok', 'cancel', 'done'], true)) { edTopupRules($chatId, $msgId); return; }
+    $m   = cfg()['topup_rules']['btns'][$which] ?? [];
+    $lbl = trBtnLabel($which);
+
+    $t  = "🔘 <b>" . h($lbl) . "</b>\n\n";
+    $t .= 'متن: ' . h(trim((string)($m['text'] ?? '')) ?: '—') . "\n";
+    $t .= 'ایموجی معمولی: ' . (trim((string)($m['emoji'] ?? '')) !== ''
+          ? h($m['emoji']) : '<b>ندارد</b>') . "\n";
+    $t .= '✨ پریمیوم: ' . (!empty($m['icon']) ? '<code>' . h($m['icon']) . '</code>' : '—') . "\n";
+    $t .= 'رنگ: ' . (styleMap()[$m['color'] ?? 'none'] ?? '—') . "\n";
+
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb([
+        [btnCb('✏️ متن', 'etrbt_' . $which, 'admin'),
+         btnCb('😀 ایموجی معمولی', 'etrbe_' . $which, 'admin')],
+        [btnCb('✨ ایموجی پریمیوم', 'etrbi_' . $which, 'admin'),
+         btnCb('🎨 رنگ', 'etrbc_' . $which, 'admin')],
+        [btnUI('back', 'etr_home', 'nav')],
+    ]));
 }
 
 /**
@@ -5467,6 +5684,32 @@ function masterHandle($update) {
             return;
         }
         if ($data === 'sup_direct') { answerCb(BOT_TOKEN, $cbId); return; }
+        if ($data === 'sup_group')  { answerCb(BOT_TOKEN, $cbId); return; }
+
+        // --- 📋 قوانینِ افزایش موجودی ---
+        // --- 👥 داشبورد زیرمجموعه ---
+        if ($data === 'ref_link')   { answerCb(BOT_TOKEN, $cbId); showReferralLink($uid, $chatId); return; }
+        if ($data === 'ref_hist')   { answerCb(BOT_TOKEN, $cbId); showReferralHistory($uid, $chatId); return; }
+        if ($data === 'ref_wallet') { answerCb(BOT_TOKEN, $cbId); showReferralWallet($uid, $chatId); return; }
+
+        if ($data === 'trnop') { answerCb(BOT_TOKEN, $cbId); return; }
+        if ($data === 'tr_cancel') {
+            // ⚠️ دکمه‌ها را دست‌نمی‌زنیم — اگر حذفشان کنیم، کاربر دیگر
+            // راهی برای تاییدِ بعدی ندارد و برای همیشه گیر می‌کند.
+            answerCb(BOT_TOKEN, $cbId, strip_tags(trBtnLabel('cancel')) . ' — هر وقت خواستید، بزنید تایید.', true);
+            return;
+        }
+        if ($data === 'tr_ok') {
+            mutate('users', function (&$users) use ($uid) {
+                $k = (string)$uid;
+                if (isset($users[$k])) $users[$k]['topup_rules_ok'] = true;
+            });
+            if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, (string)cfg()['topup_rules']['text'],
+                inlineKb([[trBtn('done', 'trnop')]]));
+            answerCb(BOT_TOKEN, $cbId, '✅');
+            startTopup($uid, $chatId);
+            return;
+        }
 
         // --- دکمه شیشه‌ای زیرمجموعه ---
         if (str_starts_with($data, 'sub_')) {
@@ -5774,7 +6017,7 @@ function masterHandle($update) {
         // همه کال‌بک‌های مدیریتی — شامل ویرایشگر داخل ربات
         // هر پیشوند تازه‌ای که اینجا نباشد، بی‌صدا دور ریخته می‌شود —
         // نه خطایی، نه پیامی. پس با هر بخش تازه این فهرست هم باید کامل شود.
-        $adminPrefixes = ['aok_', 'ano_', 'adm_', 'ag_', 'eb', 'et', 'eg', 'eu', 'sb', 'ep', 'esp',
+        $adminPrefixes = ['aok_', 'ano_', 'adm_', 'ag_', 'eb', 'et', 'eg', 'eu', 'eref', 'sb', 'ep', 'esp',
                           'esup', 'rp', 'tf', 'jn', 'gw', 'pay', 'px', 'dm', 'ch', 'gma', 'gm_', 'ol',
                           'pf_', 'num', 'reply_', 'setup'];
         $isAdminCb = false;
@@ -6750,7 +6993,7 @@ function masterHandle($update) {
         }
         if ($data === 'esupclr') {
             cfgSet(function (&$c) {
-                foreach (['direct', 'indirect'] as $k) {
+                foreach (['direct', 'indirect', 'group'] as $k) {
                     $c['support_main'][$k]['emoji'] = '';
                     $c['support_main'][$k]['text']  = stripPlainEmoji($c['support_main'][$k]['text'] ?? '');
                 }
@@ -6759,7 +7002,7 @@ function masterHandle($update) {
             edSupMain($chatId, $msgId);
             return;
         }
-        if (preg_match('/^esup([teicu])_(direct|indirect)$/', $data, $em)) {
+        if (preg_match('/^esup([teicu])_(direct|indirect|group)$/', $data, $em)) {
             static $ask = [
                 't' => ["✏️ متنِ دکمه را بفرستید.", 'sup_text'],
                 'e' => ["😀 ایموجیِ معمولی را بفرستید.\n\n<code>-</code> بفرستید تا پاک شود.", 'sup_emoji'],
@@ -6784,11 +7027,95 @@ function masterHandle($update) {
                     inlineKb([[btnUI('cancel', 'esup_' . $em[2], 'cancel')]]));
             return;
         }
-        if (preg_match('/^esupC_(direct|indirect)_(\w+)$/', $data, $em)) {
+        if (preg_match('/^esupC_(direct|indirect|group)_(\w+)$/', $data, $em)) {
             $col = isStyle($em[2]) ? $em[2] : 'none';
             cfgSet(function (&$c) use ($em, $col) { $c['support_main'][$em[1]]['color'] = $col; });
             answerCb(BOT_TOKEN, $cbId, '✅');
             edSupOne($chatId, $msgId, $em[1]);
+            return;
+        }
+
+        // 📋 قوانینِ افزایش موجودی
+        if ($data === 'etr_home') { answerCb(BOT_TOKEN, $cbId); edTopupRules($chatId, $msgId); return; }
+        if ($data === 'etrx') {
+            cfgSet(function (&$c) { $c['topup_rules']['on'] = empty($c['topup_rules']['on']); });
+            answerCb(BOT_TOKEN, $cbId, '✅'); edTopupRules($chatId, $msgId); return;
+        }
+        if ($data === 'etrm') {
+            answerCb(BOT_TOKEN, $cbId);
+            setState($uid, 'tr_text', []);
+            sendMsg(BOT_TOKEN, $chatId,
+                "✏️ متنِ تازه‌ی قوانین را بفرستید.\n\n✨ ایموجی پریمیوم و <code>&lt;blockquote&gt;</code> هم می‌پذیرد.",
+                inlineKb([[btnUI('cancel', 'etr_home', 'cancel')]]));
+            return;
+        }
+        if (str_starts_with($data, 'etrb_')) {
+            answerCb(BOT_TOKEN, $cbId);
+            edTopupRulesBtn($chatId, $msgId, substr($data, 5));
+            return;
+        }
+        if (preg_match('/^etrb([teic])_(ok|cancel|done)$/', $data, $em)) {
+            if ($em[1] === 'c') {
+                answerCb(BOT_TOKEN, $cbId);
+                $rows = [];
+                foreach (styleMap() as $sk => $sl) $rows[] = [btnCb($sl, 'etrbC_' . $em[2] . '_' . $sk, 'info')];
+                $rows[] = [btnUI('back', 'etrb_' . $em[2], 'nav')];
+                editMsg(BOT_TOKEN, $chatId, $msgId, "🎨 <b>رنگ دکمه</b>", inlineKb($rows));
+                return;
+            }
+            static $trAsk = [
+                't' => ["✏️ متنِ دکمه را بفرستید.", 'tr_btext'],
+                'e' => ["😀 ایموجیِ معمولی را بفرستید.\n\n<code>-</code> بفرستید تا پاک شود.", 'tr_bemoji'],
+                'i' => ["✨ <b>ایموجی پریمیوم</b>\n\nخودِ ایموجی را بفرستید — شناسه‌اش خودکار خوانده می‌شود.\n\n" .
+                        "<code>-</code> بفرستید تا برداشته شود.", 'tr_bicon'],
+            ];
+            [$txt, $st] = $trAsk[$em[1]];
+            setState($uid, $st, ['which' => $em[2]]);
+            answerCb(BOT_TOKEN, $cbId);
+            sendMsg(BOT_TOKEN, $chatId, $txt, inlineKb([[btnUI('cancel', 'etrb_' . $em[2], 'cancel')]]));
+            return;
+        }
+        if (preg_match('/^etrbC_(ok|cancel|done)_(\w+)$/', $data, $em)) {
+            $col = isStyle($em[2]) ? $em[2] : 'none';
+            cfgSet(function (&$c) use ($em, $col) { $c['topup_rules']['btns'][$em[1]]['color'] = $col; });
+            answerCb(BOT_TOKEN, $cbId, '✅');
+            edTopupRulesBtn($chatId, $msgId, $em[1]);
+            return;
+        }
+
+        // 👥 دکمه‌های زیرمجموعه
+        if ($data === 'eref_home') { answerCb(BOT_TOKEN, $cbId); edRefButtons($chatId, $msgId); return; }
+        if (preg_match('/^eref_(link|hist|wallet)$/', $data, $em)) {
+            answerCb(BOT_TOKEN, $cbId);
+            edRefButtonOne($chatId, $msgId, $em[1]);
+            return;
+        }
+        if (preg_match('/^erefb([teic])_(link|hist|wallet)$/', $data, $em)) {
+            if ($em[1] === 'c') {
+                answerCb(BOT_TOKEN, $cbId);
+                $rows = [];
+                foreach (styleMap() as $sk => $sl) $rows[] = [btnCb($sl, 'erefbC_' . $em[2] . '_' . $sk, 'info')];
+                $rows[] = [btnUI('back', 'eref_' . $em[2], 'nav')];
+                editMsg(BOT_TOKEN, $chatId, $msgId, "🎨 <b>رنگ دکمه</b>", inlineKb($rows));
+                return;
+            }
+            static $refAsk = [
+                't' => ["✏️ متنِ دکمه را بفرستید.", 'ref_btext'],
+                'e' => ["😀 ایموجیِ معمولی را بفرستید.\n\n<code>-</code> بفرستید تا پاک شود.", 'ref_bemoji'],
+                'i' => ["✨ <b>ایموجی پریمیوم</b>\n\nخودِ ایموجی را بفرستید — شناسه‌اش خودکار خوانده می‌شود.\n\n" .
+                        "<code>-</code> بفرستید تا برداشته شود.", 'ref_bicon'],
+            ];
+            [$txt, $st] = $refAsk[$em[1]];
+            setState($uid, $st, ['which' => $em[2]]);
+            answerCb(BOT_TOKEN, $cbId);
+            sendMsg(BOT_TOKEN, $chatId, $txt, inlineKb([[btnUI('cancel', 'eref_' . $em[2], 'cancel')]]));
+            return;
+        }
+        if (preg_match('/^erefbC_(link|hist|wallet)_(\w+)$/', $data, $em)) {
+            $col = isStyle($em[2]) ? $em[2] : 'none';
+            cfgSet(function (&$c) use ($em, $col) { $c['referral']['btns'][$em[1]]['color'] = $col; });
+            answerCb(BOT_TOKEN, $cbId, '✅');
+            edRefButtonOne($chatId, $msgId, $em[1]);
             return;
         }
 
@@ -7027,7 +7354,7 @@ function masterHandle($update) {
     if (str_starts_with($action, 'sup_')) {
         $st    = getState($uid);
         $which = (string)(($st['data'] ?? [])['which'] ?? 'direct');
-        if (!in_array($which, ['direct', 'indirect'], true)) { clearState($uid); return; }
+        if (!in_array($which, ['direct', 'indirect', 'group'], true)) { clearState($uid); return; }
         $plain = trim((string)($msg['text'] ?? ''));
         $blank = ($plain === '-' || $plain === '—');
         $back  = inlineKb([[btnCb('📞 دکمه‌های پشتیبانی', 'esup', 'admin')]]);
@@ -7073,6 +7400,114 @@ function masterHandle($update) {
             clearState($uid); sendMsg(BOT_TOKEN, $chatId, '✅ ثبت شد.', $back); return;
         }
         clearState($uid);
+        return;
+    }
+
+    // 📋 قوانینِ افزایش موجودی
+    if ($action === 'tr_text') {
+        $html = function_exists('msgHtml') ? msgHtml($msg) : trim((string)($msg['text'] ?? ''));
+        if (trim($html) === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی نمی‌شود."); return; }
+        cfgSet(function (&$c) use ($html) { $c['topup_rules']['text'] = $html; });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, '✅ ثبت شد.', inlineKb([[btnCb('📋 قوانین شارژ', 'etr_home', 'admin')]]));
+        return;
+    }
+    if (str_starts_with($action, 'tr_b')) {
+        $st    = getState($uid);
+        $which = (string)(($st['data'] ?? [])['which'] ?? '');
+        if (!in_array($which, ['ok', 'cancel', 'done'], true)) { clearState($uid); return; }
+        $plain = trim((string)($msg['text'] ?? ''));
+        $blank = ($plain === '-' || $plain === '—');
+        $back  = inlineKb([[btnCb('📋 قوانین شارژ', 'etr_home', 'admin')]]);
+
+        if ($action === 'tr_btext') {
+            if ($plain === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ یک متن بفرستید."); return; }
+            $v = mb_substr($plain, 0, 40);
+            cfgSet(function (&$c) use ($which, $v) { $c['topup_rules']['btns'][$which]['text'] = $v; });
+            clearState($uid); sendMsg(BOT_TOKEN, $chatId, '✅ ثبت شد.', $back); return;
+        }
+        if ($action === 'tr_bemoji') {
+            $v = $blank ? '' : mb_substr($plain, 0, 8);
+            cfgSet(function (&$c) use ($which, $v) { $c['topup_rules']['btns'][$which]['emoji'] = $v; });
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId, $v === '' ? '✅ ایموجی معمولی پاک شد.' : '✅ ثبت شد.', $back);
+            return;
+        }
+        if ($action === 'tr_bicon') {
+            $ids = customEmojiIds($msg);
+            $v   = $blank ? '' : (string)($ids[0] ?? '');
+            if (!$blank && $v === '') {
+                sendMsg(BOT_TOKEN, $chatId,
+                    "⚠️ ایموجی پریمیوم پیدا نشد.\n\n" .
+                    "باید خودِ ایموجیِ پریمیوم را بفرستید (با اکانت پریمیوم)، نه شناسه‌اش را.");
+                return;
+            }
+            cfgSet(function (&$c) use ($which, $v) { $c['topup_rules']['btns'][$which]['icon'] = $v; });
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId,
+                $v === '' ? '✅ پریمیوم برداشته شد.'
+                          : "✅ ثبت شد: <code>" . h($v) . "</code>\n\n" .
+                            "<i>اگر ایموجیِ معمولی هم دارد، پاکش کنید — با هم جا نمی‌شوند.</i>",
+                $back);
+            return;
+        }
+        clearState($uid);
+        return;
+    }
+
+    if (str_starts_with($action, 'ref_b')) {
+        $st    = getState($uid);
+        $which = (string)(($st['data'] ?? [])['which'] ?? '');
+        if (!in_array($which, ['link', 'hist', 'wallet'], true)) { clearState($uid); return; }
+        $plain = trim((string)($msg['text'] ?? ''));
+        $blank = ($plain === '-' || $plain === '—');
+        $back  = inlineKb([[btnCb('👥 دکمه‌های زیرمجموعه', 'eref_home', 'admin')]]);
+
+        if ($action === 'ref_btext') {
+            if ($plain === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ یک متن بفرستید."); return; }
+            $v = mb_substr($plain, 0, 40);
+            cfgSet(function (&$c) use ($which, $v) { $c['referral']['btns'][$which]['text'] = $v; });
+            clearState($uid); sendMsg(BOT_TOKEN, $chatId, '✅ ثبت شد.', $back); return;
+        }
+        if ($action === 'ref_bemoji') {
+            $v = $blank ? '' : mb_substr($plain, 0, 8);
+            cfgSet(function (&$c) use ($which, $v) { $c['referral']['btns'][$which]['emoji'] = $v; });
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId, $v === '' ? '✅ ایموجی معمولی پاک شد.' : '✅ ثبت شد.', $back);
+            return;
+        }
+        if ($action === 'ref_bicon') {
+            $ids = customEmojiIds($msg);
+            $v   = $blank ? '' : (string)($ids[0] ?? '');
+            if (!$blank && $v === '') {
+                sendMsg(BOT_TOKEN, $chatId,
+                    "⚠️ ایموجی پریمیوم پیدا نشد.\n\n" .
+                    "باید خودِ ایموجیِ پریمیوم را بفرستید (با اکانت پریمیوم)، نه شناسه‌اش را.");
+                return;
+            }
+            cfgSet(function (&$c) use ($which, $v) { $c['referral']['btns'][$which]['icon'] = $v; });
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId,
+                $v === '' ? '✅ پریمیوم برداشته شد.'
+                          : "✅ ثبت شد: <code>" . h($v) . "</code>\n\n" .
+                            "<i>اگر ایموجیِ معمولی هم دارد، پاکش کنید — با هم جا نمی‌شوند.</i>",
+                $back);
+            return;
+        }
+        clearState($uid);
+        return;
+    }
+
+    if ($action === 'ref_wallet') {
+        $plain = trim((string)($msg['text'] ?? ''));
+        if ($plain === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ آدرس کیف پول را بفرستید."); return; }
+        mutate('users', function (&$users) use ($uid, $plain) {
+            $k = (string)$uid;
+            if (isset($users[$k])) $users[$k]['ref_wallet'] = $plain;
+        });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, T('referral_wallet_ok', ['address' => h($plain)]),
+            inlineKb([[btnCb('👥 زیرمجموعه', 'menu_referral', 'buy')]]));
         return;
     }
 
