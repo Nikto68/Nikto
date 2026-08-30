@@ -106,7 +106,7 @@ function pxDefaults() {
         'margin' => 0,
 
         // ارزهایی که در «نرخ ارز» فهرست می‌شوند
-        'coins' => ['BTC', 'ETH', 'TON', 'SOL', 'BNB', 'XRP', 'DOGE', 'NOT', 'TRX', 'ADA', 'LINK', 'AVAX'],
+        'coins' => ['BTC', 'ETH', 'TON', 'TRX', 'XRP', 'SOL', 'DOGE'],
 
         // کلماتی که پیام را می‌سازند (با ویرگول جدا)
         'words' => [

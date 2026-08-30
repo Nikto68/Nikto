@@ -2907,6 +2907,36 @@ function refCardPhotoIdKey($uid) { return 'refcard_fid_' . (int)$uid; }
  * ویرایش می‌شود — نه پیامِ تازه، نه آپلودِ دوباره اگر فایل‌شناسه را داریم.
  */
 /**
+ * فایل‌شناسه/شناسه‌ی پیامِ کارت را ذخیره می‌کند و بلافاصله دوباره
+ * می‌خواند تا مطمئن شود واقعا رویِ دیسک نشست — دقیقا همان دلیلی که
+ * قبلا باعث شد «هر بار کارتِ تازه بسازد»: اگر نوشتنِ ma_cache یا
+ * اسلاتِ کاربر بی‌صدا شکست بخورد، دفعه‌ی بعد نه فایل‌شناسه‌ای هست نه
+ * پیامی، و کل زنجیره از نو (با GD) شروع می‌شود. حالا اگر این نوشتن
+ * شکست بخورد، لااقل یک‌بار در ساعت به ادمین می‌گوید.
+ */
+function refCardRemember($uid, $fid, $nid) {
+    if ($fid !== '' && function_exists('maCachePut')) {
+        maCachePut(refCardPhotoIdKey($uid), $fid);
+        $check = function_exists('maCacheGet') ? (string)(maCacheGet(refCardPhotoIdKey($uid), 2592000) ?? '') : $fid;
+        if ($check !== $fid && function_exists('adminAlertOnce')) {
+            adminAlertOnce('refcard_cache_fail',
+                '🖼 <b>ذخیره‌ی فایل‌شناسه‌ی کارتِ دعوت شکست خورد</b>' . "\n\n" .
+                'یعنی هر بار کارت از نو ساخته می‌شود، نه اینکه یک‌بار بسازد و دوباره بفرستد. ' .
+                'دسترسیِ نوشتن روی پوشه‌ی data_master را چک کنید.');
+        }
+    }
+    if ($nid) {
+        slotSet($uid, 'refcard', $nid);
+        $checkMid = slotGet($uid, 'refcard');
+        if ((int)$checkMid !== (int)$nid && function_exists('adminAlertOnce')) {
+            adminAlertOnce('refcard_slot_fail',
+                '🖼 <b>ذخیره‌ی شناسه‌ی پیامِ کارتِ دعوت شکست خورد</b>' . "\n\n" .
+                'دسترسیِ نوشتن روی پوشه‌ی data_master را چک کنید.');
+        }
+    }
+}
+
+/**
  * برگشتِ true یعنی کارت واقعا فرستاده/ویرایش شد. false یعنی هر دلیلی
  * (GD نبود، فونت نبود، تلگرام رد کرد، شبکه قطع بود) — و در این حالت
  * صدا زننده باید لااقل لینک را به‌شکل متن ساده نشان بدهد، وگرنه کاربر
@@ -2934,9 +2964,8 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
         $out = __tgHook(BOT_TOKEN, 'sendPhoto', $data);
         if (empty($out['ok'])) return false;
         $nid = $out['result']['message_id'] ?? null;
-        if ($nid) slotSet($uid, 'refcard', $nid);
         $newFid = $out['result']['photo'][0]['file_id'] ?? ('TESTFID_' . $uid);
-        if (function_exists('maCachePut')) maCachePut(refCardPhotoIdKey($uid), $newFid);
+        refCardRemember($uid, $newFid, $nid);
         return true;
     }
 
@@ -2965,7 +2994,7 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
             $resend = pxSendPhotoById($chatId, $fid, $caption, $rm, null, 8);
             if (!empty($resend['ok'])) {
                 $nid = $resend['result']['message_id'] ?? null;
-                if ($nid) slotSet($uid, 'refcard', $nid);
+                refCardRemember($uid, '', $nid);
                 return true;
             }
         }
@@ -3017,13 +3046,13 @@ function refCardShow($uid, $chatId, $caption = '', $markup = null) {
 
     $applyResult = function ($j) use ($uid) {
         $ph = $j['result']['photo'] ?? [];
+        $newFid = '';
         if ($ph) {
             $last = end($ph);
-            if (!empty($last['file_id']) && function_exists('maCachePut'))
-                maCachePut(refCardPhotoIdKey($uid), $last['file_id']);
+            $newFid = (string)($last['file_id'] ?? '');
         }
         $nid = $j['result']['message_id'] ?? null;
-        if ($nid) slotSet($uid, 'refcard', $nid);
+        refCardRemember($uid, $newFid, $nid);
     };
 
     [$wrote, $res, $curlErr] = $upload((bool)$mid);
