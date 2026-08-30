@@ -108,8 +108,18 @@ function dmVal($path, $default = null) {
 
 function dmT($slug, $vars = []) {
     $t = (string)(dmVal('texts.' . $slug) ?? dmDefaults()['texts'][$slug] ?? $slug);
+    // 🔘 متن‌هایی که خودشان برچسبِ یک دکمه‌ی شیشه‌ای می‌شوند نه HTML قبول
+    //    می‌کنند نه ایموجیِ پریمیوم — تلگرام روی دکمه‌ها هیچ‌کدام را رندر
+    //    نمی‌کند. اگر قبلا (با راهنماییِ اشتباه) تگ خام ذخیره شده باشد،
+    //    همین‌جا پاک می‌شود تا خودش را درست کند.
+    if (dmIsButtonTextKey($slug)) $t = strip_tags($t);
     foreach ($vars as $k => $v) $t = str_replace('{' . $k . '}', (string)$v, $t);
     return $t;
+}
+
+/** کلیدهایی که متن‌شان مستقیم روی یک دکمه‌ی شیشه‌ای نشسته می‌شود */
+function dmIsButtonTextKey($slug) {
+    return in_array($slug, ['jail_btn'], true);
 }
 
 function dmOn() { return !empty(dmVal('on')); }
@@ -897,10 +907,14 @@ function dmAdminCallback($data, $chatId, $msgId, $cbId) {
         $k = substr($data, 5);
         answerCb(BOT_TOKEN, $cbId);
         setState(ADMIN_ID, 'dm_text', ['k' => $k]);
+        $hint = dmIsButtonTextKey($k)
+            ? "⚠️ این متن روی خودِ دکمه‌ی شیشه‌ای می‌نشیند — تلگرام روی دکمه‌ها نه " .
+              "ایموجیِ پریمیوم قبول می‌کند نه Quote، فقط متنِ ساده (ایموجیِ معمولی هم اشکالی ندارد)."
+            : "✨ ایموجی پریمیوم و <code>&lt;blockquote&gt;</code> هم می‌پذیرد.";
         sendMsg(BOT_TOKEN, $chatId,
             "✏️ متن تازه‌ی <b>" . h(dmLabel($k)) . "</b> را بفرستید.\n\n" .
-            "✨ ایموجی پریمیوم و <code>&lt;blockquote&gt;</code> هم می‌پذیرد.\n\nالان:\n<code>" .
-            h(mb_substr((string)dmVal('texts.' . $k, ''), 0, 500)) . '</code>',
+            $hint . "\n\nالان:\n<code>" .
+            h(mb_substr((string)dmT($k), 0, 500)) . '</code>',
             inlineKb([[btnUI('cancel', 'dm_home', 'cancel')]]));
         return true;
     }
@@ -1108,6 +1122,16 @@ function dmStateHandle($action, $msg, $uid, $chatId) {
     if ($action === 'dm_text') {
         $k = (string)($sd['k'] ?? '');
         if ($k === '') return $bad('متن خالی نمی‌شود.');
+        if (dmIsButtonTextKey($k)) {
+            // 🔘 این متن، خودِ برچسبِ یک دکمه‌ی شیشه‌ای می‌شود — تلگرام روی
+            // دکمه‌ها هیچ HTML/entity ای را رندر نمی‌کند، فقط متنِ ساده.
+            // پس همان $text خام را ذخیره می‌کنیم (نه msgHtml)، تا اگر
+            // ایموجیِ پریمیوم هم فرستاده باشد، جای شکلِ معمولی‌اش بماند
+            // نه یک تگِ خام که رو دکمه اسمش دیده می‌شود.
+            if (trim($text) === '') return $bad('متن خالی نمی‌شود.');
+            dmSet(function (&$c) use ($k, $text) { $c['texts'][$k] = $text; });
+            return $done();
+        }
         // ⚠️ متنِ خام ($text) ایموجی پرمیوم را نگه نمی‌دارد — تلگرام آن را
         // به‌شکل entity کنار متن می‌فرستد، نه داخلش. پس همان HTML را
         // ذخیره می‌کنیم تا ایموجی پرمیوم و نقل‌قول هر دو سر جایشان بمانند.
