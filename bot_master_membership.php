@@ -1850,6 +1850,57 @@ function saleButtons() {
     return $out;
 }
 
+/**
+ * 🚀 راه‌اندازیِ یک‌کلیکِ «بوست تلگرام» روی یک دکمه‌ی موجود.
+ *
+ * همه‌چیزی که دستی تنظیم می‌شد (متن‌ها، چیدمانِ ۱و۲و۱، رنگ‌ها، خاموش‌کردنِ
+ * «ادمین‌شدنِ ربات»، ۴ ردیفِ سرعتِ ۱/۷/۱۴/۳۰ روزه) یک‌جا نوشته می‌شود.
+ * تنها چیزی که خودِ ادمین باید بعدش دستی بزند: انتخابِ سرویسِ واقعیِ
+ * پنل برای هرکدام از این ۴ ردیف — چون شماره‌ی آن مخصوصِ حسابِ خودش
+ * است و از اینجا قابل‌حدس‌زدن نیست.
+ */
+function boostQuickSetup($bid, $sid) {
+    if (!findSub($bid, $sid)) return false;
+    subMutate($bid, $sid, function (&$x) {
+        $x['text']     = '🚀 بوست تلگرام';
+        $x['sale_cat'] = 'boost';
+        $x['smm_auto_price'] = true;
+        $x['flow_texts'] = [
+            'flow_link' => "🎯 <b>مقصدِ بوست را ارسال کنید</b>\n\n" .
+                "لینکِ کانال یا یوزرنیمِ تلگرام را بفرستید.\n" .
+                "لینکِ عمومیِ کانال یا لینکِ بوست را وارد کنید — لینکِ خصوصی پذیرفته نمی‌شود.",
+            'flow_link_bad' => "❌ لینک معتبر نیست.\nلینکِ کانال یا یوزرنیم را دوباره بفرستید.",
+            'flow_qty' => "🔢 لطفاً تعدادِ موردنیاز را بین <b>{min}</b> و <b>{max}</b> وارد کنید.",
+            'flow_qty_bad' => "❌ عددِ واردشده معتبر نیست.\nحداقل <b>{min}</b> و حداکثر <b>{max}</b>.",
+            'flow_speed' => "📅 لطفاً مدتِ بوستِ موردنظر را انتخاب کنید:",
+            'flow_invoice' => "🚀 <b>فاکتورِ خریدِ بوستِ تلگرام</b>\n\n" .
+                "🎯 مقصد: <code>{link}</code>\n" .
+                "📅 مدت: {speed}\n" .
+                "🔢 تعداد: <b>{qty}</b>\n" .
+                "💵 قیمتِ هر عدد: <b>{rate}</b>\n\n" .
+                "💳 مبلغ قابلِ پرداخت: <b>{total} {currency}</b>\n\n" .
+                "❗️ سفارش‌ها بلافاصله و به‌صورتِ سیستمی ثبت می‌شوند.\n\n" .
+                "👇 در صورتِ تایید، دکمه‌ی زیر را بزنید.",
+        ];
+        if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
+        $x['flow'] = array_merge(defaultFlow(), $x['flow'], [
+            'on' => true, 'ask_link' => true, 'ask_qty' => true, 'ask_admin' => false,
+            'min' => 10, 'max' => 15000, 'per' => 1, 'speed_layout' => '1,2,1',
+            'speeds' => [
+                ['id' => 'bst1',  'text' => '۱ روزه',  'emoji' => '🚀', 'mult' => 1, 'per_day' => 0,
+                 'color' => 'primary', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][0]['smm_service'] ?? '')],
+                ['id' => 'bst7',  'text' => '۷ روزه',  'emoji' => '🚀', 'mult' => 1, 'per_day' => 0,
+                 'color' => 'success', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][1]['smm_service'] ?? '')],
+                ['id' => 'bst14', 'text' => '۱۴ روزه', 'emoji' => '🚀', 'mult' => 1, 'per_day' => 0,
+                 'color' => 'danger', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][2]['smm_service'] ?? '')],
+                ['id' => 'bst30', 'text' => '۳۰ روزه', 'emoji' => '🚀', 'mult' => 1, 'per_day' => 0,
+                 'color' => 'primary', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][3]['smm_service'] ?? '')],
+            ],
+        ]);
+    });
+    return true;
+}
+
 class Product
 {
     /**

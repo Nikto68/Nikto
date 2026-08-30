@@ -574,6 +574,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('اتصال پنل ممبر ذخیره شد.');
     }
 
+    // ---- راه‌اندازیِ یک‌کلیکِ بوستِ تلگرام روی یک دکمه‌ی موجود ----
+    if ($a === 'boost_quickstart') {
+        $parts = explode('|', (string)($_POST['target'] ?? ''), 2);
+        if (count($parts) !== 2 || !function_exists('boostQuickSetup') || !boostQuickSetup($parts[0], $parts[1]))
+            go('دکمه پیدا نشد.', 'err');
+        go('✅ دکمه به «بوست تلگرام» تبدیل شد — پایین همین صفحه، برو رو همون دکمه و برای هر ۴ مدت، سرویسِ واقعیِ پنل رو از دراپ‌داون انتخاب کن.');
+    }
+
     // ---- سود روی محصولات — یک‌جا برای همه‌ی بخش‌ها ----
     if ($a === 'save_profit') {
         $numOnly = fn($k) => (float)str_replace([',', '،'], '', $_POST[$k] ?? 0);
@@ -1384,6 +1392,33 @@ foreach ($tabs as $k => $l): ?>
     <?php $svcList = smmServicesCached(); if ($svcList): ?>
       <div class="muted" style="margin-top:8px">📋 <?= count($svcList) ?> سرویس گرفته‌شده — پایین همین صفحه، توی هر محصول قابل انتخاب است.</div>
     <?php endif; ?>
+    <?php endif; ?>
+  </div></div>
+
+  <div class="card"><h2>🚀 راه‌اندازیِ یک‌کلیکِ «بوست تلگرام»</h2><div class="body">
+    <div class="note">
+      یک دکمه‌ی موجود رو انتخاب کن — همه‌چیز (متن‌ها، ۴ پلنِ ۱/۷/۱۴/۳۰ روزه، چیدمانِ ۱و۲و۱، رنگ‌ها،
+      خاموش‌بودنِ «ادمین‌شدنِ ربات») خودش نوشته می‌شه. فقط بعدش برو پایینِ همین صفحه، رو همون دکمه،
+      و برای هر ۴ پلن، سرویسِ واقعیِ پنل رو از دراپ‌داون انتخاب کن (چون شماره‌ی اونا مالِ حسابِ خودته).
+    </div>
+    <?php $sBtns = saleButtons(); ?>
+    <?php if (!$sBtns): ?>
+      <div class="empty">هنوز هیچ دکمه‌ی فروشی نساخته‌اید — اول یک دکمه بسازید، بعد اینجا انتخابش کنید.</div>
+    <?php else: ?>
+    <form method="post" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
+      <input type="hidden" name="action" value="boost_quickstart">
+      <div style="flex:1;min-width:240px"><label>کدوم دکمه تبدیل به «بوست تلگرام» بشه؟</label>
+        <select name="target">
+          <?php foreach ($sBtns as $sp): [$tbid, $tsid] = $sp['btn']; ?>
+            <option value="<?= h($tbid . '|' . $tsid) ?>">
+              <?= h(trim(($sp['emoji'] ?? '') . ' ' . $sp['name'])) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <button class="btn b" onclick="return confirm('متن‌ها و پلن‌های این دکمه با تنظیماتِ بوست جایگزین می‌شود. مطمئنی؟')">🚀 راه‌اندازی</button>
+    </form>
     <?php endif; ?>
   </div></div>
 
