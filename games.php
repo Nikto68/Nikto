@@ -1035,15 +1035,6 @@ function gmCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
         answerCb(BOT_TOKEN, $cbId, '✅');
         $g = gmGet($gid);
 
-        // 🎮 «بازی» (rand) — دکمه‌ی پیوستن زده شد. برخلافِ «چالش» که یا
-        // فوری نتیجه می‌دهد یا صفحه‌ی دوزِ خودش را دارد، اینجا بازی تا
-        // کشیدنِ قرعه (gmDraw) باز می‌ماند، پس همین لحظه بگو در حال انجام است.
-        if ($g && $g['kind'] === 'rand') {
-            $extra2 = [];
-            if ((int)($g['thread'] ?? 0) > 0) $extra2['message_thread_id'] = (int)$g['thread'];
-            sendMsg(BOT_TOKEN, $chatId, gmT('in_progress'), null, $extra2);
-        }
-
         // ⚡ چالش: همین که نفر دوم آمد، نتیجه همان لحظه معلوم می‌شود.
         //    نه تیک بعدی، نه نوبت‌بازی — کمتر از یک ثانیه.
         if ($g && $g['kind'] === 'duel' && count($g['players']) >= 2
@@ -1057,7 +1048,16 @@ function gmCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
             return true;
         }
 
-        gmShow($g);
+        // 🎮 «بازی» (rand) — دکمه‌ی پیوستن زده شد. همان کارتِ بازی (نه یک
+        // پیامِ جدا) ویرایش می‌شود تا «در حال انجام است» را نشان دهد؛
+        // دکمه‌ها همان‌ها می‌مانند تا بقیه هم بتوانند بپیوندند. بعداً وقتی
+        // قرعه کشیده شود (gmDraw→gmFinish)، همین پیام دوباره ویرایش
+        // می‌شود و نتیجه را نشان می‌دهد — یک پیام، سه حالت.
+        if ($g && $g['kind'] === 'rand' && (int)$g['msg']) {
+            editMsg(BOT_TOKEN, $g['chat'], (int)$g['msg'], gmT('in_progress'), gmKb($g));
+        } else {
+            gmShow($g);
+        }
         // مهلت همین حالا تمام شد؟ منتظر تیکِ بعدی نمان
         if ($g && $g['kind'] === 'rand' && $g['status'] === 'open'
             && (int)$g['ends'] > 0 && time() >= (int)$g['ends']) gmDraw($g);
