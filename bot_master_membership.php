@@ -823,7 +823,7 @@ function defaultConfig() {
         'sales' => [
             'on'       => false,
             'chat_id'  => '',
-            'template' => "🎉 <b>فروش جدید</b>\n\n📦 محصول: {product}\n🧾 کد خرید: <code>{code}</code>\n💰 مبلغ: <b>{amount} {currency}</b>\n👥 تعداد ممبر: <b>{count}</b>{limit_part}\n📅 {date}",
+            'template' => "<b>فروش جدید</b>\n\nمحصول: {product}\nکد خرید: <code>{code}</code>\nمبلغ: <b>{amount} {currency}</b>\nتعداد ممبر: <b>{count}</b>{limit_part}\n{date}",
             'show_user' => false,
         ],
 

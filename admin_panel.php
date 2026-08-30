@@ -2290,6 +2290,7 @@ def join_gate(user_id):
           <button type="button" onclick="wrapSel('sales_tpl','<b>','</b>')"><b>پررنگ</b></button>
           <button type="button" onclick="wrapSel('sales_tpl','<code>','</code>')">&lt;/&gt; کد</button>
         <button type="button" onclick="premEmoji('sales_tpl')">✨ ایموجی پریمیوم</button>
+        <button type="button" onclick="resetTpl('sales_tpl', <?= json_encode("<b>فروش جدید</b>\n\nمحصول: {product}\nکد خرید: <code>{code}</code>\nمبلغ: <b>{amount} {currency}</b>\nتعداد ممبر: <b>{count}</b>{limit_part}\n{date}") ?>)">🔄 پیش‌فرض</button>
         </div>
         <textarea id="sales_tpl" name="sales_tpl" style="min-height:140px"><?= h($C['sales']['template']) ?></textarea>
         <div class="muted" style="margin-top:6px;line-height:1.9">
@@ -2805,6 +2806,13 @@ function premEmoji(id) {
   code = code.trim();
   if (!/^[0-9]+$/.test(code)) { alert('کد باید فقط عدد باشد.'); return; }
   wrapSel(id, '<tg-emoji emoji-id="' + code + '">', '</tg-emoji>');
+}
+function resetTpl(id, text) {
+  if (!confirm('متنِ فعلی پاک و با پیش‌فرض جایگزین شود؟')) return;
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.value = text;
+  el.focus();
 }
 function wrapSel(id, open, close) {
   var el = document.getElementById(id);
