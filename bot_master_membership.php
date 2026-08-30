@@ -1071,6 +1071,27 @@ function T($key, $vars = []) {
     return $t;
 }
 
+/**
+ * متنِ سوالاتِ جریانِ خرید (لینک/تعداد/سرعت/فاکتور)، ولی مخصوصِ یک
+ * محصول — برای وقتی این محصول با بقیه فرق دارد (مثلا «بوست تلگرام»
+ * که باید بگوید «لینک بوست» نه «لینک کانال برای ممبرگیری»).
+ *
+ * اگر محصول برای این کلید متنِ خودش را ننوشته باشد (خالی)، همان
+ * متنِ سراسریِ T($key) به‌کار می‌رود — یعنی محصول‌های دیگر که
+ * چیزی تنظیم نکرده‌اند، دقیقاً مثل قبل کار می‌کنند.
+ */
+function flowT($key, $p, $vars = []) {
+    $custom = trim((string)($p['flow_texts'][$key] ?? ''));
+    $t = $custom !== '' ? $custom : (string)T($key);
+    foreach ($vars as $k => $v) $t = str_replace('{' . $k . '}', (string)$v, $t);
+    return $t;
+}
+
+/** فهرستِ کلیدهایی که هر محصول می‌تواند مخصوصِ خودش بنویسد */
+function flowTextKeys() {
+    return ['flow_link', 'flow_link_bad', 'flow_qty', 'flow_qty_bad', 'flow_speed', 'flow_rate', 'flow_invoice'];
+}
+
 /** متن روی دکمه — رنگ واقعی جدا از متن اعمال می‌شود */
 function btnLabel($b, $withDot = null) {
     $dot = ($withDot === null) ? !empty(cfg()['ui']['show_dot']) : $withDot;
@@ -1801,6 +1822,7 @@ function subProduct($bid, $sid, $sub = null) {
         'order'     => (int)($sub['order'] ?? 99),
         'flow'      => $flow,
         'report'    => $sub['report'] ?? [],
+        'flow_texts' => is_array($sub['flow_texts'] ?? null) ? $sub['flow_texts'] : [],
         'smm_service' => (string)($sub['smm_service'] ?? ''),
         'smm_auto_price' => !empty($sub['smm_auto_price']),
         'sale_cat'  => $saleCat,
@@ -3970,7 +3992,7 @@ function flowStart($uid, $chatId, $p) {
     $f = $p['flow'] ?? [];
     setState($uid, 'flow', ['pid' => $p['id'], 'step' => 'link', 'data' => []]);
     if (!empty($f['ask_link'])) {
-        panelShow($uid, $chatId, 'shop', T('flow_link'), inlineKb([[btnUI('cancel', 'cancel', 'cancel')]]));
+        panelShow($uid, $chatId, 'shop', flowT('flow_link', $p), inlineKb([[btnUI('cancel', 'cancel', 'cancel')]]));
         return;
     }
     flowNext($uid, $chatId, 'qty');
@@ -3989,7 +4011,7 @@ function flowNext($uid, $chatId, $step) {
     if ($step === 'qty') {
         if (empty($f['ask_qty'])) { flowNext($uid, $chatId, 'speed'); return; }
         panelShow($uid, $chatId, 'shop',
-            T('flow_qty', ['min' => number_format((int)$f['min']), 'max' => number_format((int)$f['max'])]),
+            flowT('flow_qty', $p, ['min' => number_format((int)$f['min']), 'max' => number_format((int)$f['max'])]),
             inlineKb([[btnUI('cancel', 'cancel', 'cancel')]]));
         return;
     }
@@ -4034,7 +4056,7 @@ function flowNext($uid, $chatId, $step) {
         }
         if ($notes !== '') $notes = "\n" . $notes . "\n";
 
-        panelShow($uid, $chatId, 'shop', $head . T('flow_speed') . $notes, inlineKb($rows));
+        panelShow($uid, $chatId, 'shop', $head . flowT('flow_speed', $p) . $notes, inlineKb($rows));
         return;
     }
 
@@ -4178,7 +4200,7 @@ function flowInvoice($uid, $chatId) {
         ? T('flow_admin_ok', ['title' => h($sd['data']['chat_title'] ?? '—')]) . "\n\n"
         : '';
 
-    $text = $okLine . T('flow_invoice', [
+    $text = $okLine . flowT('flow_invoice', $p, [
         'link'     => h($sd['data']['link'] ?? '—'),
         'qty'      => number_format($qty),
         'product'  => h($p['name']),
@@ -8578,7 +8600,7 @@ function masterHandle($update) {
 
         if ($step === 'link') {
             if (!preg_match('#^https?://t\.me/[A-Za-z0-9_+\-]{3,}#', $text)) {
-                sendMsg(BOT_TOKEN, $chatId, T('flow_link_bad'));
+                sendMsg(BOT_TOKEN, $chatId, flowT('flow_link_bad', $p));
                 return;
             }
             $sd['data']['link'] = $text;
@@ -8592,14 +8614,14 @@ function masterHandle($update) {
             $q = (int)preg_replace('/[^0-9]/', '', $text);
             $min = (int)$f['min']; $max = (int)$f['max'];
             if ($q < $min || ($max > 0 && $q > $max)) {
-                sendMsg(BOT_TOKEN, $chatId, T('flow_qty_bad',
+                sendMsg(BOT_TOKEN, $chatId, flowT('flow_qty_bad', $p,
                     ['min' => number_format($min), 'max' => number_format($max)]));
                 return;
             }
             $sd['data']['qty'] = $q;
             setState($uid, 'flow', $sd);
 
-            $sd['data']['rate_note'] = T('flow_rate', ['rate' => fmtNum($p['price'])]);
+            $sd['data']['rate_note'] = flowT('flow_rate', $p, ['rate' => fmtNum($p['price'])]);
             setState($uid, 'flow', $sd);
             flowNext($uid, $chatId, 'speed');
             return;

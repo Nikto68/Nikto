@@ -548,6 +548,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $all[$id]['smm_service'] = trim($post['smm_service'] ?? '');
             $all[$id]['smm_auto_price'] = !empty($post['smm_auto_price']);
             $all[$id]['sale_cat'] = in_array($post['sale_cat'] ?? '', ['fake_member', 'boost'], true) ? $post['sale_cat'] : '';
+            if (function_exists('flowTextKeys')) {
+                $all[$id]['flow_texts'] = [];
+                foreach (flowTextKeys() as $k) {
+                    $v = trim((string)($post['flow_texts'][$k] ?? ''));
+                    if ($v !== '') $all[$id]['flow_texts'][$k] = $v;
+                }
+            }
         });
         go('محصول به‌روزرسانی شد.');
     }
@@ -644,11 +651,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $x['smm_service'] = trim($post['smm_service'] ?? '');
             $x['smm_auto_price'] = !empty($post['smm_auto_price']);
             $x['sale_cat'] = in_array($post['sale_cat'] ?? '', ['fake_member', 'boost'], true) ? $post['sale_cat'] : '';
+            if (function_exists('flowTextKeys')) {
+                $x['flow_texts'] = [];
+                foreach (flowTextKeys() as $k) {
+                    $v = trim((string)($post['flow_texts'][$k] ?? ''));
+                    if ($v !== '') $x['flow_texts'][$k] = $v;
+                }
+            }
             if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
-            $x['flow'] = array_merge(defaultFlow(), $x['flow'], ['on' => true, 'ask_admin' => true]);
+            // ⚠️ ask_admin دیگر همیشه true نیست — بوست/گیفت نیازی به ادمین‌شدنِ
+            // ربات در کانال ندارند، فقط محصولاتِ ممبرگیریِ واقعی نیاز دارند
+            $x['flow'] = array_merge(defaultFlow(), $x['flow'], ['on' => true, 'ask_admin' => !empty($post['ask_admin'])]);
             $x['flow']['min'] = $min;
             $x['flow']['max'] = $max;
             $x['flow']['per'] = $per;
+            $x['flow']['speed_layout'] = trim((string)($post['speed_layout'] ?? '1')) ?: '1';
 
             // متن، ایموجی، رنگ، ضریب، نفر/روز و توضیح هر سرعت
             foreach ($x['flow']['speeds'] as $i => $sp) {
@@ -1499,9 +1516,38 @@ foreach ($tabs as $k => $l): ?>
           <div><label>📂 دسته‌بندیِ سود</label><?php saleCatField((string)($sb['sale_cat'] ?? '')); ?></div>
           <div><label>🤖 سرویسِ پنلِ SMM (خالی = دستی می‌ماند)</label>
             <?php smmServiceField((string)($sb['smm_service'] ?? ''), !empty($sb['smm_auto_price'])); ?></div>
+          <div><label>📐 چیدمانِ دکمه‌های سرعت/پلن (مثلا <code>1,2,1</code> یعنی یکی بالا، دوتا وسط، یکی پایین)</label>
+            <input name="speed_layout" value="<?= h($f['speed_layout'] ?? '1') ?>" placeholder="1" style="direction:ltr"></div>
+          <div><label style="font-weight:500;margin-top:22px;display:block">
+            <input type="checkbox" name="ask_admin" value="1" style="width:auto"
+              <?= (!isset($f['ask_admin']) || !empty($f['ask_admin'])) ? 'checked' : '' ?>>
+            بعد از سفارش، ربات باید ادمینِ کانالِ مشتری بشه (برای بوست/گیفت لازم نیست، خاموشش کن)</label></div>
         </div>
 
-        <div style="margin-top:16px"><label>⚡️ سرعت‌ها</label>
+        <details style="margin-top:14px">
+          <summary style="cursor:pointer;font-weight:500;color:#4a5568">✏️ متن‌های مخصوصِ این محصول (خالی = متنِ عمومیِ ربات)</summary>
+          <div class="note" style="margin-top:8px">
+            برای محصولی مثل «بوست تلگرام» که با ممبرگیریِ عادی فرق داره، این‌جا می‌تونی برای همین
+            یکی متنِ سوال‌ها رو عوض کنی — بقیه‌ی محصولات دست‌نخورده با متنِ عمومی کار می‌کنن.
+            متغیرها دقیقاً مثل متن‌های عمومیِ همینا: <code>{min} {max}</code> (تعداد)،
+            <code>{rate}</code> (نرخ)، <code>{link} {qty} {product} {speed} {per_day} {eta} {per} {total} {currency}</code> (فاکتور).
+          </div>
+          <?php
+            $ftLbl = [
+              'flow_link' => '🔗 سوالِ لینک/مقصد', 'flow_link_bad' => '🔗 لینکِ نامعتبر',
+              'flow_qty'  => '👥 سوالِ تعداد', 'flow_qty_bad' => '👥 تعدادِ نامعتبر',
+              'flow_speed' => '⚡️ سوالِ سرعت/پلن', 'flow_rate' => '💰 نمایشِ نرخ',
+              'flow_invoice' => '📋 متنِ فاکتورِ نهایی',
+            ];
+            $ft = (array)($sb['flow_texts'] ?? []);
+          ?>
+          <?php foreach ($ftLbl as $fk => $fl): ?>
+            <div style="margin-top:10px"><label><?= h($fl) ?></label>
+              <textarea name="flow_texts[<?= h($fk) ?>]" rows="3" style="direction:rtl"><?= h($ft[$fk] ?? '') ?></textarea></div>
+          <?php endforeach; ?>
+        </details>
+
+        <div style="margin-top:16px"><label>⚡️ سرعت‌ها / پلن‌ها</label>
           <table style="margin-top:6px">
             <tr><th>ایموجی</th><th>متن دکمه</th><th>ضریب</th><th>نفر در روز</th>
                 <th>قیمت هر <?= number_format((int)$f['per']) ?></th><th>رنگ</th><th>روشن</th></tr>
