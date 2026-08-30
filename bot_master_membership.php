@@ -964,6 +964,16 @@ function defaultConfig() {
             'usdt' => '', 'trx' => '', 'card' => '', 'card_name' => '',
         ],
 
+        // 🤖 پنلِ استاندارد SMM (فروشنده‌ی ممبر/فالوور و مشابه) — با
+        // key + action=add/status روی همه‌ی این پنل‌ها یک شکل کار می‌کند.
+        // فقط باید هر محصول به یک service id از این پنل وصل شود.
+        'smm' => [
+            'on'      => false,
+            'base'    => '',   // مثل https://panel.com/api/v2
+            'key'     => '',
+            'timeout' => 15,
+        ],
+
         // پیش‌فرض ربات‌های اپلودر — روی هر ربات جدید اعمال می‌شود
         'uploader' => [
             'delete_seconds'  => 30,
@@ -1582,6 +1592,108 @@ function reportMutate($pid, callable $fn) {
     });
 }
 
+// ============================================================
+// 🤖 اتصالِ خودکار به پنلِ SMM (فروشنده‌ی ممبر/فالوور و مشابه)
+// ============================================================
+//
+// تقریبا همه‌ی این پنل‌ها یک قرارداد دارند: یک آدرس API، یک کلید، و
+// action=add/status/balance با فرم پارامترهای یکسان. پس یک اتصال‌دهنده
+// برای همه‌شان کافی است — فقط هر محصول باید بداند سرویسِ چندم آن پنل
+// را می‌خرد (service id).
+
+/** فراخوانیِ پنل — همیشه POST با key+action، همان قراردادِ استاندارد */
+function smmCall($action, array $params = []) {
+    if (function_exists('__smmHook')) return __smmHook($action, $params);
+
+    $c = cfg()['smm'];
+    if (empty($c['on'])) return [false, null, 'اتصال به پنل SMM خاموش است.'];
+    $base = trim((string)$c['base']);
+    $key  = trim((string)$c['key']);
+    if ($base === '' || $key === '') return [false, null, 'آدرس یا کلیدِ پنل هنوز ست نشده.'];
+
+    $post = array_merge(['key' => $key, 'action' => $action], $params);
+    $ch = curl_init($base);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query($post),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => max(5, (int)$c['timeout']),
+        CURLOPT_CONNECTTIMEOUT => 8,
+    ]);
+    $res = curl_exec($ch);
+    $err = curl_error($ch);
+    curl_close($ch);
+
+    if ($res === false) return [false, null, 'curl: ' . $err];
+    $j = json_decode((string)$res, true);
+    if (!is_array($j)) return [false, null, 'پاسخِ نامعتبر از پنل'];
+    if (!empty($j['error'])) return [false, $j, (string)$j['error']];
+    return [true, $j, ''];
+}
+
+/** service id ای که این محصول به آن وصل است — خالی یعنی وصل نیست، دستی می‌ماند */
+function productSmmService($product) { return trim((string)($product['smm_service'] ?? '')); }
+
+/** روی هر دو نوع محصول کار می‌کند: محصولِ ساده و دکمه‌ی زیرمجموعه (btn:) */
+function productSetSmmService($pid, $serviceId) {
+    $serviceId = trim((string)$serviceId);
+    if ($bs = parseSubProductId($pid)) {
+        subMutate($bs[0], $bs[1], function (&$x) use ($serviceId) { $x['smm_service'] = $serviceId; });
+        return;
+    }
+    mutate('products', function (&$a) use ($pid, $serviceId) {
+        if (isset($a[$pid])) $a[$pid]['smm_service'] = $serviceId;
+    });
+}
+
+/**
+ * 🤖 بعد از تاییدِ سفارش صدا زده می‌شود. اگر این محصول به یک سرویسِ
+ * پنل وصل باشد، خودِ ربات سفارشِ ممبر را همان‌جا ثبت می‌کند — دیگر
+ * ادمین لازم نیست دستی برود لینک و تعداد را کپی کند.
+ *
+ * نتیجه (موفق یا نه) روی خودِ سفارش هم نوشته می‌شود تا در گزارش‌ها و
+ * پنل دیده شود؛ شکست، سفارش را رد نمی‌کند — فقط به ادمین خبر می‌دهد
+ * تا دستی پیگیری کند.
+ */
+function smmAutoFulfill($order, $product) {
+    $sid = productSmmService($product);
+    if ($sid === '') return;                         // این محصول به پنلی وصل نشده
+    if (empty(cfg()['smm']['on'])) return;
+
+    $meta = $order['meta'] ?? [];
+    $link = trim((string)($meta['link'] ?? ''));
+    $qty  = (int)($meta['qty'] ?? 0);
+    if ($link === '' || $qty <= 0) return;            // این سفارش لینک/تعداد نداشت
+
+    [$ok, $res, $err] = smmCall('add', ['service' => $sid, 'link' => $link, 'quantity' => $qty]);
+    $panelOrderId = $ok ? trim((string)($res['order'] ?? '')) : '';
+
+    mutate('orders', function (&$a) use ($order, $ok, $panelOrderId, $err) {
+        if (!isset($a[$order['id']])) return;
+        $a[$order['id']]['smm'] = [
+            'sent_at' => nowStr(), 'ok' => $ok,
+            'order_id' => $panelOrderId, 'error' => $ok ? '' : $err,
+        ];
+    });
+
+    if (!$ok) {
+        adminAlertOnce('smm_fail_' . substr(md5($order['id'] . $err), 0, 10),
+            "🤖 <b>سفارشِ خودکارِ ممبر در پنل ثبت نشد</b>\n\n" .
+            "سفارش: <code>" . h($order['id']) . "</code>\n" .
+            "لینک: " . h($link) . "\n" .
+            "تعداد: " . number_format($qty) . "\n" .
+            "خطا: <code>" . h($err) . "</code>\n\n" .
+            "این یکی را دستی توی پنلت ثبت کن.");
+    }
+}
+
+/** بررسیِ وضعیتِ سفارشی که قبلا خودکار در پنل ثبت شده */
+function smmCheckStatus($order) {
+    $sid = trim((string)($order['smm']['order_id'] ?? ''));
+    if ($sid === '') return [false, null, 'این سفارش هنوز در پنل ثبت نشده.'];
+    return smmCall('status', ['order' => $sid]);
+}
+
 /**
  * 🔘 خودِ دکمه شیشه‌ای = محصول
  * هیچ رکورد محصولی لازم نیست؛ قیمت و جریان روی خود دکمه ذخیره می‌شود.
@@ -1621,6 +1733,7 @@ function subProduct($bid, $sid, $sub = null) {
         'order'     => (int)($sub['order'] ?? 99),
         'flow'      => $flow,
         'report'    => $sub['report'] ?? [],
+        'smm_service' => (string)($sub['smm_service'] ?? ''),
         'active'    => !empty($sub['on']),
         'virtual'   => true,
         'btn'       => [$bid, $sid],
@@ -1796,6 +1909,7 @@ class Order
         Product::addBuyer($p['id'], $o['user_id']);
         payReferralCommission($o['user_id'], $o['amount']);
         campaignFromOrder($o);   // 🎯 کانال مشتری خودکار در ربات‌های اپلودر قفل می‌شود
+        smmAutoFulfill($o, $p);  // 🤖 اگر محصول به پنل ممبر وصل است، همان‌جا سفارش ثبت می‌شود
         return [true, $o];
     }
 

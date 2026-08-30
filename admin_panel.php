@@ -545,8 +545,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $all[$id]['icon']      = trim($post['icon'] ?? '');
             $all[$id]['row']       = max(0, (int)($post['row'] ?? 0));
             $all[$id]['order']     = max(1, (int)($post['order'] ?? 99));
+            $all[$id]['smm_service'] = trim($post['smm_service'] ?? '');
         });
         go('محصول به‌روزرسانی شد.');
+    }
+
+    // ---- اتصال به پنل SMM (فروشنده‌ی ممبر/فالوور) ----
+    if ($a === 'save_smm') {
+        $base = rtrim(trim($_POST['smm_base'] ?? ''), '/');
+        $key  = trim($_POST['smm_key'] ?? '');
+        if ($base !== '' && !preg_match('#^https://#i', $base)) go('آدرس پنل باید با https شروع شود.', 'err');
+        cfgSet(function (&$c) use ($base, $key) {
+            if (!is_array($c['smm'] ?? null)) $c['smm'] = [];
+            $c['smm']['base']    = $base;
+            $c['smm']['key']     = $key;
+            $c['smm']['timeout'] = max(5, (int)($_POST['smm_timeout'] ?? 15));
+            $c['smm']['on']      = !empty($_POST['smm_on']);
+        });
+        go('اتصال پنل ممبر ذخیره شد.');
     }
 
     // ---- قیمت‌گذاری دکمه‌های فروش (خودِ دکمه = محصول) ----
@@ -572,6 +588,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $x['price']    = (float)$price;
             $x['currency'] = $cur !== '' ? $cur : 'تومان';
             $x['desc']     = $desc;
+            $x['smm_service'] = trim($post['smm_service'] ?? '');
             if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
             $x['flow'] = array_merge(defaultFlow(), $x['flow'], ['on' => true, 'ask_admin' => true]);
             $x['flow']['min'] = $min;
@@ -1209,6 +1226,33 @@ foreach ($tabs as $k => $l): ?>
 
 <?php // ================= محصولات ================= ?>
 <?php elseif ($tab === 'products'): ?>
+  <?php $SM = cfg()['smm'] ?? []; ?>
+  <div class="card"><h2>🤖 اتصال به پنلِ ممبر (SMM) <?= !empty($SM['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?></h2><div class="body">
+    <div class="note">
+      پنلی که ازش ممبر/فالوور می‌خری معمولا یک API استاندارد دارد: آدرس + کلید،
+      و <code>action=add</code> برای ثبت سفارش. اینجا یک‌بار وصلش کن، بعد پایین برای هر
+      محصول (یا هر دکمه‌ی «ممبر») سرویسِ همان پنل را انتخاب کن — از آن به بعد،
+      با تاییدِ هر سفارش خودش می‌رود آنجا ثبت می‌کند.
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
+      <input type="hidden" name="action" value="save_smm">
+      <div class="grid2">
+        <div><label>آدرس API پنل</label>
+          <input name="smm_base" value="<?= h($SM['base'] ?? '') ?>" placeholder="https://panel.com/api/v2" style="direction:ltr"></div>
+        <div><label>کلید API</label>
+          <input name="smm_key" value="<?= h($SM['key'] ?? '') ?>" placeholder="کلیدِ حساب شما در آن پنل" style="direction:ltr"></div>
+        <div><label>تایم‌اوت (ثانیه)</label>
+          <input name="smm_timeout" type="number" min="5" value="<?= (int)($SM['timeout'] ?? 15) ?>" style="direction:ltr"></div>
+      </div>
+      <div style="margin-top:12px">
+        <label style="font-weight:500"><input type="checkbox" name="smm_on" style="width:auto"
+          <?= !empty($SM['on']) ? 'checked' : '' ?>> اتصال روشن باشد</label>
+      </div>
+      <div style="margin-top:14px"><button class="btn g">ذخیره اتصال</button></div>
+    </form>
+  </div></div>
+
   <?php $TF = cfg()['tariff'] ?? []; ?>
   <div class="card"><h2>📋 لیست تعرفه‌ها <?= !empty($TF['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?></h2><div class="body">
     <div class="note">
@@ -1335,6 +1379,8 @@ foreach ($tabs as $k => $l): ?>
             <input name="max" type="number" min="2" value="<?= (int)$f['max'] ?>" style="direction:ltr"></div>
           <div><label>توضیح کوتاه (اختیاری)</label>
             <input name="desc" value="<?= h($sb['desc'] ?? '') ?>" placeholder="تحویل تدریجی"></div>
+          <div><label>🤖 سرویسِ پنلِ SMM (خالی = دستی می‌ماند)</label>
+            <input name="smm_service" value="<?= h($sb['smm_service'] ?? '') ?>" placeholder="مثلا 1234" style="direction:ltr"></div>
         </div>
 
         <div style="margin-top:16px"><label>⚡️ سرعت‌ها</label>
@@ -1433,7 +1479,9 @@ foreach ($tabs as $k => $l): ?>
             <textarea name="rtext" rows="7" style="direction:rtl"><?= h($rp['text']) ?></textarea>
             <div class="muted" style="margin-top:6px">
               متغیرها: <code>{product} {emoji} {qty} {speed} {per_day} {eta} {amount} {currency}
-              {code} {link} {channel} {user} {user_id} {date} {delivered}</code><br>
+              {code} {link} {channel} {user} {user_id} {user_id_masked} {date} {delivered}</code><br>
+              💡 <code>{user_id_masked}</code> آیدیِ عددیِ خریدار را با چند رقمِ وسط مخفی نشان می‌دهد
+              (مثلا <code>821••••584</code>) — به‌جای یوزرنیم، برای گزارش‌های داخلی مناسب‌تر است.<br>
               HTML مجاز است: <code>&lt;b&gt;</code> <code>&lt;i&gt;</code> <code>&lt;code&gt;</code>
               <code>&lt;blockquote&gt;</code> <code>&lt;blockquote expandable&gt;</code><br>
               ✨ برای <b>ایموجی پریمیوم</b> و نقل‌قول آماده، متن را داخل ربات بنویسید:
@@ -1578,6 +1626,8 @@ foreach ($tabs as $k => $l): ?>
             <option value="<?= h($bb['id']) ?>" <?= ($p['bot_id'] ?? '') === $bb['id'] ? 'selected' : '' ?>>@<?= h($bb['username']) ?></option>
           <?php endforeach; ?></select></div>
         <div><label>کد لینک محتوا</label><input name="link_code" value="<?= h($p['link_code'] ?? '') ?>"></div>
+        <div><label>🤖 سرویسِ پنلِ SMM (خالی = دستی می‌ماند)</label>
+          <input name="smm_service" value="<?= h($p['smm_service'] ?? '') ?>" placeholder="مثلا 1234" style="direction:ltr"></div>
       </div>
       <div style="margin-top:14px"><button class="btn g">ذخیره</button></div>
     </form>
