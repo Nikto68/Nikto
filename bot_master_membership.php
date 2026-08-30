@@ -1778,11 +1778,16 @@ function subProduct($bid, $sid, $sub = null) {
         if ($auto !== null) $rawPrice = $auto;
     }
 
+    $saleCat = trim((string)($sub['sale_cat'] ?? ''));
+    $pfSec   = in_array($saleCat, ['fake_member', 'boost'], true) ? $saleCat : 'member';
+
     return [
         'id'        => subProductId($bid, $sid),
         'name'      => trim((string)($sub['text'] ?? 'محصول')),
         'desc'      => (string)($sub['desc'] ?? ''),
-        'price'      => round(pfApply('member', $rawPrice), 2),
+        // 🎯 ممبر فیک/بوست اگر سودِ جداگانه نداشته باشند، از «ممبر» عادی
+        // پیروی می‌کنند نه مستقیم از سودِ عمومی
+        'price'      => round(pfApply($pfSec, $rawPrice, 'member'), 2),
         'price_base' => $rawPrice,
         'currency'  => (string)($sub['currency'] ?? (cfg()['currency'] ?? 'تومان')),
         'limit'     => (int)($sub['limit'] ?? 0),
@@ -1798,6 +1803,7 @@ function subProduct($bid, $sid, $sub = null) {
         'report'    => $sub['report'] ?? [],
         'smm_service' => (string)($sub['smm_service'] ?? ''),
         'smm_auto_price' => !empty($sub['smm_auto_price']),
+        'sale_cat'  => $saleCat,
         'active'    => !empty($sub['on']),
         'virtual'   => true,
         'btn'       => [$bid, $sid],

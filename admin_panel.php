@@ -547,6 +547,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $all[$id]['order']     = max(1, (int)($post['order'] ?? 99));
             $all[$id]['smm_service'] = trim($post['smm_service'] ?? '');
             $all[$id]['smm_auto_price'] = !empty($post['smm_auto_price']);
+            $all[$id]['sale_cat'] = in_array($post['sale_cat'] ?? '', ['fake_member', 'boost'], true) ? $post['sale_cat'] : '';
         });
         go('محصول به‌روزرسانی شد.');
     }
@@ -573,7 +574,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c['on']  = !empty($_POST['pf_on']);
             $c['all'] = ['mode' => ($_POST['pf_all_mode'] ?? 'pct') === 'fixed' ? 'fixed' : 'pct',
                          'v' => $numOnly('pf_all_v')];
-            foreach (['member', 'ma'] as $sec) {
+            foreach (['member', 'ma', 'fake_member', 'boost'] as $sec) {
                 $mode = $_POST['pf_' . $sec . '_mode'] ?? 'off';
                 if ($mode === 'off') { $c[$sec] = ['mode' => null, 'v' => null]; continue; }
                 $c[$sec] = ['mode' => $mode === 'fixed' ? 'fixed' : 'pct', 'v' => $numOnly('pf_' . $sec . '_v')];
@@ -581,6 +582,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         });
         if (function_exists('numSet')) numSet(function (&$c) use ($numOnly) { $c['markup'] = $numOnly('num_markup'); });
         if (function_exists('pxSet'))  pxSet(function (&$c) use ($numOnly)  { $c['margin'] = $numOnly('px_margin'); });
+        // 🎁⭐️💎🪙 چهار دسته‌ی مینی‌اپ — همان زیرساختِ axCfg()['pricing']['margin'] که از قبل هست
+        if (function_exists('axSet')) {
+            axSet(function (&$c) use ($numOnly) {
+                foreach (['c_gift', 'c_star', 'c_prem', 'c_coin'] as $cat) {
+                    $mode = $_POST['pf_' . $cat . '_mode'] ?? 'off';
+                    if (!is_array($c['pricing']['margin'] ?? null)) $c['pricing']['margin'] = [];
+                    if ($mode === 'off') { unset($c['pricing']['margin'][$cat]); continue; }
+                    $c['pricing']['margin'][$cat] = ['mode' => $mode === 'fixed' ? 'fixed' : 'pct',
+                                                      'v' => $numOnly('pf_' . $cat . '_v')];
+                }
+            });
+        }
         go('تنظیمات سود ذخیره شد.');
     }
     if ($a === 'profit_every') {
@@ -630,6 +643,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $x['desc']     = $desc;
             $x['smm_service'] = trim($post['smm_service'] ?? '');
             $x['smm_auto_price'] = !empty($post['smm_auto_price']);
+            $x['sale_cat'] = in_array($post['sale_cat'] ?? '', ['fake_member', 'boost'], true) ? $post['sale_cat'] : '';
             if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
             $x['flow'] = array_merge(defaultFlow(), $x['flow'], ['on' => true, 'ask_admin' => true]);
             $x['flow']['min'] = $min;
@@ -1070,6 +1084,15 @@ function smmServiceField($current, $autoOn = false) {
          'پنل و تتر و سودِ تنظیم‌شده در تب سود حساب می‌شود.</small>';
 }
 
+/** این محصول برای محاسبه‌ی سود، دسته‌اش چیه — تا تبِ «سود» بشناستش و جدا حسابش کند */
+function saleCatField($current) {
+    $opts = ['' => '🎯 ممبر (پیش‌فرض)', 'fake_member' => '👤 ممبر فیک', 'boost' => '🚀 بوست'];
+    echo '<select name="sale_cat">';
+    foreach ($opts as $v => $l)
+        echo '<option value="' . h($v) . '"' . ($current === $v ? ' selected' : '') . '>' . h($l) . '</option>';
+    echo '</select>';
+}
+
 function uLabel($users, $id) {
     $u = $users[(string)$id] ?? null;
     if ($u && !empty($u['username']))   return '@' . $u['username'];
@@ -1473,6 +1496,7 @@ foreach ($tabs as $k => $l): ?>
             <input name="max" type="number" min="2" value="<?= (int)$f['max'] ?>" style="direction:ltr"></div>
           <div><label>توضیح کوتاه (اختیاری)</label>
             <input name="desc" value="<?= h($sb['desc'] ?? '') ?>" placeholder="تحویل تدریجی"></div>
+          <div><label>📂 دسته‌بندیِ سود</label><?php saleCatField((string)($sb['sale_cat'] ?? '')); ?></div>
           <div><label>🤖 سرویسِ پنلِ SMM (خالی = دستی می‌ماند)</label>
             <?php smmServiceField((string)($sb['smm_service'] ?? ''), !empty($sb['smm_auto_price'])); ?></div>
         </div>
@@ -1749,6 +1773,7 @@ foreach ($tabs as $k => $l): ?>
             <option value="<?= h($bb['id']) ?>" <?= ($p['bot_id'] ?? '') === $bb['id'] ? 'selected' : '' ?>>@<?= h($bb['username']) ?></option>
           <?php endforeach; ?></select></div>
         <div><label>کد لینک محتوا</label><input name="link_code" value="<?= h($p['link_code'] ?? '') ?>"></div>
+        <div><label>📂 دسته‌بندیِ سود</label><?php saleCatField((string)($p['sale_cat'] ?? '')); ?></div>
         <div><label>🤖 سرویسِ پنلِ SMM (خالی = دستی می‌ماند)</label>
           <?php smmServiceField((string)($p['smm_service'] ?? ''), !empty($p['smm_auto_price'])); ?></div>
       </div>
@@ -1777,14 +1802,19 @@ foreach ($tabs as $k => $l): ?>
 <?php // ================= سود ================= ?>
 <?php elseif ($tab === 'profit'): ?>
   <?php
-    $PF = function_exists('pfCfg') ? pfCfg() : ['on' => false, 'all' => ['mode' => 'pct', 'v' => 0], 'member' => ['mode' => null, 'v' => null], 'ma' => ['mode' => null, 'v' => null]];
-    $secLbl = ['member' => '🎯 خرید ممبر (ممبر فیک، بوست، ممبر اخلاقی)', 'ma' => '🚀 مینی‌اپ‌ها (خدمات مجازی)'];
+    $PF = function_exists('pfCfg') ? pfCfg() : ['on' => false, 'all' => ['mode' => 'pct', 'v' => 0]];
+    $AXM = function_exists('axCfg') ? (axCfg()['pricing']['margin'] ?? []) : [];
+    $modeSel = function ($cur, $followLbl) { ?>
+      <option value="off" <?= empty($cur) ? 'selected' : '' ?>>⚪️ <?= h($followLbl) ?></option>
+      <option value="pct" <?= ($cur ?? '') === 'pct' ? 'selected' : '' ?>>📊 درصدِ جدا</option>
+      <option value="fixed" <?= ($cur ?? '') === 'fixed' ? 'selected' : '' ?>>💰 تومانِ ثابتِ جدا</option>
+    <?php };
   ?>
   <div class="card"><h2>📈 سود — وضعیتِ کلی <?= !empty($PF['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?></h2><div class="body">
     <div class="note">
-      یک‌جا برای همه‌ی جاهایی که سود روی قیمت می‌نشیند: خرید ممبر (فیک، بوست، اخلاقی —
-      هرکدوم دکمه‌ی خودشو داره ولی همه از همین سود پیروی می‌کنن مگه اینکه پایین‌تر
-      عددِ جدا براش بذاری)، مینی‌اپ‌ها، شماره مجازی، و قیمت‌گیریِ ارز.
+      هر بخش جدا از بقیه تنظیم می‌شه: ممبر فیک، بوست، شماره مجازی، ترون‌وتون، پریمیوم، استارز، گیفت —
+      هرکدوم اگه عددِ خودشو نداشته باشه، از دسته‌ی مادرش (ممبر/مینی‌اپ‌ها) پیروی می‌کنه،
+      و اگه اونم نداشته باشه، از سودِ عمومیِ پایین.
     </div>
     <form method="post">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="profit">
@@ -1794,7 +1824,7 @@ foreach ($tabs as $k => $l): ?>
           <?= !empty($PF['on']) ? 'checked' : '' ?>> سود روشن باشد
           (تا روشن نشه، هیچ‌کدوم از بخش‌های زیر روی قیمت اثر نمی‌ذارن)</label>
       </div>
-      <h3 style="font-size:13.5px;margin:14px 0 9px">📊 سودِ عمومی — هرجا عددِ جدا نذاری، همین می‌شینه</h3>
+      <h3 style="font-size:13.5px;margin:14px 0 9px">📊 سودِ عمومی — آخرین ته‌چاه، هرجا هیچ عددِ جدا نبود همین می‌شینه</h3>
       <div class="grid2">
         <div><label>نوع</label><select name="pf_all_mode">
           <option value="pct" <?= ($PF['all']['mode'] ?? 'pct') === 'pct' ? 'selected' : '' ?>>📊 درصد</option>
@@ -1804,24 +1834,54 @@ foreach ($tabs as $k => $l): ?>
           <input name="pf_all_v" value="<?= h(fmtNum((float)($PF['all']['v'] ?? 0))) ?>" style="direction:ltr"></div>
       </div>
 
-      <?php foreach (['member', 'ma'] as $sec): $s = $PF[$sec] ?? ['mode' => null, 'v' => null]; ?>
-      <h3 style="font-size:13.5px;margin:18px 0 9px"><?= $secLbl[$sec] ?></h3>
+      <h3 style="font-size:13.5px;margin:18px 0 9px;color:#718096">— زیرِ اینا هرکدوم بخشِ جداگانه دارن، پایین‌تر —</h3>
+      <div class="grid2">
+        <div><label>🎯 پیش‌فرضِ خانواده‌ی «ممبر» (وقتی فیک/بوست خودشون عدد ندارن)</label>
+          <select name="pf_member_mode"><?php $modeSel($PF['member']['mode'] ?? null, 'از سودِ عمومی پیروی کند'); ?></select></div>
+        <div><label>مقدار</label>
+          <input name="pf_member_v" value="<?= h(fmtNum((float)($PF['member']['v'] ?? 0))) ?>" style="direction:ltr"></div>
+        <div><label>🚀 پیش‌فرضِ خانواده‌ی «مینی‌اپ‌ها» (وقتی گیفت/استارز/پریمیوم/ترون‌وتون خودشون عدد ندارن)</label>
+          <select name="pf_ma_mode"><?php $modeSel($PF['ma']['mode'] ?? null, 'از سودِ عمومی پیروی کند'); ?></select></div>
+        <div><label>مقدار</label>
+          <input name="pf_ma_v" value="<?= h(fmtNum((float)($PF['ma']['v'] ?? 0))) ?>" style="direction:ltr"></div>
+      </div>
+
+      <?php
+        $memberCats = ['fake_member' => '👤 ممبر فیک', 'boost' => '🚀 بوست'];
+        foreach ($memberCats as $sec => $lbl): $s = $PF[$sec] ?? ['mode' => null, 'v' => null]; ?>
+      <h3 style="font-size:13.5px;margin:18px 0 9px"><?= $lbl ?></h3>
       <div class="grid2">
         <div><label>نوع</label><select name="pf_<?= $sec ?>_mode">
-          <option value="off" <?= empty($s['mode']) ? 'selected' : '' ?>>⚪️ از سودِ عمومی پیروی کند</option>
-          <option value="pct" <?= ($s['mode'] ?? '') === 'pct' ? 'selected' : '' ?>>📊 درصدِ جدا</option>
-          <option value="fixed" <?= ($s['mode'] ?? '') === 'fixed' ? 'selected' : '' ?>>💰 تومانِ ثابتِ جدا</option>
+          <?php $modeSel($s['mode'] ?? null, 'از «خرید ممبر» پیروی کند'); ?>
         </select></div>
         <div><label>مقدار (اگه «جدا» انتخاب شد)</label>
           <input name="pf_<?= $sec ?>_v" value="<?= h(fmtNum((float)($s['v'] ?? 0))) ?>" style="direction:ltr"></div>
       </div>
       <?php endforeach; ?>
 
-      <h3 style="font-size:13.5px;margin:18px 0 9px">☎️ شماره مجازی / 💹 قیمت‌گیریِ ارز — این دوتا فقط درصد می‌شناسن</h3>
+      <h3 style="font-size:13.5px;margin:18px 0 9px">☎️ شماره مجازی — فقط درصد</h3>
       <div class="grid2">
-        <div><label>☎️ درصدِ سودِ شماره مجازی</label>
+        <div><label>درصدِ سود</label>
           <input name="num_markup" value="<?= h(fmtNum((float)(function_exists('numVal') ? numVal('markup', 0) : 0))) ?>" style="direction:ltr"></div>
-        <div><label>💹 درصدِ سودِ قیمت‌گیریِ ارز</label>
+      </div>
+
+      <?php
+        $maCats = ['c_coin' => '🪙 خرید ترون و تون', 'c_prem' => '💎 خرید پریمیوم',
+                   'c_star' => '⭐️ خرید استارز', 'c_gift' => '🎁 گیفت'];
+        foreach ($maCats as $cat => $lbl): $m = $AXM[$cat] ?? null; ?>
+      <h3 style="font-size:13.5px;margin:18px 0 9px"><?= $lbl ?></h3>
+      <div class="grid2">
+        <div><label>نوع</label><select name="pf_<?= $cat ?>_mode">
+          <?php $modeSel($m['mode'] ?? null, 'از «مینی‌اپ‌ها» پیروی کند'); ?>
+        </select></div>
+        <div><label>مقدار (اگه «جدا» انتخاب شد)</label>
+          <input name="pf_<?= $cat ?>_v" value="<?= h(fmtNum((float)($m['v'] ?? 0))) ?>" style="direction:ltr"></div>
+      </div>
+      <?php endforeach; ?>
+
+      <h3 style="font-size:13.5px;margin:18px 0 9px">💹 قیمت‌گیریِ ارز — فقط درصد</h3>
+      <div class="grid2">
+        <div><label>درصدِ سود</label>
           <input name="px_margin" value="<?= h(fmtNum((float)(function_exists('pxVal') ? pxVal('margin', 0) : 0))) ?>" style="direction:ltr"></div>
       </div>
 

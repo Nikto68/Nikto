@@ -44,6 +44,9 @@ function pfDefaults() {
         'all'    => ['mode' => 'pct', 'v' => 0.0],   // عمومی
         'member' => ['mode' => null,  'v' => null],  // null یعنی «از عمومی پیروی کن»
         'ma'     => ['mode' => null,  'v' => null],
+        // 🎯 زیرِ «خرید ممبر» — وقتی خالی‌اند از خودِ «member» پیروی می‌کنند
+        'fake_member' => ['mode' => null, 'v' => null],
+        'boost'       => ['mode' => null, 'v' => null],
     ];
 }
 
@@ -80,13 +83,15 @@ function pfSecSet($sec, $mode, $v) {
 
 /**
  * حالت و عددِ مؤثرِ یک بخش — ['mode' => 'pct'|'fixed', 'v' => float]
- * ترتیب: خودِ بخش → عمومی → صفر (خاموش).
+ * ترتیب: خودِ بخش → $parent (اگر بدهید — مثلا «ممبر فیک» زیرِ «ممبر»
+ * است) → عمومی → صفر (خاموش).
  */
-function pfEffective($sec) {
+function pfEffective($sec, $parent = 'all') {
     if (!pfOn()) return ['mode' => 'pct', 'v' => 0.0];
     $own = (array)pfVal($sec, []);
     if (!empty($own['mode']) && $own['v'] !== null && $own['v'] !== '')
         return ['mode' => (string)$own['mode'], 'v' => (float)$own['v']];
+    if ($parent !== null && $parent !== $sec) return pfEffective($parent);
     $all = (array)pfVal('all', []);
     return ['mode' => (string)($all['mode'] ?? 'pct'), 'v' => (float)($all['v'] ?? 0)];
 }
@@ -104,10 +109,10 @@ function pfFixed($sec) {
 }
 
 /** قیمت + سودِ آن بخش — درصد یا تومانِ ثابت، هرکدام که مُدِ مؤثرش باشد */
-function pfApply($sec, $price) {
+function pfApply($sec, $price, $parent = 'all') {
     $p = (float)$price;
     if ($p <= 0) return $p;
-    $e = pfEffective($sec);
+    $e = pfEffective($sec, $parent);
     if ($e['v'] == 0.0) return $p;
     return $e['mode'] === 'fixed' ? ($p + $e['v']) : ($p * (1 + $e['v'] / 100));
 }
@@ -123,6 +128,12 @@ function pfAmountStr($e) {
  * قیمتِ خام زیرِ `price_base` می‌ماند — پنلِ ویرایش همان را نشان
  * می‌دهد، وگرنه هر بار ذخیره، سود روی سود سوار می‌شد.
  */
+/** بخشِ سودی که این محصول باید ازش پیروی کند — «ممبر فیک»/«بوست» جدا، وگرنه «ممبر» عادی */
+function pfProductSection($p) {
+    $cat = trim((string)($p['sale_cat'] ?? ''));
+    return in_array($cat, ['fake_member', 'boost'], true) ? $cat : 'member';
+}
+
 function pfProduct($p) {
     if (!is_array($p)) return $p;
     $base = (float)($p['price'] ?? 0);
@@ -132,7 +143,10 @@ function pfProduct($p) {
         if ($auto !== null) $base = $auto;
     }
     $p['price_base'] = $base;
-    $p['price']      = round(pfApply('member', $base), 2);
+    // 🎯 «ممبر فیک»/«بوست» اگر سودِ جداگانه نداشته باشند از «ممبر» عادی
+    // پیروی می‌کنند، نه مستقیم از سودِ عمومی — تا هرکدام یک قدم جداگانه
+    // برای بی‌خیال‌شدن و برگشتن به دسته‌ی مادرشان داشته باشند.
+    $p['price']      = round(pfApply(pfProductSection($p), $base, 'member'), 2);
     return $p;
 }
 
@@ -154,17 +168,24 @@ function pfRows() {
     return $rows;
 }
 
-/** یک درصد را در هر چهار جا بنشان — شماره مجازی و قیمت‌گیری فقط درصد می‌شناسند */
+/** یک درصد را همه‌جا بنشان — شماره مجازی و قیمت‌گیری فقط درصد می‌شناسند */
 function pfSetAll($pct) {
     $pct = max(0.0, min(1000.0, (float)$pct));
     pfSet(function (&$c) use ($pct) {
-        $c['on']     = true;
-        $c['all']    = ['mode' => 'pct', 'v' => $pct];
-        $c['member'] = ['mode' => null, 'v' => null];      // همه از عمومی پیروی کنند
-        $c['ma']     = ['mode' => null, 'v' => null];
+        $c['on']  = true;
+        $c['all'] = ['mode' => 'pct', 'v' => $pct];
+        // همه از عمومی پیروی کنند — وگرنه سودِ جداگانه‌ی قدیمی‌شان
+        // زیرِ «روی همه بنشان» پنهان می‌ماند و اسمش دروغ می‌شود
+        foreach (['member', 'ma', 'fake_member', 'boost'] as $sec) $c[$sec] = ['mode' => null, 'v' => null];
     });
     if (function_exists('numSet')) numSet(function (&$c) use ($pct) { $c['markup'] = $pct; });
     if (function_exists('pxSet'))  pxSet(function (&$c) use ($pct)  { $c['margin'] = $pct; });
+    if (function_exists('axSet')) {
+        axSet(function (&$c) {
+            if (!is_array($c['pricing']['margin'] ?? null)) $c['pricing']['margin'] = [];
+            foreach (['c_gift', 'c_star', 'c_prem', 'c_coin'] as $cat) unset($c['pricing']['margin'][$cat]);
+        });
+    }
     return $pct;
 }
 
