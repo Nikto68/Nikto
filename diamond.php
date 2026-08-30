@@ -48,6 +48,7 @@ function dmDefaults() {
             'need'  => 3,          // چند نفرِ متفاوت باید تایید کنن
             'secs'  => 3600,       // مدتِ زندان — ثانیه
             'color' => 'danger',   // رنگِ دکمه‌ی تایید
+            'icon'  => '',         // ایموجیِ پریمیومِ کنارِ دکمه‌ی تایید (icon_custom_emoji_id)
         ],
 
         // 🔁 تبدیل الماس به موجودی کیف پول (۰ = خاموش)
@@ -605,8 +606,17 @@ function dmJailWords() {
 function dmJailButtons($need, $data) {
     $color = (string)dmVal('jail.color', 'danger');
     $style = isStyle($color) ? $color : null;
+    $icon  = (string)dmVal('jail.icon', '');
     $btns = [];
-    for ($i = 0; $i < $need; $i++) $btns[] = btnCb(dmT('jail_btn'), $data, null, $style);
+    for ($i = 0; $i < $need; $i++) {
+        $b = btnCb(dmT('jail_btn'), $data, null, $style);
+        // 🌟 ایموجیِ پریمیومِ واقعیِ روی دکمه — این فیلدِ جداگانه‌ی تلگرام
+        // (icon_custom_emoji_id) همان چیزیه که خیلی جای دیگرِ همین ربات
+        // برای ایموجیِ پریمیوم رو دکمه استفاده می‌کنه؛ برخلافِ متنِ دکمه،
+        // اینجا واقعا رندر می‌شود.
+        if ($icon !== '') $b['icon_custom_emoji_id'] = $icon;
+        $btns[] = $b;
+    }
     return array_chunk($btns, 2);
 }
 
@@ -768,17 +778,20 @@ function dmAdminTexts($chatId, $msgId) {
 function dmAdminJail($chatId, $msgId) {
     $j = (array)dmVal('jail', []);
     $color = (string)($j['color'] ?? 'danger');
+    $icon  = trim((string)($j['icon'] ?? ''));
     $t  = "🚨 <b>زندان</b>\n\n";
     $t .= "کسی این کلمه‌ها رو تو گروه بنویسه، به دام می‌افتد؛ اگه به‌اندازه‌ی کافی از اعضا " .
           "تاییدش کنن، برای مدتی نمی‌تواند الماس بزند.\n\n";
     $t .= 'کلمه‌ها: <code>' . h((string)($j['words'] ?? '')) . "</code>\n";
     $t .= 'تعدادِ لازم برای تایید: <b>' . (int)($j['need'] ?? 3) . "</b> نفر\n";
     $t .= 'مدتِ زندان: <b>' . dmDur((int)($j['secs'] ?? 3600)) . "</b>\n";
-    $t .= 'رنگ دکمه‌ی تایید: <b>' . h(styleMap()[$color] ?? styleMap()['danger']) . "</b>";
+    $t .= 'رنگ دکمه‌ی تایید: <b>' . h(styleMap()[$color] ?? styleMap()['danger']) . "</b>\n";
+    $t .= 'ایموجیِ پریمیومِ دکمه: ' . ($icon !== '' ? '<tg-emoji emoji-id="' . h($icon) . '">🌟</tg-emoji> ثبت شده' : '❌ تنظیم نشده');
 
     $rows = [
         [btnCb('💬 کلمه‌ها', 'dmjw', 'admin'), btnCb('👥 تعدادِ تایید', 'dmjn', 'admin')],
         [btnCb('⏳ مدتِ زندان', 'dmjs', 'admin'), btnCb('🎨 رنگ دکمه', 'dmjc', 'admin')],
+        [btnCb('🌟 ایموجیِ پریمیومِ دکمه', 'dmji', 'admin')],
         [btnCb('✏️ متنِ به‌دام‌افتادن', 'dmts_jail_hit', 'admin')],
         [btnCb('✏️ متنِ دکمه‌ی تایید', 'dmts_jail_btn', 'admin')],
         [btnCb(UT('back'), 'dm_home', 'nav')],
@@ -854,6 +867,9 @@ function dmAdminCallback($data, $chatId, $msgId, $cbId) {
         'dmjs'  => ['dm_jsecs',  "⏳ مدتِ زندان چقدر باشد؟\n\n" .
                                  "مثال: <code>1 ساعت</code>\n" .
                                  "عددِ تنها ثانیه حساب می‌شود: <code>3600</code>"],
+        'dmji'  => ['dm_jicon',  "🌟 ایموجیِ پریمیومِ دکمه‌ی تایید را بفرستید.\n\n" .
+                                 "یک پیام حاوی همان ایموجی بفرستید، یا کد عددی‌اش را.\n" .
+                                 "برای برداشتن، یک خط تیره <code>-</code> بفرستید."],
     ];
     if (isset($asks[$data])) {
         [$act, $ask] = $asks[$data];
@@ -1072,6 +1088,16 @@ function dmStateHandle($action, $msg, $uid, $chatId) {
             return true;
         }
         return $done('✅ مدتِ زندان: <b>' . dmDur($sec) . '</b>');
+    }
+    if ($action === 'dm_jicon') {
+        $ids = function_exists('customEmojiIds') ? customEmojiIds($msg) : [];
+        $dash = ($text === '-' || $text === '—');
+        $v = $ids ? (string)$ids[0] : ($dash ? '' : preg_replace('/\D/', '', norm_fa_digits($text)));
+        if (!$dash && $v === '')
+            return $bad("ایموجی پیدا نشد. یک پیام با همان ایموجی بفرستید، یا کد عددی‌اش را.\n" .
+                        "برای برداشتنش خط تیره بفرستید.");
+        dmSet(function (&$c) use ($v) { $c['jail']['icon'] = $v; });
+        return $done($v === '' ? '✅ حذف شد.' : '✅ ثبت شد.');
     }
     if ($action === 'dm_step') {
         if ($num < 10 || $num > 100000000) return $bad('بین ۱۰ تا ۱۰۰٬۰۰۰٬۰۰۰.');

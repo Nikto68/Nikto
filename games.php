@@ -346,6 +346,26 @@ function gmColorName($k)  { return (string)(gmPalette()[$k]['n'] ?? ''); }
 function gmColorStyle($k) { return (string)(gmPalette()[$k]['s'] ?? 'primary'); }
 
 /**
+ * ایموجیِ پریمیومِ هر رنگ — خانه‌های صفحه‌ی دوز دکمه‌ی شیشه‌ای‌اند، و
+ * تلگرام روی متنِ دکمه هیچ فرمتی قبول نمی‌کند؛ ولی یک فیلدِ جداگانه
+ * (icon_custom_emoji_id) هست که واقعا رو دکمه یک ایموجیِ پریمیوم نشان
+ * می‌دهد — دقیقا همان چیزی که در بقیه‌ی جای ربات (گزارش‌ها، جریان‌ها،
+ * زندان) استفاده شده. اینجا هم همان‌طور.
+ */
+function gmColorIcons() {
+    $d = [
+        'red' => '5411225014148014586', 'blue' => '', 'green' => '5416081784641168838',
+        'yellow' => '', 'purple' => '', 'orange' => '', 'brown' => '', 'black' => '', 'white' => '',
+    ];
+    foreach ((array)gmVal('color_icons', []) as $k => $v) {
+        $k = (string)$k;
+        if (isset($d[$k]) && (ctype_digit((string)$v) || $v === '')) $d[$k] = (string)$v;
+    }
+    return $d;
+}
+function gmColorIcon($k) { return (string)(gmColorIcons()[$k] ?? ''); }
+
+/**
  * رنگِ یک بازیکن داخلِ یک بازی.
  *
  * ⚠️ اگر دو حریف اتفاقا یک رنگ داشته باشند، صفحه‌ی دوز بی‌معنی می‌شود.
@@ -560,7 +580,11 @@ function gmKb($g) {
             $v = (int)$g['board'][$i];
             $b = ['text' => $v === 0 ? '·' : gmColorEmoji($col[$v] ?? ''),
                   'callback_data' => 'gmm_' . $g['id'] . '_' . $i];
-            if ($v !== 0) $b['style'] = gmColorStyle($col[$v] ?? '');
+            if ($v !== 0) {
+                $b['style'] = gmColorStyle($col[$v] ?? '');
+                $ic = gmColorIcon($col[$v] ?? '');
+                if ($ic !== '') $b['icon_custom_emoji_id'] = $ic;
+            }
             $line[] = $b;
         }
         $rows[] = $line;
@@ -1137,6 +1161,7 @@ function gmAdminHome($chatId, $msgId = null) {
         [btnCb('🗣 کلمه‌ها', 'gmaw_home', 'admin'), btnCb('✏️ متن‌ها', 'gmat_home', 'admin')],
         [btnCb('🔢 ایموجی عددها', 'gmadig', 'admin'),
          btnCb(!empty(gmVal('duel_board')) ? '⭕ چالش: صفحه دوز' : '⚡ چالش: نتیجه‌ی فوری', 'gmaduel', 'info')],
+        [btnCb('🎨 ایموجیِ رنگ‌های دوز', 'gmacolors', 'admin')],
         [btnCb('🔢 سقف بازی باز: ' . gmNum((int)gmVal('open_max', 2)), 'gmaopen', 'admin'),
          btnCb('⏰ مهلت بی‌حریف: ' . gmNum((int)gmVal('expire', 180)) . 'ث', 'gmaexp', 'admin')],
         [btnCb('🧹 بستن بازی‌های باز', 'gmaclose', 'danger')],
@@ -1168,6 +1193,22 @@ function gmAdminDigits($chatId, $msgId) {
     foreach ($ids as $d => $v) if ($v === '') $miss[] = $d;
     if ($miss) $t .= '⬜️ بدون ایموجی (ساده نوشته می‌شود): <b>' . implode('، ', $miss) . "</b>\n";
 
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+/** 🎨 صفحه‌ی ایموجیِ پریمیومِ رنگ‌های صفحه‌ی دوز */
+function gmAdminColors($chatId, $msgId) {
+    $ics = gmColorIcons();
+    $t  = "🎨 <b>ایموجیِ رنگ‌های دوز</b>\n\n";
+    $t .= "هر بازیکن یک رنگِ ثابت دارد؛ خانه‌ای که می‌زند با همان رنگ نشان داده می‌شود.\n";
+    $t .= "روی هرکدام بزنید تا برایش ایموجیِ پریمیوم بگذارید — بدونِ ایموجی، همان دایره‌ی رنگیِ ساده می‌ماند.\n\n";
+    $rows = [];
+    foreach (gmPalette() as $k => $p) {
+        $has = ($ics[$k] ?? '') !== '';
+        $t .= gmColorEmoji($k) . ' <b>' . h($p['n']) . '</b>: ' . ($has ? '✅ پریمیوم دارد' : '⬜️ ساده') . "\n";
+        $rows[] = [btnCb(gmColorEmoji($k) . ' ' . $p['n'] . ($has ? ' ✅' : ''), 'gmac_' . $k, $has ? 'admin' : 'info')];
+    }
+    $rows[] = [btnCb(UT('back'), 'gm_home', 'nav')];
     editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
 }
 
@@ -1293,6 +1334,19 @@ function gmAdminCallback($data, $chatId, $msgId, $cbId) {
             inlineKb([[btnUI('cancel', 'gmadig', 'cancel')]]));
         return true;
     }
+    if ($data === 'gmacolors') { answerCb(BOT_TOKEN, $cbId); gmAdminColors($chatId, $msgId); return true; }
+    if (str_starts_with($data, 'gmac_')) {
+        $c = substr($data, 5);
+        if (!isset(gmPalette()[$c])) { answerCb(BOT_TOKEN, $cbId); return true; }
+        answerCb(BOT_TOKEN, $cbId);
+        setState(ADMIN_ID, 'gm_coloricon', ['c' => $c]);
+        sendMsg(BOT_TOKEN, $chatId,
+            "🎨 ایموجیِ پریمیومِ رنگِ <b>" . h(gmPalette()[$c]['n']) . "</b> را بفرستید.\n\n" .
+            "یک پیام حاوی همان ایموجی بفرستید، یا کد عددی‌اش را.\n" .
+            "برای برداشتن، یک خط تیره <code>-</code> بفرستید.",
+            inlineKb([[btnUI('cancel', 'gmacolors', 'cancel')]]));
+        return true;
+    }
 
     if ($data === 'gmaw_home') { answerCb(BOT_TOKEN, $cbId); gmAdminWords($chatId, $msgId); return true; }
     if ($data === 'gmat_home') { answerCb(BOT_TOKEN, $cbId); gmAdminTexts($chatId, $msgId, 0); return true; }
@@ -1394,6 +1448,29 @@ function gmStateHandle($action, $msg, $uid, $chatId) {
         sendMsg(BOT_TOKEN, $chatId,
             ($v === '' ? "✅ ایموجی رقم {$d} برداشته شد." : "✅ رقم {$d} → " . gmBigNum($d)),
             inlineKb([[btnCb('🔢 ایموجی عددها', 'gmadig', 'admin')]]));
+        return true;
+    }
+
+    if ($action === 'gm_coloricon') {
+        $c = (string)($sd['c'] ?? '');
+        if ($c === '' || !isset(gmPalette()[$c])) { clearState($uid); return true; }
+        $ids = function_exists('customEmojiIds') ? customEmojiIds($msg) : [];
+        $dash = ($text === '-' || $text === '—');
+        $v = $ids ? (string)$ids[0] : ($dash ? '' : preg_replace('/\D/', '', norm_fa_digits($text)));
+        if (!$dash && $v === '') {
+            sendMsg(BOT_TOKEN, $chatId,
+                "⚠️ ایموجی پیدا نشد. یک پیام با همان ایموجی بفرستید، یا کد عددی‌اش را.\n" .
+                "برای برداشتنش خط تیره بفرستید.");
+            return true;
+        }
+        gmSet(function (&$c2) use ($c, $v) {
+            if (!is_array($c2['color_icons'] ?? null)) $c2['color_icons'] = [];
+            $c2['color_icons'][$c] = $v;
+        });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId,
+            ($v === '' ? '✅ حذف شد.' : '✅ ثبت شد.'),
+            inlineKb([[btnCb('🎨 ایموجیِ رنگ‌های دوز', 'gmacolors', 'admin')]]));
         return true;
     }
 
