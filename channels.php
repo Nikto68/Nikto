@@ -88,12 +88,17 @@ function chNormFa($s) {
 }
 
 function chDefaults() {
+    // ⚠️ عمداً بدون هیچ ایموجیِ معمولی — تنها ایموجی‌ای که اینجا دیده
+    // می‌شود، ایموجیِ پریمیومِ خودِ همین جریان است (فیلدِ premium_icon،
+    // از دکمه‌ی «🌟 ایموجیِ پریمیوم» تو صفحه‌ی خودِ همین جریان)، که
+    // chBuy جلوی {icon} می‌گذارد. اگر چیزی تنظیم نشده باشد، {icon} خالی
+    // می‌ماند.
     $saleText = "{icon} <b>{section}</b>\n\n" .
-                "👤 {user}\n" .
-                "<blockquote>📦 {product}\n" .
-                "🔢 تعداد: <b>{qty}</b>\n" .
-                "💰 مبلغ: <b>{amount}</b> تومان</blockquote>\n" .
-                "🧾 <code>{code}</code>\n🕓 {date}";
+                "{user}\n" .
+                "<blockquote>محصول: {product}\n" .
+                "تعداد: <b>{qty}</b>\n" .
+                "مبلغ: <b>{amount}</b> تومان</blockquote>\n" .
+                "<code>{code}</code>\n{date}";
     $saleBtns = [
         ['on' => 1, 'text' => '🛒 ثبت سفارش', 'url' => '', 'color' => 'success', 'icon' => ''],
         ['on' => 1, 'text' => '💬 پشتیبانی',  'url' => '', 'color' => 'primary', 'icon' => ''],
@@ -102,11 +107,11 @@ function chDefaults() {
     $out = [
         'topup' => [
             'on' => false, 'chat_id' => '', 'thread_id' => 0,
-            'text' => "🧾 <b>رسید شارژ حساب</b>\n\n" .
-                      "👤 {user}\n🆔 <code>{uid}</code>\n" .
-                      "<blockquote>💰 مبلغ: <b>{amount}</b> تومان\n" .
-                      "💳 موجودی بعد از تایید: <b>{balance}</b> تومان</blockquote>\n" .
-                      "🧾 <code>{code}</code>\n🕓 {date}",
+            'text' => "<b>رسید شارژ حساب</b>\n\n" .
+                      "{user}\n<code>{uid}</code>\n" .
+                      "<blockquote>مبلغ: <b>{amount}</b> تومان\n" .
+                      "موجودی بعد از تایید: <b>{balance}</b> تومان</blockquote>\n" .
+                      "<code>{code}</code>\n{date}",
             'photo'   => true,     // عکس رسید هم فرستاده شود
             'buttons' => [
                 ['on' => 1, 'text' => '🤖 ربات', 'url' => '', 'color' => 'primary', 'icon' => ''],
@@ -114,7 +119,7 @@ function chDefaults() {
         ],
         'tech' => [
             'on' => false, 'chat_id' => '', 'thread_id' => 0,
-            'text' => "🛠 <b>گزارش فنی</b>\n\n{text}\n\n🕓 {date}",
+            'text' => "<b>گزارش فنی</b>\n\n{text}\n\n{date}",
             'photo' => false, 'buttons' => [],
         ],
     ];
@@ -125,6 +130,7 @@ function chDefaults() {
         $out[$k] = [
             'on' => false, 'chat_id' => '', 'thread_id' => 0,
             'text' => $saleText, 'photo' => false, 'buttons' => $saleBtns,
+            'premium_icon' => '',   // 🌟 کدِ ایموجیِ پریمیوم — خالی یعنی {icon} چیزی نشان نمی‌دهد
         ];
     }
     return $out;
@@ -324,9 +330,16 @@ function chTopupReceipt($order) {
 function chBuy($uid, $uname, $productName, $qty, $amount, $code, $extra = [], $app = '', $cat = '') {
     $stream = chStreamFor($app, $productName, $cat);
     [$label] = chStreams()[$stream] ?? ['🛒 فروش'];
-    // ایموجیِ سرِ برچسب را جدا می‌کنیم تا {icon} و {section} هرکدام جای خود
-    $icon = '';
-    if (preg_match('/^(\X)\s+(.*)$/u', $label, $m)) { $icon = $m[1]; $label = $m[2]; }
+    // ایموجیِ سرِ برچسب فقط برای جداکردنِ خودِ متنِ {section} است؛ دیگر
+    // در {icon} نمی‌نشیند. {icon} فقط ایموجیِ پریمیومِ خودِ همین جریان
+    // است (اگر ادمین از صفحه‌ی خودِ جریان تنظیم کرده باشد)، وگرنه خالی.
+    $plainIcon = '';
+    if (preg_match('/^(\X)\s+(.*)$/u', $label, $m)) { $plainIcon = $m[1]; $label = $m[2]; }
+
+    $pid = trim((string)(chOf($stream)['premium_icon'] ?? ''));
+    $icon = ($pid !== '' && ctype_digit($pid))
+        ? '<tg-emoji emoji-id="' . h($pid) . '">' . h($plainIcon ?: '🛒') . '</tg-emoji>'
+        : '';
 
     chSend($stream, array_merge([
         'user'    => chUser($uid, $uname, ''),
@@ -336,7 +349,7 @@ function chBuy($uid, $uname, $productName, $qty, $amount, $code, $extra = [], $a
         'amount'  => fmtNum((float)$amount),
         'code'    => (string)$code,
         'section' => $label,
-        'icon'    => $icon !== '' ? $icon : '🛒',
+        'icon'    => $icon,
         'app'     => (string)$app,
     ], $extra));
 }
@@ -399,6 +412,10 @@ function chAdminStream($chatId, $msgId, $k) {
             ? '<code>' . h((string)$s['chat_id']) . '</code>' : '— تنظیم نشده') . "\n";
     $t .= 'تاپیک: ' . ((int)$s['thread_id'] > 0 ? (int)$s['thread_id'] : 'بدون تاپیک') . "\n";
     if ($k === 'topup') $t .= 'عکس رسید: ' . (!empty($s['photo']) ? '✅ فرستاده شود' : '❌ فقط متن') . "\n";
+    if ($k !== 'topup' && $k !== 'tech') {
+        $pid = trim((string)($s['premium_icon'] ?? ''));
+        $t .= '🌟 ایموجیِ پریمیوم: ' . ($pid !== '' ? '<tg-emoji emoji-id="' . h($pid) . '">🛒</tg-emoji> تنظیم‌شده' : 'تنظیم‌نشده') . "\n";
+    }
     $t .= "\n<b>متن گزارش:</b>\n" . $s['text'] . "\n\n";
     $t .= "جای‌گذاری‌ها: " . implode(' ', array_map(fn($x) => '<code>{' . $x . '}</code>', chVarsOf($k)));
 
@@ -408,6 +425,10 @@ function chAdminStream($chatId, $msgId, $k) {
         [btnCb('🔗 گروه و تاپیک', 'chl_' . $k, 'admin')],
         [btnCb('✏️ متن گزارش', 'chm_' . $k, 'admin')],
     ];
+    $resetRow = $k !== 'topup' && $k !== 'tech'
+        ? [btnCb('🌟 ایموجیِ پریمیوم', 'chi_' . $k, 'admin'), btnCb('🔄 بازنشانی متن', 'chrs_' . $k, 'confirm')]
+        : [btnCb('🔄 بازنشانی متن به پیش‌فرض', 'chrs_' . $k, 'confirm')];
+    $rows[] = $resetRow;
     if ($k === 'topup') $rows[] = [btnCb(!empty($s['photo']) ? '🖼 عکس رسید: روشن' : '🖼 عکس رسید: خاموش', 'chp_' . $k, 'info')];
     $t .= "\n\n<b>دکمه‌ها:</b>";
     foreach ((array)$s['buttons'] as $i => $b) {
@@ -462,7 +483,7 @@ function chAdminCallback($data, $chatId, $msgId, $cbId) {
         return true;
     }
 
-    foreach (['chs_' => 'open', 'chx_' => 'toggle', 'chp_' => 'photo', 'cht_' => 'test'] as $pre => $what) {
+    foreach (['chs_' => 'open', 'chx_' => 'toggle', 'chp_' => 'photo', 'cht_' => 'test', 'chrs_' => 'reset'] as $pre => $what) {
         if (!str_starts_with($data, $pre)) continue;
         $k = substr($data, strlen($pre));
         if (!isset(chStreams()[$k])) { answerCb(BOT_TOKEN, $cbId); return true; }
@@ -473,6 +494,10 @@ function chAdminCallback($data, $chatId, $msgId, $cbId) {
         } elseif ($what === 'photo') {
             chSet($k, function (&$s) { $s['photo'] = empty($s['photo']); });
             answerCb(BOT_TOKEN, $cbId, '✅');
+        } elseif ($what === 'reset') {
+            $def = chDefaults()[$k]['text'] ?? '';
+            chSet($k, function (&$s) use ($def) { $s['text'] = $def; });
+            answerCb(BOT_TOKEN, $cbId, '✅ بازنشانی شد');
         } elseif ($what === 'test') {
             answerCb(BOT_TOKEN, $cbId);
             if (!chReady($k)) {
@@ -508,6 +533,9 @@ function chAdminCallback($data, $chatId, $msgId, $cbId) {
                                "برای پاک کردن، <code>-</code> بفرستید."],
         'chm_'  => ['ch_text', "✏️ متن گزارش را بفرستید.\n\n" .
                                "ایموجی پرمیوم و نقل‌قول هرچه بگذارید سرِ جایش می‌ماند."],
+        'chi_'  => ['ch_icon', "🌟 ایموجیِ پریمیومِ این جریان را بفرستید — همان چیزی که جلوی {icon} می‌نشیند.\n\n" .
+                               "یک پیام حاوی همان ایموجی بفرستید، یا کد عددی‌اش را.\n" .
+                               "برای برداشتن، یک خط تیره <code>-</code> بفرستید."],
     ];
     foreach ($asks as $pre => [$act, $ask]) {
         if (!str_starts_with($data, $pre)) continue;
@@ -544,8 +572,12 @@ function chSampleVars($k) {
                                 'balance' => fmtNum(750000), 'code' => 'TEST-1234', 'receipt' => 'آزمایشی'];
     if ($k === 'tech')  return ['text' => '🧪 این یک گزارشِ فنیِ آزمایشی است.'];
     [$label] = chStreams()[$k] ?? ['🛒 فروش'];
-    $icon = '🛒';
-    if (preg_match('/^(\X)\s+(.*)$/u', $label, $m)) { $icon = $m[1]; $label = $m[2]; }
+    $plainIcon = '🛒';
+    if (preg_match('/^(\X)\s+(.*)$/u', $label, $m)) { $plainIcon = $m[1]; $label = $m[2]; }
+    $pid = trim((string)(chOf($k)['premium_icon'] ?? ''));
+    $icon = ($pid !== '' && ctype_digit($pid))
+        ? '<tg-emoji emoji-id="' . h($pid) . '">' . h($plainIcon) . '</tg-emoji>'
+        : '';
     return ['user' => '@testuser', 'uid' => 123456789, 'product' => '⭐️ ۵۰ استارز',
             'qty' => '1', 'amount' => fmtNum(149000), 'code' => 'TEST-1234',
             'section' => $label, 'icon' => $icon, 'app' => ''];
@@ -617,6 +649,19 @@ function chStateHandle($action, $msg, $uid, $chatId) {
         sendMsg(BOT_TOKEN, $chatId, chFill($html, chSampleVars($k) + ['date' => chDate()]),
                 chKeyboard(chOf($k)) ?: inlineKb([[btnCb('📡 برگرد', 'chs_' . $k, 'admin')]]));
         return true;
+    }
+
+    if ($action === 'ch_icon') {
+        $ids = function_exists('customEmojiIds') ? customEmojiIds($msg) : [];
+        $v = $ids ? (string)$ids[0] : ($blank ? '' : preg_replace('/\D/', '', norm_fa_digits($text)));
+        if (!$blank && $v === '') {
+            sendMsg(BOT_TOKEN, $chatId,
+                "⚠️ ایموجی پیدا نشد. یک پیام با همان ایموجی بفرستید، یا کد عددی‌اش را.\n" .
+                "برای برداشتنش خط تیره بفرستید.");
+            return true;
+        }
+        chSet($k, function (&$s) use ($v) { $s['premium_icon'] = $v; });
+        return $done($v === '' ? '✅ حذف شد.' : '✅ ثبت شد.');
     }
 
     $i = (int)($sd['i'] ?? -1);
