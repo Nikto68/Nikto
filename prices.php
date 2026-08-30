@@ -1110,6 +1110,11 @@ function pxKeyboard() {
  *   ۳) مسیرهای معمولِ لینوکس و ویندوز
  *   ۴) جست‌وجوی واقعی در پوشه‌های فونتِ سیستم — هر ttf که پیدا شد
  */
+/** با pxfontclr/آپلود فونتِ دستی صدا زده می‌شود تا نتیجه‌ی کهنه‌ی گشتنِ خودکار دور ریخته شود */
+function pxFontCacheBust() {
+    if (function_exists('maCachePut')) { maCachePut('px_font_b', null); maCachePut('px_font_r', null); }
+}
+
 function pxFont($bold = true) {
     static $cache = [];
     $k = $bold ? 'b' : 'r';
@@ -1120,6 +1125,19 @@ function pxFont($bold = true) {
     // یک فونت هم بهتر از هیچ: اگر فقط یکی داده شده، برای هر دو حالت
     $any = trim((string)pxVal('card.font_bold', '')) ?: trim((string)pxVal('card.font', ''));
     if ($any !== '' && is_file($any)) return $cache[$k] = $any;
+
+    // 💾 گشتنِ خودکار (چک‌کردنِ ده‌ها مسیر + برای هرکدام رندرِ آزمایشی
+    // با GD تا معلوم شود فارسی دارد یا نه) گران است — و چون هر
+    // درخواستِ وبهوک روی هاستِ اشتراکی یک پردازه‌ی تازه‌ی PHP است،
+    // «static» بالا هیچ‌وقت زنده نمی‌ماند و این گشتنِ گران هر بار از
+    // اول تکرار می‌شد. همانی که «ساختِ کارت طول می‌کشد» را حس می‌کرد.
+    // چون فونت‌های خودِ هاست تغییر نمی‌کنند، نتیجه را روی دیسک نگه
+    // می‌داریم؛ آپلود/پاکِ فونتِ دستی با pxFontCacheBust() آن را دور می‌ریزد.
+    $diskKey = 'px_font_' . $k;
+    if (function_exists('maCacheGet')) {
+        $disk = maCacheGet($diskKey, 2592000);
+        if ($disk !== null && ($disk === '' || is_file($disk))) return $cache[$k] = $disk;
+    }
 
     $names = $bold
         ? ['DejaVuSans-Bold.ttf', 'LiberationSans-Bold.ttf', 'Roboto-Bold.ttf',
@@ -1139,7 +1157,11 @@ function pxFont($bold = true) {
         'C:\\Windows\\Fonts',
     ];
     foreach ($dirs as $d) foreach ($names as $n)
-        if (is_file($d . '/' . $n)) return $cache[$k] = $d . '/' . $n;
+        if (is_file($d . '/' . $n)) {
+            $found = $d . '/' . $n;
+            if (function_exists('maCachePut')) maCachePut($diskKey, $found);
+            return $cache[$k] = $found;
+        }
 
     // هنوز نه؟ هر ttf ای که پیدا شود — ولی فقط آن‌هایی که واقعا حرف
     // فارسی دارند. فونتِ فقط‌لاتین کارت را با مربع پر می‌کند، که از
@@ -1151,11 +1173,16 @@ function pxFont($bold = true) {
                   $root . '/*/*/*.[tT][tT][fF]'] as $pat) {
             foreach ((glob($pat) ?: []) as $f) {
                 if ($any === '') $any = $f;
-                if (pxFontHasFa($f)) return $cache[$k] = $f;
+                if (pxFontHasFa($f)) {
+                    if (function_exists('maCachePut')) maCachePut($diskKey, $f);
+                    return $cache[$k] = $f;
+                }
             }
         }
     }
-    return $cache[$k] = $any;      // هیچ‌کدام فارسی نداشت — لااقل یکی
+    // هیچ‌کدام فارسی نداشت — لااقل یکی؛ همین نتیجه (حتی خالی) هم کش می‌شود
+    if (function_exists('maCachePut')) maCachePut($diskKey, $any);
+    return $cache[$k] = $any;
 }
 
 /**
@@ -1503,14 +1530,17 @@ function pxSendPhoto($chatId, $bytes, $caption, $markup = null, $replyTo = null,
     if ($markup)  $post['reply_markup'] = is_string($markup) ? $markup : json_encode($markup);
     if ($replyTo) $post['reply_to_message_id'] = $replyTo;
 
+    // ۴۰/۱۰ قبلی برای یک آپلودِ چندده‌کیلوبایتی بیش از حد سخاوتمندانه
+    // بود — یک تلاشِ موفق زیرِ یک ثانیه است؛ این عدد فقط سقفِ بدترین
+    // حالت (شبکه‌ی کند/معلق) را کوتاه می‌کند.
     $base = defined('TG_API_BASE') ? TG_API_BASE : 'https://api.telegram.org';
     $ch = curl_init($base . '/bot' . BOT_TOKEN . '/sendPhoto');
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => $post,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 40,
-        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 12,
+        CURLOPT_CONNECTTIMEOUT => 5,
     ]);
     $res = curl_exec($ch);
     $err = curl_error($ch);
@@ -2524,6 +2554,7 @@ function pxAdminCallback($data, $chatId, $msgId, $cbId) {
     }
     if ($data === 'pxfontclr') {
         pxSet(function (&$c) { $c['card']['font'] = ''; $c['card']['font_bold'] = ''; });
+        pxFontCacheBust(); // وگرنه تا ۳۰ روز نتیجه‌ی کهنه‌ی گشتنِ خودکار برمی‌گردد
         answerCb(BOT_TOKEN, $cbId, '🧹');
         pxAdminCard($chatId, $msgId);
         return true;

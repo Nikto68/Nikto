@@ -282,6 +282,18 @@ function h($s)      { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); 
 function nowStr()   { return date('Y-m-d H:i:s'); }
 function fmtNum($n) { return rtrim(rtrim(number_format((float)$n, 2, '.', ','), '0'), '.'); }
 
+/** آیدیِ عددیِ کاربر برای گزارش‌ها — ۳ یا ۴ رقمِ وسط پنهان، نه یوزرنیم */
+function maskUserId($id) {
+    $s = (string)(int)$id;
+    $len = strlen($s);
+    if ($len <= 4) return str_repeat('•', $len);
+    $maskLen = $len >= 9 ? 4 : 3;
+    $keepLen = $len - $maskLen;
+    $left = (int)ceil($keepLen / 2);
+    $right = $keepLen - $left;
+    return substr($s, 0, $left) . str_repeat('•', $maskLen) . substr($s, $len - $right);
+}
+
 // ============================================================
 // 🔌 تلگرام API
 // ============================================================
@@ -1486,7 +1498,7 @@ function defaultReport() {
         'on'        => false,
         'chat_id'   => '',    // آیدی گروه/کانال — مثلا -1001234567890
         'thread_id' => 0,     // شماره تاپیک داخل گروه (۰ = بدون تاپیک)
-        'text'      => "<b>فروش جدید</b>\n\n{product}\n{qty} ممبر\n{speed}\n{amount} {currency}\n\n<code>{code}</code>\n{date}",
+        'text'      => "<b>فروش جدید</b>\n\n{product}\n🆔 {user_id_masked}\n{qty} ممبر\n{speed}\n{amount} {currency}\n\n<code>{code}</code>\n{date}",
         'buttons'   => [
             ['text' => 'ثبت سفارش', 'url' => '', 'color' => 'success', 'icon' => '', 'on' => true],
             ['text' => 'پشتیبانی',  'url' => '', 'color' => 'primary', 'icon' => '', 'on' => true],
@@ -2905,6 +2917,11 @@ function refInviteLink($uid) {
 
 /** داشبورد زیرمجموعه — لینک و تاریخچه و کیف‌پول، هرکدام پشتِ دکمه‌ی خودش */
 function showReferral($uid, $chatId, $extra = [], $replyTo = null) {
+    // از روی کارتِ گرافیکیِ لینک برگشته؟ عکس نمی‌تواند به متن ویرایش شود،
+    // پس جمعش می‌کنیم تا هم‌زمان دو پیام (کارت + داشبورد) دیده نشود.
+    $cardMid = slotGet($uid, 'refcard');
+    if ($cardMid) { delMsg(BOT_TOKEN, $chatId, $cardMid); slotClear($uid, 'refcard'); }
+
     $u = getUser($uid) ?: [];
     $refText = T('referral', [
         'percent'     => cfg()['referral']['percent'],
@@ -2931,6 +2948,11 @@ function showReferralLink($uid, $chatId) {
             inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
         return;
     }
+    // متن ویرایش به عکس نمی‌شود، پس داشبورد را جمع می‌کنیم تا فقط
+    // کارت بماند — نه اینکه یک پیامِ تازه زیرِ داشبوردِ قبلی بنشیند.
+    $oldMid = slotGet($uid, 'menu');
+    if ($oldMid) { delMsg(BOT_TOKEN, $chatId, $oldMid); slotClear($uid, 'menu'); }
+
     $rows = [];
     if (function_exists('axShareButton')) {
         if ($sb = axShareButton($link)) $rows[] = [$sb];
@@ -4190,8 +4212,9 @@ function reportSale($order, $force = false) {
         '{link}'     => h($m['link'] ?? '—'),
         '{channel}'  => h($m['chat_title'] ?? ($m['link'] ?? '—')),
         '{delivered}'=> number_format($done),
-        '{user}'     => h($uname),
-        '{user_id}'  => (int)$order['user_id'],
+        '{user}'          => h($uname),
+        '{user_id}'       => (int)$order['user_id'],
+        '{user_id_masked}'=> h(maskUserId($order['user_id'])),
         '{date}'     => h(nowStr()),
     ]);
 
@@ -4257,8 +4280,9 @@ function announceSale($order) {
         '{limit}'      => $limit > 0 ? $limit : '∞',
         '{remaining}'  => $limit > 0 ? max(0, $limit - $count) : '∞',
         '{limit_part}' => $limitPart,
-        '{user}'       => h($user),
-        '{user_id}'    => (int)$order['user_id'],
+        '{user}'            => h($user),
+        '{user_id}'         => (int)$order['user_id'],
+        '{user_id_masked}'  => h(maskUserId($order['user_id'])),
         '{date}'       => h(nowStr()),
     ]);
 
