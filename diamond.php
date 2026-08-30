@@ -821,6 +821,30 @@ function dmStateHandle($action, $msg, $uid, $chatId) {
             return $bad("بین ۵ ثانیه تا ۲۴ ساعت.\n\n" .
                         "واحد هم می‌شود نوشت: <code>5 دقیقه</code>");
         dmSet(function (&$c) use ($sec) { $c['cooldown'] = $sec; });
+
+        // ⚠️ قبلاً اینجا فقط پیامِ موفقیت رو از رویِ همون عددی که کاربر
+        // فرستاده بود می‌ساخت — یعنی حتی اگه ذخیره‌سازی واقعاً شکست
+        // می‌خورد، باز «✅ ذخیره شد» نشون می‌داد. حالا واقعاً از دیسک
+        // دوباره می‌خونه تا مطمئن بشه چیزی که برگشته دقیقاً همونیه که
+        // خواستیم؛ اگه نه، یه‌بار دیگه امتحان می‌کنه، وگرنه صادقانه می‌گه.
+        cfg(true);
+        $confirmed = (int)dmVal('cooldown', -1);
+        if ($confirmed !== $sec) {
+            dmSet(function (&$c) use ($sec) { $c['cooldown'] = $sec; });
+            cfg(true);
+            $confirmed = (int)dmVal('cooldown', -1);
+        }
+        if ($confirmed !== $sec) {
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId,
+                "⚠️ <b>ذخیره نشد</b>\n\n" .
+                "خواستم <b>" . dmDur($sec) . "</b> ثبت بشه، ولی رو دیسک همچنان <b>" .
+                dmDur($confirmed) . "</b> مونده.\n\n" .
+                "این یعنی نوشتنِ فایلِ تنظیمات رو سرور شکست می‌خوره (شاید دسترسیِ نوشتن روی " .
+                "پوشه‌ی data_master مشکل داره) — لطفاً همین پیام رو با اسکرین‌شات بفرست.",
+                inlineKb([[btnCb('💎 الماس', 'dm_home', 'admin')]]));
+            return true;
+        }
         return $done('✅ فاصله‌ی بین دو الماس: <b>' . dmDur($sec) . '</b>');
     }
     if ($action === 'dm_step') {
