@@ -47,6 +47,7 @@ function dmDefaults() {
             'words' => 'میو,هاپ',
             'need'  => 3,          // چند نفرِ متفاوت باید تایید کنن
             'secs'  => 3600,       // مدتِ زندان — ثانیه
+            'color' => 'danger',   // رنگِ دکمه‌ی تایید
         ],
 
         // 🔁 تبدیل الماس به موجودی کیف پول (۰ = خاموش)
@@ -590,12 +591,20 @@ function dmJailWords() {
     return $out;
 }
 
+/** دکمه‌های تاییدِ زندان — دوتا دوتا هر ردیف، اگر فرد بود آخری تک می‌ماند */
+function dmJailButtons($need, $data) {
+    $color = (string)dmVal('jail.color', 'danger');
+    $style = isStyle($color) ? $color : null;
+    $btns = [];
+    for ($i = 0; $i < $need; $i++) $btns[] = btnCb(dmT('jail_btn'), $data, null, $style);
+    return array_chunk($btns, 2);
+}
+
 /** پیامِ تازه‌ی «به دام افتاد» را می‌سازد و رکوردِ در-انتظار را ذخیره می‌کند */
 function dmJailStart($uid, $name, $username, $chatId, $replyTo = null) {
     $need = max(1, (int)dmVal('jail.need', 3));
     $id   = 'j' . bin2hex(random_bytes(4));
-    $rows = [];
-    for ($i = 0; $i < $need; $i++) $rows[] = [btnCb(dmT('jail_btn'), 'dmjail_' . $id, 'reject')];
+    $rows = dmJailButtons($need, 'dmjail_' . $id);
 
     $extra = $replyTo ? ['reply_to_message_id' => $replyTo] : [];
     $res = sendMsg(BOT_TOKEN, $chatId, dmT('jail_hit', ['name' => h($name), 'need' => $need]),
@@ -648,8 +657,7 @@ function dmCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
         editMsg(BOT_TOKEN, $j['chat'], (int)$j['msg'],
             dmT('jail_done', ['name' => h($j['name']), 'dur' => dmDur($secs)]), null);
     } else {
-        $rows = [];
-        for ($i = 0; $i < $need; $i++) $rows[] = [btnCb(dmT('jail_btn'), $data, 'reject')];
+        $rows = dmJailButtons($need, $data);
         editMsg(BOT_TOKEN, $j['chat'], (int)$j['msg'],
             dmT('jail_prog', ['name' => h($j['name']), 'got' => $got, 'need' => $need]),
             inlineKb($rows));
@@ -749,16 +757,20 @@ function dmAdminTexts($chatId, $msgId) {
 
 function dmAdminJail($chatId, $msgId) {
     $j = (array)dmVal('jail', []);
+    $color = (string)($j['color'] ?? 'danger');
     $t  = "🚨 <b>زندان</b>\n\n";
     $t .= "کسی این کلمه‌ها رو تو گروه بنویسه، به دام می‌افتد؛ اگه به‌اندازه‌ی کافی از اعضا " .
           "تاییدش کنن، برای مدتی نمی‌تواند الماس بزند.\n\n";
     $t .= 'کلمه‌ها: <code>' . h((string)($j['words'] ?? '')) . "</code>\n";
     $t .= 'تعدادِ لازم برای تایید: <b>' . (int)($j['need'] ?? 3) . "</b> نفر\n";
-    $t .= 'مدتِ زندان: <b>' . dmDur((int)($j['secs'] ?? 3600)) . "</b>";
+    $t .= 'مدتِ زندان: <b>' . dmDur((int)($j['secs'] ?? 3600)) . "</b>\n";
+    $t .= 'رنگ دکمه‌ی تایید: <b>' . h(styleMap()[$color] ?? styleMap()['danger']) . "</b>";
 
     $rows = [
         [btnCb('💬 کلمه‌ها', 'dmjw', 'admin'), btnCb('👥 تعدادِ تایید', 'dmjn', 'admin')],
-        [btnCb('⏳ مدتِ زندان', 'dmjs', 'admin')],
+        [btnCb('⏳ مدتِ زندان', 'dmjs', 'admin'), btnCb('🎨 رنگ دکمه', 'dmjc', 'admin')],
+        [btnCb('✏️ متنِ به‌دام‌افتادن', 'dmts_jail_hit', 'admin')],
+        [btnCb('✏️ متنِ دکمه‌ی تایید', 'dmts_jail_btn', 'admin')],
         [btnCb(UT('back'), 'dm_home', 'nav')],
     ];
     editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
@@ -799,6 +811,21 @@ function dmAdminCallback($data, $chatId, $msgId, $cbId) {
     }
     if ($data === 'dmt_home') { answerCb(BOT_TOKEN, $cbId); dmAdminTexts($chatId, $msgId); return true; }
     if ($data === 'dmj_home') { answerCb(BOT_TOKEN, $cbId); dmAdminJail($chatId, $msgId); return true; }
+    if ($data === 'dmjc') {
+        answerCb(BOT_TOKEN, $cbId);
+        $rows = [];
+        foreach (styleMap() as $sk => $sl) $rows[] = [btnCb($sl, 'dmjcC_' . $sk, 'info')];
+        $rows[] = [btnCb(UT('back'), 'dmj_home', 'nav')];
+        editMsg(BOT_TOKEN, $chatId, $msgId, "🎨 <b>رنگ دکمه‌ی تایید</b>", inlineKb($rows));
+        return true;
+    }
+    if (preg_match('/^dmjcC_(\w+)$/', $data, $dmc)) {
+        $col = isStyle($dmc[1]) ? $dmc[1] : 'none';
+        dmSet(function (&$c) use ($col) { $c['jail']['color'] = $col; });
+        answerCb(BOT_TOKEN, $cbId, '✅');
+        dmAdminJail($chatId, $msgId);
+        return true;
+    }
 
     $asks = [
         'dmw'   => ['dm_word',  "💬 کلمه‌ی بازی را بفرستید (مثلا الماس):"],
