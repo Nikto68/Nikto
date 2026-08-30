@@ -5396,6 +5396,9 @@ function masterHandle($update) {
         // 🎮 دکمه‌های بازی عمدا در گروه هم کار می‌کنند — بازی همان‌جاست
         if (gmCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
 
+        // 🚨 دکمه‌های تاییدِ زندانِ الماس — همین‌طور، باید تو گروه کار کنند
+        if (function_exists('dmCallback') && dmCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
+
         // 🤐 بقیه‌ی دکمه‌ها در گروه و کانال چیزی نمی‌فرستند
         if (($cb['message']['chat']['type'] ?? 'private') !== 'private') {
             answerCb(BOT_TOKEN, $cbId);

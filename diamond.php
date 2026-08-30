@@ -41,6 +41,14 @@ function dmDefaults() {
         'top_n'      => 10,
         'level_step' => 10000,       // هر چند امتیاز، یک سطح
 
+        // 🚨 زندان: کسی این کلمه‌ها رو بنویسه، به دام می‌افته و باید چند
+        // نفر از اعضا تاییدش کنن تا زندانی بشه — یعنی تا مدتی نتونه الماس بزنه.
+        'jail' => [
+            'words' => 'میو,هاپ',
+            'need'  => 3,          // چند نفرِ متفاوت باید تایید کنن
+            'secs'  => 3600,       // مدتِ زندان — ثانیه
+        ],
+
         // 🔁 تبدیل الماس به موجودی کیف پول (۰ = خاموش)
         'to_wallet'  => 0,           // هر ۱ الماس چند تومان
         'min_swap'   => 10000,       // حداقل الماس برای تبدیل
@@ -63,6 +71,15 @@ function dmDefaults() {
             'gift_low' => "❌ برای این هدیه <b>{cost}</b> الماس لازم است.\n💎 الماس تو: <b>{points}</b>",
             'gift_off' => "🔒 هدیه فعلا بسته است.",
             'gift_had' => "🎁 سقف دریافت این هدیه برای تو پر شده است.",
+
+            // 🚨 زندان
+            'jail_hit'   => "🚨 {name} به دام افتاد و باید بره زندان!\n\n{need} نفر از اعضا باید تاییدش کنن.",
+            'jail_prog'  => "🚨 {name} به دام افتاد و باید بره زندان!\n\n✅ {got} از {need} نفر تایید کردن.",
+            'jail_btn'   => "🔒 بفرستش زندان",
+            'jail_done'  => "🚔 {name} به زندان افتاد!\n\n⏳ به مدت {dur} نمی‌تواند الماس بزند.",
+            'jail_self'  => "نمی‌تونی خودتو بفرستی زندان 😄",
+            'jail_twice' => "قبلاً همینو تایید کرده بودی.",
+            'jail_wait'  => "⛔️ {name}، الان زندانی‌ای!\n⌛️ {m} دقیقه و {s} ثانیه دیگر آزاد می‌شوی.",
         ],
     ];
 }
@@ -308,8 +325,16 @@ function dmDur($secs) {
  * برگشت: [متن پاسخ, آیا امتیاز گرفت]
  */
 function dmHit($uid, $name, $username = '') {
-    $cd = max(5, (int)dmVal('cooldown', 300));
     $now = time();
+
+    // 🚨 زندانی نمی‌تواند الماس بزند
+    $u0 = dmUser($uid);
+    $jailLeft = (int)($u0['jailed_until'] ?? 0) - $now;
+    if ($jailLeft > 0) {
+        return [dmT('jail_wait', ['name' => $name, 'm' => intdiv($jailLeft, 60), 's' => $jailLeft % 60]), false];
+    }
+
+    $cd = max(5, (int)dmVal('cooldown', 300));
 
     $u = dmUser($uid);
     if ($u) {
@@ -518,9 +543,21 @@ function dmHandleText($text, $uid, $chatId, $name, $username = '', $replyTo = nu
 
     $t = mb_strtolower($raw);
     $word = mb_strtolower((string)dmVal('word', 'الماس'));
-    if (in_array($t, [$word . ' من', 'امتیاز من', 'امتیازم', 'الماس من', 'حساب من'], true)) {
+    if (in_array($t, [$word . ' من', 'امتیاز من', 'امتیازم', 'الماس من', 'حساب من', 'حساب الماس'], true)) {
         sendMsg(BOT_TOKEN, $chatId, dmMeText($uid, $name), null, $extra);
         return true;
+    }
+
+    // 🚨 کلمه‌ی زندان — بگیر بندازش تو دام
+    foreach (dmJailWords() as $jw) {
+        if ($jw !== '' && $t === mb_strtolower($jw)) {
+            if ($isPrivate && !empty(dmVal('group_only'))) {
+                sendMsg(BOT_TOKEN, $chatId, dmT('private'), null, $extra);
+                return true;
+            }
+            dmJailStart($uid, $name, $username, $chatId, $replyTo);
+            return true;
+        }
     }
     if (in_array($t, ['برترین‌ها', 'برترین ها', 'رتبه‌بندی', 'رتبه بندی', 'top', 'لیدربرد'], true)) {
         sendMsg(BOT_TOKEN, $chatId, dmTopText(), null, $extra);
@@ -538,6 +575,86 @@ function dmHandleText($text, $uid, $chatId, $name, $username = '', $replyTo = nu
         return true;
     }
     return false;
+}
+
+// ============================================================
+// 🚨 زندان — کلمه‌ای که می‌نویسی، چند نفر تاییدت کنن، بری زندان
+// ============================================================
+
+function dmJailWords() {
+    $out = [];
+    foreach (explode(',', (string)dmVal('jail.words', 'میو,هاپ')) as $w) {
+        $w = trim($w);
+        if ($w !== '') $out[] = $w;
+    }
+    return $out;
+}
+
+/** پیامِ تازه‌ی «به دام افتاد» را می‌سازد و رکوردِ در-انتظار را ذخیره می‌کند */
+function dmJailStart($uid, $name, $username, $chatId, $replyTo = null) {
+    $need = max(1, (int)dmVal('jail.need', 3));
+    $id   = 'j' . bin2hex(random_bytes(4));
+    $rows = [];
+    for ($i = 0; $i < $need; $i++) $rows[] = [btnCb(dmT('jail_btn'), 'dmjail_' . $id, 'reject')];
+
+    $extra = $replyTo ? ['reply_to_message_id' => $replyTo] : [];
+    $res = sendMsg(BOT_TOKEN, $chatId, dmT('jail_hit', ['name' => h($name), 'need' => $need]),
+        inlineKb($rows), $extra);
+    $mid = (int)($res['result']['message_id'] ?? 0);
+
+    mutate('dm_jails', function (&$a) use ($id, $uid, $name, $username, $chatId, $mid) {
+        // 🧹 خانه‌تکانیِ رکوردهای خیلی کهنه — بیشتر از ۱ ساعت یعنی
+        // هیچ‌وقت به سه‌تا تاییدِ لازم نمی‌رسند
+        $now = time();
+        foreach ($a as $k => $v) if ($now - (int)($v['created'] ?? 0) > 3600) unset($a[$k]);
+        $a[$id] = ['target' => (int)$uid, 'name' => (string)$name, 'username' => (string)$username,
+                   'chat' => $chatId, 'msg' => $mid, 'confirmed' => [], 'created' => $now];
+    });
+}
+
+/** برگشتِ true یعنی این callback مالِ دکمه‌ی تاییدِ زندان بود */
+function dmCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
+    if (!str_starts_with((string)$data, 'dmjail_')) return false;
+    $id = substr($data, 7);
+
+    $jails = load('dm_jails');
+    $j = $jails[$id] ?? null;
+    if (!$j) { answerCb(BOT_TOKEN, $cbId, '⌛️ این دیگه معتبر نیست.', true); return true; }
+
+    if ((int)$j['target'] === (int)$uid) {
+        answerCb(BOT_TOKEN, $cbId, strip_tags(dmT('jail_self')), true);
+        return true;
+    }
+    if (isset($j['confirmed'][(string)$uid])) {
+        answerCb(BOT_TOKEN, $cbId, strip_tags(dmT('jail_twice')), true);
+        return true;
+    }
+
+    $need = max(1, (int)dmVal('jail.need', 3));
+    $done = false; $got = 0;
+    mutate('dm_jails', function (&$a) use ($id, $uid, $need, &$done, &$got) {
+        if (!isset($a[$id])) return;
+        if (isset($a[$id]['confirmed'][(string)$uid])) { $got = count($a[$id]['confirmed']); return; }
+        $a[$id]['confirmed'][(string)$uid] = true;
+        $got = count($a[$id]['confirmed']);
+        if ($got >= $need) { $done = true; unset($a[$id]); }
+    });
+
+    answerCb(BOT_TOKEN, $cbId, '✅');
+
+    if ($done) {
+        $secs = max(60, (int)dmVal('jail.secs', 3600));
+        dmUserSet($j['target'], function (&$x) use ($secs) { $x['jailed_until'] = time() + $secs; });
+        editMsg(BOT_TOKEN, $j['chat'], (int)$j['msg'],
+            dmT('jail_done', ['name' => h($j['name']), 'dur' => dmDur($secs)]), null);
+    } else {
+        $rows = [];
+        for ($i = 0; $i < $need; $i++) $rows[] = [btnCb(dmT('jail_btn'), $data, 'reject')];
+        editMsg(BOT_TOKEN, $j['chat'], (int)$j['msg'],
+            dmT('jail_prog', ['name' => h($j['name']), 'got' => $got, 'need' => $need]),
+            inlineKb($rows));
+    }
+    return true;
 }
 
 // ============================================================
@@ -577,6 +694,7 @@ function dmAdminHome($chatId, $msgId = null) {
         [btnCb('🔁 نرخ تبدیل', 'dmsw', 'admin'), btnCb('🔢 حداقل تبدیل', 'dmms', 'admin')],
         [btnCb('✏️ متن‌ها', 'dmt_home', 'admin'), btnCb('🏆 برترین‌ها', 'dmtop', 'confirm')],
         [btnCb('🎁 دادن الماس به کاربر', 'dmgive', 'admin')],
+        [btnCb('🚨 زندان', 'dmj_home', 'admin')],
         [btnCb('🧮 شمارش دوباره', 'dmsum', 'confirm')],
         [btnCb('🛍 هدیه با الماس', 'dmgift', 'confirm')],
         [btnCb(UT('back'), 'adm_home', 'nav')],
@@ -604,6 +722,13 @@ function dmLabel($k) {
         'gift_low' => '🎁 الماس برای هدیه کم است',
         'gift_off' => '🎁 هدیه بسته است',
         'gift_had' => '🎁 قبلا هدیه گرفته',
+        'jail_hit'   => '🚨 وقتی کسی به دام می‌افتد',
+        'jail_prog'  => '🚨 وقتی یکی تاییدش کرد (هنوز کامل نشده)',
+        'jail_btn'   => '🔒 متنِ دکمه‌ی تایید',
+        'jail_done'  => '🚔 وقتی زندانی می‌شود',
+        'jail_self'  => '🚨 وقتی خودشو تایید می‌کند',
+        'jail_twice' => '🚨 وقتی دوباره تایید می‌کند',
+        'jail_wait'  => '⛔️ وقتی زندانی است و الماس می‌زند',
     ];
     return $m[$k] ?? $k;
 }
@@ -619,6 +744,23 @@ function dmAdminTexts($chatId, $msgId) {
         $rows[] = [btnCb(dmLabel($k), 'dmts_' . $k, 'admin')];
     }
     $rows[] = [btnCb(UT('back'), 'dm_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function dmAdminJail($chatId, $msgId) {
+    $j = (array)dmVal('jail', []);
+    $t  = "🚨 <b>زندان</b>\n\n";
+    $t .= "کسی این کلمه‌ها رو تو گروه بنویسه، به دام می‌افتد؛ اگه به‌اندازه‌ی کافی از اعضا " .
+          "تاییدش کنن، برای مدتی نمی‌تواند الماس بزند.\n\n";
+    $t .= 'کلمه‌ها: <code>' . h((string)($j['words'] ?? '')) . "</code>\n";
+    $t .= 'تعدادِ لازم برای تایید: <b>' . (int)($j['need'] ?? 3) . "</b> نفر\n";
+    $t .= 'مدتِ زندان: <b>' . dmDur((int)($j['secs'] ?? 3600)) . "</b>";
+
+    $rows = [
+        [btnCb('💬 کلمه‌ها', 'dmjw', 'admin'), btnCb('👥 تعدادِ تایید', 'dmjn', 'admin')],
+        [btnCb('⏳ مدتِ زندان', 'dmjs', 'admin')],
+        [btnCb(UT('back'), 'dm_home', 'nav')],
+    ];
     editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
 }
 
@@ -656,6 +798,7 @@ function dmAdminCallback($data, $chatId, $msgId, $cbId) {
         return true;
     }
     if ($data === 'dmt_home') { answerCb(BOT_TOKEN, $cbId); dmAdminTexts($chatId, $msgId); return true; }
+    if ($data === 'dmj_home') { answerCb(BOT_TOKEN, $cbId); dmAdminJail($chatId, $msgId); return true; }
 
     $asks = [
         'dmw'   => ['dm_word',  "💬 کلمه‌ی بازی را بفرستید (مثلا الماس):"],
@@ -669,6 +812,11 @@ function dmAdminCallback($data, $chatId, $msgId, $cbId) {
         'dmsw'  => ['dm_swap',  "🔁 هر ۱ الماس چند تومان؟ (۰ = تبدیل خاموش)"],
         'dmms'  => ['dm_mins',  "🔢 حداقل الماس برای تبدیل:"],
         'dmgive'=> ['dm_give',  "🎁 آیدی عددی کاربر و مقدار را بفرستید.\n\nمثال: <code>123456789 5000</code>"],
+        'dmjw'  => ['dm_jwords', "💬 کلمه‌های زندان را با ویرگول بفرستید (مثلا: میو,هاپ):"],
+        'dmjn'  => ['dm_jneed',  "👥 چند نفرِ متفاوت باید تایید کنند؟ (مثلا 3)"],
+        'dmjs'  => ['dm_jsecs',  "⏳ مدتِ زندان چقدر باشد؟\n\n" .
+                                 "مثال: <code>1 ساعت</code>\n" .
+                                 "عددِ تنها ثانیه حساب می‌شود: <code>3600</code>"],
     ];
     if (isset($asks[$data])) {
         [$act, $ask] = $asks[$data];
@@ -846,6 +994,43 @@ function dmStateHandle($action, $msg, $uid, $chatId) {
             return true;
         }
         return $done('✅ فاصله‌ی بین دو الماس: <b>' . dmDur($sec) . '</b>');
+    }
+    if ($action === 'dm_jwords') {
+        $v = ($text === '-' || $text === '—') ? '' : $text;
+        dmSet(function (&$c) use ($v) { $c['jail']['words'] = $v; });
+        return $done('✅ کلمه‌های زندان: <code>' . h($v) . '</code>');
+    }
+    if ($action === 'dm_jneed') {
+        $n = (int)$num;
+        if ($n < 1 || $n > 20) return $bad('بین ۱ تا ۲۰.');
+        dmSet(function (&$c) use ($n) { $c['jail']['need'] = $n; });
+        return $done('✅ تعدادِ لازم برای تایید: <b>' . $n . '</b> نفر');
+    }
+    if ($action === 'dm_jsecs') {
+        $sec = dmSecs($text);
+        if ($sec === null || $sec < 60 || $sec > 604800)
+            return $bad("بین ۱ دقیقه تا ۷ روز.\n\n" .
+                        "واحد هم می‌شود نوشت: <code>1 ساعت</code>");
+        dmSet(function (&$c) use ($sec) { $c['jail']['secs'] = $sec; });
+
+        cfg(true);
+        $confirmed = (int)dmVal('jail.secs', -1);
+        if ($confirmed !== $sec) {
+            dmSet(function (&$c) use ($sec) { $c['jail']['secs'] = $sec; });
+            cfg(true);
+            $confirmed = (int)dmVal('jail.secs', -1);
+        }
+        if ($confirmed !== $sec) {
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId,
+                "⚠️ <b>ذخیره نشد</b>\n\n" .
+                "خواستم <b>" . dmDur($sec) . "</b> ثبت بشه، ولی رو دیسک همچنان <b>" .
+                dmDur($confirmed) . "</b> مونده.\n\n" .
+                "این یعنی نوشتنِ فایلِ تنظیمات رو سرور شکست می‌خوره — لطفاً همین پیام رو با اسکرین‌شات بفرست.",
+                inlineKb([[btnCb('💎 الماس', 'dm_home', 'admin')]]));
+            return true;
+        }
+        return $done('✅ مدتِ زندان: <b>' . dmDur($sec) . '</b>');
     }
     if ($action === 'dm_step') {
         if ($num < 10 || $num > 100000000) return $bad('بین ۱۰ تا ۱۰۰٬۰۰۰٬۰۰۰.');
