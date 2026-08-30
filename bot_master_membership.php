@@ -63,6 +63,20 @@ if (!defined('DATA_DIR'))
 if (!defined('CRON_KEY'))
     define('CRON_KEY',  getenv('CRON_KEY') ?: '');
 
+// کاربران روی SQLite ذخیره می‌شوند (نه یک فایل JSON بزرگ) — بدون این
+// افزونه هیچ موجودی/سفارش/رفرالی ذخیره نمی‌شود، پس به‌جای شکستِ خاموش
+// همین اول با یک پیامِ روشن می‌ایستیم.
+if (!class_exists('SQLite3')) {
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    exit("افزونه‌ی SQLite3 در PHP این هاست خاموش است.\n\n" .
+         "کاربرانِ ربات (موجودی، رفرال، سفارش) روی این افزونه ذخیره می‌شوند —\n" .
+         "بدونش ربات بالا نمی‌آید تا داده‌ی کسی گم نشود.\n\n" .
+         "در cPanel: Select PHP Version ← Extensions ← تیکِ sqlite3 را بزنید ← Save.\n" .
+         "چیزی دستی ساخته نمی‌شود؛ فایلِ دیتابیس را خودِ ربات داخلِ data_master می‌سازد.\n" .
+         "بعد همین صفحه را دوباره باز کنید.\n");
+}
+
 // بدون توکن و شناسه‌ی ادمین جلوتر نمی‌رویم
 if (!defined('MEMBERSHIP_LIB_ONLY') && (BOT_TOKEN === '' || ADMIN_ID <= 0)) {
     http_response_code(500);
