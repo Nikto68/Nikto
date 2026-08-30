@@ -546,6 +546,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $all[$id]['row']       = max(0, (int)($post['row'] ?? 0));
             $all[$id]['order']     = max(1, (int)($post['order'] ?? 99));
             $all[$id]['smm_service'] = trim($post['smm_service'] ?? '');
+            $all[$id]['smm_auto_price'] = !empty($post['smm_auto_price']);
         });
         go('محصول به‌روزرسانی شد.');
     }
@@ -605,6 +606,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $x['currency'] = $cur !== '' ? $cur : 'تومان';
             $x['desc']     = $desc;
             $x['smm_service'] = trim($post['smm_service'] ?? '');
+            $x['smm_auto_price'] = !empty($post['smm_auto_price']);
             if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
             $x['flow'] = array_merge(defaultFlow(), $x['flow'], ['on' => true, 'ask_admin' => true]);
             $x['flow']['min'] = $min;
@@ -1016,7 +1018,7 @@ $curBot = $_GET['bot'] ?? '';
  * متنیِ ساده برای واردکردنِ دستیِ شماره — تا وقتی هنوز لیستی نگرفته‌ای
  * هم چیزی خراب نشود.
  */
-function smmServiceField($current) {
+function smmServiceField($current, $autoOn = false) {
     $list = function_exists('smmServicesCached') ? smmServicesCached() : [];
     if (!$list) {
         echo '<input name="smm_service" value="' . h($current) . '" placeholder="مثلا 1234" style="direction:ltr">';
@@ -1036,6 +1038,11 @@ function smmServiceField($current) {
         echo '<option value="' . h($current) . '" selected>سرویسِ فعلی (' . h($current) . ') — دیگر در لیست نیست</option>';
     }
     echo '</select>';
+    echo '<label style="font-weight:500;display:block;margin-top:6px">' .
+         '<input type="checkbox" name="smm_auto_price" value="1" style="width:auto"' . ($autoOn ? ' checked' : '') . '> ' .
+         '🔄 قیمتِ خودکار از نرخِ پنل (تتر → تومان، با سودِ بخش «خرید ممبر»)</label>';
+    echo '<small class="muted">وقتی روشنه، فیلدِ «قیمت پایه» بالا نادیده گرفته می‌شود — قیمت هربار از نرخِ زنده‌ی ' .
+         'پنل و تتر و سودِ تنظیم‌شده در تب سود حساب می‌شود.</small>';
 }
 
 function uLabel($users, $id) {
@@ -1441,7 +1448,7 @@ foreach ($tabs as $k => $l): ?>
           <div><label>توضیح کوتاه (اختیاری)</label>
             <input name="desc" value="<?= h($sb['desc'] ?? '') ?>" placeholder="تحویل تدریجی"></div>
           <div><label>🤖 سرویسِ پنلِ SMM (خالی = دستی می‌ماند)</label>
-            <?php smmServiceField((string)($sb['smm_service'] ?? '')); ?></div>
+            <?php smmServiceField((string)($sb['smm_service'] ?? ''), !empty($sb['smm_auto_price'])); ?></div>
         </div>
 
         <div style="margin-top:16px"><label>⚡️ سرعت‌ها</label>
@@ -1688,7 +1695,7 @@ foreach ($tabs as $k => $l): ?>
           <?php endforeach; ?></select></div>
         <div><label>کد لینک محتوا</label><input name="link_code" value="<?= h($p['link_code'] ?? '') ?>"></div>
         <div><label>🤖 سرویسِ پنلِ SMM (خالی = دستی می‌ماند)</label>
-          <?php smmServiceField((string)($p['smm_service'] ?? '')); ?></div>
+          <?php smmServiceField((string)($p['smm_service'] ?? ''), !empty($p['smm_auto_price'])); ?></div>
       </div>
       <div style="margin-top:14px"><button class="btn g">ذخیره</button></div>
     </form>

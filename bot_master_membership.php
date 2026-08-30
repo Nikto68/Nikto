@@ -1717,6 +1717,33 @@ function smmServicesRefresh() {
     return [true, count($list)];
 }
 
+/** نرخِ یک سرویس از لیستِ کش‌شده — دلار به‌ازای هر ۱۰۰۰ تا؛ صفر یعنی پیدا نشد */
+function smmServiceRate($serviceId) {
+    $serviceId = trim((string)$serviceId);
+    if ($serviceId === '') return 0.0;
+    foreach (smmServicesCached() as $s) {
+        if ((string)($s['service'] ?? '') === $serviceId) return (float)($s['rate'] ?? 0);
+    }
+    return 0.0;
+}
+
+/**
+ * 💱 قیمتِ خامِ محصول (بدون سود) از رویِ نرخِ دلاریِ پنل — تبدیل‌شده به
+ * تومان با نرخِ لحظه‌ایِ تتر (همان چیزی که بخشِ «قیمت‌گیری» استفاده
+ * می‌کند)، به‌ازایِ همان تعدادی که «per» محصول تعریف کرده.
+ *
+ * null یعنی نمی‌شود حساب کرد (سرویس نامعلوم یا نرخِ تتر در دسترس نیست)
+ * — آن‌وقت قیمتِ دستیِ قبلی دست‌نخورده می‌ماند، نه صفر.
+ */
+function smmAutoBasePrice($serviceId, $per) {
+    $rate = smmServiceRate($serviceId);
+    if ($rate <= 0) return null;
+    $usdtIrt = function_exists('pxUsdtIrt') ? pxUsdtIrt() : 0;
+    if ($usdtIrt <= 0) return null;
+    $per = max(1, (int)$per);
+    return round($rate * $usdtIrt * ($per / 1000), 2);
+}
+
 /**
  * 🔘 خودِ دکمه شیشه‌ای = محصول
  * هیچ رکورد محصولی لازم نیست؛ قیمت و جریان روی خود دکمه ذخیره می‌شود.
@@ -1738,12 +1765,21 @@ function subProduct($bid, $sid, $sub = null) {
     if (!$sub) return null;
     $flow = defaultFlow();
     foreach (($sub['flow'] ?? []) as $k => $v) $flow[$k] = $v;
+
+    // 💱 اگر «قیمتِ خودکار از پنل» روشن است، قیمتِ خام از رویِ نرخِ
+    // زنده‌ی پنل + تترِ لحظه‌ای حساب می‌شود، نه عددی که ادمین دستی زده
+    $rawPrice = (float)($sub['price'] ?? 0);
+    if (!empty($sub['smm_auto_price']) && !empty($sub['smm_service'])) {
+        $auto = smmAutoBasePrice($sub['smm_service'], $flow['per'] ?? 1000);
+        if ($auto !== null) $rawPrice = $auto;
+    }
+
     return [
         'id'        => subProductId($bid, $sid),
         'name'      => trim((string)($sub['text'] ?? 'محصول')),
         'desc'      => (string)($sub['desc'] ?? ''),
-        'price'      => round(pfApply('member', (float)($sub['price'] ?? 0)), 2),
-        'price_base' => (float)($sub['price'] ?? 0),
+        'price'      => round(pfApply('member', $rawPrice), 2),
+        'price_base' => $rawPrice,
         'currency'  => (string)($sub['currency'] ?? (cfg()['currency'] ?? 'تومان')),
         'limit'     => (int)($sub['limit'] ?? 0),
         'buyers'    => array_values($sub['buyers'] ?? []),
@@ -1757,6 +1793,7 @@ function subProduct($bid, $sid, $sub = null) {
         'flow'      => $flow,
         'report'    => $sub['report'] ?? [],
         'smm_service' => (string)($sub['smm_service'] ?? ''),
+        'smm_auto_price' => !empty($sub['smm_auto_price']),
         'active'    => !empty($sub['on']),
         'virtual'   => true,
         'btn'       => [$bid, $sid],

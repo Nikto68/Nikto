@@ -126,6 +126,11 @@ function pfAmountStr($e) {
 function pfProduct($p) {
     if (!is_array($p)) return $p;
     $base = (float)($p['price'] ?? 0);
+    // 💱 «قیمتِ خودکار از پنل» — همان منطقِ subProduct(), برای محصولِ ساده
+    if (!empty($p['smm_auto_price']) && !empty($p['smm_service']) && function_exists('smmAutoBasePrice')) {
+        $auto = smmAutoBasePrice($p['smm_service'], $p['flow']['per'] ?? 1000);
+        if ($auto !== null) $base = $auto;
+    }
     $p['price_base'] = $base;
     $p['price']      = round(pfApply('member', $base), 2);
     return $p;
