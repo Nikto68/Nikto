@@ -848,8 +848,7 @@ function defaultConfig() {
             'orders_head'  => "📊 <b>سفارش‌های شما</b>\n",
             'referral'     => "👥 <b>داشبورد زیرمجموعه</b>\n\nبا دعوت دوستان خود <b>{percent}%</b> از هر خرید آن‌ها را دریافت کنید.\n\n👥 تعداد زیرمجموعه: <b>{referrals}</b>\n💵 درآمد شما: <b>{ref_earned}</b> تومان",
             'referral_link'=> "🔗 <b>لینک دعوت شما</b>\n\n{link}\n\nاین لینک را با دوستانتان به اشتراک بگذارید.",
-            'referral_wallet' => "💠 <b>اتصال به کیف پول</b>\n\nآدرس کیف پولی که می‌خواهید پورسانتتان به آن واریز شود را بفرستید.",
-            'referral_wallet_ok' => "✅ آدرس کیف پول ثبت شد:\n<code>{address}</code>",
+            'referral_wallet' => "💠 <b>کیف‌پول‌های فروشگاه</b>\n\nهمین آدرس‌ها برای واریزهای فروشگاه استفاده می‌شود:",
             'referral_hist_head' => "🧾 <b>تاریخچه‌ی پورسانت</b>\n",
             'referral_hist_row'  => "▪️ {date} — از خرید <b>{amount}</b> تومانی: <b>+{commission}</b> تومان\n",
             'referral_hist_none' => "هنوز پورسانتی ثبت نشده است.",
@@ -3067,14 +3066,18 @@ function showReferralHistory($uid, $chatId) {
     panelShow($uid, $chatId, 'menu', $t, inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
 }
 
-/** 💠 آدرسِ کیف‌پولِ ثبت‌شده برای دریافتِ پورسانت را نشان بده و بگیرد */
+/** 💠 آدرس‌های کیف‌پولِ خودِ فروشگاه — همان‌هایی که برای واریز استفاده می‌شود */
 function showReferralWallet($uid, $chatId) {
-    $u = getUser($uid) ?: [];
-    $addr = trim((string)($u['ref_wallet'] ?? ''));
-    $t = T('referral_wallet');
-    if ($addr !== '') $t .= "\n\nآدرسِ فعلی:\n<code>" . h($addr) . '</code>';
-    setState($uid, 'ref_wallet');
-    panelShow($uid, $chatId, 'menu', $t, inlineKb([[btnUI('cancel', 'menu_referral', 'cancel')]]));
+    $t = T('referral_wallet') . "\n\n";
+    $any = false;
+    foreach (['USDT', 'TRX', 'CARD'] as $cur) {
+        [$label, $addr] = walletFor($cur);
+        if ($addr === 'تنظیم نشده') continue;
+        $t .= '💠 <b>' . h($label) . "</b>\n<code>" . h($addr) . "</code>\n\n";
+        $any = true;
+    }
+    if (!$any) $t .= 'هنوز هیچ آدرسی از پنل تنظیم نشده است.';
+    panelShow($uid, $chatId, 'menu', trim($t), inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
 }
 
 function supMainBtn($which, $cb) {
@@ -7761,19 +7764,6 @@ function masterHandle($update) {
             return;
         }
         clearState($uid);
-        return;
-    }
-
-    if ($action === 'ref_wallet') {
-        $plain = trim((string)($msg['text'] ?? ''));
-        if ($plain === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ آدرس کیف پول را بفرستید."); return; }
-        mutate('users', function (&$users) use ($uid, $plain) {
-            $k = (string)$uid;
-            if (isset($users[$k])) $users[$k]['ref_wallet'] = $plain;
-        });
-        clearState($uid);
-        sendMsg(BOT_TOKEN, $chatId, T('referral_wallet_ok', ['address' => h($plain)]),
-            inlineKb([[btnCb('👥 زیرمجموعه', 'menu_referral', 'buy')]]));
         return;
     }
 
