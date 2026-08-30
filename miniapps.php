@@ -2141,12 +2141,11 @@ function maDebit($userId, $amount) {
     $amount = round((float)$amount, 2);
     if ($amount <= 0) return false;
 
-    return (bool)mutate('users', function (&$users) use ($userId, $amount) {
-        $k = (string)$userId;
-        if (!isset($users[$k])) return false;
-        $bal = round((float)($users[$k]['balance'] ?? 0), 2);
+    return (bool)mutateUser($userId, function (&$user) use ($amount) {
+        if ($user === null) return false;
+        $bal = round((float)($user['balance'] ?? 0), 2);
         if ($bal + 0.001 < $amount) return false;          // موجودی کافی نیست
-        $users[$k]['balance'] = round($bal - $amount, 2);
+        $user['balance'] = round($bal - $amount, 2);
         return true;
     });
 }

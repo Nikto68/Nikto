@@ -913,17 +913,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ---- کاربران ----
     if ($a === 'ban_user') {
-        $uid = (string)(int)($_POST['user_id'] ?? 0);
-        mutate('users', function (&$all) use ($uid) {
-            if (isset($all[$uid])) $all[$uid]['banned'] = empty($all[$uid]['banned']);
+        $uid = (int)($_POST['user_id'] ?? 0);
+        mutateUser($uid, function (&$user) {
+            if ($user !== null) $user['banned'] = empty($user['banned']);
         });
         go('وضعیت کاربر تغییر کرد.');
     }
     if ($a === 'set_balance') {
-        $uid = (string)(int)($_POST['user_id'] ?? 0);
+        $uid = (int)($_POST['user_id'] ?? 0);
         $val = (float)str_replace(',', '', $_POST['balance'] ?? '0');
-        mutate('users', function (&$all) use ($uid, $val) {
-            if (isset($all[$uid])) $all[$uid]['balance'] = $val;
+        mutateUser($uid, function (&$user) use ($val) {
+            if ($user !== null) $user['balance'] = $val;
         });
         go('موجودی به‌روزرسانی شد.');
     }
@@ -951,7 +951,7 @@ $C        = cfg();
 $products = Product::all();
 $bots     = BotManager::all();
 $orders   = Order::all();
-$users    = load('users');
+$users    = allUsers();
 // شمارش زیرمجموعه‌ها یک‌بار برای کل جدول (قبلا برای هر ردیف کل کاربران پیمایش می‌شد)
 $refCount = [];
 foreach ($users as $_u) {

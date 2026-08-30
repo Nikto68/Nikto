@@ -1139,12 +1139,135 @@ function findMenuAction($text) {
 }
 
 // ============================================================
-// 👤 کاربران، کیف پول، زیرمجموعه
+// 👤 کاربران، کیف پول، زیرمجموعه — روی SQLite، نه یک فایل JSON بزرگ
 // ============================================================
+//
+// چرا: mutate('users', ...) کل فایلِ کاربران را می‌خواند، عوض می‌کند،
+// و کاملش را دوباره می‌نویسد — زیرِ یک قفلِ سراسری. با صدهزار کاربر
+// همان فایل چند ده مگابایت می‌شود؛ یعنی کلیکِ هرکسی معطلِ نوشتنِ
+// کاملِ آن فایل می‌ماند، حتی اگر فقط یک بایتش عوض شده باشد و آن
+// کاربر خودش اصلا داخلش نباشد. SQLite هر کاربر را یک ردیفِ جدا نگه
+// می‌دارد؛ نوشتنِ یک کاربر فقط همان ردیف را دست می‌زند.
+//
+// journal_mode=WAL یعنی خواندن هیچ‌وقت پشتِ نوشتن معطل نمی‌ماند.
+// بقیه‌ی فایل‌ها (config.json و غیره) دست‌نخورده روی همان JSON قدیمی
+// می‌مانند — فقط کاربران، چون تنها فایلی است که در هر آپدیت لمس می‌شود.
+
+function usersDbPath() { return DATA_DIR . '/users.sqlite'; }
+
+function usersDb() {
+    static $db = null;
+    if ($db) return $db;
+    if (!class_exists('SQLite3')) return null;
+
+    $path = usersDbPath();
+    $dir  = dirname($path);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $fresh = !is_file($path);
+
+    try {
+        $db = new SQLite3($path);
+    } catch (Throwable $e) {
+        error_log('[shop-bot] users.sqlite باز نشد: ' . $e->getMessage());
+        return null;
+    }
+    $db->busyTimeout(5000);
+    $db->exec('PRAGMA journal_mode = WAL');
+    $db->exec('PRAGMA synchronous = NORMAL');
+    $db->exec('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, data TEXT NOT NULL)');
+
+    if ($fresh) usersImportFromJson($db);
+    return $db;
+}
+
+/** یک‌بار، فقط وقتی users.sqlite تازه ساخته می‌شود: هرچه در users.json قدیمی بود کوچ می‌کند. */
+function usersImportFromJson($db) {
+    $old = dataPath('users');
+    if (!is_file($old)) return;
+    $raw = @file_get_contents($old);
+    $arr = $raw ? json_decode($raw, true) : null;
+
+    if (is_array($arr) && $arr) {
+        $db->exec('BEGIN');
+        $stmt = $db->prepare('INSERT OR REPLACE INTO users (id, data) VALUES (:id, :data)');
+        foreach ($arr as $k => $v) {
+            $id = (int)$k;
+            if ($id <= 0 || !is_array($v)) continue;
+            $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+            $stmt->bindValue(':data', json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $stmt->execute();
+            $stmt->reset();
+        }
+        $db->exec('COMMIT');
+    }
+    // فایلِ قدیمی پاک نمی‌شود، فقط از سرِ راه می‌رود — برای اطمینان
+    @rename($old, $old . '.migrated');
+}
 
 function getUser($id) {
-    $u = load('users');
-    return $u[(string)$id] ?? null;
+    $db = usersDb();
+    if (!$db) return null;
+    $stmt = $db->prepare('SELECT data FROM users WHERE id = :id');
+    $stmt->bindValue(':id', (int)$id, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    if (!$row) return null;
+    $d = json_decode($row['data'], true);
+    return is_array($d) ? $d : null;
+}
+
+/**
+ * تغییرِ یک کاربر، اتمیک، فقط همان یک ردیف — نه کلِ جدول.
+ * $fn($user) رفرنس می‌گیرد: null یعنی کاربر نیست؛ برای ساختنِ کاربرِ
+ * تازه خودِ $fn باید آن را آرایه کند (نمونه: touchUser). اگر بعد از
+ * $fn هنوز null بود، هیچ ردیفی نوشته نمی‌شود.
+ */
+function mutateUser($id, callable $fn) {
+    $db = usersDb();
+    if (!$db) return null;
+    $id = (int)$id;
+
+    $db->exec('BEGIN IMMEDIATE');
+    try {
+        $stmt = $db->prepare('SELECT data FROM users WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $u = $row ? json_decode($row['data'], true) : null;
+        if (!is_array($u)) $u = null;
+
+        $result = $fn($u);
+
+        if (is_array($u)) {
+            $up = $db->prepare('INSERT OR REPLACE INTO users (id, data) VALUES (:id, :data)');
+            $up->bindValue(':id', $id, SQLITE3_INTEGER);
+            $up->bindValue(':data', json_encode($u, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $up->execute();
+        }
+        $db->exec('COMMIT');
+        return $result;
+    } catch (Throwable $e) {
+        $db->exec('ROLLBACK');
+        error_log('[shop-bot] mutateUser خطا: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/** همه‌ی کاربران یک‌جا — فقط برای شمارش/آمار/همگانی. در مسیرِ داغِ هر پیام استفاده نشود. */
+function allUsers() {
+    $db = usersDb();
+    if (!$db) return [];
+    $out = [];
+    $res = $db->query('SELECT id, data FROM users');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $d = json_decode($row['data'], true);
+        if (is_array($d)) $out[(string)$row['id']] = $d;
+    }
+    return $out;
+}
+
+function countUsers() {
+    $db = usersDb();
+    if (!$db) return 0;
+    return (int)$db->querySingle('SELECT COUNT(*) FROM users');
 }
 
 /**
@@ -1156,8 +1279,7 @@ function getUser($id) {
  * از آخرین دیدنش گذشته، اصلا قفل نمی‌گیریم و فایل را بازنویسی نمی‌کنیم.
  */
 function touchUser($id, $username = '', $firstName = '', $referrer = null) {
-    $k = (string)$id;
-    $cur = load('users')[$k] ?? null;
+    $cur = getUser($id);
     // رکورد قدیمی که هنوز همه‌ی فیلدها را ندارد باید از مسیر عادی رد شود
     // تا فیلدهای تازه به آن اضافه شوند
     $whole = is_array($cur)
@@ -1170,41 +1292,42 @@ function touchUser($id, $username = '', $firstName = '', $referrer = null) {
         if ($seen > 0 && (time() - $seen) < 60) return $cur;
     }
 
-    return mutate('users', function (&$users) use ($id, $username, $firstName, $referrer) {
-        $k = (string)$id;
-        $isNew = !isset($users[$k]);
-        $users[$k] = array_merge([
+    // بررسیِ وجودِ معرف بیرونِ تراکنش — فقط یک خواندنِ سبک است
+    $referrerOk = $referrer && (int)$referrer !== (int)$id && getUser($referrer) !== null;
+
+    return mutateUser($id, function (&$user) use ($id, $username, $firstName, $referrerOk, $referrer) {
+        $isNew = ($user === null);
+        $user = array_merge([
             'telegram_id' => (int)$id,
             'balance'     => 0,
             'referrer'    => null,
             'ref_earned'  => 0,
             'banned'      => false,
             'joined_at'   => nowStr(),
-        ], $users[$k] ?? [], [
+        ], is_array($user) ? $user : [], [
             'username'   => $username,
             'first_name' => $firstName,
             'seen_at'    => nowStr(),
         ]);
         // معرف فقط یک بار و فقط برای کاربر جدید ثبت می‌شود
-        if ($isNew && $referrer && (int)$referrer !== (int)$id && isset($users[(string)$referrer])) {
-            $users[$k]['referrer'] = (int)$referrer;
+        if ($isNew && $referrerOk) {
+            $user['referrer'] = (int)$referrer;
         }
-        return $users[$k];
+        return $user;
     });
 }
 
 function addBalance($userId, $amount) {
-    mutate('users', function (&$users) use ($userId, $amount) {
-        $k = (string)$userId;
-        if (!isset($users[$k])) return;
+    mutateUser($userId, function (&$user) use ($amount) {
+        if ($user === null) return;
         // کیف پول تومانی است و تومان جزء ندارد
-        $users[$k]['balance'] = (float)round((float)$users[$k]['balance'] + (float)$amount);
+        $user['balance'] = (float)round((float)$user['balance'] + (float)$amount);
     });
 }
 
 function countReferrals($userId) {
     $n = 0;
-    foreach (load('users') as $u) if ((int)($u['referrer'] ?? 0) === (int)$userId) $n++;
+    foreach (allUsers() as $u) if ((int)($u['referrer'] ?? 0) === (int)$userId) $n++;
     return $n;
 }
 
@@ -1218,11 +1341,10 @@ function payReferralCommission($buyerId, $amount) {
     // 💠 دیگر خودکار به موجودی واریز نمی‌شود — تا خودِ کاربر «برداشت
     // پورسانت» را نزند، توی ref_pending می‌ماند. ref_earned همچنان
     // مجموعِ کلِ تاریخیِ درآمد است (فقط برای نمایش، دست‌نخورده).
-    mutate('users', function (&$users) use ($u, $commission) {
-        $k = (string)$u['referrer'];
-        if (!isset($users[$k])) return;
-        $users[$k]['ref_earned']  = round((float)($users[$k]['ref_earned'] ?? 0) + $commission, 2);
-        $users[$k]['ref_pending'] = round((float)($users[$k]['ref_pending'] ?? 0) + $commission, 2);
+    mutateUser($u['referrer'], function (&$user) use ($commission) {
+        if ($user === null) return;
+        $user['ref_earned']  = round((float)($user['ref_earned'] ?? 0) + $commission, 2);
+        $user['ref_pending'] = round((float)($user['ref_pending'] ?? 0) + $commission, 2);
     });
     // 🧾 تاریخچه‌ی پورسانت — هر ردیف: خرید کدام زیرمجموعه، چه مبلغی، کِی.
     //    فقط ۵۰ ردیفِ آخرِ هر معرف نگه داشته می‌شود، وگرنه بی‌نهایت بزرگ می‌شود.
@@ -1253,21 +1375,19 @@ function slotGet($uid, $slot) {
 }
 
 function slotSet($uid, $slot, $mid) {
-    mutate('users', function (&$a) use ($uid, $slot, $mid) {
-        $k = (string)$uid;
-        if (!isset($a[$k])) return;
-        if (!is_array($a[$k]['slots'] ?? null)) $a[$k]['slots'] = [];
-        if ($mid) $a[$k]['slots'][$slot] = (int)$mid;
-        else unset($a[$k]['slots'][$slot]);
+    mutateUser($uid, function (&$user) use ($slot, $mid) {
+        if ($user === null) return;
+        if (!is_array($user['slots'] ?? null)) $user['slots'] = [];
+        if ($mid) $user['slots'][$slot] = (int)$mid;
+        else unset($user['slots'][$slot]);
     });
 }
 
 function slotClear($uid, $slot = null) {
-    mutate('users', function (&$a) use ($uid, $slot) {
-        $k = (string)$uid;
-        if (!isset($a[$k])) return;
-        if ($slot === null) $a[$k]['slots'] = [];
-        else unset($a[$k]['slots'][$slot]);
+    mutateUser($uid, function (&$user) use ($slot) {
+        if ($user === null) return;
+        if ($slot === null) $user['slots'] = [];
+        else unset($user['slots'][$slot]);
     });
 }
 
@@ -2317,8 +2437,8 @@ function hintHideOnce($uid, $chatId) {
     if (cfg()['ui']['mode'] !== 'menu') return;
     $u = getUser($uid);
     if (!empty($u['hide_hint'])) return;
-    mutate('users', function (&$a) use ($uid) {
-        if (isset($a[(string)$uid])) $a[(string)$uid]['hide_hint'] = true;
+    mutateUser($uid, function (&$user) {
+        if ($user !== null) $user['hide_hint'] = true;
     });
     sendMsg(BOT_TOKEN, $chatId, "ℹ️ برای بستن منو هر وقت خواستید /hide را بزنید.");
 }
@@ -3120,9 +3240,8 @@ function refWithdraw($uid, $chatId) {
         return;
     }
     addBalance($uid, $pending);
-    mutate('users', function (&$users) use ($uid) {
-        $k = (string)$uid;
-        if (isset($users[$k])) $users[$k]['ref_pending'] = 0;
+    mutateUser($uid, function (&$user) {
+        if ($user !== null) $user['ref_pending'] = 0;
     });
     panelShow($uid, $chatId, 'menu', T('referral_wallet_ok', ['amount' => fmtNum($pending)]),
         inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
@@ -3201,9 +3320,8 @@ function topupRulesGate($uid, $chatId, $replyTo = null) {
     $mid = (int)($res['result']['message_id'] ?? 0);
     if ($mid) {
         tg(BOT_TOKEN, 'pinChatMessage', ['chat_id' => $chatId, 'message_id' => $mid, 'disable_notification' => true]);
-        mutate('users', function (&$users) use ($uid, $mid) {
-            $k = (string)$uid;
-            if (isset($users[$k])) $users[$k]['topup_rules_msg'] = $mid;
+        mutateUser($uid, function (&$user) use ($mid) {
+            if ($user !== null) $user['topup_rules_msg'] = $mid;
         });
     }
     return false;
@@ -3930,10 +4048,10 @@ function flowFinish($uid, $chatId, $uname) {
                  ($meta['eta'] ? ' · ' . $meta['eta'] : ''));
     setState($uid, 'flow_meta', $meta);
     // نسخه ماندگار — اگر کاربر وسط کار رفت شارژ کند، مشخصات سفارش گم نشود
-    mutate('users', function (&$a) use ($uid, $meta, $p, $total) {
-        if (!isset($a[(string)$uid])) return;
-        $a[(string)$uid]['pending'] = ['pid' => $p['id'], 'amount' => $total,
-                                       'currency' => $p['currency'], 'meta' => $meta, 'at' => nowStr()];
+    mutateUser($uid, function (&$user) use ($meta, $p, $total) {
+        if ($user === null) return;
+        $user['pending'] = ['pid' => $p['id'], 'amount' => $total,
+                             'currency' => $p['currency'], 'meta' => $meta, 'at' => nowStr()];
     });
 
     settlePurchase($uid, $chatId, $uname, $p, $total, $meta);
@@ -4178,7 +4296,7 @@ function completeApprovedOrder($order) {
 
         if ($pp && $need > 0 && $balT >= $need) {
             addBalance($uidT, -$need);
-            mutate('users', function (&$a) use ($uidT) { unset($a[(string)$uidT]['pending']); });
+            mutateUser($uidT, function (&$user) { if ($user !== null) unset($user['pending']); });
             clearState($uidT);
 
             $oid2 = Order::create($uidT, $order['username'] ?? '', 'product', $pend['pid'],
@@ -4222,10 +4340,10 @@ function settlePurchase($uid, $chatId, $uname, $p, $total, $meta = []) {
     $short = max(0, $total - $bal);
 
     // مشخصات سفارش را نگه دار تا اگر رفت شارژ کند، گم نشود
-    mutate('users', function (&$a) use ($uid, $meta, $p, $total) {
-        if (!isset($a[(string)$uid])) return;
-        $a[(string)$uid]['pending'] = ['pid' => $p['id'], 'amount' => $total,
-                                       'currency' => $p['currency'], 'meta' => $meta, 'at' => nowStr()];
+    mutateUser($uid, function (&$user) use ($meta, $p, $total) {
+        if ($user === null) return;
+        $user['pending'] = ['pid' => $p['id'], 'amount' => $total,
+                             'currency' => $p['currency'], 'meta' => $meta, 'at' => nowStr()];
     });
 
     if ($short > 0) {
@@ -4235,7 +4353,7 @@ function settlePurchase($uid, $chatId, $uname, $p, $total, $meta = []) {
 
     addBalance($uid, -$total);
     clearState($uid);
-    mutate('users', function (&$a) use ($uid) { unset($a[(string)$uid]['pending']); });
+    mutateUser($uid, function (&$user) { if ($user !== null) unset($user['pending']); });
 
     $oid = Order::create($uid, $uname, 'product', $p['id'], $total, $p['currency'], $meta);
     Order::attachReceipt($oid, 'text', 'پرداخت از کیف پول');
@@ -4342,7 +4460,7 @@ function notifyAdminOrder($orderId) {
 
 function admHome($chatId, $msgId = null) {
     $text  = "👑 <b>پنل مدیریت</b>\n\n";
-    $text .= "👥 کاربران: " . count(load('users')) . "\n";
+    $text .= "👥 کاربران: " . countUsers() . "\n";
     $text .= "🛒 محصولات: " . count(Product::all()) . "\n";
     $text .= "🤖 ربات‌های اپلودر: " . count(BotManager::all()) . "\n";
     $text .= "📢 کانال‌های اجباری: " . count(Channels::all()) . "\n";
@@ -4461,11 +4579,13 @@ function admLeakTest($chatId) {
 
 ";
     $leaks = [];
-    foreach (['config.json', 'users.json', 'orders.json'] as $f) {
+    foreach (['config.json', 'users.sqlite', 'orders.json'] as $f) {
         $url = $root . '/' . $dir . '/' . $f;
         [$body, $err] = maHttpRaw($url, 8);
+        // users.sqlite باینری است و با «SQLite format 3» شروع می‌شود، نه { یا [
         $open = is_string($body) && strlen($body) > 2 &&
-                (str_starts_with(ltrim($body), '{') || str_starts_with(ltrim($body), '['));
+                (str_starts_with(ltrim($body), '{') || str_starts_with(ltrim($body), '[') ||
+                 str_starts_with($body, 'SQLite format 3'));
         if ($open) $leaks[] = $f;
         $t .= ($open ? '🔴' : '✅') . ' <code>' . h($dir . '/' . $f) . '</code>' .
               ($open ? ' — <b>از بیرون باز است!</b>' : ' — بسته') . "
@@ -6015,9 +6135,8 @@ function masterHandle($update) {
             return;
         }
         if ($data === 'tr_ok') {
-            mutate('users', function (&$users) use ($uid) {
-                $k = (string)$uid;
-                if (isset($users[$k])) $users[$k]['topup_rules_ok'] = true;
+            mutateUser($uid, function (&$user) {
+                if ($user !== null) $user['topup_rules_ok'] = true;
             });
             if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, (string)cfg()['topup_rules']['text'],
                 inlineKb([[trBtn('done', 'trnop')]]));
@@ -8134,7 +8253,7 @@ function masterHandle($update) {
                              (string)($sd['currency'] ?? 'تومان'), $sd['meta'] ?? []);
         Order::attachReceipt($oid, $type, $val);
         clearState($uid);
-        mutate('users', function (&$a) use ($uid) { unset($a[(string)$uid]['pending']); });
+        mutateUser($uid, function (&$user) { if ($user !== null) unset($user['pending']); });
 
         $m = $sd['meta'] ?? [];
         $t  = "✅ <b>سفارش شما ثبت شد</b>\n\n";
@@ -8768,7 +8887,7 @@ function masterHandle($update) {
  */
 function bcQueue($html, $botIds = null) {
     $ids = [];
-    foreach (load('users') as $u) {
+    foreach (allUsers() as $u) {
         if (!empty($u['banned'])) continue;
         $t = (int)($u['telegram_id'] ?? 0);
         if ($t > 0) $ids[] = $t;
