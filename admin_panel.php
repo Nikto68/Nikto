@@ -717,6 +717,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('اتصال پنل ممبر ذخیره شد.');
     }
 
+    // ---- ساختِ خودکارِ «ری‌اکشن پست» و «ممبر پریمیوم» — بدون نیاز به ساختنِ دستیِ زیردکمه ----
+    if ($a === 'autocreate_react_premium') {
+        [$ok, $msg] = function_exists('autoCreateReactAndPremium') ? autoCreateReactAndPremium('buy') : [false, 'تابع پیدا نشد.'];
+        go($msg, $ok ? 'ok' : 'err');
+    }
+
     // ---- راه‌اندازیِ یک‌کلیکِ بوستِ تلگرام روی یک دکمه‌ی موجود ----
     if ($a === 'boost_quickstart') {
         $parts = explode('|', (string)($_POST['target'] ?? ''), 2);
@@ -1667,6 +1673,19 @@ $tabFolders = [
       <div class="muted" style="margin-top:8px">📋 <?= count($svcList) ?> سرویس گرفته‌شده — پایین همین صفحه، توی هر محصول قابل انتخاب است.</div>
     <?php endif; ?>
     <?php endif; ?>
+  </div></div>
+
+  <div class="card"><h2>⚡️ ساختِ خودکار: «ری‌اکشن پست» + «ممبر پریمیوم»</h2><div class="body">
+    <div class="note">
+      این یکی نیازی به انتخابِ یک دکمه‌ی موجود نداره — خودش از صفر دو تا زیردکمه‌ی تازه می‌سازه، زیرِ «خرید محصول»:
+      «😍 ری‌اکشن پست تلگرام» و «⭐ ممبر پریمیوم» — هر دو با قیمتِ خودکار از پنلِ SMM.
+      فقط بعدش برو رو هرکدوم و سرویسِ واقعیِ پنل رو از دراپ‌داون انتخاب کن.
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
+      <input type="hidden" name="action" value="autocreate_react_premium">
+      <button class="btn b">⚡️ بساز</button>
+    </form>
   </div></div>
 
   <div class="card"><h2>🚀 راه‌اندازیِ یک‌کلیکِ «بوست تلگرام»</h2><div class="body">
