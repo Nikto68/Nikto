@@ -526,6 +526,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ تنظیماتِ شماره مجازی ذخیره شد.');
     }
 
+    // ---- 🚀 مینی‌اپ‌ها ----
+    if ($a === 'save_miniapps_root') {
+        maSetRoot(function (&$m) {
+            $m['base_url']   = trim((string)($_POST['base_url'] ?? ''));
+            $m['row_layout'] = trim((string)($_POST['row_layout'] ?? '')) ?: '1,1';
+        });
+        go('✅ آدرس و چیدمانِ مینی‌اپ‌ها ذخیره شد.');
+    }
+    if ($a === 'save_miniapp_app') {
+        $key = ($_POST['key'] ?? '') === 'num' ? 'num' : 'tg';
+        $post = $_POST;
+        maSet($key, function (&$app) use ($post) {
+            $app['on'] = !empty($post['app_on']);
+            if (!is_array($app['theme'] ?? null)) $app['theme'] = [];
+            foreach (['c1', 'c2', 'c3', 'bg'] as $ck) {
+                $v = trim((string)($post['theme_' . $ck] ?? ''));
+                if (preg_match('/^#[0-9a-fA-F]{6}$/', $v)) $app['theme'][$ck] = $v;
+            }
+            $app['theme']['glow']  = !empty($post['theme_glow']);
+            $app['theme']['grain'] = !empty($post['theme_grain']);
+            $app['theme']['fx']    = max(0, min(2, (int)($post['theme_fx'] ?? 2)));
+        });
+        go('✅ تنظیماتِ این مینی‌اپ ذخیره شد.');
+    }
+    if ($a === 'save_miniapp_cats') {
+        $key = ($_POST['key'] ?? '') === 'num' ? 'num' : 'tg';
+        $onIds = (array)($_POST['cat_on'] ?? []);
+        maSet($key, function (&$app) use ($onIds) {
+            if (!is_array($app['cats'] ?? null)) return;
+            foreach ($app['cats'] as $i => $c) {
+                $app['cats'][$i]['on'] = in_array((string)($c['id'] ?? ''), $onIds, true);
+            }
+        });
+        go('✅ دسته‌بندی‌ها ذخیره شد.');
+    }
+    if ($a === 'save_miniapp_items') {
+        $key = ($_POST['key'] ?? '') === 'num' ? 'num' : 'tg';
+        $onIds  = (array)($_POST['item_on'] ?? []);
+        $prices = (array)($_POST['item_price'] ?? []);
+        maSet($key, function (&$app) use ($onIds, $prices) {
+            if (!is_array($app['items'] ?? null)) return;
+            foreach ($app['items'] as $i => $it) {
+                $id = (string)($it['id'] ?? '');
+                $app['items'][$i]['on'] = in_array($id, $onIds, true);
+                if (isset($prices[$id]) && is_numeric(str_replace([',', '،'], '', $prices[$id]))) {
+                    $app['items'][$i]['price'] = (float)str_replace([',', '،'], '', $prices[$id]);
+                }
+            }
+        });
+        go('✅ سرویس‌ها ذخیره شد.');
+    }
+
     // ---- محصولات ----
     if ($a === 'add_product') {
         $name = trim($_POST['name'] ?? '');
@@ -3305,9 +3357,102 @@ def join_gate(user_id):
 
 <?php // ================= 🚀 مینی‌اپ‌ها ================= ?>
 <?php elseif ($tab === 'miniapps'): ?>
+  <?php $MAC = maCfg(); $maBase = maBaseUrl(); ?>
   <div class="card"><h2>🚀 مینی‌اپ‌ها</h2><div class="body">
-    <div class="note">این بخش داره تکمیل می‌شه — فعلاً کاتالوگ و روشن/خاموشیِ هر آیتم رو از <code>/panel</code> ← 🚀 تنظیماتِ مینی‌اپ‌ها انجام بده.</div>
+    <div class="note">
+      متن‌ها، دکمه‌ی زیرِ محصولات، و دکمه‌های شیشه‌ایِ فاکتور همچنان تو <code>/panel</code> ← 🚀 تنظیماتِ مینی‌اپ‌ها می‌مونن —
+      اینجا فقط آدرس، تمِ گرافیکی، دسته‌بندی‌ها و قیمتِ سرویس‌هاست.
+    </div>
+    <?php if ($maBase === ''): ?>
+      <div class="flash warn">⚠️ آدرسِ عمومی ثبت نشده — تا وقتی ثبت نشه، دکمه‌ی مینی‌اپ نمایش داده نمی‌شه.</div>
+    <?php endif; ?>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="miniapps">
+      <input type="hidden" name="action" value="save_miniapps_root">
+      <div class="grid2">
+        <div><label>🔗 آدرسِ عمومیِ فایلِ ربات (باید https باشه)</label>
+          <input name="base_url" value="<?= h($MAC['base_url'] ?? '') ?>" placeholder="https://site.com/bot_master_membership.php" style="direction:ltr"></div>
+        <div><label>📐 چیدمانِ دکمه‌های مینی‌اپ زیرِ محصولات</label>
+          <input name="row_layout" value="<?= h($MAC['row_layout'] ?? '1,1') ?>" style="direction:ltr"></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn g">ذخیره</button></div>
+    </form>
   </div></div>
+
+  <?php foreach (maKeys() as $mk):
+    $app = maGet($mk); $th = $app['theme'] ?? [];
+    $appLbl = $mk === 'tg' ? '🌟 خدمات تلگرام' : '☎️ شماره مجازی';
+  ?>
+  <div class="card"><h2><?= h($appLbl) ?>
+    <?= !empty($app['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
+  </h2><div class="body">
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="miniapps">
+      <input type="hidden" name="action" value="save_miniapp_app"><input type="hidden" name="key" value="<?= h($mk) ?>">
+      <div class="subcard"><h3>🔌 وضعیت</h3>
+        <label style="font-weight:500"><input type="checkbox" name="app_on" style="width:auto"
+          <?= !empty($app['on']) ? 'checked' : '' ?>> این مینی‌اپ روشن باشد</label>
+        <?php $mu = maUrl($mk); if ($mu !== ''): ?>
+          <div class="muted" style="margin-top:6px"><code style="direction:ltr;display:inline-block"><?= h($mu) ?></code></div>
+        <?php endif; ?>
+      </div>
+      <div class="subcard"><h3>🎨 تمِ گرافیکی</h3>
+        <div class="grid2">
+          <div><label>رنگِ اصلی</label><input type="color" name="theme_c1" value="<?= h($th['c1'] ?? '#7C4DFF') ?>" style="padding:4px;height:42px"></div>
+          <div><label>رنگِ دوم</label><input type="color" name="theme_c2" value="<?= h($th['c2'] ?? '#00E5FF') ?>" style="padding:4px;height:42px"></div>
+          <div><label>رنگِ تاکید</label><input type="color" name="theme_c3" value="<?= h($th['c3'] ?? '#FF3D9A') ?>" style="padding:4px;height:42px"></div>
+          <div><label>پس‌زمینه</label><input type="color" name="theme_bg" value="<?= h($th['bg'] ?? '#080512') ?>" style="padding:4px;height:42px"></div>
+        </div>
+        <div style="margin-top:10px">
+          <label style="font-weight:500"><input type="checkbox" name="theme_glow" style="width:auto" <?= !empty($th['glow']) ? 'checked' : '' ?>> ✨ درخشش</label>
+          <label style="font-weight:500"><input type="checkbox" name="theme_grain" style="width:auto" <?= !empty($th['grain']) ? 'checked' : '' ?>> بافت</label>
+        </div>
+        <div style="margin-top:10px;max-width:240px"><label>سطحِ افکت (۰ خاموش تا ۲ کامل)</label>
+          <input name="theme_fx" type="number" min="0" max="2" value="<?= (int)($th['fx'] ?? 2) ?>"></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn g">ذخیره این مینی‌اپ</button></div>
+    </form>
+
+    <?php if (!empty($app['cats'])): ?>
+    <form method="post" style="margin-top:16px">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="miniapps">
+      <input type="hidden" name="action" value="save_miniapp_cats"><input type="hidden" name="key" value="<?= h($mk) ?>">
+      <div class="subcard"><h3>📂 دسته‌بندی‌ها</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:9px">
+          <?php foreach ($app['cats'] as $c): ?>
+            <label style="font-weight:500;background:#1e1e1e;padding:7px 12px;border-radius:9px">
+              <input type="checkbox" name="cat_on[]" value="<?= h($c['id']) ?>" style="width:auto"
+                <?= !empty($c['on']) ? 'checked' : '' ?>> <?= h(trim(($c['emoji'] ?? '') . ' ' . $c['name'])) ?>
+            </label>
+          <?php endforeach; ?>
+        </div>
+        <div style="margin-top:14px"><button class="btn g">ذخیره دسته‌بندی‌ها</button></div>
+      </div>
+    </form>
+    <?php endif; ?>
+
+    <?php if (!empty($app['items'])): ?>
+    <form method="post" style="margin-top:16px">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="miniapps">
+      <input type="hidden" name="action" value="save_miniapp_items"><input type="hidden" name="key" value="<?= h($mk) ?>">
+      <div class="subcard"><h3>🛒 سرویس‌ها (<?= count($app['items']) ?>)</h3>
+        <div class="scroll"><table>
+          <tr><th>سرویس</th><th>قیمت</th><th>روشن</th></tr>
+          <?php foreach ($app['items'] as $it): $iid = (string)($it['id'] ?? ''); if ($iid === '') continue; ?>
+            <tr>
+              <td><?= h(trim(($it['emoji'] ?? '') . ' ' . $it['name'])) ?>
+                <?php if (!empty($it['desc'])): ?><div class="muted"><?= h(mb_substr($it['desc'], 0, 50)) ?></div><?php endif; ?></td>
+              <td><input name="item_price[<?= h($iid) ?>]" value="<?= h(number_format((float)($it['price'] ?? 0))) ?>" style="direction:ltr;min-width:110px"></td>
+              <td><input type="checkbox" name="item_on[]" value="<?= h($iid) ?>" style="width:auto" <?= !empty($it['on']) ? 'checked' : '' ?>></td>
+            </tr>
+          <?php endforeach; ?>
+        </table></div>
+        <div style="margin-top:14px"><button class="btn g">ذخیره سرویس‌ها</button></div>
+      </div>
+    </form>
+    <?php endif; ?>
+  </div></div>
+  <?php endforeach; ?>
 
 <?php // ================= 💎 الماس ================= ?>
 <?php elseif ($tab === 'diamond'): ?>
