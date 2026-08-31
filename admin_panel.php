@@ -578,6 +578,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ سرویس‌ها ذخیره شد.');
     }
 
+    // ---- 💎 الماس ----
+    if ($a === 'save_diamond') {
+        $post = $_POST;
+        dmSet(function (&$c) use ($post) {
+            $c['on']         = !empty($post['dm_on']);
+            $c['group_only'] = !empty($post['group_only']);
+            $c['word']       = trim((string)($post['word'] ?? 'الماس')) ?: 'الماس';
+            $c['aliases']    = trim((string)($post['aliases'] ?? ''));
+            $c['cooldown']   = max(0, (int)($post['cooldown'] ?? 300));
+            $c['base']       = max(0, (float)str_replace([',', '،'], '', $post['base'] ?? 0));
+            $c['ratio']      = max(1, (float)str_replace([',', '،'], '', $post['ratio'] ?? 1));
+            $c['min']        = max(0, (float)str_replace([',', '،'], '', $post['min_reward'] ?? 0));
+            $c['cap']        = max(0, (float)str_replace([',', '،'], '', $post['cap'] ?? 0));
+            $c['top_n']      = max(1, (int)($post['top_n'] ?? 10));
+            $c['level_step'] = max(1, (int)($post['level_step'] ?? 10000));
+            $c['to_wallet']  = max(0, (float)str_replace([',', '،'], '', $post['to_wallet'] ?? 0));
+            $c['min_swap']   = max(0, (float)str_replace([',', '،'], '', $post['min_swap'] ?? 0));
+            if (!is_array($c['gift'] ?? null)) $c['gift'] = [];
+            $c['gift']['on']    = !empty($post['gift_on']);
+            $c['gift']['cost']  = max(0, (float)str_replace([',', '،'], '', $post['gift_cost'] ?? 0));
+            $c['gift']['app']   = ($post['gift_app'] ?? 'tg') === 'num' ? 'num' : 'tg';
+            $c['gift']['item']  = trim((string)($post['gift_item'] ?? ''));
+            $c['gift']['word']  = trim((string)($post['gift_word'] ?? 'هدیه')) ?: 'هدیه';
+            $c['gift']['limit'] = max(0, (int)($post['gift_limit'] ?? 0));
+            if (!is_array($c['jail'] ?? null)) $c['jail'] = [];
+            $c['jail']['words'] = trim((string)($post['jail_words'] ?? ''));
+            $c['jail']['need']  = max(1, (int)($post['jail_need'] ?? 3));
+            $c['jail']['secs']  = max(0, (int)($post['jail_secs'] ?? 3600));
+            $c['jail']['color'] = isStyle($post['jail_color'] ?? '') ? $post['jail_color'] : 'danger';
+        });
+        go('✅ تنظیماتِ الماس ذخیره شد.');
+    }
+
     // ---- محصولات ----
     if ($a === 'add_product') {
         $name = trim($_POST['name'] ?? '');
@@ -3456,8 +3489,88 @@ def join_gate(user_id):
 
 <?php // ================= 💎 الماس ================= ?>
 <?php elseif ($tab === 'diamond'): ?>
-  <div class="card"><h2>💎 الماس</h2><div class="body">
-    <div class="note">این بخش داره تکمیل می‌شه — فعلاً از <code>/panel</code> ← 💎 الماس انجام بده.</div>
+  <?php $DM = dmCfg(); $DMS = function_exists('dmStats') ? dmStats() : ['users' => 0, 'points' => 0, 'total' => 0]; ?>
+  <div class="card"><h2>💎 الماس
+    <?= !empty($DM['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
+  </h2><div class="body">
+    <div class="note">
+      متن‌های پیام‌ها (وقتی الماس می‌گیره، لِول‌آپ، هدیه، زندان و...) همچنان تو <code>/panel</code> ← 💎 الماس ← ✏️ متن‌ها می‌مونن.
+    </div>
+    <div class="stats" style="margin-bottom:16px">
+      <div class="stat"><div class="n"><?= number_format($DMS['users']) ?></div><div class="l">👥 بازیکن</div></div>
+      <div class="stat"><div class="n"><?= number_format($DMS['points']) ?></div><div class="l">💎 مجموعِ الماس</div></div>
+      <div class="stat"><div class="n"><?= number_format($DMS['total']) ?></div><div class="l">🔁 تعدادِ دفعات</div></div>
+    </div>
+
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="diamond">
+      <input type="hidden" name="action" value="save_diamond">
+
+      <div class="subcard"><h3>🔌 وضعیت و کلمه</h3>
+        <div style="margin-bottom:10px">
+          <label style="font-weight:500"><input type="checkbox" name="dm_on" style="width:auto" <?= !empty($DM['on']) ? 'checked' : '' ?>> روشن باشد</label>
+          <label style="font-weight:500"><input type="checkbox" name="group_only" style="width:auto" <?= !empty($DM['group_only']) ? 'checked' : '' ?>> فقط داخلِ گروه کار کند</label>
+        </div>
+        <div class="grid2">
+          <div><label>💬 کلمه</label><input name="word" value="<?= h($DM['word'] ?? 'الماس') ?>"></div>
+          <div><label>➕ کلمه‌های دیگر (با ویرگول)</label><input name="aliases" value="<?= h($DM['aliases'] ?? '') ?>"></div>
+        </div>
+      </div>
+
+      <div class="subcard"><h3>🎁 جایزه</h3>
+        <div class="grid2">
+          <div><label>⏳ فاصله بینِ دو الماس (ثانیه)</label><input name="cooldown" type="number" min="0" value="<?= (int)($DM['cooldown'] ?? 300) ?>"></div>
+          <div><label>🎁 جایزه‌ی پایه (سطح ۱)</label><input name="base" value="<?= h($DM['base'] ?? 56.74) ?>" style="direction:ltr"></div>
+          <div><label>📈 ضریبِ رشدِ جایزه با هر سطح</label><input name="ratio" value="<?= h($DM['ratio'] ?? 1.2336) ?>" style="direction:ltr"></div>
+          <div><label>🔢 کفِ جایزه</label><input name="min_reward" value="<?= h($DM['min'] ?? 20) ?>" style="direction:ltr"></div>
+          <div><label>🧢 سقفِ جایزه</label><input name="cap" value="<?= h($DM['cap'] ?? 1000000000) ?>" style="direction:ltr"></div>
+          <div><label>⭐️ امتیاز لازم برای هر سطح</label><input name="level_step" type="number" min="1" value="<?= (int)($DM['level_step'] ?? 10000) ?>"></div>
+          <div><label>🏆 تعدادِ نفراتِ لیستِ برترین‌ها</label><input name="top_n" type="number" min="1" value="<?= (int)($DM['top_n'] ?? 10) ?>"></div>
+        </div>
+      </div>
+
+      <div class="subcard"><h3>🔁 تبدیل به کیف پول (۰ = خاموش)</h3>
+        <div class="grid2">
+          <div><label>هر ۱ الماس چند تومان</label><input name="to_wallet" value="<?= h($DM['to_wallet'] ?? 0) ?>" placeholder="0 = خاموش" style="direction:ltr"></div>
+          <div><label>حداقلِ الماس برای تبدیل</label><input name="min_swap" value="<?= h($DM['min_swap'] ?? 10000) ?>" style="direction:ltr"></div>
+        </div>
+      </div>
+
+      <div class="subcard"><h3>🎁 هدیه با الماس</h3>
+        <div style="margin-bottom:10px">
+          <label style="font-weight:500"><input type="checkbox" name="gift_on" style="width:auto" <?= !empty($DM['gift']['on']) ? 'checked' : '' ?>> روشن باشد</label>
+        </div>
+        <div class="grid2">
+          <div><label>💎 چند الماس خرج شود</label><input name="gift_cost" value="<?= h($DM['gift']['cost'] ?? 100000) ?>" style="direction:ltr"></div>
+          <div><label>🚀 کدام مینی‌اپ</label>
+            <select name="gift_app">
+              <option value="tg" <?= ($DM['gift']['app'] ?? 'tg') === 'tg' ? 'selected' : '' ?>>🌟 خدمات تلگرام</option>
+              <option value="num" <?= ($DM['gift']['app'] ?? 'tg') === 'num' ? 'selected' : '' ?>>☎️ شماره مجازی</option>
+            </select></div>
+          <div><label>🛍 شناسه‌ی محصول (از کاتالوگِ همون مینی‌اپ)</label>
+            <input name="gift_item" value="<?= h($DM['gift']['item'] ?? '') ?>" style="direction:ltr"></div>
+          <div><label>💬 کاربر چه بنویسد</label><input name="gift_word" value="<?= h($DM['gift']['word'] ?? 'هدیه') ?>"></div>
+          <div><label>🔢 سقفِ دفعات برای هر نفر (۰ = بی‌نهایت)</label>
+            <input name="gift_limit" type="number" min="0" value="<?= (int)($DM['gift']['limit'] ?? 0) ?>"></div>
+        </div>
+      </div>
+
+      <div class="subcard"><h3>🚨 زندان</h3>
+        <div class="grid2">
+          <div><label>کلمه‌های دام (با ویرگول)</label><input name="jail_words" value="<?= h($DM['jail']['words'] ?? '') ?>"></div>
+          <div><label>چند نفرِ متفاوت باید تایید کنن</label><input name="jail_need" type="number" min="1" value="<?= (int)($DM['jail']['need'] ?? 3) ?>"></div>
+          <div><label>مدتِ زندان (ثانیه)</label><input name="jail_secs" type="number" min="0" value="<?= (int)($DM['jail']['secs'] ?? 3600) ?>"></div>
+          <div><label>رنگِ دکمه‌ی تایید</label>
+            <select name="jail_color">
+              <?php foreach (styleMap() as $sk => $sl): ?>
+                <option value="<?= h($sk) ?>" <?= ($DM['jail']['color'] ?? 'danger') === $sk ? 'selected' : '' ?>><?= h($sl) ?></option>
+              <?php endforeach; ?>
+            </select></div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ الماس</button></div>
+    </form>
   </div></div>
 
 <?php // ================= 🎮 بازی‌ها ================= ?>
