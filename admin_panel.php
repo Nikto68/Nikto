@@ -700,6 +700,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $x['flow']['max'] = $max;
             $x['flow']['per'] = $per;
             $x['flow']['speed_layout'] = trim((string)($post['speed_layout'] ?? '1')) ?: '1';
+            $x['flow']['speed_mode'] = ($post['speed_mode'] ?? 'grid') === 'carousel' ? 'carousel' : 'grid';
 
             // متن، ایموجی، رنگ، ضریب، نفر/روز و توضیح هر سرعت
             foreach ($x['flow']['speeds'] as $i => $sp) {
@@ -1603,6 +1604,13 @@ foreach ($tabs as $k => $l): ?>
             <?php smmServiceField((string)($sb['smm_service'] ?? ''), !empty($sb['smm_auto_price'])); ?></div>
           <div><label>📐 چیدمانِ دکمه‌های سرعت/پلن (مثلا <code>1,2,1</code> یعنی یکی بالا، دوتا وسط، یکی پایین)</label>
             <input name="speed_layout" value="<?= h($f['speed_layout'] ?? '1') ?>" placeholder="1" style="direction:ltr"></div>
+          <div><label>🎠 نمایشِ سرعت/پلن‌ها</label>
+            <select name="speed_mode">
+              <option value="grid" <?= ($f['speed_mode'] ?? 'grid') === 'grid' ? 'selected' : '' ?>>🔲 دکمه‌های جدا (طبقِ چیدمانِ بالا)</option>
+              <option value="carousel" <?= ($f['speed_mode'] ?? 'grid') === 'carousel' ? 'selected' : '' ?>>🎠 اسلایدر (۱ دکمه بالا + قبلی/بعدی)</option>
+            </select>
+            <small class="muted">حالتِ اسلایدر برای وقتی خوبه که چندتا پلنِ زیاد داری (مثلا ۴-۵ تا مدت) —
+              فقط یکی بالا نشون داده می‌شه، با ◀️ قبلی / بعدی▶️ بینشون جابه‌جا می‌شی.</small></div>
           <div><label style="font-weight:500;margin-top:22px;display:block">
             <input type="checkbox" name="ask_admin" value="1" style="width:auto"
               <?= (!isset($f['ask_admin']) || !empty($f['ask_admin'])) ? 'checked' : '' ?>>

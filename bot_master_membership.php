@@ -4117,6 +4117,42 @@ function flowNext($uid, $chatId, $step) {
             return;
         }
 
+        $head = ($sd['data']['rate_note'] ?? '') !== '' ? $sd['data']['rate_note'] . "\n\n" : '';
+        $qtyNow = (int)($sd['data']['qty'] ?? 0);
+
+        // 🎠 حالتِ اسلایدر — یک دکمه‌ی بالا (خودِ انتخاب) + قبلی/بعدی برای
+        // ورق‌زدن بینِ پلن‌ها؛ برای وقتی پلن‌ها زیادند و چیدمانِ توری شلوغه
+        if (($f['speed_mode'] ?? 'grid') === 'carousel') {
+            $n = count($speeds);
+            $idx = (int)($sd['data']['speed_idx'] ?? 0);
+            $idx = (($idx % $n) + $n) % $n;
+            $sd['data']['speed_idx'] = $idx;
+            setState($uid, 'flow', $sd);
+            $cur = $speeds[$idx];
+
+            $top = ['text' => speedBtnLabel($cur), 'callback_data' => 'fsp_' . $cur['id']];
+            if (isStyle($cur['color'] ?? '')) $top['style'] = $cur['color'];
+            elseif (gs('buy')) $top['style'] = gs('buy');
+            if (!empty($cur['icon'])) $top['icon_custom_emoji_id'] = (string)$cur['icon'];
+
+            $rows = [
+                [$top],
+                [btnCb('◀️ قبلی', 'fspnav_prev', 'nav'), btnCb('بعدی ▶️', 'fspnav_next', 'nav')],
+                [btnUI('cancel', 'cancel', 'cancel')],
+            ];
+
+            $notes = '';
+            $d = trim((string)($cur['desc'] ?? ''));
+            if ($d !== '') {
+                $notes = "\n" . h(speedLabel($cur)) . ' — ' . $d;
+                if ($qtyNow > 0) $notes .= ' (' . h(speedEta($cur, $qtyNow)) . ')';
+                $notes = "\n" . $notes . "\n";
+            }
+            $pos = "\n\n" . number_format($idx + 1) . ' از ' . number_format($n);
+            panelShow($uid, $chatId, 'shop', $head . flowT('flow_speed', $p) . $notes . $pos, inlineKb($rows));
+            return;
+        }
+
         $items = [];
         foreach ($speeds as $sp) {
             $b = ['text' => speedBtnLabel($sp), 'callback_data' => 'fsp_' . $sp['id']];
@@ -4127,11 +4163,9 @@ function flowNext($uid, $chatId, $step) {
         }
         $rows = layoutRows($items, $f['speed_layout'] ?? '1');
         $rows[] = [btnUI('cancel', 'cancel', 'cancel')];
-        $head = ($sd['data']['rate_note'] ?? '') !== '' ? $sd['data']['rate_note'] . "\n\n" : '';
 
         // توضیح هر سرعت، اگر ادمین نوشته باشد
         $notes = '';
-        $qtyNow = (int)($sd['data']['qty'] ?? 0);
         foreach ($speeds as $sp) {
             $d = trim((string)($sp['desc'] ?? ''));
             if ($d === '') continue;
@@ -6670,6 +6704,28 @@ function masterHandle($update) {
             setState($uid, 'flow', $sd);
             answerCb(BOT_TOKEN, $cbId);
             flowNext($uid, $chatId, 'admin');
+            return;
+        }
+        // 🎠 ورق‌زدنِ اسلایدرِ سرعت/پلن — فقط شماره‌ی نشان‌داده‌شده را عوض
+        // می‌کند، چیزی را نهایی نمی‌کند (انتخاب با خودِ دکمه‌ی fsp_ است)
+        if (str_starts_with($data, 'fspnav_')) {
+            $dir = substr($data, 7);
+            $st = getState($uid);
+            if (!$st || $st['action'] !== 'flow' || ($st['data']['step'] ?? '') !== 'speed') {
+                answerCb(BOT_TOKEN, $cbId); return;
+            }
+            $sd = $st['data'];
+            $p = Product::get($sd['pid']);
+            $speeds = [];
+            foreach (($p['flow']['speeds'] ?? []) as $sp) if (!isset($sp['on']) || !empty($sp['on'])) $speeds[] = $sp;
+            $n = count($speeds);
+            if (!$p || $n < 1) { answerCb(BOT_TOKEN, $cbId); return; }
+            $idx = (int)($sd['data']['speed_idx'] ?? 0);
+            $idx = ((($idx + ($dir === 'next' ? 1 : -1)) % $n) + $n) % $n;
+            $sd['data']['speed_idx'] = $idx;
+            setState($uid, 'flow', $sd);
+            answerCb(BOT_TOKEN, $cbId);
+            flowNext($uid, $chatId, 'speed');
             return;
         }
         if ($data === 'fadm') {
