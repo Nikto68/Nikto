@@ -308,7 +308,11 @@ function chTopupReceipt($order) {
     $uid = (int)($order['user_id'] ?? 0);
     $u   = function_exists('getUser') ? (getUser($uid) ?: []) : [];
     $amt = (float)($order['amount'] ?? 0);
-    $pending = ($order['status'] ?? '') === 'pending';
+    // ⚠️ رسید که پیوست می‌شود، Order::attachReceipt وضعیت را می‌گذارد
+    // روی «review» نه «pending» — این تابع همیشه بعد از همان لحظه صدا
+    // زده می‌شود، پس مقایسه با 'pending' همیشه نادرست بود و دکمه‌های
+    // تایید/رد هیچ‌وقت رو پیامِ کانال نمی‌نشستند.
+    $pending = ($order['status'] ?? '') === (class_exists('Order') ? Order::REVIEW : 'review');
     $rows = $pending ? [[
         ['text' => function_exists('UT') ? UT('confirm') : '✅ تایید', 'callback_data' => 'aok_' . $order['id']],
         ['text' => function_exists('UT') ? UT('reject')  : '❌ رد',   'callback_data' => 'ano_' . $order['id']],

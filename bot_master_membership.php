@@ -6524,6 +6524,37 @@ function masterHandle($update) {
         // 🚨 دکمه‌های تاییدِ زندانِ الماس — همین‌طور، باید تو گروه کار کنند
         if (function_exists('dmCallback') && dmCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
 
+        // 🧾 تصمیمِ رسید (تایید/رد) عمدا تو گروه هم کار می‌کند — دقیقا
+        // برای همین رسیدها به گروهِ گزارش می‌روند؛ وگرنه دروازه‌ی پایین
+        // (که فقط چتِ خصوصی را رد نمی‌کند) دکمه‌اش را همیشه بی‌اثر می‌کرد
+        // و از گروه نمی‌شد رسید را تایید/رد کرد.
+        if (($cb['message']['chat']['type'] ?? 'private') !== 'private'
+            && preg_match('/^(aok_|ano_|maok_|mano_)/', $data)) {
+            if (!$isAdmin) { answerCb(BOT_TOKEN, $cbId, '🔒 دسترسی ندارید.', true); return; }
+
+            if (str_starts_with($data, 'aok_')) {
+                $oid = substr($data, 4);
+                [$ok, $res] = Order::approve($oid, $uid);
+                if (!$ok) { answerCb(BOT_TOKEN, $cbId, $res, true); return; }
+                completeApprovedOrder($res);
+                answerCb(BOT_TOKEN, $cbId, '✅ تایید شد');
+                if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, "✅ سفارش <code>" . h($oid) . "</code> تایید شد.");
+                return;
+            }
+            if (str_starts_with($data, 'ano_')) {
+                $oid = substr($data, 4);
+                [$ok, $res] = Order::reject($oid, $uid);
+                if (!$ok) { answerCb(BOT_TOKEN, $cbId, $res, true); return; }
+                sendMsg(BOT_TOKEN, $res['user_id'], T('rejected'));
+                answerCb(BOT_TOKEN, $cbId, 'رد شد');
+                if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, "❌ سفارش <code>" . h($oid) . "</code> رد شد.");
+                return;
+            }
+            if (function_exists('maCallback') && maCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin)) return;
+            answerCb(BOT_TOKEN, $cbId);
+            return;
+        }
+
         // 🤐 بقیه‌ی دکمه‌ها در گروه و کانال چیزی نمی‌فرستند
         if (($cb['message']['chat']['type'] ?? 'private') !== 'private') {
             answerCb(BOT_TOKEN, $cbId);
