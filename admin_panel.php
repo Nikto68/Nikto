@@ -1615,15 +1615,12 @@ foreach ($tabs as $k => $l): ?>
             برای محصولی مثل «بوست تلگرام» که با ممبرگیریِ عادی فرق داره، این‌جا می‌تونی برای همین
             یکی متنِ سوال‌ها رو عوض کنی — بقیه‌ی محصولات دست‌نخورده با متنِ عمومی کار می‌کنن.
             متغیرها دقیقاً مثل متن‌های عمومیِ همینا: <code>{min} {max}</code> (تعداد)،
-            <code>{rate}</code> (نرخ)، <code>{link} {qty} {product} {speed} {per_day} {eta} {per} {total} {currency}</code> (فاکتور).
+            <code>{rate}</code> (نرخ)، <code>{link} {qty} {product} {speed} {per_day} {eta} {per} {total} {currency}</code> (فاکتور).<br>
+            ✨ اگه می‌خوای ایموجی پریمیوم یا نقل‌قول (quote) هم داخلِ متن بذاری، از همین‌جا نمی‌شه —
+            برو تو خودِ ربات: <code>/panel</code> ← 🎨 دکمه‌ها ← این دکمه ← 📝 متن‌های اختصاصی.
           </div>
           <?php
-            $ftLbl = [
-              'flow_link' => '🔗 سوالِ لینک/مقصد', 'flow_link_bad' => '🔗 لینکِ نامعتبر',
-              'flow_qty'  => '👥 سوالِ تعداد', 'flow_qty_bad' => '👥 تعدادِ نامعتبر',
-              'flow_speed' => '⚡️ سوالِ سرعت/پلن', 'flow_rate' => '💰 نمایشِ نرخ',
-              'flow_invoice' => '📋 متنِ فاکتورِ نهایی',
-            ];
+            $ftLbl = function_exists('flowTextLabels') ? flowTextLabels() : [];
             $ft = (array)($sb['flow_texts'] ?? []);
           ?>
           <?php foreach ($ftLbl as $fk => $fl): ?>

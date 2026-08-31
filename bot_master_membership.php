@@ -1092,6 +1092,16 @@ function flowTextKeys() {
     return ['flow_link', 'flow_link_bad', 'flow_qty', 'flow_qty_bad', 'flow_speed', 'flow_rate', 'flow_invoice'];
 }
 
+/** برچسبِ فارسیِ هرکدام — هم پنلِ وب هم ویرایشگرِ داخلِ ربات از همین استفاده می‌کنند */
+function flowTextLabels() {
+    return [
+        'flow_link' => '🔗 سوالِ لینک/مقصد', 'flow_link_bad' => '🔗 لینکِ نامعتبر',
+        'flow_qty'  => '👥 سوالِ تعداد', 'flow_qty_bad' => '👥 تعدادِ نامعتبر',
+        'flow_speed' => '⚡️ سوالِ سرعت/پلن', 'flow_rate' => '💰 نمایشِ نرخ',
+        'flow_invoice' => '📋 متنِ فاکتورِ نهایی',
+    ];
+}
+
 /** متن روی دکمه — رنگ واقعی جدا از متن اعمال می‌شود */
 function btnLabel($b, $withDot = null) {
     $dot = ($withDot === null) ? !empty(cfg()['ui']['show_dot']) : $withDot;
@@ -5626,12 +5636,60 @@ function edSub($chatId, $msgId, $bid, $sid) {
         ($sp ? [btnCb('💰 قیمت', 'sbpr_' . $k, 'buy'), btnCb('👥 تعداد', 'sbm_' . $k, 'info')] : null),
         ($sp ? [btnCb('⚡️ سرعت‌ها', 'sbsp_' . $k, 'admin'),
                 btnCb('📢 گزارش خرید', 'sbrp_' . $k, 'admin')] : null),
+        ($sp ? [btnCb('📝 متن‌های اختصاصی', 'sbft_' . $k, 'admin')] : null),
         ($sp ? [btnCb('🤖 ربات تحویل', 'sbbot_' . $k, 'admin')] : null),
         [btnCb(!empty($sub['on']) ? '❌ خاموش' : '✅ روشن', 'sbx_' . $k, 'info'),
          btnCb('🗑 حذف', 'sbd_' . $k, 'reject')],
         [btnUI('back', 'sbs_' . $bid, 'nav')],
     ];
     $rows = array_values(array_filter($rows));
+    editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
+}
+
+/** 📝 فهرستِ متن‌های اختصاصیِ یک محصول (مثلا «بوستِ تلگرام») */
+function edFlowTexts($chatId, $msgId, $bid, $sid) {
+    $sub = findSub($bid, $sid);
+    if (!$sub) { edSubs($chatId, $msgId, $bid); return; }
+    $ft = (array)($sub['flow_texts'] ?? []);
+    $k  = $bid . '|' . $sid;
+
+    $text  = "📝 <b>متن‌های اختصاصیِ «" . h($sub['text']) . "»</b>\n\n";
+    $text .= "هرکدوم خالی باشه، متنِ عمومیِ ربات به‌کار می‌ره. ✅ یعنی برای همین محصول جدا نوشته شده.\n";
+    $text .= "متن جدید را با <b>ایموجی پریمیوم</b>، <b>نقل‌قول</b> و قالب‌بندی بفرست — همه حفظ می‌شود.";
+
+    $rows = [];
+    foreach (flowTextLabels() as $fk => $fl) {
+        $mark = trim((string)($ft[$fk] ?? '')) !== '' ? '✅ ' : '';
+        $rows[] = [btnCb($mark . $fl, 'pft_' . $k . '|' . $fk, 'info')];
+    }
+    $rows[] = [btnUI('back', 'sb_' . $k, 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
+}
+
+/** 📝 نمایشِ یکی از متن‌های اختصاصیِ محصول */
+function edFlowText($chatId, $msgId, $bid, $sid, $key) {
+    $sub = findSub($bid, $sid);
+    $labels = flowTextLabels();
+    if (!$sub || !isset($labels[$key])) { edSubs($chatId, $msgId, $bid); return; }
+    $cur = trim((string)($sub['flow_texts'][$key] ?? ''));
+    $isQ = str_starts_with($cur, '<blockquote');
+    $k   = $bid . '|' . $sid . '|' . $key;
+
+    $text  = "📝 <b>" . h($labels[$key]) . "</b> — <i>" . h($sub['text']) . "</i>\n\n";
+    if ($cur !== '') {
+        $text .= "<b>پیش‌نمایش:</b>\n" . $cur . "\n\n<b>کد:</b>\n<code>" . h(mb_substr($cur, 0, 700)) . "</code>";
+    } else {
+        $text .= "<i>خالی — الان از متنِ عمومیِ ربات استفاده می‌شود:</i>\n" . T($key);
+    }
+    if ($v = textVars($key)) $text .= "\n\n<b>متغیرها:</b>\n<code>" . h($v) . "</code>";
+
+    $rows = [[btnCb('✏️ تغییر متن', 'pfte_' . $k, 'confirm')]];
+    if ($cur !== '') {
+        $rows[] = [btnCb($isQ ? '❝ حذف نقل‌قول' : '❝ نقل‌قول', 'pftq_' . $k, 'admin'),
+                   btnCb('❝ نقل‌قول بازشو', 'pftx_' . $k, 'admin')];
+        $rows[] = [btnCb('♻️ پاک‌کردن (برگشت به متنِ عمومی)', 'pftr_' . $k, 'reject')];
+    }
+    $rows[] = [btnUI('back', 'sbft_' . $bid . '|' . $sid, 'nav')];
     editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
 }
 
@@ -6807,7 +6865,7 @@ function masterHandle($update) {
         // نه خطایی، نه پیامی. پس با هر بخش تازه این فهرست هم باید کامل شود.
         $adminPrefixes = ['aok_', 'ano_', 'adm_', 'ag_', 'eb', 'et', 'eg', 'eu', 'eref', 'sb', 'ep', 'esp',
                           'esup', 'rp', 'tf', 'jn', 'gw', 'pay', 'px', 'dm', 'ch', 'gma', 'gm_', 'ol',
-                          'pf_', 'num', 'reply_', 'setup'];
+                          'pf_', 'pft', 'num', 'reply_', 'setup'];
         $isAdminCb = false;
         foreach ($adminPrefixes as $pref) {
             if (str_starts_with($data, $pref)) { $isAdminCb = true; break; }
@@ -7298,6 +7356,75 @@ function masterHandle($update) {
             $bid = substr($rest, 0, $pos); $sid = substr($rest, $pos + 1);
             if (!findSub($bid, $sid)) return;
             edSpeeds($chatId, $msgId, subProductId($bid, $sid));
+            return;
+        }
+
+        // 📝 متن‌های اختصاصیِ یک محصول (بوستِ تلگرام و مشابه) — فهرست
+        if (str_starts_with($data, 'sbft_')) {
+            $rest = substr($data, 5); $pos = strrpos($rest, '|');
+            answerCb(BOT_TOKEN, $cbId);
+            if ($pos === false) return;
+            $bid = substr($rest, 0, $pos); $sid = substr($rest, $pos + 1);
+            if (!findSub($bid, $sid)) return;
+            edFlowTexts($chatId, $msgId, $bid, $sid);
+            return;
+        }
+        // 📝 نمایشِ یک متنِ اختصاصی
+        if (str_starts_with($data, 'pft_')) {
+            $parts = explode('|', substr($data, 4), 3);
+            answerCb(BOT_TOKEN, $cbId);
+            if (count($parts) < 3 || !findSub($parts[0], $parts[1])) return;
+            edFlowText($chatId, $msgId, $parts[0], $parts[1], $parts[2]);
+            return;
+        }
+        // ✏️ شروعِ نوشتنِ متنِ جدید
+        if (str_starts_with($data, 'pfte_')) {
+            $parts = explode('|', substr($data, 5), 3);
+            if (count($parts) < 3 || !findSub($parts[0], $parts[1]) || !isset(flowTextLabels()[$parts[2]])) {
+                answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return;
+            }
+            [$bid, $sid, $key] = $parts;
+            answerCb(BOT_TOKEN, $cbId);
+            setState(ADMIN_ID, 'edit_flow_text', ['btn' => $bid, 'sub' => $sid, 'key' => $key]);
+            sendMsg(BOT_TOKEN, $chatId,
+                "✏️ متن جدید را بفرستید.\n\n✨ ایموجی پریمیوم، نقل‌قول و قالب‌بندی همه حفظ می‌شود.",
+                inlineKb([[btnUI('cancel', 'pft_' . $bid . '|' . $sid . '|' . $key, 'cancel')]]));
+            return;
+        }
+        // ❝ نقل‌قول‌کردن/برداشتن متنِ اختصاصی
+        if (str_starts_with($data, 'pftq_') || str_starts_with($data, 'pftx_')) {
+            $exp = str_starts_with($data, 'pftx_');
+            $parts = explode('|', substr($data, 5), 3);
+            if (count($parts) < 3 || !findSub($parts[0], $parts[1]) || !isset(flowTextLabels()[$parts[2]])) {
+                answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return;
+            }
+            [$bid, $sid, $key] = $parts;
+            subMutate($bid, $sid, function (&$x) use ($key, $exp) {
+                $t = trim((string)($x['flow_texts'][$key] ?? ''));
+                if (str_starts_with($t, '<blockquote')) {
+                    $t = preg_replace('#^<blockquote[^>]*>#', '', $t);
+                    $t = preg_replace('#</blockquote>$#', '', trim($t));
+                    if ($exp) $t = '<blockquote expandable>' . trim($t) . '</blockquote>';
+                } else {
+                    $t = ($exp ? '<blockquote expandable>' : '<blockquote>') . $t . '</blockquote>';
+                }
+                if (!is_array($x['flow_texts'] ?? null)) $x['flow_texts'] = [];
+                $x['flow_texts'][$key] = trim($t);
+            });
+            answerCb(BOT_TOKEN, $cbId, '❝ اعمال شد');
+            edFlowText($chatId, $msgId, $bid, $sid, $key);
+            return;
+        }
+        // ♻️ پاک‌کردنِ متنِ اختصاصی — برگشت به متنِ عمومیِ ربات
+        if (str_starts_with($data, 'pftr_')) {
+            $parts = explode('|', substr($data, 5), 3);
+            if (count($parts) < 3 || !findSub($parts[0], $parts[1]) || !isset(flowTextLabels()[$parts[2]])) {
+                answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return;
+            }
+            [$bid, $sid, $key] = $parts;
+            subMutate($bid, $sid, function (&$x) use ($key) { unset($x['flow_texts'][$key]); });
+            answerCb(BOT_TOKEN, $cbId, '♻️ پاک شد');
+            edFlowText($chatId, $msgId, $bid, $sid, $key);
             return;
         }
 
@@ -8785,6 +8912,21 @@ function masterHandle($update) {
         $html = msgHtml($msg);
         if (trim($html) === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی است."); return; }
         cfgSet(function (&$c) use ($key, $html) { $c['texts'][$key] = $html; });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, "✅ متن ذخیره شد.\n\n<b>پیش‌نمایش:</b>\n" . $html, mainKeyboard());
+        return;
+    }
+
+    // ---- متنِ اختصاصیِ یک محصول (بوستِ تلگرام و مشابه) ----
+    if ($action === 'edit_flow_text') {
+        $bid = $sd['btn'] ?? ''; $sid = $sd['sub'] ?? ''; $key = $sd['key'] ?? '';
+        if (!findSub($bid, $sid) || !isset(flowTextLabels()[$key])) { clearState($uid); return; }
+        $html = msgHtml($msg);
+        if (trim($html) === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی است."); return; }
+        subMutate($bid, $sid, function (&$x) use ($key, $html) {
+            if (!is_array($x['flow_texts'] ?? null)) $x['flow_texts'] = [];
+            $x['flow_texts'][$key] = $html;
+        });
         clearState($uid);
         sendMsg(BOT_TOKEN, $chatId, "✅ متن ذخیره شد.\n\n<b>پیش‌نمایش:</b>\n" . $html, mainKeyboard());
         return;
