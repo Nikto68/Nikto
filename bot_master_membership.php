@@ -6647,12 +6647,36 @@ function edSpeeds($chatId, $msgId, $pid) {
         $rows[] = [btnCb("$on " . speedLabel($sp) . ' ×' . $sp['mult'] . '  ' . mb_substr($col, 0, 2),
                          'esp_' . $pid . '|' . $sp['id'], 'info')];
     }
-    $rows[] = [btnCb('📐 چیدمان', 'espl_' . $pid, 'admin')];
+    $rows[] = [btnCb('📐 چیدمان', 'espl_' . $pid, 'admin'), btnCb('🎠 حالتِ نمایش', 'esm_' . $pid, 'confirm')];
     $bs = parseSubProductId($pid);
     $rows[] = [btnUI('back', $bs ? 'sb_' . $bs[0] . '|' . $bs[1] : 'ep_' . $pid, 'nav')];
     editMsg(BOT_TOKEN, $chatId, $msgId,
         "⚡️ <b>سرعت‌های سفارش</b>\n\nهر سرعت یک ضریب قیمت دارد.\nروی هرکدام بزنید:",
         inlineKb($rows));
+}
+
+/**
+ * 🎠 توری یا کاروسلی؟ + متنِ دکمه‌های قبلی/بعدی (فقط تو حالتِ کاروسل).
+ * برای هم محصولِ مستقل، هم زیردکمه — از همان flowMutate عمومی.
+ */
+function edSpeedMode($chatId, $msgId, $pid) {
+    $p = Product::get($pid);
+    if (!$p) { edProducts($chatId, $msgId); return; }
+    $f = $p['flow'] ?? [];
+    $mode = ($f['speed_mode'] ?? 'grid') === 'carousel' ? 'carousel' : 'grid';
+
+    $text  = "🎠 <b>حالتِ نمایشِ سرعت‌ها</b>\n\n";
+    $text .= "به‌جای فهرستِ توری، سرعت‌ها یکی‌یکی نشان داده می‌شوند — یک دکمه‌ی بالا (انتخاب) و قبلی/بعدی پایین.\n\n";
+    $text .= 'وضعیت: ' . ($mode === 'carousel' ? '✅ کاروسلی' : '◻️ توری (پیش‌فرض)') . "\n";
+    $text .= '◀️ دکمه‌ی قبلی: <code>' . h(trim((string)($f['speed_prev_label'] ?? '')) ?: '◀️ قبلی') . "</code>\n";
+    $text .= '▶️ دکمه‌ی بعدی: <code>' . h(trim((string)($f['speed_next_label'] ?? '')) ?: 'بعدی ▶️') . '</code>';
+
+    $rows = [
+        [btnCb($mode === 'carousel' ? '◻️ برگردون به توری' : '🎠 کاروسلی کن', 'esmx_' . $pid, 'confirm')],
+        [btnCb('✏️ متنِ دکمه‌ی قبلی', 'esmpl_' . $pid, 'admin'), btnCb('✏️ متنِ دکمه‌ی بعدی', 'esmnl_' . $pid, 'admin')],
+        [btnUI('back', 'eps_' . $pid, 'nav')],
+    ];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
 }
 
 /** ⚡️ ویرایش یک سرعت */
@@ -7304,7 +7328,7 @@ function masterHandle($update) {
         // هر پیشوند تازه‌ای که اینجا نباشد، بی‌صدا دور ریخته می‌شود —
         // نه خطایی، نه پیامی. پس با هر بخش تازه این فهرست هم باید کامل شود.
         $adminPrefixes = ['aok_', 'ano_', 'adm_', 'ag_', 'eb', 'et', 'eg', 'eu', 'eref', 'sb', 'ep', 'esp',
-                          'esup', 'rp', 'tf', 'jn', 'gw', 'pay', 'px', 'dm', 'ch', 'gma', 'gm_', 'ol',
+                          'esup', 'esm', 'rp', 'tf', 'jn', 'gw', 'pay', 'px', 'dm', 'ch', 'gma', 'gm_', 'ol',
                           'pf_', 'pft', 'num', 'reply_', 'setup', 'ecar', 'bc'];
         $isAdminCb = false;
         foreach ($adminPrefixes as $pref) {
@@ -8020,6 +8044,23 @@ function masterHandle($update) {
             $rest = substr($data, 4); $pos = strrpos($rest, '|');
             if ($pos !== false) { answerCb(BOT_TOKEN, $cbId); edSpeed($chatId, $msgId, substr($rest, 0, $pos), substr($rest, $pos + 1)); return; }
         }
+        if (str_starts_with($data, 'esmx_')) {
+            $pid = substr($data, 5);
+            if (!Product::get($pid)) { answerCb(BOT_TOKEN, $cbId, 'پیدا نشد', true); return; }
+            flowMutate($pid, function (&$f) {
+                $f['speed_mode'] = (($f['speed_mode'] ?? 'grid') === 'carousel') ? 'grid' : 'carousel';
+            });
+            answerCb(BOT_TOKEN, $cbId, '🎠');
+            edSpeedMode($chatId, $msgId, $pid);
+            return;
+        }
+        if (str_starts_with($data, 'esm_')) {
+            $pid = substr($data, 4);
+            if (!Product::get($pid)) { answerCb(BOT_TOKEN, $cbId, 'پیدا نشد', true); return; }
+            answerCb(BOT_TOKEN, $cbId);
+            edSpeedMode($chatId, $msgId, $pid);
+            return;
+        }
         if (str_starts_with($data, 'ep_'))   { answerCb(BOT_TOKEN, $cbId); edProduct($chatId, $msgId, substr($data, 3)); return; }
 
         foreach ([['epn_', 'ep_name', '✏️ نام جدید محصول:'],
@@ -8028,7 +8069,9 @@ function masterHandle($update) {
                   ['epmin_', 'ep_min', '🔢 حداقل تعداد سفارش:'],
                   ['epmax_', 'ep_max', '🔢 حداکثر تعداد سفارش:'],
                   ['epper_', 'ep_per', '➗ قیمت به ازای هر چند نفر؟ (مثلا 1000):'],
-                  ['espl_', 'ep_slayout', '📐 چیدمان دکمه‌های سرعت (مثلا 1 یا 3):']] as $it) {
+                  ['espl_', 'ep_slayout', '📐 چیدمان دکمه‌های سرعت (مثلا 1 یا 3):'],
+                  ['esmpl_', 'ep_smprevlbl', '✏️ متنِ دکمه‌ی قبلی (فقط تو حالتِ کاروسل):'],
+                  ['esmnl_', 'ep_smnextlbl', '✏️ متنِ دکمه‌ی بعدی (فقط تو حالتِ کاروسل):']] as $it) {
             [$pref, $act, $ask] = $it;
             if (!str_starts_with($data, $pref)) continue;
             $pid = substr($data, strlen($pref));
@@ -9756,6 +9799,16 @@ function masterHandle($update) {
                 if ((int)$num <= 0) { sendMsg(BOT_TOKEN, $chatId, "⚠️ عدد معتبر بفرستید."); return; }
                 $v = (int)$num;
             }
+            flowMutate($pid, function (&$f2) use ($f, $v) { $f2[$f] = $v; });
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId, "✅ ذخیره شد.", $back);
+            return;
+        }
+
+        $smap = ['ep_smprevlbl' => 'speed_prev_label', 'ep_smnextlbl' => 'speed_next_label'];
+        if (isset($smap[$action])) {
+            $f = $smap[$action];
+            $v = ($plain === '-' || $plain === '—') ? '' : $plain;
             flowMutate($pid, function (&$f2) use ($f, $v) { $f2[$f] = $v; });
             clearState($uid);
             sendMsg(BOT_TOKEN, $chatId, "✅ ذخیره شد.", $back);

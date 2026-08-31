@@ -442,9 +442,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $post = $_POST;
         cfgSet(function (&$c) use ($post) {
             $c['join']['on'] = !empty($post['jn_on']);
-            $txt = (string)($post['jn_text'] ?? '');
-            if (trim($txt) !== '') $c['join']['text'] = $txt;
-            $c['join']['btn']['text'] = trim($post['jn_btn'] ?? '') ?: 'عضو شدم';
+            // 📝 متنِ قفل و متنِ دکمه از اینجا دست نمی‌خورَند — ویرایششان
+            // فقط داخل خودِ ربات است (/panel ← 🔒 عضویت اجباری).
         });
         go('عضویت اجباری ذخیره شد.');
     }
@@ -691,13 +690,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $all[$id]['smm_service'] = trim($post['smm_service'] ?? '');
             $all[$id]['smm_auto_price'] = !empty($post['smm_auto_price']);
             $all[$id]['sale_cat'] = in_array($post['sale_cat'] ?? '', ['fake_member', 'boost'], true) ? $post['sale_cat'] : '';
-            if (function_exists('flowTextKeys')) {
-                $all[$id]['flow_texts'] = [];
-                foreach (flowTextKeys() as $k) {
-                    $v = trim((string)($post['flow_texts'][$k] ?? ''));
-                    if ($v !== '') $all[$id]['flow_texts'][$k] = $v;
-                }
-            }
+            // 📝 متن‌های اختصاصیِ محصول از اینجا دست نمی‌خورَند — ویرایششان
+            // فقط داخل خودِ ربات است (/panel ← 🎨 دکمه‌ها ← محصول ← 📝
+            // متن‌های اختصاصی)، تا ذخیره‌ی هر فیلدِ دیگر اینجا پاکشان نکند.
         });
         go('محصول به‌روزرسانی شد.');
     }
@@ -848,13 +843,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $x['smm_service'] = trim($post['smm_service'] ?? '');
             $x['smm_auto_price'] = !empty($post['smm_auto_price']);
             $x['sale_cat'] = in_array($post['sale_cat'] ?? '', ['fake_member', 'boost'], true) ? $post['sale_cat'] : '';
-            if (function_exists('flowTextKeys')) {
-                $x['flow_texts'] = [];
-                foreach (flowTextKeys() as $k) {
-                    $v = trim((string)($post['flow_texts'][$k] ?? ''));
-                    if ($v !== '') $x['flow_texts'][$k] = $v;
-                }
-            }
+            // 📝 متن‌های اختصاصی از اینجا دست نمی‌خورَند — ویرایششان فقط
+            // داخل خودِ ربات است (📝 متن‌های اختصاصی)، تا ذخیره‌ی قیمت/سرعت
+            // اینجا پاکشان نکند.
             if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
             // ⚠️ ask_admin دیگر همیشه true نیست — بوست/گیفت نیازی به ادمین‌شدنِ
             // ربات در کانال ندارند، فقط محصولاتِ ممبرگیریِ واقعی نیاز دارند
@@ -1768,13 +1759,9 @@ $tabFolders = [
           <?= !empty($TF['auto']) ? 'checked' : '' ?>> 📊 جدول خودکار قیمت‌ها اضافه شود</label>
       </div>
 
-      <label>متن لیست تعرفه‌ها</label>
-      <textarea name="tf_text" rows="8" style="direction:rtl"><?= h($TF['text'] ?? '') ?></textarea>
-      <div class="muted" style="margin-top:6px">
-        اگر <code>{list}</code> بنویسید، جدول قیمت‌ها دقیقا همان‌جا می‌نشیند؛ وگرنه زیر متن اضافه می‌شود.<br>
-        HTML مجاز: <code>&lt;b&gt;</code> <code>&lt;i&gt;</code> <code>&lt;code&gt;</code>
-        <code>&lt;blockquote&gt;</code> <code>&lt;blockquote expandable&gt;</code><br>
-        ✨ برای <b>ایموجی پریمیوم</b> متن را داخل ربات بنویسید: <code>/panel</code> ← 📋 لیست تعرفه‌ها ← ✏️ متن تعرفه
+      <div class="note">
+        📝 متنِ لیستِ تعرفه‌ها (و متغیرِ <code>{list}</code>) فقط داخل خودِ ربات ویرایش می‌شود:
+        <code>/panel</code> ← 📋 لیست تعرفه‌ها ← ✏️ متن تعرفه.
       </div>
 
       <div class="grid2" style="margin-top:14px">
@@ -1889,35 +1876,17 @@ $tabFolders = [
             </select>
             <small class="muted">حالتِ اسلایدر برای وقتی خوبه که چندتا پلنِ زیاد داری (مثلا ۴-۵ تا مدت) —
               فقط یکی بالا نشون داده می‌شه، با ◀️ قبلی / بعدی▶️ بینشون جابه‌جا می‌شی.</small></div>
-          <div><label>◀️ متنِ دکمه‌ی «قبلی» (فقط تو حالتِ اسلایدر)</label>
-            <input name="speed_prev_label" value="<?= h($f['speed_prev_label'] ?? '') ?>" placeholder="◀️ قبلی"></div>
-          <div><label>▶️ متنِ دکمه‌ی «بعدی» (فقط تو حالتِ اسلایدر)</label>
-            <input name="speed_next_label" value="<?= h($f['speed_next_label'] ?? '') ?>" placeholder="بعدی ▶️"></div>
           <div><label style="font-weight:500;margin-top:22px;display:block">
             <input type="checkbox" name="ask_admin" value="1" style="width:auto"
               <?= (!isset($f['ask_admin']) || !empty($f['ask_admin'])) ? 'checked' : '' ?>>
             بعد از سفارش، ربات باید ادمینِ کانالِ مشتری بشه (برای بوست/گیفت لازم نیست، خاموشش کن)</label></div>
         </div>
 
-        <details style="margin-top:14px">
-          <summary style="cursor:pointer;font-weight:500;color:#c2c2c2">✏️ متن‌های مخصوصِ این محصول (خالی = متنِ عمومیِ ربات)</summary>
-          <div class="note" style="margin-top:8px">
-            برای محصولی مثل «بوست تلگرام» که با ممبرگیریِ عادی فرق داره، این‌جا می‌تونی برای همین
-            یکی متنِ سوال‌ها رو عوض کنی — بقیه‌ی محصولات دست‌نخورده با متنِ عمومی کار می‌کنن.
-            متغیرها دقیقاً مثل متن‌های عمومیِ همینا: <code>{min} {max}</code> (تعداد)،
-            <code>{rate}</code> (نرخ)، <code>{link} {qty} {product} {speed} {per_day} {eta} {per} {total} {currency}</code> (فاکتور).<br>
-            ✨ اگه می‌خوای ایموجی پریمیوم یا نقل‌قول (quote) هم داخلِ متن بذاری، از همین‌جا نمی‌شه —
-            برو تو خودِ ربات: <code>/panel</code> ← 🎨 دکمه‌ها ← این دکمه ← 📝 متن‌های اختصاصی.
-          </div>
-          <?php
-            $ftLbl = function_exists('flowTextLabels') ? flowTextLabels() : [];
-            $ft = (array)($sb['flow_texts'] ?? []);
-          ?>
-          <?php foreach ($ftLbl as $fk => $fl): ?>
-            <div style="margin-top:10px"><label><?= h($fl) ?></label>
-              <textarea name="flow_texts[<?= h($fk) ?>]" rows="3" style="direction:rtl"><?= h($ft[$fk] ?? '') ?></textarea></div>
-          <?php endforeach; ?>
-        </details>
+        <div class="note" style="margin-top:14px">
+          📝 متن‌های مخصوصِ این محصول، و متنِ دکمه‌های «قبلی/بعدی»یِ حالتِ اسلایدر، فقط داخل خودِ ربات
+          ویرایش می‌شوند (با ایموجی پریمیوم و نقل‌قول): <code>/panel</code> ← 🎨 دکمه‌ها ← این دکمه ←
+          📝 متن‌های اختصاصی / ⚡️ سرعت‌ها ← 🎠 حالتِ نمایش.
+        </div>
 
         <div style="margin-top:16px"><label>⚡️ سرعت‌ها / پلن‌ها</label>
           <table style="margin-top:6px">
@@ -3915,11 +3884,7 @@ def join_gate(user_id):
         <label style="font-weight:500"><input type="checkbox" name="jn_on" style="width:auto"
           <?= !empty($J['on']) ? 'checked' : '' ?>> قفل عضویت روشن باشد</label>
       </div>
-      <label>متن قفل</label>
-      <textarea name="jn_text" rows="3" style="direction:rtl"><?= h($J['text'] ?? '') ?></textarea>
-      <div style="margin-top:10px"><label>متن دکمه</label>
-        <input name="jn_btn" value="<?= h($J['btn']['text'] ?? 'عضو شدم') ?>"></div>
-      <div class="muted" style="margin-top:6px">✨ برای ایموجی پریمیوم، متن را داخل ربات بنویسید: <code>/panel</code> ← 🔒 عضویت اجباری</div>
+      <div class="muted">📝 متنِ قفل و متنِ دکمه فقط داخل خودِ ربات ویرایش می‌شوند: <code>/panel</code> ← 🔒 عضویت اجباری</div>
       <div style="margin-top:14px"><button class="btn g">ذخیره</button></div>
     </form>
   </div></div>
