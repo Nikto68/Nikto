@@ -388,30 +388,155 @@ function gmPlayerColor($g, $uid) {
 
 // ============================================================
 // 🗄 انبار بازی‌ها
+//
+// قبلا یک فایلِ JSON بود: هر تیکِ یک بازیکن (پیوستن، زدنِ یک خانه...)
+// کلِ فایل را می‌خواند و با قفلِ انحصاریِ همان یک فایل می‌نوشت — یعنی
+// اگر ۲۰ نفر هم‌زمان در ۱۰ بازیِ جداگانه دست می‌زدند، همه‌شان پشتِ سرِ
+// هم، یکی‌یکی، منتظرِ همان یک قفل می‌ماندند؛ هرچه بازی‌های بازِ بیشتر،
+// همه چیز کندتر. حالا مثلِ کاربران روی SQLite است: هر بازی یک ردیفِ
+// مستقل با قفلِ مخصوصِ همان ردیف — بازی‌های مختلف دیگر منتظرِ هم نمی‌مانند.
 // ============================================================
 
-function gmAll() { return load('games'); }
-function gmGet($id) { $a = gmAll(); return $a[(string)$id] ?? null; }
+function gamesDbPath() { return DATA_DIR . '/games.sqlite'; }
 
+function gamesDb() {
+    static $db = null;
+    if ($db) return $db;
+    if (!class_exists('SQLite3')) return null;
+
+    $path = gamesDbPath();
+    $dir  = dirname($path);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $fresh = !is_file($path);
+
+    try {
+        $db = new SQLite3($path);
+    } catch (Throwable $e) {
+        error_log('[shop-bot] games.sqlite باز نشد: ' . $e->getMessage());
+        return null;
+    }
+    $db->busyTimeout(5000);
+    $db->exec('PRAGMA journal_mode = WAL');
+    $db->exec('PRAGMA synchronous = NORMAL');
+    $db->exec('CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, data TEXT NOT NULL, created INTEGER NOT NULL DEFAULT 0)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_games_created ON games(created)');
+
+    if ($fresh) gamesImportFromJson($db);
+    return $db;
+}
+
+/** یک‌بار، فقط وقتی games.sqlite تازه ساخته می‌شود: بازی‌های بازِ نصبِ قدیمی گم نشوند */
+function gamesImportFromJson($db) {
+    $old = dataPath('games');
+    if (!is_file($old)) return;
+    $raw = @file_get_contents($old);
+    $arr = $raw ? json_decode($raw, true) : null;
+
+    if (is_array($arr) && $arr) {
+        $db->exec('BEGIN');
+        $stmt = $db->prepare('INSERT OR REPLACE INTO games (id, data, created) VALUES (:id, :data, :created)');
+        foreach ($arr as $k => $v) {
+            if ($k === '' || !is_array($v)) continue;
+            $stmt->bindValue(':id', (string)$k, SQLITE3_TEXT);
+            $stmt->bindValue(':data', json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $stmt->bindValue(':created', (int)($v['created'] ?? 0), SQLITE3_INTEGER);
+            $stmt->execute();
+            $stmt->reset();
+        }
+        $db->exec('COMMIT');
+    }
+    @rename($old, $old . '.migrated');
+}
+
+/** همه‌ی بازی‌ها یک‌جا — فقط برای فهرست‌کردن/شمارش. در مسیرِ داغِ هر تیک استفاده نشود. */
+function gmAll() {
+    $db = gamesDb();
+    if (!$db) return [];
+    $out = [];
+    $res = $db->query('SELECT id, data FROM games');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $d = json_decode($row['data'], true);
+        if (is_array($d)) $out[$row['id']] = $d;
+    }
+    return $out;
+}
+
+function gmGet($id) {
+    $db = gamesDb();
+    if (!$db) return null;
+    $stmt = $db->prepare('SELECT data FROM games WHERE id = :id');
+    $stmt->bindValue(':id', (string)$id, SQLITE3_TEXT);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    if (!$row) return null;
+    $d = json_decode($row['data'], true);
+    return is_array($d) ? $d : null;
+}
+
+/** تغییرِ یک بازی، اتمیک، فقط همان یک ردیف — نه کلِ جدول (مثلِ mutateUser) */
 function gmSetGame($id, callable $fn) {
-    return mutate('games', function (&$a) use ($id, $fn) {
-        $k = (string)$id;
-        if (!isset($a[$k])) return false;
-        return $fn($a[$k]);
-    });
+    $db = gamesDb();
+    if (!$db) return null;
+    $id = (string)$id;
+
+    $db->exec('BEGIN IMMEDIATE');
+    try {
+        $stmt = $db->prepare('SELECT data FROM games WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $g = $row ? json_decode($row['data'], true) : null;
+        if (!is_array($g)) { $db->exec('ROLLBACK'); return false; }
+
+        $result = $fn($g);
+
+        $up = $db->prepare('INSERT OR REPLACE INTO games (id, data, created) VALUES (:id, :data, :created)');
+        $up->bindValue(':id', $id, SQLITE3_TEXT);
+        $up->bindValue(':data', json_encode($g, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+        $up->bindValue(':created', (int)($g['created'] ?? 0), SQLITE3_INTEGER);
+        $up->execute();
+        $db->exec('COMMIT');
+        return $result;
+    } catch (Throwable $e) {
+        $db->exec('ROLLBACK');
+        error_log('[shop-bot] gmSetGame خطا: ' . $e->getMessage());
+        return null;
+    }
 }
 
 function gmPut($g) {
-    mutate('games', function (&$a) use ($g) {
-        $a[$g['id']] = $g;
-        // خانه‌تکانی — بازی‌های تمام‌شده‌ی کهنه جا اشغال نکنند
-        if (count($a) > 300) {
-            $now = time();
-            foreach ($a as $k => $v)
-                if (($v['status'] ?? '') !== 'open' && ($v['status'] ?? '') !== 'playing'
-                    && ($now - (int)($v['created'] ?? 0)) > 86400) unset($a[$k]);
-        }
-    });
+    $db = gamesDb();
+    if (!$db) return;
+    $stmt = $db->prepare('INSERT OR REPLACE INTO games (id, data, created) VALUES (:id, :data, :created)');
+    $stmt->bindValue(':id', (string)$g['id'], SQLITE3_TEXT);
+    $stmt->bindValue(':data', json_encode($g, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+    $stmt->bindValue(':created', (int)($g['created'] ?? 0), SQLITE3_INTEGER);
+    $stmt->execute();
+    gmGcMaybe($db);
+}
+
+/**
+ * خانه‌تکانی — بازی‌های تمام‌شده‌ی کهنه جا اشغال نکنند. حداکثر هر ۵
+ * دقیقه، و فقط روی بازی‌های قدیمی‌تر از یک روز (ایندکس روی created) —
+ * نه هر بار که یک بازی تازه ساخته می‌شود کلِ جدول را بخواند.
+ */
+function gmGcMaybe($db) {
+    $mark = DATA_DIR . '/.games_gc_at';
+    if (time() - (@filemtime($mark) ?: 0) < 300) return;
+    @touch($mark);
+
+    $cutoff = time() - 86400;
+    $res = $db->query('SELECT id, data FROM games WHERE created > 0 AND created < ' . (int)$cutoff);
+    $del = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $d = json_decode($row['data'], true);
+        $st = is_array($d) ? (string)($d['status'] ?? '') : '';
+        if ($st !== 'open' && $st !== 'playing') $del[] = $row['id'];
+    }
+    if ($del) {
+        $db->exec('BEGIN');
+        $stmt = $db->prepare('DELETE FROM games WHERE id = :id');
+        foreach ($del as $id) { $stmt->bindValue(':id', $id, SQLITE3_TEXT); $stmt->execute(); $stmt->reset(); }
+        $db->exec('COMMIT');
+    }
 }
 
 // ============================================================

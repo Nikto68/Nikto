@@ -149,9 +149,22 @@ function pxDefaults() {
     ];
 }
 
-function pxCfg() {
+/**
+ * ⚡️ نتیجه یک‌بار در هر درخواست ساخته می‌شود، نه هر بار که pxVal() صدا
+ * زده می‌شود.
+ *
+ * pxVal() در یک پاسخِ قیمتِ معمولی (کارت + متن + دکمه‌ها) ده‌ها بار صدا
+ * زده می‌شود، و تا قبل از این، هر بار همین array_replace_recursive
+ * سنگین (پیش‌فرض‌ها + ایموجی‌ها + دکمه‌ها + متن‌ها) از نو اجرا می‌شد —
+ * یعنی همان کارِ تکراری، ده‌ها بار، فقط برای یک پیام. دقیقا همان الگویی
+ * که cfg() از قبل برایش راه‌حل دارد.
+ */
+function pxCfg($refresh = false) {
+    static $out = null;
+    if ($out !== null && !$refresh) return $out;
+
     $c = cfg()['prices'] ?? null;
-    if (!is_array($c)) return pxDefaults();
+    if (!is_array($c)) return $out = pxDefaults();
 
     // 🧹 مهاجرتِ یک‌بارهِ نصب‌های قدیمی: قبل از این‌که منبعِ دوم به کوین‌گکو
     // عوض شود، آدرس/کلیدِ swapwallet.app (همان منبعِ کند/گاهی از‌کاراُفتاده)
@@ -191,6 +204,7 @@ function pxSet(callable $fn) {
         if (!is_array($c['prices'] ?? null)) $c['prices'] = pxDefaults();
         $fn($c['prices']);
     });
+    pxCfg(true); // کشِ pxCfg() هم باطل شود، وگرنه همین درخواست مقدارِ کهنه می‌بیند
 }
 
 function pxVal($path, $default = null) {
