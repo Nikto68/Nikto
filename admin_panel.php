@@ -611,6 +611,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ تنظیماتِ الماس ذخیره شد.');
     }
 
+    // ---- 🎮 بازی‌ها ----
+    if ($a === 'save_games') {
+        $post = $_POST;
+        gmSet(function (&$c) use ($post) {
+            $c['on']         = !empty($post['gm_on']);
+            $c['duel_board'] = !empty($post['duel_board']);
+            $c['open_max']   = max(1, (int)($post['open_max'] ?? 2));
+            $c['expire']     = max(10, (int)($post['expire'] ?? 180));
+            $c['wait']       = max(1, (int)($post['wait'] ?? 8));
+            $c['join_max']   = max(2, (int)($post['join_max'] ?? 50));
+            $c['word_duel']  = trim((string)($post['word_duel'] ?? '')) ?: 'چالش';
+            $c['word_rand']  = trim((string)($post['word_rand'] ?? '')) ?: 'بازی';
+            $c['word_bal']   = trim((string)($post['word_bal'] ?? '')) ?: 'موجودی';
+            $c['word_send']  = trim((string)($post['word_send'] ?? '')) ?: 'انتقال';
+            $c['min']        = max(0, (float)str_replace([',', '،'], '', $post['gm_min'] ?? 0));
+            $c['max']        = max(0, (float)str_replace([',', '،'], '', $post['gm_max'] ?? 0));
+            $c['tax']        = max(0, min(100, (float)str_replace([',', '،'], '', $post['tax'] ?? 0)));
+            $c['send_tax']   = max(0, min(100, (float)str_replace([',', '،'], '', $post['send_tax'] ?? 0)));
+        });
+        go('✅ تنظیماتِ بازی‌ها ذخیره شد.');
+    }
+
     // ---- محصولات ----
     if ($a === 'add_product') {
         $name = trim($_POST['name'] ?? '');
@@ -3575,8 +3597,52 @@ def join_gate(user_id):
 
 <?php // ================= 🎮 بازی‌ها ================= ?>
 <?php elseif ($tab === 'games'): ?>
-  <div class="card"><h2>🎮 بازی‌ها</h2><div class="body">
-    <div class="note">این بخش داره تکمیل می‌شه — فعلاً از <code>/panel</code> ← 🎮 بازی‌ها انجام بده.</div>
+  <?php $GM = gmCfg(); ?>
+  <div class="card"><h2>🎮 بازی‌ها (چالش و قرعه با الماس)
+    <?= !empty($GM['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
+  </h2><div class="body">
+    <div class="note">
+      شرط‌ها با <b>الماس</b> بازی می‌شود (تبِ «💎 الماس»)، نه پول نقد. متن‌های پیام‌ها و ایموجیِ پریمیومِ دکمه‌ها
+      همچنان تو <code>/panel</code> ← 🎮 بازی‌ها می‌مونن.
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="games">
+      <input type="hidden" name="action" value="save_games">
+
+      <div class="subcard"><h3>🔌 وضعیت</h3>
+        <label style="font-weight:500"><input type="checkbox" name="gm_on" style="width:auto" <?= !empty($GM['on']) ? 'checked' : '' ?>> بازی‌ها روشن باشند</label>
+        <label style="font-weight:500;margin-right:14px"><input type="checkbox" name="duel_board" style="width:auto" <?= !empty($GM['duel_board']) ? 'checked' : '' ?>> چالش با صفحه‌ی دوز (نه نتیجه‌ی درجا)</label>
+      </div>
+
+      <div class="subcard"><h3>💬 کلمه‌های شروع</h3>
+        <div class="grid2">
+          <div><label>🎯 چالش (با ویرگول)</label><input name="word_duel" value="<?= h($GM['word_duel'] ?? 'چالش,دوز') ?>"></div>
+          <div><label>🎲 قرعه</label><input name="word_rand" value="<?= h($GM['word_rand'] ?? 'بازی') ?>"></div>
+          <div><label>💎 موجودی</label><input name="word_bal" value="<?= h($GM['word_bal'] ?? 'موجودی') ?>"></div>
+          <div><label>📤 انتقال (با ویرگول)</label><input name="word_send" value="<?= h($GM['word_send'] ?? 'انتقال') ?>"></div>
+        </div>
+      </div>
+
+      <div class="subcard"><h3>💰 شرط و مالیات</h3>
+        <div class="grid2">
+          <div><label>کمترینِ شرط (الماس)</label><input name="gm_min" value="<?= h($GM['min'] ?? 10) ?>" style="direction:ltr"></div>
+          <div><label>بیشترینِ شرط (الماس)</label><input name="gm_max" value="<?= h($GM['max'] ?? 1000000000) ?>" style="direction:ltr"></div>
+          <div><label>🧾 مالیاتِ برد (٪)</label><input name="tax" value="<?= h($GM['tax'] ?? 10) ?>" style="direction:ltr"></div>
+          <div><label>🧾 مالیاتِ انتقال (٪)</label><input name="send_tax" value="<?= h($GM['send_tax'] ?? 10) ?>" style="direction:ltr"></div>
+        </div>
+      </div>
+
+      <div class="subcard"><h3>⏱ محدودیت‌ها</h3>
+        <div class="grid2">
+          <div><label>حداکثرِ بازیِ بازِ هم‌زمانِ هر نفر</label><input name="open_max" type="number" min="1" value="<?= (int)($GM['open_max'] ?? 2) ?>"></div>
+          <div><label>مهلتِ بی‌حریف تا لغوِ خودکار (ثانیه)</label><input name="expire" type="number" min="10" value="<?= (int)($GM['expire'] ?? 180) ?>"></div>
+          <div><label>مهلتِ انتظارِ قرعه (ثانیه)</label><input name="wait" type="number" min="1" value="<?= (int)($GM['wait'] ?? 8) ?>"></div>
+          <div><label>حداکثرِ شرکت‌کننده در قرعه</label><input name="join_max" type="number" min="2" value="<?= (int)($GM['join_max'] ?? 50) ?>"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ بازی‌ها</button></div>
+    </form>
   </div></div>
 
 <?php else: ?>
