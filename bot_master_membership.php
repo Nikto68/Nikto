@@ -798,6 +798,11 @@ function defaultConfig() {
             'orders'   => ['emoji' => '📊', 'text' => 'پیگیری سفارش',                   'color' => 'primary', 'dot' => '🔵', 'icon' => '', 'row' => 4, 'order' => 5, 'on' => true, 'action' => ''],
             'support'  => ['emoji' => '📞', 'text' => 'پشتیبانی',                       'color' => 'primary', 'dot' => '🔵', 'icon' => '', 'row' => 4, 'order' => 6, 'on' => true, 'action' => ''],
             'trust'    => ['emoji' => '💚', 'text' => 'چطوری میتوانم به شما اعتماد کنم', 'color' => 'danger',  'dot' => '🔴', 'icon' => '', 'row' => 5, 'order' => 7, 'on' => true, 'action' => ''],
+            // 🌟 دکمه‌ی زیردکمه‌هایش به‌جای توری، یکی‌یکی کاروسلی نشان
+            //    داده می‌شود — برای وقتی زیردکمه‌ها زیادند (لیستِ محصولِ
+            //    ممبر پریمیوم). زیردکمه‌ها را از همان «💠 زیردکمه‌های
+            //    شیشه‌ای» همیشگی اضافه کنید؛ فقط نمایششان کاروسلی است.
+            'pmem'     => ['emoji' => '🌟', 'text' => 'خدمات ممبر پریمیوم', 'color' => 'success', 'dot' => '🟢', 'icon' => '', 'row' => 6, 'order' => 8, 'on' => true, 'action' => '', 'subs_mode' => 'carousel'],
         ],
 
         // متن دکمه‌های ثابت ربات — همه از داخل ربات قابل ویرایش
@@ -1100,6 +1105,30 @@ function flowTextLabels() {
         'flow_speed' => '⚡️ سوالِ سرعت/پلن', 'flow_rate' => '💰 نمایشِ نرخ',
         'flow_invoice' => '📋 متنِ فاکتورِ نهایی',
     ];
+}
+
+/**
+ * متنِ صفحه‌ی کاروسلِ زیردکمه‌های یک دکمه — دقیقاً مثلِ flowT ولی روی
+ * خودِ دکمه، نه محصول (چون این صفحه قبل از انتخابِ هیچ محصولی نشان
+ * داده می‌شود).
+ */
+function carouselT($btnId, $key, $vars = []) {
+    $custom = trim((string)(cfg()['buttons'][$btnId]['carousel_texts'][$key] ?? ''));
+    $t = $custom !== '' ? $custom : carouselTextDefault($key);
+    foreach ($vars as $k => $v) $t = str_replace('{' . $k . '}', (string)$v, $t);
+    return $t;
+}
+
+function carouselTextKeys() { return ['item', 'empty']; }
+
+function carouselTextLabels() {
+    return ['item' => '📝 متنِ نمایشِ هر زیردکمه', 'empty' => '📭 وقتی هنوز چیزی اضافه نشده'];
+}
+
+function carouselTextDefault($key) {
+    return $key === 'empty'
+        ? '📭 هنوز محصولی برای این بخش اضافه نشده.'
+        : "{name}\n\n💰 قیمت: <b>{price}</b>";
 }
 
 /** متن روی دکمه — رنگ واقعی جدا از متن اعمال می‌شود */
@@ -5589,11 +5618,84 @@ function edButton($chatId, $msgId, $id) {
         [btnCb('📐 ردیف', 'ebr_' . $id, 'admin'), btnCb('🔢 ترتیب', 'ebo_' . $id, 'admin')],
         [btnCb(!empty($b['on']) ? '❌ خاموش کن' : '✅ روشن کن', 'ebx_' . $id, 'info')],
         [btnCb('💠 دکمه‌های شیشه‌ای زیرش (' . count($b['subs'] ?? []) . ')', 'sbs_' . $id, 'confirm')],
+        [btnCb('🎠 نمایشِ زیردکمه‌ها: ' . (($b['subs_mode'] ?? 'grid') === 'carousel' ? 'کاروسلی' : 'توری'), 'ecar_' . $id, 'confirm')],
     ];
     if (!empty($b['action'])) {
         $rows[] = [btnCb('📝 مقدار', 'ebv_' . $id, 'admin'), btnCb('🗑 حذف دکمه', 'ebd_' . $id, 'reject')];
     }
     $rows[] = [btnCb(UT('back'), 'ebuttons', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
+}
+
+/**
+ * 🎠 تنظیماتِ نمایشِ کاروسلیِ زیردکمه‌ها — روشن/خاموش، متن‌های صفحه،
+ * و متن+ایموجیِ پریمیومِ دکمه‌های قبلی/بعدی.
+ */
+function edCarousel($chatId, $msgId, $id) {
+    $b = cfg()['buttons'][$id] ?? null;
+    if (!$b) { edButtons($chatId, $msgId); return; }
+    $mode = ($b['subs_mode'] ?? 'grid') === 'carousel' ? 'carousel' : 'grid';
+
+    $text  = "🎠 <b>نمایشِ کاروسلیِ «" . h($b['text']) . "»</b>\n\n";
+    $text .= "به‌جای فهرستِ توری، زیردکمه‌ها یکی‌یکی نشان داده می‌شوند — یک دکمه‌ی بالا (انتخاب) و قبلی/بعدی پایین.\n\n";
+    $text .= 'وضعیت: ' . ($mode === 'carousel' ? '✅ کاروسلی' : '◻️ توری (پیش‌فرض)') . "\n";
+    $text .= '◀️ دکمه‌ی قبلی: <code>' . h(trim((string)($b['carousel_prev_label'] ?? '')) ?: '◀️ قبلی') . '</code>' .
+             (!empty($b['carousel_prev_icon']) ? ' ✨' : '') . "\n";
+    $text .= '▶️ دکمه‌ی بعدی: <code>' . h(trim((string)($b['carousel_next_label'] ?? '')) ?: 'بعدی ▶️') . '</code>' .
+             (!empty($b['carousel_next_icon']) ? ' ✨' : '');
+
+    $rows = [
+        [btnCb($mode === 'carousel' ? '◻️ برگردون به توری' : '🎠 کاروسلی کن', 'ecarx_' . $id, 'confirm')],
+        [btnCb('📝 متن‌های صفحه', 'bct_' . $id, 'admin')],
+        [btnCb('✏️ متنِ دکمه‌ی قبلی', 'ecarpl_' . $id, 'admin'), btnCb('✨ ایموجیِ قبلی', 'ecarpi_' . $id, 'admin')],
+        [btnCb('✏️ متنِ دکمه‌ی بعدی', 'ecarnl_' . $id, 'admin'), btnCb('✨ ایموجیِ بعدی', 'ecarni_' . $id, 'admin')],
+        [btnCb(UT('back'), 'eb_' . $id, 'nav')],
+    ];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
+}
+
+/** 📝 فهرستِ متن‌های قابلِ ویرایشِ صفحه‌ی کاروسل */
+function edCarouselTexts($chatId, $msgId, $btnId) {
+    $b = cfg()['buttons'][$btnId] ?? null;
+    if (!$b) { edButtons($chatId, $msgId); return; }
+    $ct = (array)($b['carousel_texts'] ?? []);
+
+    $text  = "📝 <b>متن‌های صفحه‌ی کاروسلِ «" . h($b['text']) . "»</b>\n\n";
+    $text .= "متن جدید را با <b>ایموجی پریمیوم</b>، <b>نقل‌قول</b> و قالب‌بندی بفرست — همه حفظ می‌شود.";
+
+    $rows = [];
+    foreach (carouselTextLabels() as $ck => $cl) {
+        $mark = trim((string)($ct[$ck] ?? '')) !== '' ? '✅ ' : '';
+        $rows[] = [btnCb($mark . $cl, 'bcv_' . $btnId . '|' . $ck, 'info')];
+    }
+    $rows[] = [btnCb(UT('back'), 'ecar_' . $btnId, 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
+}
+
+/** 📝 نمایشِ یکی از متن‌های صفحه‌ی کاروسل */
+function edCarouselText($chatId, $msgId, $btnId, $key) {
+    $b = cfg()['buttons'][$btnId] ?? null;
+    $labels = carouselTextLabels();
+    if (!$b || !isset($labels[$key])) { edButtons($chatId, $msgId); return; }
+    $cur = trim((string)($b['carousel_texts'][$key] ?? ''));
+    $isQ = str_starts_with($cur, '<blockquote');
+    $k   = $btnId . '|' . $key;
+
+    $text  = "📝 <b>" . h($labels[$key]) . "</b> — <i>" . h($b['text']) . "</i>\n\n";
+    if ($cur !== '') {
+        $text .= "<b>پیش‌نمایش:</b>\n" . $cur . "\n\n<b>کد:</b>\n<code>" . h(mb_substr($cur, 0, 700)) . "</code>";
+    } else {
+        $text .= "<i>خالی — الان از متنِ پیش‌فرض استفاده می‌شود:</i>\n" . carouselTextDefault($key);
+    }
+    if ($key === 'item') $text .= "\n\n<b>متغیرها:</b>\n<code>{name} {price}</code>";
+
+    $rows = [[btnCb('✏️ تغییر متن', 'bce_' . $k, 'confirm')]];
+    if ($cur !== '') {
+        $rows[] = [btnCb($isQ ? '❝ حذف نقل‌قول' : '❝ نقل‌قول', 'bcq_' . $k, 'admin'),
+                   btnCb('❝ نقل‌قول بازشو', 'bcx_' . $k, 'admin')];
+        $rows[] = [btnCb('♻️ پاک‌کردن (برگشت به پیش‌فرض)', 'bcr_' . $k, 'reject')];
+    }
+    $rows[] = [btnCb(UT('back'), 'bct_' . $btnId, 'nav')];
     editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
 }
 
@@ -6656,6 +6758,20 @@ function masterHandle($update) {
         }
 
         // --- دکمه شیشه‌ای زیرمجموعه ---
+        // 🎠 ورق‌زدنِ کاروسلِ زیردکمه‌ها — اندیس همان تویِ callback_data
+        // است، پس هیچ وضعیتی لازم نیست بخوانیم یا بنویسیم
+        if (str_starts_with($data, 'pmc_')) {
+            $rest = substr($data, 4);
+            $pos = strrpos($rest, '|');
+            answerCb(BOT_TOKEN, $cbId);
+            if ($pos === false) return;
+            $bid = substr($rest, 0, $pos);
+            $idx = (int)substr($rest, $pos + 1);
+            if (!isset(cfg()['buttons'][$bid])) return;
+            showSubsCarousel($uid, $chatId, $bid, $idx, $msgId);
+            return;
+        }
+
         if (str_starts_with($data, 'sub_')) {
             $rest = substr($data, 4);
             $pos = strrpos($rest, '|');
@@ -6990,7 +7106,7 @@ function masterHandle($update) {
         // نه خطایی، نه پیامی. پس با هر بخش تازه این فهرست هم باید کامل شود.
         $adminPrefixes = ['aok_', 'ano_', 'adm_', 'ag_', 'eb', 'et', 'eg', 'eu', 'eref', 'sb', 'ep', 'esp',
                           'esup', 'rp', 'tf', 'jn', 'gw', 'pay', 'px', 'dm', 'ch', 'gma', 'gm_', 'ol',
-                          'pf_', 'pft', 'num', 'reply_', 'setup'];
+                          'pf_', 'pft', 'num', 'reply_', 'setup', 'ecar', 'bc'];
         $isAdminCb = false;
         foreach ($adminPrefixes as $pref) {
             if (str_starts_with($data, $pref)) { $isAdminCb = true; break; }
@@ -7550,6 +7666,103 @@ function masterHandle($update) {
             subMutate($bid, $sid, function (&$x) use ($key) { unset($x['flow_texts'][$key]); });
             answerCb(BOT_TOKEN, $cbId, '♻️ پاک شد');
             edFlowText($chatId, $msgId, $bid, $sid, $key);
+            return;
+        }
+
+        // ---------- تنظیماتِ کاروسلِ زیردکمه‌های یک دکمه ----------
+        if (str_starts_with($data, 'ecarx_')) {
+            $bid = substr($data, 6);
+            if (!isset(cfg()['buttons'][$bid])) { answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return; }
+            cfgSet(function (&$c) use ($bid) {
+                $c['buttons'][$bid]['subs_mode'] = (($c['buttons'][$bid]['subs_mode'] ?? 'grid') === 'carousel') ? 'grid' : 'carousel';
+            });
+            answerCb(BOT_TOKEN, $cbId, '🎠');
+            edCarousel($chatId, $msgId, $bid);
+            return;
+        }
+        if (str_starts_with($data, 'ecarpl_') || str_starts_with($data, 'ecarnl_')
+            || str_starts_with($data, 'ecarpi_') || str_starts_with($data, 'ecarni_')) {
+            $which = substr($data, 4, 2);   // pl / nl / pi / ni
+            $bid = substr($data, 7);
+            if (!isset(cfg()['buttons'][$bid])) { answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return; }
+            $isIcon = in_array($which, ['pi', 'ni'], true);
+            $act = 'ed_bcar_' . $which;
+            $ask = $isIcon
+                ? "✨ کد ایموجی پریمیوم را بفرستید.\nبا /emoji می‌گیرید. برای حذف خط تیره بفرستید."
+                : '✏️ متن جدید دکمه را بفرستید:';
+            answerCb(BOT_TOKEN, $cbId);
+            setState(ADMIN_ID, $act, ['btn' => $bid]);
+            sendMsg(BOT_TOKEN, $chatId, $ask, inlineKb([[btnCb(UT('cancel'), 'ecar_' . $bid, 'cancel')]]));
+            return;
+        }
+        if (str_starts_with($data, 'ecar_')) {
+            $bid = substr($data, 5);
+            if (!isset(cfg()['buttons'][$bid])) { answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return; }
+            answerCb(BOT_TOKEN, $cbId);
+            edCarousel($chatId, $msgId, $bid);
+            return;
+        }
+
+        // ---------- متن‌های صفحه‌ی کاروسل ----------
+        if (str_starts_with($data, 'bct_')) {
+            $bid = substr($data, 4);
+            if (!isset(cfg()['buttons'][$bid])) { answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return; }
+            answerCb(BOT_TOKEN, $cbId);
+            edCarouselTexts($chatId, $msgId, $bid);
+            return;
+        }
+        if (str_starts_with($data, 'bcv_')) {
+            $parts = explode('|', substr($data, 4), 2);
+            answerCb(BOT_TOKEN, $cbId);
+            if (count($parts) < 2 || !isset(cfg()['buttons'][$parts[0]])) return;
+            edCarouselText($chatId, $msgId, $parts[0], $parts[1]);
+            return;
+        }
+        if (str_starts_with($data, 'bce_')) {
+            $parts = explode('|', substr($data, 4), 2);
+            if (count($parts) < 2 || !isset(cfg()['buttons'][$parts[0]]) || !isset(carouselTextLabels()[$parts[1]])) {
+                answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return;
+            }
+            [$bid, $key] = $parts;
+            answerCb(BOT_TOKEN, $cbId);
+            setState(ADMIN_ID, 'edit_carousel_text', ['btn' => $bid, 'key' => $key]);
+            sendMsg(BOT_TOKEN, $chatId,
+                "✏️ متن جدید را بفرستید.\n\n✨ ایموجی پریمیوم، نقل‌قول و قالب‌بندی همه حفظ می‌شود.",
+                inlineKb([[btnUI('cancel', 'bcv_' . $bid . '|' . $key, 'cancel')]]));
+            return;
+        }
+        if (str_starts_with($data, 'bcq_') || str_starts_with($data, 'bcx_')) {
+            $exp = str_starts_with($data, 'bcx_');
+            $parts = explode('|', substr($data, 4), 2);
+            if (count($parts) < 2 || !isset(cfg()['buttons'][$parts[0]]) || !isset(carouselTextLabels()[$parts[1]])) {
+                answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return;
+            }
+            [$bid, $key] = $parts;
+            cfgSet(function (&$c) use ($bid, $key, $exp) {
+                $t = trim((string)($c['buttons'][$bid]['carousel_texts'][$key] ?? ''));
+                if (str_starts_with($t, '<blockquote')) {
+                    $t = preg_replace('#^<blockquote[^>]*>#', '', $t);
+                    $t = preg_replace('#</blockquote>$#', '', trim($t));
+                    if ($exp) $t = '<blockquote expandable>' . trim($t) . '</blockquote>';
+                } else {
+                    $t = ($exp ? '<blockquote expandable>' : '<blockquote>') . $t . '</blockquote>';
+                }
+                if (!is_array($c['buttons'][$bid]['carousel_texts'] ?? null)) $c['buttons'][$bid]['carousel_texts'] = [];
+                $c['buttons'][$bid]['carousel_texts'][$key] = trim($t);
+            });
+            answerCb(BOT_TOKEN, $cbId, '❝ اعمال شد');
+            edCarouselText($chatId, $msgId, $bid, $key);
+            return;
+        }
+        if (str_starts_with($data, 'bcr_')) {
+            $parts = explode('|', substr($data, 4), 2);
+            if (count($parts) < 2 || !isset(cfg()['buttons'][$parts[0]]) || !isset(carouselTextLabels()[$parts[1]])) {
+                answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return;
+            }
+            [$bid, $key] = $parts;
+            cfgSet(function (&$c) use ($bid, $key) { unset($c['buttons'][$bid]['carousel_texts'][$key]); });
+            answerCb(BOT_TOKEN, $cbId, '♻️ پاک شد');
+            edCarouselText($chatId, $msgId, $bid, $key);
             return;
         }
 
@@ -9101,6 +9314,46 @@ function masterHandle($update) {
             sendMsg(BOT_TOKEN, $chatId, "✅ مقدار ذخیره شد.", $back);
             return;
         }
+
+        // ---- متن/ایموجیِ دکمه‌های قبلی/بعدیِ کاروسل ----
+        if (in_array($action, ['ed_bcar_pl', 'ed_bcar_nl', 'ed_bcar_pi', 'ed_bcar_ni'], true)) {
+            $backCar = inlineKb([[btnCb(UT('back'), 'ecar_' . $bid, 'nav')]]);
+            $field = ['ed_bcar_pl' => 'carousel_prev_label', 'ed_bcar_nl' => 'carousel_next_label',
+                      'ed_bcar_pi' => 'carousel_prev_icon',  'ed_bcar_ni' => 'carousel_next_icon'][$action];
+
+            if ($action === 'ed_bcar_pl' || $action === 'ed_bcar_nl') {
+                if ($plain === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی است."); return; }
+                cfgSet(function (&$c) use ($bid, $field, $plain) { $c['buttons'][$bid][$field] = $plain; });
+                clearState($uid);
+                sendMsg(BOT_TOKEN, $chatId, "✅ ذخیره شد.", $backCar);
+                return;
+            }
+
+            $ic = '';
+            if ($ids) $ic = $ids[0];
+            elseif (ctype_digit($plain)) $ic = $plain;
+            elseif ($plain === '-' || $plain === '—') $ic = '';
+            else { sendMsg(BOT_TOKEN, $chatId, "⚠️ یک ایموجی پریمیوم بفرستید، یا کد عددی، یا خط تیره."); return; }
+            cfgSet(function (&$c) use ($bid, $field, $ic) { $c['buttons'][$bid][$field] = $ic; });
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId, $ic ? "✅ ایموجی پریمیوم نشست." : "✅ حذف شد.", $backCar);
+            return;
+        }
+    }
+
+    // ---- متنِ اختصاصیِ صفحه‌ی کاروسلِ یک دکمه ----
+    if ($action === 'edit_carousel_text') {
+        $bid = $sd['btn'] ?? ''; $key = $sd['key'] ?? '';
+        if (!isset(cfg()['buttons'][$bid]) || !isset(carouselTextLabels()[$key])) { clearState($uid); return; }
+        $html = msgHtml($msg);
+        if (trim($html) === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی است."); return; }
+        cfgSet(function (&$c) use ($bid, $key, $html) {
+            if (!is_array($c['buttons'][$bid]['carousel_texts'] ?? null)) $c['buttons'][$bid]['carousel_texts'] = [];
+            $c['buttons'][$bid]['carousel_texts'][$key] = $html;
+        });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, "✅ متن ذخیره شد.\n\n<b>پیش‌نمایش:</b>\n" . $html, mainKeyboard());
+        return;
     }
 
     // ---- زیردکمه‌های شیشه‌ای ----
@@ -9752,6 +10005,67 @@ function subRows($btnId) {
     return $rows;
 }
 
+/** زیردکمه‌های روشنِ یک دکمه، مرتب‌شده — پایه‌ی هم توری هم کاروسل */
+function carouselItems($btnId) {
+    $b = cfg()['buttons'][$btnId] ?? null;
+    if (!$b) return [];
+    $items = [];
+    foreach ($b['subs'] ?? [] as $sub) if (!empty($sub['on'])) $items[] = $sub;
+    usort($items, fn($x, $y) => ((int)($x['order'] ?? 99)) <=> ((int)($y['order'] ?? 99)));
+    return $items;
+}
+
+/**
+ * 🎠 به‌جای فهرستِ توری، زیردکمه‌ها یکی‌یکی — یک دکمه‌ی بالا (همینو
+ * می‌خوام، دقیقا همان sub_ همیشگی) + قبلی/بعدی پایین برای ورق‌زدن.
+ * اندیس همان تویِ callback_data جاسازی می‌شود، نه تویِ وضعیتِ کاربر —
+ * چون این صفحه قبل از شروعِ هیچ جریانی است، حالتِ ذخیره‌شده لازم ندارد.
+ */
+function showSubsCarousel($uid, $chatId, $btnId, $idx, $msgId = null, $replyTo = null) {
+    $b = cfg()['buttons'][$btnId] ?? null;
+    if (!$b) return;
+    $slot = 'pmc_' . $btnId;
+
+    $items = carouselItems($btnId);
+    if (!$items) {
+        $rows = [[btnUI('home', 'home', 'nav')]];
+        if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, carouselT($btnId, 'empty'), inlineKb($rows));
+        else panelShow($uid, $chatId, $slot, carouselT($btnId, 'empty'), inlineKb($rows), $replyTo);
+        return;
+    }
+
+    $n = count($items);
+    $idx = (($idx % $n) + $n) % $n;
+    $cur = $items[$idx];
+
+    $top = ['text' => trim(($cur['emoji'] ?? '') . ' ' . ($cur['text'] ?? '')),
+            'callback_data' => 'sub_' . $btnId . '|' . ($cur['id'] ?? '')];
+    if (isStyle($cur['color'] ?? '')) $top['style'] = $cur['color'];
+    elseif (gs('buy')) $top['style'] = gs('buy');
+    if (!empty($cur['icon'])) $top['icon_custom_emoji_id'] = (string)$cur['icon'];
+
+    $prevLabel = trim((string)($b['carousel_prev_label'] ?? '')) ?: '◀️ قبلی';
+    $nextLabel = trim((string)($b['carousel_next_label'] ?? '')) ?: 'بعدی ▶️';
+    $prevBtn = ['text' => $prevLabel, 'callback_data' => 'pmc_' . $btnId . '|' . (($idx - 1 + $n) % $n)];
+    $nextBtn = ['text' => $nextLabel, 'callback_data' => 'pmc_' . $btnId . '|' . (($idx + 1) % $n)];
+    if (gs('nav')) { $prevBtn['style'] = gs('nav'); $nextBtn['style'] = gs('nav'); }
+    if (!empty($b['carousel_prev_icon'])) $prevBtn['icon_custom_emoji_id'] = (string)$b['carousel_prev_icon'];
+    if (!empty($b['carousel_next_icon'])) $nextBtn['icon_custom_emoji_id'] = (string)$b['carousel_next_icon'];
+
+    $rows = [[$top], [$prevBtn, $nextBtn], [btnUI('home', 'home', 'nav')]];
+
+    $sp = subProduct($btnId, $cur['id'] ?? '', $cur);
+    $price = $sp ? (fmtNum($sp['price']) . ' ' . h($sp['currency'])) : '—';
+    $name  = h(trim(($cur['emoji'] ?? '') . ' ' . ($cur['text'] ?? '')));
+
+    $head = carouselT($btnId, 'item', ['name' => $name, 'price' => $price]);
+    $pos  = "\n\n" . number_format($idx + 1) . ' از ' . number_format($n);
+    $text = $head . $pos;
+
+    if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
+    else panelShow($uid, $chatId, $slot, $text, inlineKb($rows), $replyTo);
+}
+
 /** فهرست محصولات برای بستن یک زیردکمه به محصول */
 function edSubPick($chatId, $msgId, $bid, $sid) {
     $rows = [];
@@ -9827,6 +10141,14 @@ function runMenuAction($act, $uid, $chatId, $uname, $fname, $replyTo = null) {
                 return;
         }
     }
+
+    // 🎠 این دکمه با کاروسل نشان داده می‌شود، نه توری — دقیقا همان
+    // الگوی کاروسلِ سرعت، ولی برای خودِ فهرستِ زیردکمه‌ها
+    if ($b && (($b['subs_mode'] ?? 'grid') === 'carousel')) {
+        showSubsCarousel($uid, $chatId, $act, 0, null, $replyTo);
+        return;
+    }
+
     $subs = subRows($act);
     switch ($act) {
         case 'buy':      showProducts($uid, $chatId, $subs, $replyTo); break;
