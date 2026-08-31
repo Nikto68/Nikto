@@ -811,6 +811,15 @@ function gmHandleText($text, $uid, $chatId, $name, $uname = '', $replyTo = null,
         gmTransfer($r, $uid, $chatId, $name, $uname, $replyTo, $msg);
         return true;
     }
+    // فقط کلمه‌ی «انتقال» تنها، بدون ریپلای و بدون عدد — دقیقا مثل
+    // «چالش»/«بازیِ» تنها، تا حالا هیچ اتفاقی نمی‌افتاد و از بیرون مثل
+    // خراب بودنِ ربات بود.
+    foreach (gmWords(gmVal('word_send', 'انتقال')) as $w) {
+        if ($w !== '' && mb_strtolower($raw) === mb_strtolower($w)) {
+            sendMsg(BOT_TOKEN, $chatId, gmT('send_how', ['word' => $w]), null, $extra);
+            return true;
+        }
+    }
 
     $min = max(1, (float)gmVal('min', 10));
     $max = max($min, (float)gmVal('max', 1e9));
