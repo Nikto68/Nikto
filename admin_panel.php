@@ -125,16 +125,17 @@ function renderLogin($error) { ?>
 <title>ورود — پنل مدیریت</title><style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{min-height:100vh;display:grid;place-items:center;font-family:system-ui,'Segoe UI',Tahoma,sans-serif;
-background:#111;padding:20px}
-.card{background:#fff;padding:40px 32px;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:380px;text-align:center;border:1px solid #222}
-h1{font-size:22px;margin-bottom:6px;color:#111}
-p.sub{color:#666;font-size:13px;margin-bottom:24px}
-input{width:100%;padding:14px 16px;border:1.5px solid #ddd;border-radius:10px;font-size:15px;font-family:inherit;margin-bottom:14px;text-align:center}
-input:focus{outline:none;border-color:#111}
-button{width:100%;padding:14px;border:1.5px solid #111;border-radius:10px;background:#111;
+background:#0c0c0c;padding:20px}
+.card{background:#161616;padding:40px 32px;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);width:100%;max-width:380px;text-align:center;border:1px solid #2b2b2b}
+h1{font-size:22px;margin-bottom:6px;color:#f2f2f2}
+p.sub{color:#8a8a8a;font-size:13px;margin-bottom:24px}
+input{width:100%;padding:14px 16px;border:1.5px solid #2b2b2b;border-radius:10px;font-size:15px;font-family:inherit;
+margin-bottom:14px;text-align:center;background:#1e1e1e;color:#f2f2f2}
+input:focus{outline:none;border-color:#2f7de1}
+button{width:100%;padding:14px;border:1.5px solid #2f7de1;border-radius:10px;background:#2f7de1;
 color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit}
 button:hover{opacity:.85}
-.err{background:#fbeaea;color:#7a2323;border:1px solid #eec3c3;padding:10px;border-radius:10px;font-size:13px;margin-bottom:14px}
+.err{background:#5c2224;color:#f5a3a6;border:1px solid #e5484d;padding:10px;border-radius:10px;font-size:13px;margin-bottom:14px}
 </style></head><body>
 <form class="card" method="post">
   <div style="font-size:44px">👑</div><h1>پنل مدیریت</h1><p class="sub">فروشگاه تلگرام</p>
@@ -1202,24 +1203,25 @@ function oBadge($s) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>پنل مدیریت فروشگاه</title>
 <style>
-:root{--bg:#f2f2f2;--panel:#ffffff;--ink:#111111;--ink-soft:#4a4a4a;--muted:#8a8a8a;
---line:#dcdcdc;--line-soft:#ececec}
+:root{--bg:#0c0c0c;--panel:#161616;--panel-alt:#1e1e1e;--ink:#f2f2f2;--ink-soft:#c2c2c2;--muted:#8a8a8a;
+--line:#2b2b2b;--line-soft:#232323;--blue:#2f7de1;--blue-dim:#1c3f66;--red:#e5484d;--red-dim:#5c2224;
+--green:#2fbf6f;--green-dim:#1d4a32;--amber:#e0a72e;--amber-dim:#54430f}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:60px}
 a{color:inherit;text-decoration:none}
-header{background:#111;color:#fff;padding:16px 20px;border-bottom:1px solid #000}
+header{background:#000;color:#fff;padding:16px 20px;border-bottom:1px solid var(--line)}
 .wrap{max-width:1200px;margin:0 auto;padding:0 16px}
 header h1{font-size:19px;font-weight:800}
 header .row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
-.logout{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);padding:8px 16px;border-radius:8px;font-size:13px}
-.logout:hover{background:rgba(255,255,255,.2)}
+.logout{background:var(--red-dim);border:1px solid var(--red);color:#fff;padding:8px 16px;border-radius:8px;font-size:13px}
+.logout:hover{opacity:.85}
 
 /* ---------- shell: right sidebar + content (folder-grouped nav) ---------- */
 .nav-toggle-cb{display:none}
 .nav-toggle-btn{display:none}
 .nav-backdrop{display:none}
 .shell{display:flex;align-items:flex-start;max-width:1320px;margin:0 auto}
-.sidebar{width:225px;flex:0 0 225px;background:#fff;border-left:1px solid var(--line);
+.sidebar{width:225px;flex:0 0 225px;background:#000;border-left:1px solid var(--line);
 min-height:calc(100vh - 57px);position:sticky;top:0;align-self:flex-start;overflow-y:auto}
 .sidebar-inner{padding:14px 10px}
 .nav-folder{margin-bottom:14px}
@@ -1227,80 +1229,83 @@ min-height:calc(100vh - 57px);position:sticky;top:0;align-self:flex-start;overfl
 letter-spacing:.4px;padding:6px 10px 4px}
 .sidebar a{display:block;padding:9px 12px;border-radius:8px;font-size:13.5px;font-weight:600;
 color:var(--ink-soft);margin-bottom:2px}
-.sidebar a:hover{background:#f0f0f0}
-.sidebar a.on{background:#111;color:#fff}
+.sidebar a:hover{background:var(--panel-alt)}
+.sidebar a.on{background:var(--blue);color:#fff}
 .content{flex:1;min-width:0;padding:18px 16px}
 .content .wrap{max-width:1000px;margin:0;padding:0}
 @media(max-width:900px){
-  .nav-toggle-btn{display:block;margin:10px 16px;padding:10px 14px;background:#111;color:#fff;
+  .nav-toggle-btn{display:block;margin:10px 16px;padding:10px 14px;background:var(--blue);color:#fff;
     border-radius:8px;font-weight:700;font-size:13.5px;text-align:center;cursor:pointer;
     max-width:1200px;margin-left:auto;margin-right:auto}
   .sidebar{position:fixed;top:0;right:0;height:100vh;z-index:50;transform:translateX(100%);
-    transition:transform .22s ease;box-shadow:-6px 0 24px rgba(0,0,0,.18);width:250px}
+    transition:transform .22s ease;box-shadow:-6px 0 24px rgba(0,0,0,.5);width:250px}
   .nav-toggle-cb:checked ~ .shell .sidebar{transform:translateX(0)}
-  .nav-toggle-cb:checked ~ .nav-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+  .nav-toggle-cb:checked ~ .nav-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40}
   .content{padding:6px 16px}
 }
 
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:0 0 20px}
-.stat{background:#fff;padding:18px;border-radius:12px;border:1px solid var(--line)}
-.stat .n{font-size:26px;font-weight:800;color:#111}
+.stat{background:var(--panel);padding:18px;border-radius:12px;border:1px solid var(--line)}
+.stat .n{font-size:26px;font-weight:800;color:var(--blue)}
 .stat .l{color:var(--muted);font-size:12.5px;margin-top:5px}
-.card{background:#fff;border-radius:12px;border:1px solid var(--line);margin-bottom:18px;overflow:hidden}
-.card h2{padding:15px 18px;font-size:14.5px;font-weight:800;border-bottom:1px solid var(--line-soft);background:#fafafa}
+.card{background:var(--panel);border-radius:12px;border:1px solid var(--line);margin-bottom:18px;overflow:hidden}
+.card h2{padding:15px 18px;font-size:14.5px;font-weight:800;border-bottom:1px solid var(--line);background:var(--panel-alt)}
 .card .body{padding:18px}
+.subcard{background:var(--panel-alt);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:16px}
+.subcard:last-child{margin-bottom:0}
+.subcard>h3{font-size:13px;font-weight:800;color:var(--ink);margin-bottom:11px;display:flex;align-items:center;gap:6px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:13px}
 label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:5px}
 input,select,textarea{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;
-font-size:13.5px;font-family:inherit;background:#fff;color:var(--ink)}
-input:focus,select:focus,textarea:focus{outline:none;border-color:#111}
+font-size:13.5px;font-family:inherit;background:var(--panel-alt);color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)}
 textarea{min-height:90px;resize:vertical;line-height:1.9}
-.btn{display:inline-block;padding:10px 18px;border:1.5px solid #111;border-radius:8px;font-size:13.5px;font-weight:700;
-cursor:pointer;font-family:inherit;color:#fff;background:#111}
+.btn{display:inline-block;padding:10px 18px;border:1.5px solid var(--blue);border-radius:8px;font-size:13.5px;font-weight:700;
+cursor:pointer;font-family:inherit;color:#fff;background:var(--blue)}
 .btn:hover{opacity:.85}
-.btn.g{background:#2f7a44;border-color:#2f7a44}.btn.r{background:#b83a3a;border-color:#b83a3a}.btn.b{background:#33587a;border-color:#33587a}
+.btn.g{background:var(--green);border-color:var(--green)}.btn.r{background:var(--red);border-color:var(--red)}.btn.b{background:var(--blue);border-color:var(--blue)}
 .btn.sm{padding:6px 12px;font-size:12px}
-.btn.ghost{background:#fff;color:#111;border-color:var(--line)}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#fafafa;padding:11px;text-align:right;font-weight:700;color:var(--ink-soft);white-space:nowrap;border-bottom:1px solid var(--line)}
-td{padding:11px;border-top:1px solid var(--line-soft);vertical-align:middle}
+th{background:var(--panel-alt);padding:11px;text-align:right;font-weight:700;color:var(--ink-soft);white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:11px;border-top:1px solid var(--line-soft);vertical-align:middle;color:var(--ink)}
 .scroll{overflow-x:auto}
 .badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:700;white-space:nowrap;border:1px solid var(--line)}
-.badge.green{background:#eaf6ee;color:#245432;border-color:#bfe2c9}.badge.amber{background:#fdf3e3;color:#7b4e12;border-color:#f0d9ac}
-.badge.red{background:#fbeaea;color:#7a2323;border-color:#eec3c3}.badge.gray{background:#f0f0f0;color:#444;border-color:var(--line)}
+.badge.green{background:var(--green-dim);color:#8fe6b6;border-color:var(--green)}.badge.amber{background:var(--amber-dim);color:#f0cb75;border-color:var(--amber)}
+.badge.red{background:var(--red-dim);color:#f5a3a6;border-color:var(--red)}.badge.gray{background:var(--panel-alt);color:var(--ink-soft);border-color:var(--line)}
 .flash{padding:13px 17px;border-radius:10px;margin:16px 0;font-size:13.5px;font-weight:600;border:1px solid var(--line)}
-.flash.ok{background:#eaf6ee;color:#245432;border-color:#bfe2c9}.flash.err{background:#fbeaea;color:#7a2323;border-color:#eec3c3}
-.flash.warn{background:#fdf3e3;color:#7b4e12;border-color:#f0d9ac}
+.flash.ok{background:var(--green-dim);color:#8fe6b6;border-color:var(--green)}.flash.err{background:var(--red-dim);color:#f5a3a6;border-color:var(--red)}
+.flash.warn{background:var(--amber-dim);color:#f0cb75;border-color:var(--amber)}
 .empty{text-align:center;padding:32px;color:var(--muted);font-size:13.5px}
-code{background:#f0f0f0;padding:2px 6px;border-radius:5px;font-size:11.5px;direction:ltr;display:inline-block}
+code{background:var(--panel-alt);color:var(--ink-soft);padding:2px 6px;border-radius:5px;font-size:11.5px;direction:ltr;display:inline-block}
 .muted{color:var(--muted);font-size:12px}
 .inline{display:inline}
 .brow8{grid-template-columns:44px 1fr 96px 52px 90px 52px 52px 40px!important;gap:7px!important}
 .brow{display:grid;grid-template-columns:44px 1fr 90px 70px 60px 46px;gap:8px;align-items:center;
-padding:10px;border:1px solid var(--line-soft);border-radius:8px;margin-bottom:8px}
+padding:10px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--panel-alt)}
 .brow input,.brow select{padding:8px;font-size:13px}
-.prev{background:#f7f7f7;border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px}
-.pbtn{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center;font-size:13.5px;margin:4px 0}
+.prev{background:var(--panel-alt);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px}
+.pbtn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center;font-size:13.5px;margin:4px 0;color:var(--ink)}
 .pgrid{display:flex;gap:6px}
 .pgrid .pbtn{flex:1;margin:0}
 .srow{display:grid;grid-template-columns:40px 90px 100px 60px 1fr 1.4fr;gap:8px;align-items:center;
-padding:9px;border:1px solid var(--line-soft);border-radius:8px;margin-bottom:8px}
+padding:9px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--panel-alt)}
 .srow input,.srow select{padding:8px;font-size:12.5px}
 .tgrid{display:grid;gap:14px}
-.bar{height:9px;background:#ececec;border-radius:20px;overflow:hidden}
-.bar-in{height:100%;background:#111;border-radius:20px;transition:width .3s}
-pre.code{background:#111;color:#eee;padding:13px;border-radius:8px;font-size:11.5px;
-line-height:1.75;overflow-x:auto;direction:ltr;text-align:left;white-space:pre;margin:0}
+.bar{height:9px;background:var(--panel-alt);border-radius:20px;overflow:hidden;border:1px solid var(--line)}
+.bar-in{height:100%;background:var(--blue);border-radius:20px;transition:width .3s}
+pre.code{background:#000;color:#d8d8d8;padding:13px;border-radius:8px;font-size:11.5px;
+line-height:1.75;overflow-x:auto;direction:ltr;text-align:left;white-space:pre;margin:0;border:1px solid var(--line)}
 details summary::-webkit-details-marker{display:none}
-.note{background:#f5f5f5;border-right:4px solid #111;border-radius:8px;padding:12px 14px;
-margin-bottom:14px;font-size:12.5px;line-height:1.95;color:#222}
+.note{background:var(--panel-alt);border-right:4px solid var(--blue);border-radius:8px;padding:12px 14px;
+margin-bottom:14px;font-size:12.5px;line-height:1.95;color:var(--ink-soft)}
 .tbar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
-.tbar button{background:#f0f0f0;border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:11.5px;
+.tbar button{background:var(--panel-alt);border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:11.5px;
 cursor:pointer;font-family:inherit;color:var(--ink-soft)}
-.tbar button:hover{background:#e5e5e5}
-.pbtn.pb-b{background:#33587a;color:#fff;border-color:#33587a}
-.pbtn.pb-g{background:#2f7a44;color:#fff;border-color:#2f7a44}
-.pbtn.pb-r{background:#b83a3a;color:#fff;border-color:#b83a3a}
+.tbar button:hover{background:#292929}
+.pbtn.pb-b{background:var(--blue);color:#fff;border-color:var(--blue)}
+.pbtn.pb-g{background:var(--green);color:#fff;border-color:var(--green)}
+.pbtn.pb-r{background:var(--red);color:#fff;border-color:var(--red)}
 @media(max-width:900px){.brow,.brow8,.srow{grid-template-columns:1fr 1fr!important;gap:6px!important}}
 @media(max-width:640px){.card .body{padding:15px}header h1{font-size:16px}}
 </style>
@@ -1680,7 +1685,7 @@ $tabFolders = [
         </div>
 
         <details style="margin-top:14px">
-          <summary style="cursor:pointer;font-weight:500;color:#4a5568">✏️ متن‌های مخصوصِ این محصول (خالی = متنِ عمومیِ ربات)</summary>
+          <summary style="cursor:pointer;font-weight:500;color:#c2c2c2">✏️ متن‌های مخصوصِ این محصول (خالی = متنِ عمومیِ ربات)</summary>
           <div class="note" style="margin-top:8px">
             برای محصولی مثل «بوست تلگرام» که با ممبرگیریِ عادی فرق داره، این‌جا می‌تونی برای همین
             یکی متنِ سوال‌ها رو عوض کنی — بقیه‌ی محصولات دست‌نخورده با متنِ عمومی کار می‌کنن.
@@ -1996,7 +2001,7 @@ $tabFolders = [
       </div>
       <div style="margin-top:14px"><button class="btn g">ذخیره</button></div>
     </form>
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #edf2f7">
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #2b2b2b">
       <form method="post" class="inline">
         <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
         <input type="hidden" name="action" value="toggle_product"><input type="hidden" name="id" value="<?= h($p['id']) ?>">
@@ -2051,7 +2056,7 @@ $tabFolders = [
           <input name="pf_all_v" value="<?= h(fmtNum((float)($PF['all']['v'] ?? 0))) ?>" style="direction:ltr"></div>
       </div>
 
-      <h3 style="font-size:13.5px;margin:18px 0 9px;color:#718096">— زیرِ اینا هرکدوم بخشِ جداگانه دارن، پایین‌تر —</h3>
+      <h3 style="font-size:13.5px;margin:18px 0 9px;color:#8a8a8a">— زیرِ اینا هرکدوم بخشِ جداگانه دارن، پایین‌تر —</h3>
       <div class="grid2">
         <div><label>🎯 پیش‌فرضِ خانواده‌ی «ممبر» (وقتی فیک/بوست خودشون عدد ندارن)</label>
           <select name="pf_member_mode"><?php $modeSel($PF['member']['mode'] ?? null, 'از سودِ عمومی پیروی کند'); ?></select></div>
@@ -2105,7 +2110,7 @@ $tabFolders = [
       <div style="margin-top:14px"><button class="btn g">ذخیره‌ی همه</button></div>
     </form>
 
-    <form method="post" style="margin-top:14px;padding-top:14px;border-top:1px solid #edf2f7;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <form method="post" style="margin-top:14px;padding-top:14px;border-top:1px solid #2b2b2b;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="profit">
       <input type="hidden" name="action" value="profit_every">
       <div style="flex:1;min-width:200px"><label>🎯 روی همه بنشان — یک درصد، هر ۴ بخش (شامل شماره مجازی و قیمت‌گیری)</label>
@@ -2174,7 +2179,7 @@ $tabFolders = [
 
       <h3 style="font-size:13.5px;margin:20px 0 9px">📨 گزینه‌های زیر «ارتباط غیر مستقیم»</h3>
       <div style="display:grid;grid-template-columns:40px 100px 60px 1fr 1.4fr;gap:8px;
-                  font-size:11.5px;color:#718096;font-weight:700;padding:0 9px 6px">
+                  font-size:11.5px;color:#8a8a8a;font-weight:700;padding:0 9px 6px">
         <div>فعال</div><div>نوع</div><div>ایموجی</div><div>عنوان</div><div>مقدار</div>
       </div>
       <?php foreach ($C['support_methods'] as $i => $m): ?>
@@ -2301,7 +2306,7 @@ $tabFolders = [
         <?php else: ?>
         <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:6px">
           <?php foreach ($channels as $cid => $ch): ?>
-            <label style="font-weight:500;background:#edf2f7;padding:7px 12px;border-radius:9px">
+            <label style="font-weight:500;background:#1e1e1e;padding:7px 12px;border-radius:9px">
               <input type="checkbox" name="bot_channels[]" value="<?= h($cid) ?>" style="width:auto"
                 <?= in_array($cid, $myChans, true) ? 'checked' : '' ?>> <?= h($ch['title']) ?>
             </label>
@@ -2311,7 +2316,7 @@ $tabFolders = [
 
         <h3 style="font-size:13.5px;margin:18px 0 9px">🎨 دکمه‌های شیشه‌ای این ربات</h3>
         <div style="display:grid;grid-template-columns:44px 1fr 96px 90px 52px 52px 40px;gap:7px;
-                    font-size:11px;color:#718096;font-weight:700;padding:0 10px 6px">
+                    font-size:11px;color:#8a8a8a;font-weight:700;padding:0 10px 6px">
           <div>ایموجی</div><div>متن</div><div>رنگ</div><div>✨ پریمیوم</div><div>ردیف</div><div>ترتیب</div><div>فعال</div>
         </div>
         <?php foreach ($bs['buttons'] as $bk => $bb): ?>
@@ -2371,7 +2376,7 @@ $tabFolders = [
 
         <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           <button class="btn g">ذخیره این ربات</button>
-          <label style="font-weight:500;background:#fef5e7;padding:9px 13px;border-radius:9px">
+          <label style="font-weight:500;background:#54430f;padding:9px 13px;border-radius:9px">
             <input type="checkbox" name="apply_all" style="width:auto"> 📋 اعمال روی <b>همه</b> ربات‌ها
           </label>
         </div>
@@ -2400,7 +2405,7 @@ $tabFolders = [
         <button class="btn b">افزودن مدیر</button>
       </form>
 
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid #edf2f7">
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid #2b2b2b">
         <form method="post" class="inline">
           <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="bots">
           <input type="hidden" name="action" value="bot_webhook"><input type="hidden" name="id" value="<?= h($b['id']) ?>">
@@ -2479,7 +2484,7 @@ $tabFolders = [
       <div style="margin-top:12px"><label>فقط برای این ربات‌ها (خالی = همه)</label>
         <div style="display:flex;flex-wrap:wrap;gap:9px">
           <?php foreach ($bots as $bb): ?>
-            <label style="font-weight:500;background:#edf2f7;padding:7px 12px;border-radius:9px">
+            <label style="font-weight:500;background:#1e1e1e;padding:7px 12px;border-radius:9px">
               <input type="checkbox" name="bots[]" value="<?= h($bb['id']) ?>" style="width:auto"> @<?= h($bb['username']) ?>
             </label>
           <?php endforeach; ?>
@@ -2505,7 +2510,7 @@ $tabFolders = [
       <button class="btn b">بررسی دسترسی همه ربات‌ها</button>
     </form>
     <?php if (!empty($_SESSION['health'])): ?>
-      <div style="margin-top:14px;background:#f7fafc;border-radius:10px;padding:14px;line-height:2;font-size:13px">
+      <div style="margin-top:14px;background:#1e1e1e;border-radius:10px;padding:14px;line-height:2;font-size:13px">
         <?php foreach ($_SESSION['health'] as $line): ?><div><?= h($line) ?></div><?php endforeach; ?>
       </div>
       <?php unset($_SESSION['health']); ?>
@@ -2571,7 +2576,7 @@ $tabFolders = [
       <div style="margin-top:12px"><label>روی کدام ربات‌های اپلودر؟ (خالی = همه)</label>
         <div style="display:flex;flex-wrap:wrap;gap:9px">
           <?php foreach ($bots as $bb): ?>
-            <label style="font-weight:500;background:#edf2f7;padding:7px 12px;border-radius:9px">
+            <label style="font-weight:500;background:#1e1e1e;padding:7px 12px;border-radius:9px">
               <input type="checkbox" name="bots[]" value="<?= h($bb['id']) ?>" style="width:auto"> @<?= h($bb['username']) ?></label>
           <?php endforeach; ?>
           <?php if (!$bots): ?><span class="muted">رباتی ندارید.</span><?php endif; ?>
@@ -2580,7 +2585,7 @@ $tabFolders = [
       <div style="margin-top:12px"><label>روی کدام ربات‌های شریک؟ (خالی = همه)</label>
         <div style="display:flex;flex-wrap:wrap;gap:9px">
           <?php foreach ($partners as $pp): ?>
-            <label style="font-weight:500;background:#edf2f7;padding:7px 12px;border-radius:9px">
+            <label style="font-weight:500;background:#1e1e1e;padding:7px 12px;border-radius:9px">
               <input type="checkbox" name="partners[]" value="<?= h($pp['id']) ?>" style="width:auto"> <?= h($pp['name']) ?></label>
           <?php endforeach; ?>
           <?php if (!$partners): ?><span class="muted">شریکی ندارید.</span><?php endif; ?>
@@ -2619,7 +2624,7 @@ $tabFolders = [
         </div>
       <?php endif; ?>
       <?php if (!empty($c['paused_reason'])): ?>
-        <div class="note" style="margin-bottom:12px;background:#fff4f4;border-color:#f5c2c7">
+        <div class="note" style="margin-bottom:12px;background:#5c2224;border-color:#e5484d">
           ⏸ <b>موقتا متوقف شد</b> — ربات نمی‌تواند عضویت را بررسی کند:
           <code><?= h($c['paused_reason']) ?></code><br>
           ربات مادر را دوباره در این کانال ادمین کنید، بعد از دکمه پایین روشنش کنید.
@@ -2639,7 +2644,7 @@ $tabFolders = [
         <div style="margin-top:10px"><label>ربات‌های اپلودر (خالی = همه)</label>
           <div style="display:flex;flex-wrap:wrap;gap:8px">
             <?php foreach ($bots as $bb): ?>
-              <label style="font-weight:500;background:#edf2f7;padding:6px 11px;border-radius:8px">
+              <label style="font-weight:500;background:#1e1e1e;padding:6px 11px;border-radius:8px">
                 <input type="checkbox" name="bots[]" value="<?= h($bb['id']) ?>" style="width:auto"
                   <?= in_array($bb['id'], $c['bots'] ?? [], true) ? 'checked' : '' ?>> @<?= h($bb['username']) ?></label>
             <?php endforeach; ?>
@@ -2647,7 +2652,7 @@ $tabFolders = [
         <div style="margin-top:10px"><label>ربات‌های شریک (خالی = همه)</label>
           <div style="display:flex;flex-wrap:wrap;gap:8px">
             <?php foreach ($partners as $pp): ?>
-              <label style="font-weight:500;background:#edf2f7;padding:6px 11px;border-radius:8px">
+              <label style="font-weight:500;background:#1e1e1e;padding:6px 11px;border-radius:8px">
                 <input type="checkbox" name="partners[]" value="<?= h($pp['id']) ?>" style="width:auto"
                   <?= in_array($pp['id'], $c['partners'] ?? [], true) ? 'checked' : '' ?>> <?= h($pp['name']) ?></label>
             <?php endforeach; ?>
@@ -2655,7 +2660,7 @@ $tabFolders = [
         <div style="margin-top:12px"><button class="btn g">ذخیره</button></div>
       </form>
 
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #edf2f7">
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #2b2b2b">
         <form method="post" class="inline">
           <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="campaigns">
           <input type="hidden" name="action" value="toggle_campaign"><input type="hidden" name="id" value="<?= h($c['id']) ?>">
@@ -2698,7 +2703,7 @@ $tabFolders = [
     <div class="body">
       <div class="grid2" style="margin-bottom:12px">
         <div><label>کلید API</label>
-          <input value="<?= h($pt['key']) ?>" readonly onclick="this.select()" style="direction:ltr;background:#f7fafc"></div>
+          <input value="<?= h($pt['key']) ?>" readonly onclick="this.select()" style="direction:ltr;background:#1e1e1e"></div>
         <div><label>آمار</label>
           <div class="muted" style="padding-top:8px">
             بررسی: <b><?= (int)$pt['checks'] ?></b> · موفق: <b><?= (int)$pt['passed'] ?></b>
@@ -2769,7 +2774,7 @@ def join_gate(user_id):
     return r</pre>
       </details>
 
-      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #edf2f7">
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #2b2b2b">
         <form method="post" class="inline">
           <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="partners">
           <input type="hidden" name="action" value="toggle_partner"><input type="hidden" name="id" value="<?= h($pt['id']) ?>">
@@ -2920,7 +2925,7 @@ def join_gate(user_id):
       <label>ربات‌های مقصد (هیچ‌کدام = همه)</label>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">
         <?php foreach ($bots as $b): ?>
-          <label style="font-weight:500;background:#edf2f7;padding:7px 12px;border-radius:9px">
+          <label style="font-weight:500;background:#1e1e1e;padding:7px 12px;border-radius:9px">
             <input type="checkbox" name="bots[]" value="<?= h($b['id']) ?>" style="width:auto">
             @<?= h($b['username']) ?> (<?= count(load('bots/' . $b['id'] . '/users')) ?>)
           </label>
@@ -3127,7 +3132,7 @@ def join_gate(user_id):
       </div>
     </form>
 
-    <div style="margin-top:15px;padding-top:15px;border-top:1px solid #edf2f7;display:flex;gap:9px;flex-wrap:wrap;align-items:center">
+    <div style="margin-top:15px;padding-top:15px;border-top:1px solid #2b2b2b;display:flex;gap:9px;flex-wrap:wrap;align-items:center">
       <form method="post" class="inline">
         <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="auto">
         <input type="hidden" name="action" value="auto_fix">
@@ -3192,24 +3197,24 @@ def join_gate(user_id):
       <input type="hidden" name="action" value="save_settings">
       <input type="hidden" name="adv_scope" value="1">
 
-      <h3 style="font-size:14px;margin-bottom:10px">💳 اطلاعات پرداخت</h3>
+      <div class="subcard"><h3>💳 اطلاعات پرداخت</h3>
       <div class="grid2">
         <div><label>آدرس USDT (TRC20)</label><input name="usdt" value="<?= h($C['wallets']['usdt']) ?>" style="direction:ltr"></div>
         <div><label>آدرس TRX</label><input name="trx" value="<?= h($C['wallets']['trx']) ?>" style="direction:ltr"></div>
         <div><label>شماره کارت</label><input name="card" value="<?= h($C['wallets']['card']) ?>" style="direction:ltr"></div>
         <div><label>به نام</label><input name="card_name" value="<?= h($C['wallets']['card_name']) ?>"></div>
-      </div>
+      </div></div>
 
-      <h3 style="font-size:14px;margin:18px 0 10px">👥 زیر مجموعه گیری</h3>
+      <div class="subcard"><h3>👥 زیر مجموعه گیری</h3>
       <div class="grid2">
         <div><label>درصد پورسانت</label><input name="ref_percent" type="number" min="0" max="100" step="0.5"
              value="<?= h($C['referral']['percent']) ?>"></div>
         <div><label>&nbsp;</label><label style="font-weight:500">
           <input type="checkbox" name="ref_on" style="width:auto" <?= !empty($C['referral']['on']) ? 'checked' : '' ?>>
           سیستم معرفی فعال باشد</label></div>
-      </div>
+      </div></div>
 
-      <h3 style="font-size:14px;margin:18px 0 10px">🤖 پیش‌فرض ربات‌های اپلودر</h3>
+      <div class="subcard"><h3>🤖 پیش‌فرض ربات‌های اپلودر</h3>
       <p class="muted" style="margin-bottom:10px">این مقادیر روی ربات‌های <b>جدید</b> اعمال می‌شود. برای ربات‌های موجود از تب «ربات‌های اپلودر» استفاده کنید.</p>
       <div class="grid2">
         <div><label>⏱ حذف فایل بعد از (ثانیه)</label>
@@ -3219,9 +3224,9 @@ def join_gate(user_id):
             <?= !empty($C['uploader']['force_join']) ? 'checked' : '' ?>> 🔒 عضویت اجباری</label>
           <label style="font-weight:500"><input type="checkbox" name="protect" style="width:auto"
             <?= !empty($C['uploader']['protect_content']) ? 'checked' : '' ?>> 🛡 محافظت فایل</label></div>
-      </div>
+      </div></div>
 
-      <h3 style="font-size:14px;margin:18px 0 10px">🧪 تست و نمایش</h3>
+      <div class="subcard"><h3>🧪 تست و نمایش</h3>
       <div class="note">
         <b>حالت تست</b> اجازه می‌دهد سفارش با مبلغ <b>صفر</b> تا آخر برود — بدون پرداخت،
         خودکار تایید می‌شود و کمپین قفل کانالش هم ساخته می‌شود.
@@ -3233,9 +3238,9 @@ def join_gate(user_id):
         <label style="font-weight:500"><input type="checkbox" name="speed_perday" style="width:auto"
           <?= !empty($C['ui']['speed_show_perday']) ? 'checked' : '' ?>>
           🚀 «نفر در روز» روی دکمه سرعت هم نوشته شود</label>
-      </div>
+      </div></div>
 
-      <h3 style="font-size:14px;margin:18px 0 10px">🤖 کار خودکار</h3>
+      <div class="subcard"><h3>🤖 کار خودکار</h3>
       <div class="note">
         با <b>درگاه پرداخت</b> همه چیز از قبل خودکار است و نیازی به حضور شما نیست.
         گزینه زیر فقط برای <b>رسید کارت به کارت</b> است: رسید که برسد، بدون بررسی تایید می‌شود.
@@ -3248,6 +3253,7 @@ def join_gate(user_id):
       </div>
       <div style="margin-top:10px;max-width:320px"><label>🧹 پاک کردن کمپین‌های تمام‌شده بعد از (روز · ۰ = هیچ‌وقت)</label>
         <input name="keep_days" type="number" min="0" value="<?= (int)($C['campaign_keep_days'] ?? 3) ?>"></div>
+      </div>
 
       <div style="margin-top:16px"><button class="btn g">ذخیره تنظیمات</button></div>
     </form>
