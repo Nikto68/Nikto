@@ -1960,6 +1960,58 @@ function boostQuickSetup($bid, $sid) {
     return true;
 }
 
+/**
+ * 😍 راه‌اندازیِ یک‌کلیکِ «ری‌اکشن پست تلگرام» — دقیقاً همان مکانیزمِ
+ * بوست (پنلِ SMM + قیمتِ خودکار)، فقط به‌جای انتخابِ مدت، مشتری نوعِ
+ * ری‌اکشن را انتخاب می‌کند و به‌جای لینکِ کانال، لینکِ خودِ پست را
+ * می‌دهد. ادمین بعداً برای هرکدام از ری‌اکشن‌ها سرویسِ واقعیِ پنل را
+ * از همان دراپ‌داونِ همیشگی انتخاب می‌کند.
+ */
+function postReactQuickSetup($bid, $sid) {
+    if (!findSub($bid, $sid)) return false;
+    subMutate($bid, $sid, function (&$x) {
+        $x['text']     = '😍 ری‌اکشن پست تلگرام';
+        $x['sale_cat'] = 'boost';
+        $x['smm_auto_price'] = true;
+        $x['flow_texts'] = [
+            'flow_link' => "😍 <b>لینکِ پستی که می‌خواهید ری‌اکشن بگیرد را ارسال کنید</b>\n\n" .
+                "🔗 لینکِ همان پست را بفرستید (مثلاً <code>https://t.me/channel/123</code>).\n" .
+                "⚠️ پست باید در کانال یا گروهِ عمومی باشد.",
+            'flow_link_bad' => "❌ لینک معتبر نیست.\nلینکِ خودِ پست را دوباره بفرستید.",
+            'flow_qty' => "🔢 چند تا ری‌اکشن می‌خواهید؟ بین <b>{min}</b> و <b>{max}</b> وارد کنید.",
+            'flow_qty_bad' => "❌ عدد واردشده معتبر نیست.\nحداقل <b>{min}</b> و حداکثر <b>{max}</b>.",
+            'flow_speed' => "😍 کدام ری‌اکشن را می‌خواهید؟",
+            'flow_invoice' => "😍 <b>فاکتور خرید ری‌اکشن پست</b>\n\n" .
+                "📈 سرویس: {product}\n" .
+                "😍 ری‌اکشن: {speed}\n" .
+                "🎯 پست: <code>{link}</code>\n" .
+                "🔢 تعداد: <b>{qty}</b>\n" .
+                "💵 قیمت هر عدد: <b>{rate} {currency}</b>\n" .
+                "⭐ نرخ سرویس (پنل): <b>{usd_rate} / 1000</b>\n" .
+                "⭐ نرخ لحظه‌ای تتر: <b>{usdt_irt}</b>\n\n" .
+                "💳 مبلغ قابل پرداخت: <b>{total} {currency}</b>\n\n" .
+                "❗️ قیمت‌ها لحظه‌ای و مستقیم از پنل و نرخ تتر محاسبه می‌شوند — سفارش‌ها بلافاصله و به‌صورت سیستمی ثبت می‌شوند.\n\n" .
+                "✅ قبل از تایید، لینکِ پست و تعداد را بررسی کنید.",
+        ];
+        if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
+        $x['flow'] = array_merge(defaultFlow(), $x['flow'], [
+            'on' => true, 'ask_link' => true, 'ask_qty' => true, 'ask_admin' => false,
+            'min' => 1, 'max' => 2000, 'per' => 1, 'speed_layout' => '2,2',
+            'speeds' => [
+                ['id' => 'prlike', 'text' => '👍 پسندیدم',  'emoji' => '', 'mult' => 1, 'per_day' => 0,
+                 'color' => 'primary', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][0]['smm_service'] ?? '')],
+                ['id' => 'prlove', 'text' => '❤️ عاشقشم',   'emoji' => '', 'mult' => 1, 'per_day' => 0,
+                 'color' => 'danger', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][1]['smm_service'] ?? '')],
+                ['id' => 'prfire', 'text' => '🔥 آتیشیه',   'emoji' => '', 'mult' => 1, 'per_day' => 0,
+                 'color' => 'success', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][2]['smm_service'] ?? '')],
+                ['id' => 'prparty','text' => '🎉 تبریک',    'emoji' => '', 'mult' => 1, 'per_day' => 0,
+                 'color' => 'primary', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][3]['smm_service'] ?? '')],
+            ],
+        ]);
+    });
+    return true;
+}
+
 class Product
 {
     /**
