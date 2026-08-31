@@ -63,6 +63,40 @@ if (!defined('DATA_DIR'))
 if (!defined('CRON_KEY'))
     define('CRON_KEY',  getenv('CRON_KEY') ?: '');
 
+/**
+ * 🔐 امضای وبهوک تلگرام.
+ *
+ * تا حالا هر درخواستی که به این آدرس POST می‌شد به‌عنوان آپدیتِ واقعیِ
+ * تلگرام پردازش می‌شد — یعنی هرکس آدرسِ وبهوک را حدس می‌زد یا پیدا
+ * می‌کرد، می‌توانست خودش یک JSON بسازد با from.id برابرِ یکی از
+ * ADMIN_IDS و مستقیم به مسیرهای مدیریتی (تایید سفارش، افزایش موجودی…)
+ * برسد؛ چون isAdmin() فقط uid داخلِ همان JSON را چک می‌کرد، نه اینکه
+ * درخواست واقعا از تلگرام آمده. حالا وقتی وبهوک با setWebhook دوباره
+ * تنظیم شود، تلگرام هر آپدیت را با هدرِ X-Telegram-Bot-Api-Secret-Token
+ * برابرِ همین مقدار می‌فرستد؛ اگر نبود یا غلط بود، درخواست اصلا پردازش
+ * نمی‌شود.
+ */
+if (!defined('WEBHOOK_SECRET'))
+    define('WEBHOOK_SECRET', getenv('WEBHOOK_SECRET') ?: '');
+
+/**
+ * تا وبهوک با این کلید دوباره ست نشود، تلگرام اصلا این هدر را نمی‌فرستد؛
+ * برای این‌که همین حالا آپدیت کردنِ فایل، رباتِ در حالِ کارِ کسی را قطع
+ * نکند، اولین باری که این هدرِ درست را دیدیم یک نشانه ذخیره می‌کنیم و از
+ * آن به بعد سخت‌گیری فعال می‌شود — قبلش، فقط اجازه می‌دهد (سخت‌گیری فقط
+ * می‌تواند فعال شود، هیچ‌وقت به‌خاطرِ نبودِ نشانه غیرفعال نمی‌شود).
+ */
+function webhookSecretOk() {
+    if (WEBHOOK_SECRET === '') return true;
+    $got    = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
+    $marker = DATA_DIR . '/.webhook_secret_verified';
+    if (is_string($got) && $got !== '' && hash_equals(WEBHOOK_SECRET, $got)) {
+        if (!is_file($marker)) { @mkdir(DATA_DIR, 0755, true); @touch($marker); }
+        return true;
+    }
+    return !is_file($marker);
+}
+
 // کاربران روی SQLite ذخیره می‌شوند (نه یک فایل JSON بزرگ) — بدون این
 // افزونه هیچ موجودی/سفارش/رفرالی ذخیره نمی‌شود، پس به‌جای شکستِ خاموش
 // همین اول با یک پیامِ روشن می‌ایستیم.
@@ -1391,7 +1425,8 @@ function touchUser($id, $username = '', $firstName = '', $referrer = null) {
     // بررسیِ وجودِ معرف بیرونِ تراکنش — فقط یک خواندنِ سبک است
     $referrerOk = $referrer && (int)$referrer !== (int)$id && getUser($referrer) !== null;
 
-    return mutateUser($id, function (&$user) use ($id, $username, $firstName, $referrerOk, $referrer) {
+    $didSetReferrer = false;
+    $out = mutateUser($id, function (&$user) use ($id, $username, $firstName, $referrerOk, $referrer, &$didSetReferrer) {
         $isNew = ($user === null);
         $user = array_merge([
             'telegram_id' => (int)$id,
@@ -1408,9 +1443,21 @@ function touchUser($id, $username = '', $firstName = '', $referrer = null) {
         // معرف فقط یک بار و فقط برای کاربر جدید ثبت می‌شود
         if ($isNew && $referrerOk) {
             $user['referrer'] = (int)$referrer;
+            $didSetReferrer = true;
         }
         return $user;
     });
+
+    // ردیفِ کاربرِ معرف، ردیفِ دیگری است — نمی‌شود همان تراکنشِ بالا آن
+    // را هم عوض کند (یک اتصالِ SQLite دو تراکنشِ تودرتو را قبول نمی‌کند)،
+    // پس جدا، بعد از تمام‌شدنِ تراکنشِ اول
+    if ($didSetReferrer) {
+        mutateUser($referrer, function (&$r) {
+            if ($r !== null) $r['ref_count'] = (int)($r['ref_count'] ?? 0) + 1;
+        });
+    }
+
+    return $out;
 }
 
 function addBalance($userId, $amount) {
@@ -1421,10 +1468,57 @@ function addBalance($userId, $amount) {
     });
 }
 
+/**
+ * کسرِ موجودی، فقط اگر واقعا کافی باشد — بررسیِ موجودی و کسر در یک قفلِ
+ * واحد (mutateUser)، نه دو مرحله‌ی جدا. جدا بودنشان یعنی دو خریدِ
+ * هم‌زمان هر دو موجودی را کافی می‌بینند و هر دو کم می‌کنند — کاربر با
+ * یک موجودی دو بار می‌خرد و حساب منفی می‌شود.
+ *
+ * برگشت: true فقط اگر واقعا کسر شد.
+ */
+function debitBalance($userId, $amount) {
+    $amount = (float)round((float)$amount);
+    if ($amount <= 0) return true;
+    return (bool)mutateUser($userId, function (&$user) use ($amount) {
+        if ($user === null) return false;
+        $bal = (float)round((float)($user['balance'] ?? 0));
+        if ($bal < $amount) return false;
+        $user['balance'] = round($bal - $amount);
+        return true;
+    });
+}
+
+/**
+ * تعدادِ زیرمجموعه‌ها — کش‌شده روی ردیفِ خودِ کاربر (ref_count)، نه
+ * شمارشِ کلِ جدولِ کاربران در هر بازدیدِ حساب. این عدد از دو جا درست
+ * می‌ماند: افزایشِ لحظه‌ایِ touchUser() برای هر زیرمجموعه‌ی تازه، و
+ * مهاجرتِ یک‌باره‌ی backfillRefCounts() برای داده‌های قدیمی‌تر از این
+ * تغییر (پایین‌تر، در بخشِ «مهاجرت‌های یک‌باره»).
+ */
 function countReferrals($userId) {
-    $n = 0;
-    foreach (allUsers() as $u) if ((int)($u['referrer'] ?? 0) === (int)$userId) $n++;
-    return $n;
+    return (int)(getUser($userId)['ref_count'] ?? 0);
+}
+
+/**
+ * مهاجرتِ یک‌باره: شمارشِ واقعیِ زیرمجموعه‌های هرکس از رویِ کلِ جدول،
+ * و نوشتنش روی ردیفِ خودش — تا از این به بعد countReferrals() دیگر
+ * لازم نباشد کلِ کاربران را بخواند. عمدا همه را «بازنویسی» می‌کند، نه
+ * فقط کسانی که هنوز ref_count ندارند — چون تا لحظه‌ی اجرا شدنِ همین
+ * مهاجرت، ممکن است افزایشِ لحظه‌ای (touchUser) برای بعضی‌ها زودتر از
+ * این مهاجرت جلو افتاده و یک عددِ ناقص کش کرده باشد؛ فقط بازنویسیِ کامل
+ * این حالت را هم درست می‌کند.
+ */
+function backfillRefCounts() {
+    $all = allUsers();
+    $counts = [];
+    foreach ($all as $u) {
+        $r = (int)($u['referrer'] ?? 0);
+        if ($r > 0) $counts[$r] = ($counts[$r] ?? 0) + 1;
+    }
+    foreach ($all as $id => $u) {
+        $n = $counts[(int)$id] ?? 0;
+        mutateUser($id, function (&$user) use ($n) { if ($user !== null) $user['ref_count'] = $n; });
+    }
 }
 
 function payReferralCommission($buyerId, $amount) {
@@ -2214,18 +2308,35 @@ class Product
         return $p && in_array((int)$uid, array_map('intval', $p['buyers']), true);
     }
 
+    /**
+     * خریدار را اضافه می‌کند — فقط اگر ظرفیت باشد یا قبلا خریده باشد.
+     * بررسیِ ظرفیت و اضافه‌کردن حتما باید در یک قفلِ واحد باشند، وگرنه
+     * دو تاییدِ هم‌زمان روی آخرین جای یک محصولِ محدود، هر دو ظرفیت را
+     * باز می‌بینند و هر دو رزرو می‌کنند.
+     *
+     * برگشت: true اگر خریدار اضافه شد (یا از قبل بود)، false اگر ظرفیت تمام بود.
+     */
     public static function addBuyer($pid, $uid) {
         if ($bs = parseSubProductId($pid)) {
-            subMutate($bs[0], $bs[1], function (&$x) use ($uid) {
+            return (bool)subMutate($bs[0], $bs[1], function (&$x) use ($uid) {
                 $b = array_map('intval', $x['buyers'] ?? []);
-                if (!in_array((int)$uid, $b, true)) { $b[] = (int)$uid; $x['buyers'] = array_values($b); }
+                if (in_array((int)$uid, $b, true)) return true;
+                $limit = (int)($x['limit'] ?? 0);
+                if ($limit > 0 && count($b) >= $limit) return false;
+                $b[] = (int)$uid;
+                $x['buyers'] = array_values($b);
+                return true;
             });
-            return;
         }
-        mutate('products', function (&$a) use ($pid, $uid) {
-            if (!isset($a[$pid])) return;
+        return (bool)mutate('products', function (&$a) use ($pid, $uid) {
+            if (!isset($a[$pid])) return false;
             $b = array_map('intval', $a[$pid]['buyers']);
-            if (!in_array((int)$uid, $b, true)) { $b[] = (int)$uid; $a[$pid]['buyers'] = array_values($b); }
+            if (in_array((int)$uid, $b, true)) return true;
+            $limit = (int)($a[$pid]['limit'] ?? 0);
+            if ($limit > 0 && count($b) >= $limit) return false;
+            $b[] = (int)$uid;
+            $a[$pid]['buyers'] = array_values($b);
+            return true;
         });
     }
 }
@@ -2284,6 +2395,27 @@ class Order
     }
 
     public static function approve($id, $adminId) {
+        $o0 = self::get($id);
+        if (!$o0) return [false, 'سفارش پیدا نشد.'];
+        if (in_array($o0['status'], [self::APPROVED, self::REJECTED], true)) {
+            return [false, 'این سفارش قبلا بررسی شده است.'];
+        }
+
+        // 🔒 برای محصول (نه شارژ کیف‌پول)، اول جای خریدار در ظرفیت رزرو
+        // می‌شود — قبل از این‌که status سفارش APPROVED شود. اگر برعکس
+        // باشد (status اول APPROVED شود، بعد ظرفیت چک شود) و ظرفیت پر
+        // باشد، سفارش با status=APPROVED روی دیسک می‌ماند ولی هیچ‌چیز
+        // تحویل نمی‌شود — و چون این تابع سفارشِ APPROVED را «قبلا
+        // بررسی‌شده» می‌داند، دیگر نه دوباره قابل تلاش است، نه قابل رد.
+        $p = null;
+        if ($o0['type'] !== 'topup') {
+            $p = Product::get($o0['product_id']);
+            if (!$p) return [false, 'محصول پیدا نشد.'];
+            if (!Product::addBuyer($p['id'], $o0['user_id'])) {
+                return [false, 'ظرفیت این محصول تکمیل است.'];
+            }
+        }
+
         $r = mutate('orders', function (&$a) use ($id, $adminId) {
             if (!isset($a[$id])) return 'notfound';
             if (in_array($a[$id]['status'], [self::APPROVED, self::REJECTED], true)) return 'done';
@@ -2302,12 +2434,12 @@ class Order
             return [true, $o];
         }
 
-        $p = Product::get($o['product_id']);
-        if (!$p) return [false, 'محصول پیدا نشد.'];
-        if (Product::isFull($p) && !Product::hasBought($p['id'], $o['user_id'])) {
-            return [false, 'ظرفیت این محصول تکمیل است.'];
-        }
-        Product::addBuyer($p['id'], $o['user_id']);
+        // شمارشِ سفارش‌های تاییدشده روی ردیفِ خودِ خریدار کش می‌شود — تا
+        // صفحه‌ی «حساب من» مجبور نباشد کلِ تاریخچه‌ی سفارش‌ها را بخواند
+        mutateUser($o['user_id'], function (&$user) {
+            if ($user !== null) $user['approved_orders'] = (int)($user['approved_orders'] ?? 0) + 1;
+        });
+
         payReferralCommission($o['user_id'], $o['amount']);
         campaignFromOrder($o);   // 🎯 کانال مشتری خودکار در ربات‌های اپلودر قفل می‌شود
         smmAutoFulfill($o, $p);  // 🤖 اگر محصول به پنل ممبر وصل است، همان‌جا سفارش ثبت می‌شود
@@ -2984,10 +3116,34 @@ function hintHideOnce($uid, $chatId) {
     sendMsg(BOT_TOKEN, $chatId, "ℹ️ برای بستن منو هر وقت خواستید /hide را بزنید.");
 }
 
+/**
+ * تعدادِ سفارش‌های تاییدشده — کش‌شده روی ردیفِ کاربر (approved_orders)،
+ * از دو جا درست نگه داشته می‌شود: افزایشِ لحظه‌ایِ داخلِ Order::approve()
+ * و مهاجرتِ یک‌باره‌ی backfillApprovedOrderCounts() برای سفارش‌های
+ * قدیمی‌تر از این تغییر.
+ */
+function countApprovedOrders($uid) {
+    return (int)(getUser($uid)['approved_orders'] ?? 0);
+}
+
+/** مهاجرتِ یک‌باره — هم‌شکلِ backfillRefCounts()، برای همان دلیل کاملِ بازنویسی می‌شود */
+function backfillApprovedOrderCounts() {
+    $counts = [];
+    foreach (Order::all() as $o) {
+        if (($o['status'] ?? '') === Order::APPROVED && ($o['type'] ?? '') !== 'topup') {
+            $uid = (int)($o['user_id'] ?? 0);
+            if ($uid > 0) $counts[$uid] = ($counts[$uid] ?? 0) + 1;
+        }
+    }
+    foreach (allUsers() as $id => $u) {
+        $n = $counts[(int)$id] ?? 0;
+        mutateUser($id, function (&$user) use ($n) { if ($user !== null) $user['approved_orders'] = $n; });
+    }
+}
+
 function showAccount($uid, $chatId, $extra = [], $replyTo = null) {
     $u = getUser($uid) ?: [];
-    $orders = 0;
-    foreach (Order::forUser($uid) as $o) if ($o['status'] === Order::APPROVED) $orders++;
+    $orders = countApprovedOrders($uid);
 
     $text = T('account', [
         'id'         => $uid,
@@ -4928,17 +5084,18 @@ function completeApprovedOrder($order) {
         $need = $pend ? (float)($pend['amount'] ?? 0) : 0;
 
         if ($pp && $need > 0 && $balT >= $need) {
-            addBalance($uidT, -$need);
             mutateUser($uidT, function (&$user) { if ($user !== null) unset($user['pending']); });
             clearState($uidT);
 
-            $oid2 = Order::create($uidT, $order['username'] ?? '', 'product', $pend['pid'],
-                                  $need, (string)($pend['currency'] ?? 'تومان'), $pend['meta'] ?? []);
-            Order::attachReceipt($oid2, 'text', 'پرداخت از کیف پول');
-            Order::approve($oid2, ADMIN_ID);
-
+            [$ok, $r] = walletSettle($uidT, $order['username'] ?? '', $pp, $need, $pend['meta'] ?? []);
             sendMsg(BOT_TOKEN, $uidT, $t);
-            $od2 = Order::get($oid2);
+            if (!$ok) {
+                $why = $r === 'insufficient' ? 'موجودیِ کافی نبود.' : $r;
+                sendMsg(BOT_TOKEN, $uidT, '❌ سفارشِ نیمه‌تمام ثبت نشد: ' . h($why) .
+                    "\n\nاگر پولی کسر شده بود، برگشت داده شد.");
+                return;
+            }
+            $od2 = $r;
             sendMsg(BOT_TOKEN, $uidT, orderDoneText($od2), orderDoneKb($od2));
             announceSale($od2);
             reportSale($od2);
@@ -4965,6 +5122,30 @@ function completeApprovedOrder($order) {
 }
 
 /**
+ * کسرِ اتمیکِ کیف‌پول + ساختِ سفارش + تاییدِ سفارش — یک‌جا، چون سه جای
+ * این ربات همین سه قدم را جدا جدا می‌زدند و هرکدام همین باگ را داشت:
+ * موجودی را با یک mutate می‌خواندند و با یک mutate دیگر کم می‌کردند (دو
+ * خریدِ هم‌زمان هر دو رد می‌شدند)، و اگر تاییدِ سفارش به هر دلیلی
+ * (مثلا ظرفیتِ محصول تمام شده) شکست می‌خورد، پولِ کسرشده هیچ‌وقت
+ * برنمی‌گشت و به کاربر صفحه‌ی «موفق» نشان داده می‌شد.
+ *
+ * برگشت: [bool $ok, $order|string $reason]
+ */
+function walletSettle($uid, $uname, $p, $total, $meta = []) {
+    if (!debitBalance($uid, $total)) {
+        return [false, 'insufficient'];
+    }
+    $oid = Order::create($uid, $uname, 'product', $p['id'], $total, $p['currency'], $meta);
+    Order::attachReceipt($oid, 'text', 'پرداخت از کیف پول');
+    [$ok, $r] = Order::approve($oid, ADMIN_ID);
+    if (!$ok) {
+        addBalance($uid, $total); // برگشتِ پول — چیزی تحویل داده نشد
+        return [false, $r];
+    }
+    return [true, Order::get($oid)];
+}
+
+/**
  * 💳 تسویه خرید — موجودی کافی بود سفارش ثبت می‌شود، وگرنه می‌رود شارژ
  * هیچ دکمه «پرداخت مستقیم» یا «کیف پول» لازم نیست؛ خودش تصمیم می‌گیرد.
  */
@@ -4984,15 +5165,18 @@ function settlePurchase($uid, $chatId, $uname, $p, $total, $meta = []) {
         return false;
     }
 
-    addBalance($uid, -$total);
+    [$ok, $r] = walletSettle($uid, $uname, $p, $total, $meta);
     clearState($uid);
     mutateUser($uid, function (&$user) { if ($user !== null) unset($user['pending']); });
 
-    $oid = Order::create($uid, $uname, 'product', $p['id'], $total, $p['currency'], $meta);
-    Order::attachReceipt($oid, 'text', 'پرداخت از کیف پول');
-    Order::approve($oid, ADMIN_ID);
+    if (!$ok) {
+        $why = $r === 'insufficient' ? 'موجودیِ کافی نبود.' : $r;
+        panelShow($uid, $chatId, 'shop', '❌ سفارش ثبت نشد: ' . h($why) .
+            "\n\nاگر پولی کسر شده بود، برگشت داده شد.");
+        return false;
+    }
 
-    $od = Order::get($oid);
+    $od = $r;
     panelShow($uid, $chatId, 'shop', orderDoneText($od), orderDoneKb($od));
     announceSale($od);
     reportSale($od);
@@ -6323,12 +6507,14 @@ function syncSubs($bid, $srcSid, $withPrice = true) {
 }
 
 function subMutate($bid, $sid, callable $fn) {
-    cfgSet(function (&$c) use ($bid, $sid, $fn) {
+    $ret = null;
+    cfgSet(function (&$c) use ($bid, $sid, $fn, &$ret) {
         if (empty($c['buttons'][$bid]['subs'])) return;
         foreach ($c['buttons'][$bid]['subs'] as $i => $sub) {
-            if (($sub['id'] ?? '') === $sid) { $fn($c['buttons'][$bid]['subs'][$i]); return; }
+            if (($sub['id'] ?? '') === $sid) { $ret = $fn($c['buttons'][$bid]['subs'][$i]); return; }
         }
     });
+    return $ret;
 }
 
 /** 📝 فهرست متن‌ها */
@@ -7264,12 +7450,14 @@ function masterHandle($update) {
             }
             if (Product::isFull($p)) { answerCb(BOT_TOKEN, $cbId, 'ظرفیت تکمیل است', true); return; }
 
-            addBalance($uid, -$p['price']);
-            $oid = Order::create($uid, $uname, 'product', $pid, $p['price'], $p['currency']);
-            Order::attachReceipt($oid, 'text', 'پرداخت از کیف پول');
-            Order::approve($oid, ADMIN_ID);
+            [$ok, $r] = walletSettle($uid, $uname, $p, (float)$p['price']);
+            if (!$ok) {
+                $why = $r === 'insufficient' ? '❌ موجودی کافی نیست' : ('❌ ' . $r);
+                answerCb(BOT_TOKEN, $cbId, $why, true);
+                return;
+            }
             answerCb(BOT_TOKEN, $cbId, '✅ خرید انجام شد');
-            $od = Order::get($oid);
+            $od = $r;
             sendMsg(BOT_TOKEN, $chatId, orderDoneText($od), orderDoneKb($od));
             announceSale($od);
             reportSale($od);
@@ -9950,7 +10138,7 @@ function masterHandle($update) {
         $hook = '';
         if ($base) {
             $url = $base . '/' . basename(__FILE__) . '?bot=' . $bot['id'];
-            $r = tg($text, 'setWebhook', ['url' => $url, 'drop_pending_updates' => 'true']);
+            $r = tg($text, 'setWebhook', ['url' => $url, 'drop_pending_updates' => 'true', 'secret_token' => WEBHOOK_SECRET]);
             $hook = !empty($r['ok']) ? "\n✅ وبهوک تنظیم شد." : "\n⚠️ وبهوک تنظیم نشد: " . h($r['description'] ?? '');
         }
         clearState($uid);
@@ -11303,6 +11491,12 @@ function runBackgroundQueues() {
         if (function_exists('maDropOldTexts')) maDropOldTexts();
     });
     migrateOnce('v3', fn() => dropOldOrderText());
+    // 🚀 «حساب من» دیگر هر بار کلِ کاربران/سفارش‌ها را نمی‌خواند — این دو
+    // عدد از قبل روی ردیفِ خودِ هر کاربر شمرده و کش می‌شوند.
+    migrateOnce('v14_ref_approved_counts', function () {
+        backfillRefCounts();
+        backfillApprovedOrderCounts();
+    });
     migrateOnce('v5', function () {
         if (function_exists('gmDropDoubleIcons')) gmDropDoubleIcons();
     });
@@ -11438,6 +11632,8 @@ function runBackgroundQueues() {
         maOrdersArchive(0, 800);
     }
 }
+
+if (!webhookSecretOk()) { http_response_code(401); exit; }
 
 $raw = file_get_contents('php://input');
 $update = json_decode($raw, true);

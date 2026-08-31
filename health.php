@@ -229,7 +229,7 @@ row($rows, $whUrl !== '', 'آدرس وبهوک',
 
 // ست کردن وبهوک از خود همین صفحه — بدون اینکه توکن جایی چاپ شود
 if (!empty($_GET['setwebhook']) && function_exists('curl_init')) {
-    $sw = h_api('setWebhook', ['url' => $guess, 'drop_pending_updates' => 'true']);
+    $sw = h_api('setWebhook', ['url' => $guess, 'drop_pending_updates' => 'true', 'secret_token' => defined('WEBHOOK_SECRET') ? WEBHOOK_SECRET : '']);
     row($rows, !empty($sw['ok']), 'ست کردن وبهوک',
         !empty($sw['ok']) ? 'انجام شد → ' . $guess : ($sw['description'] ?? 'ناموفق'),
         'اگر ناموفق بود یعنی سرور به تلگرام دسترسی ندارد یا آدرس https معتبر نیست.');

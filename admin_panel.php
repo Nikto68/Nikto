@@ -1146,7 +1146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($me['ok'])) go('توکن معتبر نیست: ' . ($me['description'] ?? ''), 'err');
         $bot = BotManager::create($token, $me['result']['username']);
         $hook = baseUrl() . '/bot_master_membership.php?bot=' . $bot['id'];
-        $r = tg($token, 'setWebhook', ['url' => $hook, 'drop_pending_updates' => 'true']);
+        $r = tg($token, 'setWebhook', ['url' => $hook, 'drop_pending_updates' => 'true', 'secret_token' => WEBHOOK_SECRET]);
         go('ربات @' . $bot['username'] . ' اضافه شد.' .
            (!empty($r['ok']) ? ' وبهوک تنظیم شد.' : ' هشدار: وبهوک تنظیم نشد.'),
            !empty($r['ok']) ? 'ok' : 'warn');
@@ -1162,7 +1162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $b = BotManager::get($_POST['id'] ?? '');
         if (!$b) go('ربات پیدا نشد.', 'err');
         $r = tg($b['token'], 'setWebhook',
-            ['url' => baseUrl() . '/bot_master_membership.php?bot=' . $b['id'], 'drop_pending_updates' => 'true']);
+            ['url' => baseUrl() . '/bot_master_membership.php?bot=' . $b['id'], 'drop_pending_updates' => 'true', 'secret_token' => WEBHOOK_SECRET]);
         go(!empty($r['ok']) ? 'وبهوک تنظیم شد.' : 'خطا: ' . ($r['description'] ?? ''), !empty($r['ok']) ? 'ok' : 'err');
     }
     if ($a === 'master_webhook') {
@@ -1171,6 +1171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'url' => baseUrl() . '/bot_master_membership.php',
             'drop_pending_updates' => 'true',
             'allowed_updates' => json_encode(['message', 'callback_query', 'my_chat_member']),
+            'secret_token' => WEBHOOK_SECRET,
         ]);
         go(!empty($r['ok']) ? 'وبهوک ربات مادر تنظیم شد.' : 'خطا: ' . ($r['description'] ?? ''), !empty($r['ok']) ? 'ok' : 'err');
     }
