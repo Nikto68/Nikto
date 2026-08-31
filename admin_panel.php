@@ -701,6 +701,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $x['flow']['per'] = $per;
             $x['flow']['speed_layout'] = trim((string)($post['speed_layout'] ?? '1')) ?: '1';
             $x['flow']['speed_mode'] = ($post['speed_mode'] ?? 'grid') === 'carousel' ? 'carousel' : 'grid';
+            $x['flow']['speed_prev_label'] = trim((string)($post['speed_prev_label'] ?? ''));
+            $x['flow']['speed_next_label'] = trim((string)($post['speed_next_label'] ?? ''));
 
             // متن، ایموجی، رنگ، ضریب، نفر/روز و توضیح هر سرعت
             foreach ($x['flow']['speeds'] as $i => $sp) {
@@ -1611,6 +1613,10 @@ foreach ($tabs as $k => $l): ?>
             </select>
             <small class="muted">حالتِ اسلایدر برای وقتی خوبه که چندتا پلنِ زیاد داری (مثلا ۴-۵ تا مدت) —
               فقط یکی بالا نشون داده می‌شه، با ◀️ قبلی / بعدی▶️ بینشون جابه‌جا می‌شی.</small></div>
+          <div><label>◀️ متنِ دکمه‌ی «قبلی» (فقط تو حالتِ اسلایدر)</label>
+            <input name="speed_prev_label" value="<?= h($f['speed_prev_label'] ?? '') ?>" placeholder="◀️ قبلی"></div>
+          <div><label>▶️ متنِ دکمه‌ی «بعدی» (فقط تو حالتِ اسلایدر)</label>
+            <input name="speed_next_label" value="<?= h($f['speed_next_label'] ?? '') ?>" placeholder="بعدی ▶️"></div>
           <div><label style="font-weight:500;margin-top:22px;display:block">
             <input type="checkbox" name="ask_admin" value="1" style="width:auto"
               <?= (!isset($f['ask_admin']) || !empty($f['ask_admin'])) ? 'checked' : '' ?>>

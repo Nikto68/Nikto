@@ -4117,8 +4117,11 @@ function flowNext($uid, $chatId, $step) {
             return;
         }
 
-        $head = ($sd['data']['rate_note'] ?? '') !== '' ? $sd['data']['rate_note'] . "\n\n" : '';
         $qtyNow = (int)($sd['data']['qty'] ?? 0);
+        // نرخِ هرکدام از پلن‌ها ممکن است فرق کند (هرکدام سرویسِ جدای خودش
+        // را دارد) — پس یک عدد ثابت برای همه‌شان درست نیست
+        $rates = array_map(fn($sp) => speedRate($p, $sp), $speeds);
+        $uniformRate = count(array_unique($rates)) <= 1;
 
         // 🎠 حالتِ اسلایدر — یک دکمه‌ی بالا (خودِ انتخاب) + قبلی/بعدی برای
         // ورق‌زدن بینِ پلن‌ها؛ برای وقتی پلن‌ها زیادند و چیدمانِ توری شلوغه
@@ -4135,11 +4138,16 @@ function flowNext($uid, $chatId, $step) {
             elseif (gs('buy')) $top['style'] = gs('buy');
             if (!empty($cur['icon'])) $top['icon_custom_emoji_id'] = (string)$cur['icon'];
 
+            $prevLabel = trim((string)($f['speed_prev_label'] ?? '')) ?: '◀️ قبلی';
+            $nextLabel = trim((string)($f['speed_next_label'] ?? '')) ?: 'بعدی ▶️';
             $rows = [
                 [$top],
-                [btnCb('◀️ قبلی', 'fspnav_prev', 'nav'), btnCb('بعدی ▶️', 'fspnav_next', 'nav')],
+                [btnCb($prevLabel, 'fspnav_prev', 'nav'), btnCb($nextLabel, 'fspnav_next', 'nav')],
                 [btnUI('cancel', 'cancel', 'cancel')],
             ];
+
+            // نرخِ همینِ پلنی که الان رو صفحه‌ست — نه یک عددِ ثابتِ کلی
+            $head = flowT('flow_rate', $p, ['rate' => fmtNum($rates[$idx])]) . "\n\n";
 
             $notes = '';
             $d = trim((string)($cur['desc'] ?? ''));
@@ -4152,6 +4160,10 @@ function flowNext($uid, $chatId, $step) {
             panelShow($uid, $chatId, 'shop', $head . flowT('flow_speed', $p) . $notes . $pos, inlineKb($rows));
             return;
         }
+
+        // حالتِ توری (پیش‌فرض): وقتی پلن‌ها نرخِ یکسان ندارند، نمایشِ یک
+        // «هزینه‌ی هر عدد» ثابت روی همه گمراه‌کننده است — نشانش نده
+        $head = ($uniformRate && ($sd['data']['rate_note'] ?? '') !== '') ? $sd['data']['rate_note'] . "\n\n" : '';
 
         $items = [];
         foreach ($speeds as $sp) {
