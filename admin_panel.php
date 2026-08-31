@@ -1112,22 +1112,25 @@ function smmServiceField($current, $autoOn = false) {
     $list = function_exists('smmServicesCached') ? smmServicesCached() : [];
     if (!$list) {
         echo '<input name="smm_service" value="' . h($current) . '" placeholder="مثلا 1234" style="direction:ltr">';
-        echo '<small class="muted">لیستِ سرویس‌ها هنوز گرفته نشده — بالای همین تب، «🔄 بروزرسانی لیست سرویس‌ها» را بزن.</small>';
-        return;
+        echo '<small class="muted">لیستِ سرویس‌ها هنوز گرفته نشده — بالای همین تب، «🔄 بروزرسانی لیست سرویس‌ها» را بزن. ' .
+             'تا وقتی نگرفتی، می‌تونی همین‌جا شماره‌ی سرویس رو دستی از پنلِ خودت بنویسی.</small>';
+    } else {
+        echo '<select name="smm_service"><option value="">— دستی نیست، وصل نکن —</option>';
+        foreach ($list as $s) {
+            $sid = (string)($s['service'] ?? '');
+            if ($sid === '') continue;
+            $label = trim(($s['name'] ?? 'سرویس ' . $sid) . ' — ' . ($s['rate'] ?? '?') . '/1000');
+            echo '<option value="' . h($sid) . '"' . ((string)$current === $sid ? ' selected' : '') . '>' .
+                 h($label) . '</option>';
+        }
+        // اگر شماره‌ی فعلی توی لیستِ تازه نبود (مثلا از پنلی دیگر یا حذف شده)، گمش نکن
+        if ($current !== '' && !in_array($current, array_map(fn($s) => (string)($s['service'] ?? ''), $list), true)) {
+            echo '<option value="' . h($current) . '" selected>سرویسِ فعلی (' . h($current) . ') — دیگر در لیست نیست</option>';
+        }
+        echo '</select>';
     }
-    echo '<select name="smm_service"><option value="">— دستی نیست، وصل نکن —</option>';
-    foreach ($list as $s) {
-        $sid = (string)($s['service'] ?? '');
-        if ($sid === '') continue;
-        $label = trim(($s['name'] ?? 'سرویس ' . $sid) . ' — ' . ($s['rate'] ?? '?') . '/1000');
-        echo '<option value="' . h($sid) . '"' . ((string)$current === $sid ? ' selected' : '') . '>' .
-             h($label) . '</option>';
-    }
-    // اگر شماره‌ی فعلی توی لیستِ تازه نبود (مثلا از پنلی دیگر یا حذف شده)، گمش نکن
-    if ($current !== '' && !in_array($current, array_map(fn($s) => (string)($s['service'] ?? ''), $list), true)) {
-        echo '<option value="' . h($current) . '" selected>سرویسِ فعلی (' . h($current) . ') — دیگر در لیست نیست</option>';
-    }
-    echo '</select>';
+    // ⚠️ این چک‌باکس باید همیشه دیده بشه — حتی وقتی لیستِ سرویس‌ها هنوز نیومده و بالا
+    // فقط یک اینپوتِ متنی داریم؛ وگرنه ادمین راهی برای روشن‌کردنِ قیمتِ خودکار نداره.
     echo '<label style="font-weight:500;display:block;margin-top:6px">' .
          '<input type="checkbox" name="smm_auto_price" value="1" style="width:auto"' . ($autoOn ? ' checked' : '') . '> ' .
          '🔄 قیمتِ خودکار از نرخِ پنل (تتر → تومان، با سودِ بخش «خرید ممبر»)</label>';
