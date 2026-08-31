@@ -4904,11 +4904,7 @@ function admHome($chatId, $msgId = null) {
         [btnCb('💳 پرداخت', 'ag_pay', 'admin'),        btnCb('🎨 ظاهر و متن‌ها', 'ag_look', 'admin')],
         [btnCb('📡 کانال‌های متصل', 'ch_home', 'admin'),
          btnCb('📢 پیام همگانی و گزارش', 'ag_rep', 'admin')],
-        [btnCb('🔧 راه‌اندازی خودکار', 'setup', 'confirm')],
-        [btnCb('🌐 پنل وب', 'adm_web', 'info'),
-         btnCb('🔒 تست نشتی داده', 'adm_leak', 'confirm')],
-        [btnCb('🩺 تست نوشتن روی دیسک', 'adm_wtest', 'confirm'),
-         btnCb('⚡️ سرعت ربات', 'adm_speed', 'confirm')],
+        [btnCb('🌐 پنل وب', 'adm_web', 'info')],
         [btnCb(UT('home'), 'home', 'nav')],
     ];
     if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
@@ -4932,6 +4928,11 @@ function admHome($chatId, $msgId = null) {
  * این تست همان سه کاری را می‌کند که ربات واقعا لازم دارد.
  */
 function admWriteTest($chatId) {
+    sendMsg(BOT_TOKEN, $chatId, admWriteTestText());
+}
+
+/** همان تستِ نوشتن روی دیسک، ولی فقط متنِ گزارش — برای پنل وب هم لازم است */
+function admWriteTestText() {
     $d = rtrim(DATA_DIR, '/');
     $t = "🩺 <b>تست نوشتن روی دیسک</b>\n\n";
     $t .= '📁 پوشه: <code>' . h($d) . "</code>\n";
@@ -4978,18 +4979,21 @@ function admWriteTest($chatId) {
               "Change Permissions را بزنید و دسترسی را روی <b>755</b> (یا اگر نشد ۷۷۵) بگذارید.\n\n" .
               "تا این درست نشود، پیام تکراری و گم شدن موجودی ادامه دارد.";
     }
-    sendMsg(BOT_TOKEN, $chatId, $t);
+    return $t;
 }
 
 function admLeakTest($chatId) {
+    sendMsg(BOT_TOKEN, $chatId, admLeakTestText());
+}
+
+/** همان تستِ نشتیِ داده، ولی فقط متنِ گزارش — برای پنل وب هم لازم است */
+function admLeakTestText() {
     $base = function_exists('maBaseUrl') ? maBaseUrl() : '';
     if ($base === '') {
-        sendMsg(BOT_TOKEN, $chatId,
-            "⚠️ اول آدرس عمومی را ثبت کنید تا بشود از بیرون امتحان کرد.
+        return "⚠️ اول آدرس عمومی را ثبت کنید تا بشود از بیرون امتحان کرد.
 
 " .
-            "پنل ← 🚀 مینی‌اپ‌ها ← 🔗 آدرس عمومی");
-        return;
+            "پنل ← 🚀 مینی‌اپ‌ها ← 🔗 آدرس عمومی";
     }
     $dir  = basename(rtrim(DATA_DIR, '/'));
     $root = preg_replace('#/[^/]+$#', '', $base);        // آدرس فایل ربات → پوشه‌اش
@@ -5037,7 +5041,7 @@ function admLeakTest($chatId) {
         $t .= "
 ✅ هیچ‌کدام از بیرون خوانده نمی‌شوند. پوشه‌ی داده امن است.";
     }
-    sendMsg(BOT_TOKEN, $chatId, $t);
+    return $t;
 }
 
 function admGroups() {
@@ -6194,6 +6198,14 @@ function edUpText($chatId, $msgId, $key) {
  * چیزی را که خودش می‌تواند درست کند، درست می‌کند؛ بقیه را گزارش می‌دهد.
  */
 function autoSetup($chatId, $msgId = null) {
+    $text = autoSetupRun();
+    $rows = [[btnCb('🔧 دوباره بررسی کن', 'setup', 'admin')], [btnUI('back', 'adm_home', 'nav')]];
+    if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
+    else sendMsg(BOT_TOKEN, $chatId, $text, inlineKb($rows));
+}
+
+/** همان راه‌اندازیِ خودکار، ولی فقط متنِ گزارش — برای پنل وب هم لازم است */
+function autoSetupRun() {
     $log = [];
 
     // ۱) هر زیردکمهٔ شیشه‌ای خودش یک محصول است — فقط جریان سفارشش را روشن کن
@@ -6266,9 +6278,7 @@ function autoSetup($chatId, $msgId = null) {
     $text .= "\n🧪 تست: /start ← خرید محصول ← روی یکی از دکمه‌ها بزنید\n";
     $text .= "باید بپرسد: لینک کانال ← تعداد ← سرعت ← ادمین کردن ربات ← فاکتور";
 
-    $rows = [[btnCb('🔧 دوباره بررسی کن', 'setup', 'admin')], [btnUI('back', 'adm_home', 'nav')]];
-    if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
-    else sendMsg(BOT_TOKEN, $chatId, $text, inlineKb($rows));
+    return $text;
 }
 
 /** 🛒 فهرست محصولات در ربات */
@@ -7560,8 +7570,6 @@ function masterHandle($update) {
             return;
         }
 
-        if ($data === 'setup') { answerCb(BOT_TOKEN, $cbId, '🔧'); autoSetup($chatId, $msgId); return; }
-
         // ---------- محصولات ----------
         if ($data === 'eprods') { answerCb(BOT_TOKEN, $cbId); edProducts($chatId, $msgId); return; }
         if (str_starts_with($data, 'eps_'))  { answerCb(BOT_TOKEN, $cbId); edSpeeds($chatId, $msgId, substr($data, 4)); return; }
@@ -8120,27 +8128,14 @@ function masterHandle($update) {
             return;
         }
 
-        if ($data === 'adm_wtest') {
-            answerCb(BOT_TOKEN, $cbId);
-            admWriteTest($chatId);
-            return;
-        }
-        if ($data === 'adm_speed') {
-            answerCb(BOT_TOKEN, $cbId, '⏱ در حال اندازه‌گیری…');
-            admSpeed($chatId, $msgId);
-            return;
-        }
-        if ($data === 'adm_leak') {
-            answerCb(BOT_TOKEN, $cbId, '🔒 در حال تست…');
-            admLeakTest($chatId);
-            return;
-        }
-        if ($data === 'adm_web' || $data === 'adm_sup' || $data === 'adm_prods') {
+        if ($data === 'adm_web' || $data === 'adm_sup' || $data === 'adm_prods'
+            || $data === 'setup' || $data === 'adm_leak' || $data === 'adm_wtest' || $data === 'adm_speed') {
             answerCb(BOT_TOKEN, $cbId);
             editMsg(BOT_TOKEN, $chatId, $msgId,
                 "🌐 <b>پنل وب</b>\n\nاین بخش‌ها در پنل وب هستند:\n\n" .
                 "🛒 محصولات · 💳 کیف پول · 📞 پشتیبانی\n" .
-                "🎯 سفارش ممبر · 🤝 ربات‌های شریک · 👥 رفرال · 👥 کاربران\n\n" .
+                "🎯 سفارش ممبر · 🤝 ربات‌های شریک · 👥 رفرال · 👥 کاربران\n" .
+                "🩺 تشخیص و سرعت (راه‌اندازی خودکار، تست نشتی، تست نوشتن، سرعت ربات)\n\n" .
                 "آدرس: <code>admin_panel.php</code>",
                 inlineKb([[btnCb(UT('back'), 'adm_home', 'nav')]]));
             return;
@@ -10561,6 +10556,15 @@ function techHealthCheck() {
  *   ۳. سرعتِ خودِ دیسک.
  */
 function admSpeed($chatId, $msgId = 0) {
+    $t  = admSpeedText();
+    $kb = [[btnCb('🔄 دوباره اندازه بگیر', 'adm_speed', 'confirm')],
+           [btnCb(UT('back'), 'adm_home', 'nav')]];
+    if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($kb));
+    else        sendMsg(BOT_TOKEN, $chatId, $t, inlineKb($kb));
+}
+
+/** همان اندازه‌گیریِ سرعت، ولی فقط متنِ گزارش — برای پنل وب هم لازم است */
+function admSpeedText() {
     $t  = "⚡️ <b>سرعت ربات</b>\n\n";
 
     // ── ۱) opcache ──
@@ -10625,10 +10629,7 @@ function admSpeed($chatId, $msgId = 0) {
     $b = (microtime(true) - $t0) / 5 * 1000;
     $t .= "\n<b>ساختِ صفحه‌ی مینی‌اپ</b>: <b>" . number_format($b, 2) . "</b> ms\n";
 
-    $kb = [[btnCb('🔄 دوباره اندازه بگیر', 'adm_speed', 'confirm')],
-           [btnCb(UT('back'), 'adm_home', 'nav')]];
-    if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($kb));
-    else        sendMsg(BOT_TOKEN, $chatId, $t, inlineKb($kb));
+    return $t;
 }
 
 function runBackgroundQueues() {

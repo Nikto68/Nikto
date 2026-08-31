@@ -633,6 +633,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ تنظیماتِ بازی‌ها ذخیره شد.');
     }
 
+    // ---- 🩺 تشخیص و سرعت ----
+    if (in_array($a, ['adm_write_test', 'adm_leak_test', 'adm_speed_test', 'adm_auto_setup'], true)) {
+        $report = $a === 'adm_write_test' ? admWriteTestText()
+                : ($a === 'adm_leak_test' ? admLeakTestText()
+                : ($a === 'adm_speed_test' ? admSpeedText() : autoSetupRun()));
+        go($report, (str_contains($report, '🔴') || str_contains($report, '🚨')) ? 'err' : 'ok');
+    }
+
     // ---- محصولات ----
     if ($a === 'add_product') {
         $name = trim($_POST['name'] ?? '');
@@ -3712,6 +3720,27 @@ def join_gate(user_id):
 
       <div style="margin-top:16px"><button class="btn g">ذخیره تنظیمات</button></div>
     </form>
+  </div></div>
+
+  <div class="card"><h2>🩺 تشخیص و سرعت</h2><div class="body">
+    <div class="note">
+      این ابزارها قبلا فقط داخل <code>/panel</code> ربات بودند؛ هرکدام یک گزارشِ لحظه‌ای می‌سازد —
+      نتیجه همین‌جا بالای صفحه نشان داده می‌شود.
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <form method="post"><input type="hidden" name="csrf" value="<?= h($CSRF) ?>">
+        <input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="adm_auto_setup">
+        <button class="btn">🔧 راه‌اندازی خودکار</button></form>
+      <form method="post"><input type="hidden" name="csrf" value="<?= h($CSRF) ?>">
+        <input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="adm_speed_test">
+        <button class="btn">⚡️ سرعت ربات</button></form>
+      <form method="post"><input type="hidden" name="csrf" value="<?= h($CSRF) ?>">
+        <input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="adm_leak_test">
+        <button class="btn">🔒 تست نشتی داده</button></form>
+      <form method="post"><input type="hidden" name="csrf" value="<?= h($CSRF) ?>">
+        <input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="adm_write_test">
+        <button class="btn">🩺 تست نوشتن روی دیسک</button></form>
+    </div>
   </div></div>
 
   <?php $G = cfg()['gateway'] ?? []; $J = cfg()['join'] ?? []; ?>
