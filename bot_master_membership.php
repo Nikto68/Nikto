@@ -1866,6 +1866,25 @@ function smmServicesCached() {
     return is_array($c) ? $c : [];
 }
 
+/**
+ * ⚡ لیستِ سرویس‌های پنل، ایندکس‌شده روی id — یک‌بار در هر درخواست.
+ *
+ * یک محصول با چند سرعت/پلن (بوست، ری‌اکشن، ممبر پریمیوم...) برای هر
+ * کدام جدا smmServiceRate() صدا می‌زند — یعنی برای نمایشِ یک محصول با
+ * ۵-۶ گزینه، تا حالا ۵-۶ بار کل فهرستِ سرویس‌های پنل (که می‌تواند
+ * هزاران ردیف باشد) خط‌به‌خط گشته می‌شد. حالا یک بار map می‌شود.
+ */
+function smmServicesById() {
+    static $map = null;
+    if ($map !== null) return $map;
+    $map = [];
+    foreach (smmServicesCached() as $s) {
+        $id = (string)($s['service'] ?? '');
+        if ($id !== '') $map[$id] = $s;
+    }
+    return $map;
+}
+
 /** گرفتنِ دوباره‌ی لیست از پنل، دستی — برمی‌گرداند: [ok, تعداد یا خطا] */
 function smmServicesRefresh() {
     [$ok, $res, $err] = smmCall('services');
@@ -1879,10 +1898,7 @@ function smmServicesRefresh() {
 function smmServiceRate($serviceId) {
     $serviceId = trim((string)$serviceId);
     if ($serviceId === '') return 0.0;
-    foreach (smmServicesCached() as $s) {
-        if ((string)($s['service'] ?? '') === $serviceId) return (float)($s['rate'] ?? 0);
-    }
-    return 0.0;
+    return (float)(smmServicesById()[$serviceId]['rate'] ?? 0);
 }
 
 /**
@@ -2982,34 +2998,140 @@ function requiredMissing($userId, $botId = null, $partnerId = null) {
 // 🔗 لینک‌های اپلودر
 // ============================================================
 
+/**
+ * 🔗 لینک‌های اپلودر — روی SQLite، یک فایل جدا برای هر ربات.
+ *
+ * قبلا هر ربات یک فایلِ JSON داشت با همه‌ی لینک‌هایش. هر تحویلِ فایل
+ * (Links::hit — پرتکرارترین متد اینجا) کلِ آن فایل را می‌خواند و
+ * دوباره می‌نوشت؛ برای رباتی که هزاران لینک ساخته، یعنی هر دانلود
+ * منتظرِ نوشتنِ کلِ تاریخچه‌ی همان ربات می‌ماند. حالا هر لینک یک
+ * ردیفِ مستقل است.
+ */
 class Links
 {
     public static function file($botId) { return 'bots/' . $botId . '/links'; }
+    public static function dbPath($botId) { return DATA_DIR . '/bots/' . $botId . '/links.sqlite'; }
 
-    public static function all($botId) { return load(self::file($botId)); }
-    public static function get($botId, $code) { $a = load(self::file($botId)); return $a[$code] ?? null; }
+    public static function db($botId) {
+        static $dbs = [];
+        if (isset($dbs[$botId])) return $dbs[$botId];
+        if (!class_exists('SQLite3')) return null;
+
+        $path = self::dbPath($botId);
+        $dir  = dirname($path);
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        $fresh = !is_file($path);
+
+        try {
+            $db = new SQLite3($path);
+        } catch (Throwable $e) {
+            error_log('[shop-bot] links.sqlite (' . $botId . ') باز نشد: ' . $e->getMessage());
+            return null;
+        }
+        $db->busyTimeout(5000);
+        $db->exec('PRAGMA journal_mode = WAL');
+        $db->exec('PRAGMA synchronous = NORMAL');
+        $db->exec('CREATE TABLE IF NOT EXISTS links (code TEXT PRIMARY KEY, data TEXT NOT NULL)');
+
+        if ($fresh) self::importFromJson($db, $botId);
+        return $dbs[$botId] = $db;
+    }
+
+    /** یک‌بار، فقط وقتی links.sqlite همین ربات تازه ساخته می‌شود */
+    public static function importFromJson($db, $botId) {
+        $old = dataPath(self::file($botId));
+        if (!is_file($old)) return;
+        $raw = @file_get_contents($old);
+        $arr = $raw ? json_decode($raw, true) : null;
+
+        if (is_array($arr) && $arr) {
+            $db->exec('BEGIN');
+            $stmt = $db->prepare('INSERT OR REPLACE INTO links (code, data) VALUES (:code, :data)');
+            foreach ($arr as $k => $v) {
+                if ($k === '' || !is_array($v)) continue;
+                $stmt->bindValue(':code', (string)$k, SQLITE3_TEXT);
+                $stmt->bindValue(':data', json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+                $stmt->execute();
+                $stmt->reset();
+            }
+            $db->exec('COMMIT');
+        }
+        @rename($old, $old . '.migrated');
+    }
+
+    /** همه‌ی لینک‌های یک ربات — فقط برای فهرست/آمار در پنل */
+    public static function all($botId) {
+        $db = self::db($botId);
+        if (!$db) return [];
+        $out = [];
+        $res = $db->query('SELECT code, data FROM links');
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $d = json_decode($row['data'], true);
+            if (is_array($d)) $out[$row['code']] = $d;
+        }
+        return $out;
+    }
+
+    public static function get($botId, $code) {
+        $db = self::db($botId);
+        if (!$db) return null;
+        $stmt = $db->prepare('SELECT data FROM links WHERE code = :code');
+        $stmt->bindValue(':code', (string)$code, SQLITE3_TEXT);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        if (!$row) return null;
+        $d = json_decode($row['data'], true);
+        return is_array($d) ? $d : null;
+    }
 
     public static function create($botId, $files, $title = '') {
         $code = genCode(12);
-        mutate(self::file($botId), function (&$a) use ($code, $files, $title) {
-            $a[$code] = [
-                'code' => $code, 'title' => $title,
-                'files' => $files,            // [['type'=>..,'file_id'=>..,'name'=>..,'caption'=>..], ...]
-                'clicks' => 0, 'delivered' => 0,
-                'active' => true, 'created_at' => nowStr(),
-            ];
-        });
+        $link = [
+            'code' => $code, 'title' => $title,
+            'files' => $files,            // [['type'=>..,'file_id'=>..,'name'=>..,'caption'=>..], ...]
+            'clicks' => 0, 'delivered' => 0,
+            'active' => true, 'created_at' => nowStr(),
+        ];
+        $db = self::db($botId);
+        if ($db) {
+            $stmt = $db->prepare('INSERT INTO links (code, data) VALUES (:code, :data)');
+            $stmt->bindValue(':code', $code, SQLITE3_TEXT);
+            $stmt->bindValue(':data', json_encode($link, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $stmt->execute();
+        }
         return $code;
     }
 
+    /** هر دانلود/بازدید فقط همان یک ردیف را کم و زیاد می‌کند، نه کلِ جدولِ همان ربات را */
     public static function hit($botId, $code, $field) {
-        mutate(self::file($botId), function (&$a) use ($code, $field) {
-            if (isset($a[$code])) $a[$code][$field] = (int)($a[$code][$field] ?? 0) + 1;
-        });
+        $db = self::db($botId);
+        if (!$db) return;
+        $db->exec('BEGIN IMMEDIATE');
+        try {
+            $stmt = $db->prepare('SELECT data FROM links WHERE code = :code');
+            $stmt->bindValue(':code', (string)$code, SQLITE3_TEXT);
+            $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+            $link = $row ? json_decode($row['data'], true) : null;
+            if (!is_array($link)) { $db->exec('ROLLBACK'); return; }
+
+            $link[$field] = (int)($link[$field] ?? 0) + 1;
+
+            $up = $db->prepare('UPDATE links SET data = :data WHERE code = :code');
+            $up->bindValue(':code', (string)$code, SQLITE3_TEXT);
+            $up->bindValue(':data', json_encode($link, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $up->execute();
+            $db->exec('COMMIT');
+        } catch (Throwable $e) {
+            $db->exec('ROLLBACK');
+            error_log('[shop-bot] Links::hit خطا: ' . $e->getMessage());
+        }
     }
 
     public static function remove($botId, $code) {
-        mutate(self::file($botId), function (&$a) use ($code) { unset($a[$code]); });
+        $db = self::db($botId);
+        if (!$db) return;
+        $stmt = $db->prepare('DELETE FROM links WHERE code = :code');
+        $stmt->bindValue(':code', (string)$code, SQLITE3_TEXT);
+        $stmt->execute();
     }
 
     public static function url($botId, $code) {
