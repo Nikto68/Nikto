@@ -2012,6 +2012,73 @@ function postReactQuickSetup($bid, $sid) {
     return true;
 }
 
+/**
+ * 🧲 دکمه‌های «🚀 بوست تلگرام» و «😍 ری‌اکشن پست تلگرام» (همان‌هایی که
+ * راه‌اندازیِ یک‌کلیک می‌سازد) را کنار هم می‌گذارد، درست زیرِ زیردکمه‌ای
+ * که تویِ متنش «ممبر فیک» دارد — بدون اینکه ترتیبِ نسبیِ بقیه‌ی
+ * زیردکمه‌ها به‌هم بریزد. هر زیردکمه یک ردیفِ صریح می‌گیرد (چندبرابرِ
+ * ۱۰، تا بعداً بدونِ شماره‌گذاریِ دوباره‌ی همه چیز بشود چیزی وسطش جا داد).
+ */
+function arrangeBoostReactAfterFake($btnId = 'buy') {
+    $groups = subGroups($btnId);
+    if (!$groups) return [false, 'زیردکمه‌ای پیدا نشد.'];
+
+    $hasBoost = $hasReact = false;
+    foreach ($groups as $line) foreach ($line as $it) {
+        $t = trim((string)($it['text'] ?? ''));
+        if ($t === '🚀 بوست تلگرام') $hasBoost = true;
+        if ($t === '😍 ری‌اکشن پست تلگرام') $hasReact = true;
+    }
+    if (!$hasBoost || !$hasReact) {
+        return [false, 'دکمه‌ی «بوست تلگرام» یا «ری‌اکشن پست تلگرام» پیدا نشد — اول از راه‌اندازیِ یک‌کلیک بسازشان.'];
+    }
+
+    $boostItem = $reactItem = null;
+    $newGroups = [];
+    foreach ($groups as $line) {
+        $rest = [];
+        foreach ($line as $it) {
+            $t = trim((string)($it['text'] ?? ''));
+            if ($t === '🚀 بوست تلگرام')            { $boostItem = $it; continue; }
+            if ($t === '😍 ری‌اکشن پست تلگرام')     { $reactItem = $it; continue; }
+            $rest[] = $it;
+        }
+        if ($rest) $newGroups[] = $rest;
+    }
+
+    $fakeIdx = null;
+    foreach ($newGroups as $gi => $line) foreach ($line as $it)
+        if (str_contains(trim((string)($it['text'] ?? '')), 'ممبر فیک')) $fakeIdx = $gi;
+    if ($fakeIdx === null) {
+        return [false, 'زیردکمه‌ای با متنِ «ممبر فیک» پیدا نشد — بدونِ اون نمی‌دونم کجا بذارمشون.'];
+    }
+
+    array_splice($newGroups, $fakeIdx + 1, 0, [[$boostItem, $reactItem]]);
+
+    // 🔢 ردیف کنترل می‌کند کدام‌ها کنار هم‌اند؛ ولی چپ‌وراستِ داخلِ همان
+    // ردیف را فیلدِ «order» تعیین می‌کند (subGroups قبل از گروه‌بندی
+    // روی order مرتب می‌کند) — پس اگر order را هم صریح ننویسیم، چپ‌راستِ
+    // بوست/ری‌اکشن به مقدارِ قبلی‌شان بستگی دارد، نه چیزی که اینجا
+    // تصمیم گرفتیم. با نوشتنِ هر دو، نتیجه همیشه یکسان و قابل‌پیش‌بینی
+    // می‌ماند.
+    $rowById = $orderById = [];
+    $seq = 0;
+    foreach ($newGroups as $gi => $line) foreach ($line as $it) {
+        $rowById[$it['id']]   = ($gi + 1) * 10;
+        $orderById[$it['id']] = ++$seq;
+    }
+
+    cfgSet(function (&$c) use ($btnId, $rowById, $orderById) {
+        if (!is_array($c['buttons'][$btnId]['subs'] ?? null)) return;
+        foreach ($c['buttons'][$btnId]['subs'] as &$sub) {
+            if (!isset($sub['id']) || !isset($rowById[$sub['id']])) continue;
+            $sub['row']   = $rowById[$sub['id']];
+            $sub['order'] = $orderById[$sub['id']];
+        }
+    });
+    return [true, '✅ چیده شد — «بوست تلگرام» و «ری‌اکشن پست تلگرام» کنار هم، درست زیرِ «ممبر فیک».'];
+}
+
 class Product
 {
     /**
@@ -10010,7 +10077,13 @@ function handleMasterChatMember($ev) {
  * دکمه‌های شیشه‌ای زیرمجموعه یک دکمه منو —
  * زیر همان بخش نمایش داده می‌شوند، با چیدمان و رنگ دلخواه.
  */
-function subRows($btnId) {
+/**
+ * زیردکمه‌های روشن، گروه‌بندی‌شده به ردیف — همان منطقی که subRows()
+ * برای نمایش استفاده می‌کند، ولی این یکی خودِ زیردکمه‌ها را برمی‌گرداند
+ * (نه دکمه‌های آماده‌ی تلگرام) تا هم برای نمایش هم برای مرتب‌سازیِ
+ * خودکار قابل استفاده باشد.
+ */
+function subGroups($btnId) {
     $b = cfg()['buttons'][$btnId] ?? null;
     if (!$b) return [];
 
@@ -10035,11 +10108,13 @@ function subRows($btnId) {
         $g = [];
         foreach ($items as $it) $g[(int)($it['row'] ?: 99)][] = $it;
         ksort($g);
-        $groups = array_values($g);
-    } else {
-        $groups = layoutRows($items, $b['sub_layout'] ?? '1');
+        return array_values($g);
     }
+    return layoutRows($items, $b['sub_layout'] ?? '1');
+}
 
+function subRows($btnId) {
+    $groups = subGroups($btnId);
     $rows = [];
     foreach ($groups as $line) {
         $out = [];

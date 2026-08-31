@@ -733,6 +733,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ دکمه به «ری‌اکشن پست تلگرام» تبدیل شد — پایین همین صفحه، برو رو همون دکمه و برای هر ۴ ری‌اکشن، سرویسِ واقعیِ پنل رو از دراپ‌داون انتخاب کن.');
     }
 
+    // ---- چیدمانِ خودکار: بوست + ری‌اکشن کنار هم، زیرِ «ممبر فیک» ----
+    if ($a === 'arrange_boost_react') {
+        [$ok, $msg] = function_exists('arrangeBoostReactAfterFake') ? arrangeBoostReactAfterFake('buy') : [false, 'تابع پیدا نشد.'];
+        go($msg, $ok ? 'ok' : 'err');
+    }
+
     // ---- سود روی محصولات — یک‌جا برای همه‌ی بخش‌ها ----
     if ($a === 'save_profit') {
         $numOnly = fn($k) => (float)str_replace([',', '،'], '', $_POST[$k] ?? 0);
@@ -1714,6 +1720,16 @@ $tabFolders = [
       <button class="btn b" onclick="return confirm('متن‌ها و ری‌اکشن‌های این دکمه با تنظیماتِ ری‌اکشنِ پست جایگزین می‌شود. مطمئنی؟')">😍 راه‌اندازی</button>
     </form>
     <?php endif; ?>
+
+    <div class="note" style="margin-top:14px">
+      وقتی هر دوتا («🚀 بوست تلگرام» و «😍 ری‌اکشن پست تلگرام») ساخته شدند، این دکمه کنارِ هم می‌ذارتشون،
+      درست زیرِ زیردکمه‌ای که تو متنش «ممبر فیک» داره — بدونِ اینکه ترتیبِ بقیه‌ی دکمه‌ها به‌هم بریزه.
+    </div>
+    <form method="post" style="margin-top:8px">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
+      <input type="hidden" name="action" value="arrange_boost_react">
+      <button class="btn">🧲 چیدمانِ خودکار: کنارِ هم زیرِ «ممبر فیک»</button>
+    </form>
   </div></div>
 
   <?php $TF = cfg()['tariff'] ?? []; ?>
