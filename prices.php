@@ -1638,28 +1638,57 @@ function pxPngOut($im) {
     return (strlen($small) > 0 && strlen($small) < strlen($full)) ? $small : $full;
 }
 
+function pxCardFresh($file, $ttl) {
+    if (!is_file($file)) return null;
+    clearstatcache(true, $file);
+    if (time() - (@filemtime($file) ?: 0) > $ttl) return null;
+    $raw = @file_get_contents($file);
+    return (is_string($raw) && strlen($raw) > 100) ? $raw : null;
+}
+
+/**
+ * ⚡ جلوگیری از رندرِ هم‌زمانِ چند نفر برای یک کارتِ یکسان.
+ *
+ * درست همان لحظه‌ای که کشِ یک ارز تمام می‌شود، معمولا چند نفر پشتِ
+ * سرِ هم قیمتِ همان ارز را می‌خواهند — بدونِ قفل، همه‌شان هم‌زمان
+ * می‌فهمند کارت کهنه شده و همه‌شان مستقل رندر می‌کنند (هرکدام ~۷۰
+ * میلی‌ثانیه + دو بار encode شدنِ PNG)، یعنی دقیقا همان لحظه‌ای که
+ * سرور باید سریع‌ترین باشد، کندترین می‌شود. حالا فقط اولی می‌سازد؛
+ * بقیه پشتِ یک قفلِ کوچکِ مخصوصِ همان یک نماد چند میلی‌ثانیه منتظر
+ * می‌مانند و همان فایلِ تازه را می‌گیرند — نه رندرِ دوباره.
+ */
 function pxCardCached($key, callable $fn) {
     $ttl  = max(10, (int)pxVal('card_ttl', 90));
     $file = pxCardFile($key);
 
-    if (is_file($file)) {
-        clearstatcache(true, $file);
-        if (time() - (@filemtime($file) ?: 0) <= $ttl) {
-            $raw = @file_get_contents($file);
-            if (is_string($raw) && strlen($raw) > 100) return $raw;
+    if ($hit = pxCardFresh($file, $ttl)) return $hit;
+
+    $render = function () use ($file, $fn) {
+        $png = pxTryCard($fn);
+        if (is_string($png) && $png !== '' && strlen($png) > 100) {
+            // اول موقت، بعد جابه‌جا — تا درخواستِ همزمان نصفه‌ی فایل را نخواند
+            $tmp = $file . '.' . bin2hex(random_bytes(4));
+            if (@file_put_contents($tmp, $png) !== false) @rename($tmp, $file);
+            else @unlink($tmp);
+            pxCardPrune();
         }
+        return $png;
+    };
+
+    $dir = dirname($file);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $lockFp = @fopen($file . '.lock', 'c');
+    if (!$lockFp || !flock($lockFp, LOCK_EX)) {
+        // قفل گرفته نشد (پوشه فقط‌خواندنی؟) — به‌جای معطلی، خودش می‌سازد، بدون هماهنگی با بقیه
+        if ($lockFp) fclose($lockFp);
+        return $render();
     }
 
-    $png = pxTryCard($fn);
-    if (is_string($png) && $png !== '' && strlen($png) > 100) {
-        $dir = dirname($file);
-        if (!is_dir($dir)) @mkdir($dir, 0755, true);
-        // اول موقت، بعد جابه‌جا — تا درخواستِ همزمان نصفه‌ی فایل را نخواند
-        $tmp = $file . '.' . bin2hex(random_bytes(4));
-        if (@file_put_contents($tmp, $png) !== false) @rename($tmp, $file);
-        else @unlink($tmp);
-        pxCardPrune();
-    }
+    // تا نوبتِ ما رسید، شاید یکیِ دیگر (که زودتر قفل را گرفته بود) همین را ساخته باشد
+    $hit = pxCardFresh($file, $ttl);
+    $png = $hit ?? $render();
+    flock($lockFp, LOCK_UN);
+    fclose($lockFp);
     return $png;
 }
 

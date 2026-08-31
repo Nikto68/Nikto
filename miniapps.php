@@ -1375,6 +1375,93 @@ function maRows() {
 // 📦 سفارش‌های مینی‌اپ — انبار جدا از سفارش‌های ممبر
 // ============================================================
 
+/**
+ * 🗄 انبارِ سفارش‌های مینی‌اپ — روی SQLite، نه یک فایلِ JSON.
+ *
+ * قبلا هر تغییرِ یک سفارش (پرداخت، تحویل، رد...) کلِ فایلِ ma_orders را
+ * می‌خواند، دوباره می‌ساخت و زیرِ یک قفلِ سراسری می‌نوشت — یعنی هر سفارش،
+ * فارغ از این‌که کدام یکی تغییر کرده، منتظرِ همان یک قفل می‌ماند؛ و
+ * MaOrder::get() هم برای پیدا کردنِ یک سفارش، کلِ فایل را decode
+ * می‌کرد. با بایگانی (maOrdersArchive) فایلِ داغ کوچک نگه داشته
+ * می‌شد، ولی مشکلِ اصلی — «هر عملیات = کل جدول» — سرِ جایش بود.
+ *
+ * حالا مثلِ کاربرها و بازی‌ها: هر سفارش یک ردیفِ مستقل، با ستون‌های
+ * ایندکس‌شده برای user_id/status — یعنی «سفارش‌های من» و شمارشِ
+ * وضعیت‌ها دیگر کلِ جدول را به PHP نمی‌آورند، خودِ SQLite با ایندکس
+ * جواب می‌دهد.
+ */
+function maOrdersDbPath() { return DATA_DIR . '/ma_orders.sqlite'; }
+
+function maOrdersDb() {
+    static $db = null;
+    if ($db) return $db;
+    if (!class_exists('SQLite3')) return null;
+
+    $path = maOrdersDbPath();
+    $dir  = dirname($path);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $fresh = !is_file($path);
+
+    try {
+        $db = new SQLite3($path);
+    } catch (Throwable $e) {
+        error_log('[shop-bot] ma_orders.sqlite باز نشد: ' . $e->getMessage());
+        return null;
+    }
+    $db->busyTimeout(5000);
+    $db->exec('PRAGMA journal_mode = WAL');
+    $db->exec('PRAGMA synchronous = NORMAL');
+    $db->exec('CREATE TABLE IF NOT EXISTS orders (
+        id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, app TEXT NOT NULL,
+        status TEXT NOT NULL, created_at TEXT NOT NULL, data TEXT NOT NULL
+    )');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_ma_orders_user   ON orders(user_id, created_at)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_ma_orders_status ON orders(status)');
+    $db->exec('CREATE TABLE IF NOT EXISTS orders_old (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+
+    if ($fresh) maOrdersImportFromJson($db);
+    return $db;
+}
+
+/** یک‌بار، فقط وقتی ma_orders.sqlite تازه ساخته می‌شود: هرچه در فایل‌های JSON قدیمی بود کوچ می‌کند */
+function maOrdersImportFromJson($db) {
+    $map = ['ma_orders' => 'orders', 'ma_orders_old' => 'orders_old'];
+    foreach ($map as $file => $table) {
+        $old = dataPath($file);
+        if (!is_file($old)) continue;
+        $raw = @file_get_contents($old);
+        $arr = $raw ? json_decode($raw, true) : null;
+        if (is_array($arr) && $arr) {
+            $db->exec('BEGIN');
+            if ($table === 'orders') {
+                $stmt = $db->prepare('INSERT OR REPLACE INTO orders (id, user_id, app, status, created_at, data) VALUES (:id, :uid, :app, :status, :created, :data)');
+                foreach ($arr as $k => $v) {
+                    if ($k === '' || !is_array($v)) continue;
+                    $stmt->bindValue(':id', (string)$k, SQLITE3_TEXT);
+                    $stmt->bindValue(':uid', (int)($v['user_id'] ?? 0), SQLITE3_INTEGER);
+                    $stmt->bindValue(':app', (string)($v['app'] ?? ''), SQLITE3_TEXT);
+                    $stmt->bindValue(':status', (string)($v['status'] ?? ''), SQLITE3_TEXT);
+                    $stmt->bindValue(':created', (string)($v['created_at'] ?? ''), SQLITE3_TEXT);
+                    $stmt->bindValue(':data', json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+                    $stmt->execute();
+                    $stmt->reset();
+                }
+            } else {
+                $stmt = $db->prepare('INSERT OR REPLACE INTO orders_old (id, data) VALUES (:id, :data)');
+                foreach ($arr as $k => $v) {
+                    if ($k === '' || !is_array($v)) continue;
+                    $stmt->bindValue(':id', (string)$k, SQLITE3_TEXT);
+                    $stmt->bindValue(':data', json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+                    $stmt->execute();
+                    $stmt->reset();
+                }
+            }
+            $db->exec('COMMIT');
+        }
+        @rename($old, $old . '.migrated');
+    }
+}
+
 class MaOrder
 {
     const PENDING = 'pending';     // منتظر انتخاب روش پرداخت / رسید
@@ -1383,78 +1470,161 @@ class MaOrder
     const DONE    = 'done';        // تحویل شد
     const REJECT  = 'rejected';
 
-    public static function all() { return load('ma_orders'); }
+    /** همه‌ی سفارش‌های داغ — فقط برای فهرست/آمار در پنل. در مسیرِ داغِ هر تیک استفاده نشود. */
+    public static function all() {
+        $db = maOrdersDb();
+        if (!$db) return [];
+        $out = [];
+        $res = $db->query('SELECT id, data FROM orders');
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $d = json_decode($row['data'], true);
+            if (is_array($d)) $out[$row['id']] = $d;
+        }
+        return $out;
+    }
 
-    /** فایل داغ، و اگر نبود بایگانی — تا سفارش قدیمی هم پیدا شود */
+    /** جدولِ داغ، و اگر نبود بایگانی — تا سفارش قدیمی هم پیدا شود. هر دو با یک SELECT روی id، نه خواندنِ کلِ جدول */
     public static function get($id) {
-        $a = load('ma_orders');
-        if (isset($a[$id])) return $a[$id];
-        $b = load('ma_orders_old');
-        return $b[$id] ?? null;
+        $db = maOrdersDb();
+        if (!$db) return null;
+        $id = (string)$id;
+
+        $stmt = $db->prepare('SELECT data FROM orders WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        if ($row) { $d = json_decode($row['data'], true); if (is_array($d)) return $d; }
+
+        $stmt = $db->prepare('SELECT data FROM orders_old WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        if ($row) { $d = json_decode($row['data'], true); if (is_array($d)) return $d; }
+
+        return null;
     }
 
     public static function allWithArchive() {
-        return load('ma_orders') + load('ma_orders_old');
+        $db = maOrdersDb();
+        if (!$db) return [];
+        $out = self::all();
+        $res = $db->query('SELECT id, data FROM orders_old');
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $d = json_decode($row['data'], true);
+            if (is_array($d)) $out[$row['id']] = $d;
+        }
+        return $out;
     }
 
     public static function create($app, $uid, $uname, $item, $qty, $total, $field) {
         $id = 'ma_' . base_convert((string)time(), 10, 36) . bin2hex(random_bytes(3));
-        mutate('ma_orders', function (&$a) use ($id, $app, $uid, $uname, $item, $qty, $total, $field) {
-            $a[$id] = [
-                'id' => $id, 'app' => $app,
-                'user_id' => (int)$uid, 'username' => (string)$uname,
-                'item_id' => $item['id'], 'item_name' => $item['name'],
-                'item_emoji' => $item['emoji'] ?? '', 'unit' => $item['unit'] ?? '',
-                'unit_price' => (float)$item['price'],
-                'qty' => (float)$qty, 'total' => (float)$total,
-                'field' => (string)$field,          // آیدی / ولت / توضیح کاربر
-                'currency' => (string)($item['currency'] ?? 'تومان'),
-                'status' => self::PENDING, 'pay' => '',
-                'receipt_type' => null, 'receipt' => null,
-                'created_at' => nowStr(), 'decided_at' => null, 'delivered_at' => null,
-            ];
-        });
+        $o = [
+            'id' => $id, 'app' => $app,
+            'user_id' => (int)$uid, 'username' => (string)$uname,
+            'item_id' => $item['id'], 'item_name' => $item['name'],
+            'item_emoji' => $item['emoji'] ?? '', 'unit' => $item['unit'] ?? '',
+            'unit_price' => (float)$item['price'],
+            'qty' => (float)$qty, 'total' => (float)$total,
+            'field' => (string)$field,          // آیدی / ولت / توضیح کاربر
+            'currency' => (string)($item['currency'] ?? 'تومان'),
+            'status' => self::PENDING, 'pay' => '',
+            'receipt_type' => null, 'receipt' => null,
+            'created_at' => nowStr(), 'decided_at' => null, 'delivered_at' => null,
+        ];
+        $db = maOrdersDb();
+        if ($db) {
+            $stmt = $db->prepare('INSERT INTO orders (id, user_id, app, status, created_at, data) VALUES (:id, :uid, :app, :status, :created, :data)');
+            $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+            $stmt->bindValue(':uid', (int)$uid, SQLITE3_INTEGER);
+            $stmt->bindValue(':app', (string)$app, SQLITE3_TEXT);
+            $stmt->bindValue(':status', self::PENDING, SQLITE3_TEXT);
+            $stmt->bindValue(':created', $o['created_at'], SQLITE3_TEXT);
+            $stmt->bindValue(':data', json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $stmt->execute();
+        }
         return $id;
     }
 
-    /**
-     * تغییر یک سفارش زیر قفل.
-     * اگر کال‌بک چیزی برگرداند، همان برمی‌گردد — این برای «قفل گرفتن» لازم است:
-     * تابع می‌تواند false برگرداند تا بگوید شرط برقرار نبود.
-     */
     /** سفارشی که هیچ‌وقت پرداخت نشد و نگه داشتنش فایده‌ای ندارد */
     public static function remove($id) {
-        mutate('ma_orders', function (&$a) use ($id) { unset($a[(string)$id]); });
+        $db = maOrdersDb();
+        if (!$db) return;
+        $stmt = $db->prepare('DELETE FROM orders WHERE id = :id');
+        $stmt->bindValue(':id', (string)$id, SQLITE3_TEXT);
+        $stmt->execute();
     }
 
+    /**
+     * تغییر یک سفارش، اتمیک، فقط همان یک ردیف — نه کلِ جدول (مثلِ mutateUser/gmSetGame).
+     * اگر کال‌بک چیزی برگرداند، همان برمی‌گردد؛ چیزی که $fn روی آرایه عوض
+     * کرده، فارغ از مقدارِ برگشتی‌اش، ذخیره می‌شود — درست مثلِ رفتارِ قبلیِ
+     * mutate() که همیشه می‌نوشت، حتی اگر $fn نهایتا false برگرداند.
+     */
     public static function set($id, callable $fn) {
-        return mutate('ma_orders', function (&$a) use ($id, $fn) {
-            if (!isset($a[$id])) return false;
-            $r = $fn($a[$id]);
+        $db = maOrdersDb();
+        if (!$db) return false;
+        $id = (string)$id;
+
+        $db->exec('BEGIN IMMEDIATE');
+        try {
+            $stmt = $db->prepare('SELECT data FROM orders WHERE id = :id');
+            $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+            $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+            $o = $row ? json_decode($row['data'], true) : null;
+            if (!is_array($o)) { $db->exec('ROLLBACK'); return false; }
+
+            $r = $fn($o);
+
+            $up = $db->prepare('UPDATE orders SET user_id = :uid, app = :app, status = :status, created_at = :created, data = :data WHERE id = :id');
+            $up->bindValue(':id', $id, SQLITE3_TEXT);
+            $up->bindValue(':uid', (int)($o['user_id'] ?? 0), SQLITE3_INTEGER);
+            $up->bindValue(':app', (string)($o['app'] ?? ''), SQLITE3_TEXT);
+            $up->bindValue(':status', (string)($o['status'] ?? ''), SQLITE3_TEXT);
+            $up->bindValue(':created', (string)($o['created_at'] ?? ''), SQLITE3_TEXT);
+            $up->bindValue(':data', json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $up->execute();
+            $db->exec('COMMIT');
             return $r === null ? true : $r;
-        });
+        } catch (Throwable $e) {
+            $db->exec('ROLLBACK');
+            error_log('[shop-bot] MaOrder::set خطا: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
      * سفارش‌های یک کاربر. با $app، فقط سفارش‌های همان مینی‌اپ.
      * بدون این، کسی که داخل «شماره مجازی» بود سفارش استارزش را هم
      * آنجا می‌دید — دو فروشگاه جدا که فهرست سفارششان قاطی بود.
+     *
+     * قبلا این یعنی کلِ جدول به PHP می‌آمد، فیلتر و مرتب می‌شد — حالا
+     * خودِ SQLite با ایندکسِ (user_id, created_at) جواب می‌دهد.
      */
     public static function forUser($uid, $limit = 10, $app = null) {
+        $db = maOrdersDb();
+        if (!$db) return [];
+        $sql = 'SELECT data FROM orders WHERE user_id = :uid';
+        if ($app !== null) $sql .= ' AND app = :app';
+        $sql .= ' ORDER BY created_at DESC LIMIT :lim';
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(':uid', (int)$uid, SQLITE3_INTEGER);
+        if ($app !== null) $stmt->bindValue(':app', (string)$app, SQLITE3_TEXT);
+        $stmt->bindValue(':lim', max(0, (int)$limit), SQLITE3_INTEGER);
         $out = [];
-        foreach (self::all() as $o) {
-            if ((int)$o['user_id'] !== (int)$uid) continue;
-            if ($app !== null && (string)($o['app'] ?? '') !== (string)$app) continue;
-            $out[] = $o;
+        $res = $stmt->execute();
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $d = json_decode($row['data'], true);
+            if (is_array($d)) $out[] = $d;
         }
-        usort($out, fn($a, $b) => strcmp($b['created_at'], $a['created_at']));
-        return array_slice($out, 0, $limit);
+        return $out;
     }
 
+    /** قبلا کلِ جدول را می‌شمرد؛ حالا خودِ SQLite با ایندکسِ status می‌شمرد */
     public static function countBy($status) {
-        $n = 0;
-        foreach (self::all() as $o) if ($o['status'] === $status) $n++;
-        return $n;
+        $db = maOrdersDb();
+        if (!$db) return 0;
+        $stmt = $db->prepare('SELECT COUNT(*) c FROM orders WHERE status = :status');
+        $stmt->bindValue(':status', (string)$status, SQLITE3_TEXT);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        return (int)($row['c'] ?? 0);
     }
 
     public static function statusLabel($s) {
@@ -2196,24 +2366,36 @@ function maOrdersArchive($days = 0, $limit = 4000) {
     if ($days <= 0) return 0;
     $cut = time() - $days * 86400;
 
+    $db = maOrdersDb();
+    if (!$db) return 0;
+
+    // فقط تمام‌شده‌ها (خودِ ایندکسِ status اینجا کاندیدها را کم می‌کند)؛
+    // هرچه هنوز در جریان است اصلا از SQLite بیرون نمی‌آید
+    $stmt = $db->prepare('SELECT id, data FROM orders WHERE status = :s1 OR status = :s2');
+    $stmt->bindValue(':s1', MaOrder::DONE, SQLITE3_TEXT);
+    $stmt->bindValue(':s2', MaOrder::REJECT, SQLITE3_TEXT);
+    $res = $stmt->execute();
+
     $moved = [];
-    mutate('ma_orders', function (&$a) use ($cut, $limit, &$moved) {
-        foreach ($a as $id => $o) {
-            if (count($moved) >= $limit) break;
-            $st = (string)($o['status'] ?? '');
-            // فقط تمام‌شده‌ها؛ هرچه هنوز در جریان است می‌ماند
-            if ($st !== MaOrder::DONE && $st !== MaOrder::REJECT) continue;
-            $when = strtotime((string)($o['delivered_at'] ?: $o['decided_at'] ?: $o['created_at'] ?? '')) ?: 0;
-            if ($when === 0 || $when > $cut) continue;
-            $moved[$id] = $o;
-            unset($a[$id]);
-        }
-    });
+    while (count($moved) < $limit && ($row = $res->fetchArray(SQLITE3_ASSOC))) {
+        $o = json_decode($row['data'], true);
+        if (!is_array($o)) continue;
+        $when = strtotime((string)($o['delivered_at'] ?: $o['decided_at'] ?: $o['created_at'] ?? '')) ?: 0;
+        if ($when === 0 || $when > $cut) continue;
+        $moved[(string)$row['id']] = $o;
+    }
     if (!$moved) return 0;
 
-    mutate('ma_orders_old', function (&$b) use ($moved) {
-        foreach ($moved as $id => $o) $b[$id] = $o;
-    });
+    $db->exec('BEGIN');
+    $del = $db->prepare('DELETE FROM orders WHERE id = :id');
+    $ins = $db->prepare('INSERT OR REPLACE INTO orders_old (id, data) VALUES (:id, :data)');
+    foreach ($moved as $id => $o) {
+        $del->bindValue(':id', $id, SQLITE3_TEXT); $del->execute(); $del->reset();
+        $ins->bindValue(':id', $id, SQLITE3_TEXT);
+        $ins->bindValue(':data', json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+        $ins->execute(); $ins->reset();
+    }
+    $db->exec('COMMIT');
     return count($moved);
 }
 
@@ -2258,8 +2440,13 @@ function maClientIp() {
     return $real;
 }
 
+/** هر کلید دترمینیستیک به یکی از N تکه می‌رود — پخشِ قفل‌ها روی چند فایلِ کوچک، نه یک فایلِ بزرگِ مشترک */
+function maShardOf($key, $shards = MA_RATE_SHARDS) {
+    return hexdec(substr(md5((string)$key), 0, 4)) % $shards;
+}
+
 function maRateFile($k) {
-    return 'ma_rate_' . (hexdec(substr(md5($k), 0, 4)) % MA_RATE_SHARDS);
+    return 'ma_rate_' . maShardOf($k);
 }
 
 function maRateOk($bucket, $id, $limit, $win) {
@@ -2291,10 +2478,17 @@ function maRateOk($bucket, $id, $limit, $win) {
  * سقف معقولی می‌گذاریم که خرید عادی آزاد باشد ولی کسی نتواند با یک initData
  * شنودشده صدها سفارش بسازد.
  */
+/**
+ * ⚡ هر دو تابعِ زیر (نانس و ضدِ تکرار) قبلا یک فایلِ مشترک برای همه‌ی
+ * کاربرها بودند — دقیقا همان مشکلی که maRateFile برایش شارد ساخته شد:
+ * با کاربرهای هم‌زمانِ زیاد، همه‌ی ثبتِ سفارش‌های کلِ مینی‌اپ پشتِ یک
+ * قفلِ سراسری صف می‌کشیدند، برای دو چکِ کاملا مستقل از هم. حالا مثلِ
+ * محدودیتِ نرخ، شارد شده‌اند.
+ */
 function maNonceOk($initData, $max = 15) {
     $sig = substr(hash('sha256', (string)$initData), 0, 32);
     $ok  = true;
-    mutate('ma_nonce', function (&$a) use ($sig, $max, &$ok) {
+    mutate('ma_nonce_' . maShardOf($sig), function (&$a) use ($sig, $max, &$ok) {
         $now = time();
         foreach ($a as $k => $v) {
             $last = is_array($v) ? (int)($v['at'] ?? 0) : (int)$v;
@@ -2311,7 +2505,7 @@ function maNonceOk($initData, $max = 15) {
 function maDuplicateOrder($uid, $app, $itemId, $qty, $field, $win = 45) {
     $sig = hash('sha256', $uid . '|' . $app . '|' . $itemId . '|' . $qty . '|' . $field);
     $dup = false;
-    mutate('ma_dup', function (&$a) use ($sig, $win, &$dup) {
+    mutate('ma_dup_' . maShardOf($sig), function (&$a) use ($sig, $win, &$dup) {
         $now = time();
         foreach ($a as $k => $t) if (($now - (int)$t) > 600) unset($a[$k]);
         if (isset($a[$sig]) && ($now - (int)$a[$sig]) < $win) { $dup = true; return; }
