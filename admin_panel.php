@@ -500,6 +500,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('تنظیمات ذخیره شد.');
     }
 
+    // ---- ☎️ شماره مجازی ----
+    if ($a === 'save_numbers') {
+        $post = $_POST;
+        $prov = ($post['provider'] ?? '5sim') === 'numberland' ? 'numberland' : '5sim';
+        numSet(function (&$c) use ($post, $prov) {
+            $c['provider']   = $prov;
+            $c['wait']       = max(60, min(86400, (int)($post['wait'] ?? 900)));
+            $c['poll']       = max(2, min(300, (int)($post['poll'] ?? 6)));
+            $c['markup']     = max(0, min(1000, (float)str_replace([',', '،'], '', $post['markup'] ?? 0)));
+            $c['sync_price'] = !empty($post['sync_price']);
+            $c['api']['on']      = !empty($post['num_on']);
+            $c['api']['timeout'] = max(5, (int)($post['timeout'] ?? 15));
+            $c['api']['rate']    = max(0, (float)str_replace([',', '،'], '', $post['rate'] ?? 0));
+            $c['api']['max']     = max(0, (float)str_replace([',', '،'], '', $post['max'] ?? 0));
+            $c['api']['base']    = trim((string)($post['base'] ?? ''));
+            $c['api']['nl_svc']  = trim((string)($post['nl_svc'] ?? '')) ?: '1';
+            $key = trim((string)($post['api_key'] ?? ''));
+            if ($key !== '') { if ($prov === 'numberland') $c['api']['nl_key'] = $key; else $c['api']['token'] = $key; }
+        });
+        if (function_exists('maSet')) {
+            $catsMax = max(0, (int)($post['cats_max'] ?? 0));
+            maSet('num', function (&$a) use ($catsMax) { $a['cats_max'] = $catsMax; });
+        }
+        go('✅ تنظیماتِ شماره مجازی ذخیره شد.');
+    }
+
     // ---- محصولات ----
     if ($a === 'add_product') {
         $name = trim($_POST['name'] ?? '');
@@ -1332,6 +1358,10 @@ $tabs = [
   'users'     => '👥 کاربران',
   'auto'      => '⚡ خودکارسازی',
   'settings'  => '⚙️ تنظیمات',
+  'numbers'   => '☎️ شماره مجازی',
+  'miniapps'  => '🚀 مینی‌اپ‌ها',
+  'diamond'   => '💎 الماس',
+  'games'     => '🎮 بازی‌ها',
 ];
 // 📁 فولدربندیِ تب‌ها — هر دسته زیرِ عنوانِ خودش تو سایدبار
 $tabFolders = [
@@ -1339,6 +1369,7 @@ $tabFolders = [
   'فروش'      => ['orders', 'products', 'profit'],
   'کاربران'   => ['users', 'referral', 'support'],
   'زیرساخت'   => ['bots', 'channels', 'campaigns', 'partners'],
+  'ویژگی‌های دیگر' => ['numbers', 'miniapps', 'diamond', 'games'],
   'سیستم'     => ['auto', 'settings'],
 ];
 ?>
@@ -3188,6 +3219,106 @@ def join_gate(user_id):
         </div>
       <?php endforeach; ?>
     </div>
+  </div></div>
+
+<?php // ================= ☎️ شماره مجازی ================= ?>
+<?php elseif ($tab === 'numbers'): ?>
+  <?php
+    $NP  = numProv(); $NPI = numProvInfo(); $NAPI = numVal('api', []);
+    $numOpenCount = 0; foreach (numAll() as $na) if (($na['status'] ?? '') === 'waiting') $numOpenCount++;
+    $numCatsMax = (int)(maGet('num')['cats_max'] ?? 0);
+  ?>
+  <div class="card"><h2>☎️ شماره مجازی تلگرام
+    <?= !empty($NAPI['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
+  </h2><div class="body">
+    <div class="note">
+      فقط شماره‌ی تلگرام فروخته می‌شود. فروشنده رو انتخاب کن، کلیدش رو بذار، بقیه خودکاره.
+      متن‌ها و ظاهرِ مینی‌اپ (که تلگرامیه، نه اینجا) همچنان تو <code>/panel</code> ← ☎️ شماره مجازی تنظیم می‌شن.
+    </div>
+    <?php if ($numOpenCount): ?>
+      <div class="flash warn">⏳ <?= $numOpenCount ?> شماره‌ی باز الان منتظرِ کد هستن — از <code>/panel</code> ← 📋 شماره‌های باز ببین.</div>
+    <?php endif; ?>
+
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="numbers">
+      <input type="hidden" name="action" value="save_numbers">
+
+      <div class="subcard"><h3>🏪 فروشنده و اتصال</h3>
+        <div style="margin-bottom:10px">
+          <label style="font-weight:500"><input type="checkbox" name="num_on" style="width:auto"
+            <?= !empty($NAPI['on']) ? 'checked' : '' ?>> روشن باشد</label>
+        </div>
+        <div class="grid2">
+          <div><label>فروشنده</label>
+            <select name="provider">
+              <?php foreach (numProviders() as $pk => $pv): ?>
+                <option value="<?= h($pk) ?>" <?= $NP === $pk ? 'selected' : '' ?>><?= h($pv['label']) ?></option>
+              <?php endforeach; ?>
+            </select></div>
+          <div><label><?= h($NPI['key']) ?> <?= h($NPI['name']) ?> (خالی = بدونِ تغییر)</label>
+            <input name="api_key" value="<?= h($NP === 'numberland' ? ($NAPI['nl_key'] ?? '') : ($NAPI['token'] ?? '')) ?>" style="direction:ltr"></div>
+          <?php if ($NP === 'numberland'): ?>
+          <div><label>🎯 کد سرویسِ تلگرام نزدِ نامبرلند</label>
+            <input name="nl_svc" value="<?= h($NAPI['nl_svc'] ?? '1') ?>" style="direction:ltr"></div>
+          <?php endif; ?>
+          <div><label>🌐 آدرسِ پایه (خالی = پیش‌فرضِ فروشنده)</label>
+            <input name="base" value="<?= h($NAPI['base'] ?? '') ?>" placeholder="<?= h($NPI['base']) ?>" style="direction:ltr"></div>
+        </div>
+        <div class="muted" style="margin-top:8px"><?= h($NPI['help']) ?></div>
+      </div>
+
+      <div class="subcard"><h3>💰 قیمت و سود</h3>
+        <div class="grid2">
+          <div><label>📈 درصد سود</label>
+            <input name="markup" value="<?= h(rtrim(rtrim(number_format((float)numVal('markup', 0), 2), '0'), '.')) ?>" style="direction:ltr"></div>
+          <?php if (numNeedsRate()): ?>
+          <div><label>💵 نرخ دلار دستی (۰ = خودکار از بخش قیمت‌گیری)</label>
+            <input name="rate" value="<?= h((float)numVal('api.rate', 0) ?: '') ?>" placeholder="خودکار" style="direction:ltr"></div>
+          <?php endif; ?>
+          <div><label>🧢 سقفِ قیمتِ خرید (۰ = بی‌سقف)</label>
+            <input name="max" value="<?= h((float)numVal('api.max', 0) ?: '') ?>" placeholder="بی‌سقف" style="direction:ltr"></div>
+          <div><label>&nbsp;</label><label style="font-weight:500">
+            <input type="checkbox" name="sync_price" style="width:auto" <?= !empty(numVal('sync_price', true)) ? 'checked' : '' ?>>
+            قیمت هر بار تازه از فروشنده گرفته شود</label></div>
+        </div>
+        <?php if (numNeedsRate() && numRate() <= 0): ?>
+          <div class="flash warn" style="margin-top:10px">⚠️ بدون نرخِ دلار، قیمتی وارد نمی‌شود.</div>
+        <?php endif; ?>
+      </div>
+
+      <div class="subcard"><h3>⏱ زمان‌بندی</h3>
+        <div class="grid2">
+          <div><label>⏳ مهلتِ انتظارِ کد (ثانیه)</label>
+            <input name="wait" type="number" min="60" value="<?= (int)numVal('wait', 900) ?>"></div>
+          <div><label>🔁 فاصله‌ی پیگیری (ثانیه)</label>
+            <input name="poll" type="number" min="2" value="<?= (int)numVal('poll', 6) ?>"></div>
+          <div><label>⏱ مهلتِ تماس با فروشنده (ثانیه)</label>
+            <input name="timeout" type="number" min="5" value="<?= (int)($NAPI['timeout'] ?? 15) ?>"></div>
+          <div><label>🌍 تعدادِ کشورِ صفحه‌ی اولِ مینی‌اپ (۰ = همه)</label>
+            <input name="cats_max" type="number" min="0" value="<?= $numCatsMax ?>" placeholder="همه"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px"><button class="btn g">ذخیره تنظیماتِ شماره مجازی</button></div>
+    </form>
+  </div></div>
+
+<?php // ================= 🚀 مینی‌اپ‌ها ================= ?>
+<?php elseif ($tab === 'miniapps'): ?>
+  <div class="card"><h2>🚀 مینی‌اپ‌ها</h2><div class="body">
+    <div class="note">این بخش داره تکمیل می‌شه — فعلاً کاتالوگ و روشن/خاموشیِ هر آیتم رو از <code>/panel</code> ← 🚀 تنظیماتِ مینی‌اپ‌ها انجام بده.</div>
+  </div></div>
+
+<?php // ================= 💎 الماس ================= ?>
+<?php elseif ($tab === 'diamond'): ?>
+  <div class="card"><h2>💎 الماس</h2><div class="body">
+    <div class="note">این بخش داره تکمیل می‌شه — فعلاً از <code>/panel</code> ← 💎 الماس انجام بده.</div>
+  </div></div>
+
+<?php // ================= 🎮 بازی‌ها ================= ?>
+<?php elseif ($tab === 'games'): ?>
+  <div class="card"><h2>🎮 بازی‌ها</h2><div class="body">
+    <div class="note">این بخش داره تکمیل می‌شه — فعلاً از <code>/panel</code> ← 🎮 بازی‌ها انجام بده.</div>
   </div></div>
 
 <?php else: ?>
