@@ -324,6 +324,48 @@ function chTopupReceipt($order) {
 }
 
 /**
+ * رسیدِ یک سفارشِ عادی (نه شارژ کیف‌پول) — محصولِ ربات یا مینی‌اپ.
+ *
+ * قبلِ این تابع، رسیدِ هر سفارشی جز شارژ کیف‌پول همیشه به چتِ خصوصیِ
+ * ادمین می‌رفت، حتی اگر همان بخش کانالِ گزارشِ خودش را وصل کرده بود —
+ * یعنی دقیقاً همان مشکلی که رسیدِ شارژ قبلاً داشت. اینجا همان مسیرِ
+ * چندسال‌جریانه (mem_ok/mem_vip/mini_tg/…) را با دکمه‌ی تایید/رد
+ * به‌کار می‌گیرد، دقیقاً مثلِ chBuy ولی با دکمه‌های تصمیم‌گیری روی خودِ
+ * پیام، تا هیچ‌چیزی به ربات نیاید.
+ *
+ * برگشتِ true یعنی رفت — دیگر لازم نیست خصوصی هم برای ادمین بفرستیم.
+ */
+function chOrderReceipt($uid, $uname, $productName, $qty, $amount, $code,
+                         $confirmCb, $rejectCb, $photo = null, $app = '', $cat = '') {
+    $stream = chStreamFor($app, $productName, $cat);
+    [$label] = chStreams()[$stream] ?? ['🛒 فروش'];
+    $plainIcon = '';
+    if (preg_match('/^(\X)\s+(.*)$/u', $label, $m)) { $plainIcon = $m[1]; $label = $m[2]; }
+
+    $pid = trim((string)(chOf($stream)['premium_icon'] ?? ''));
+    $icon = ($pid !== '' && ctype_digit($pid))
+        ? '<tg-emoji emoji-id="' . h($pid) . '">' . h($plainIcon ?: '🛒') . '</tg-emoji>'
+        : '';
+
+    $rows = ($confirmCb && $rejectCb) ? [[
+        ['text' => function_exists('UT') ? UT('confirm') : '✅ تایید', 'callback_data' => $confirmCb],
+        ['text' => function_exists('UT') ? UT('reject')  : '❌ رد',   'callback_data' => $rejectCb],
+    ]] : [];
+
+    return chSend($stream, [
+        'user'    => chUser($uid, $uname, ''),
+        'uid'     => (int)$uid,
+        'product' => (string)$productName,
+        'qty'     => fmtNum((float)$qty),
+        'amount'  => fmtNum((float)$amount),
+        'code'    => (string)$code,
+        'section' => $label,
+        'icon'    => $icon,
+        'app'     => (string)$app,
+    ], $photo, $rows);
+}
+
+/**
  * یک فروش انجام شد — می‌رود روی کانالِ همان بخش.
  * $app: 'tg' یا 'num' برای مینی‌اپ‌ها، خالی برای محصول‌های خودِ ربات.
  */

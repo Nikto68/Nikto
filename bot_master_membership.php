@@ -4848,6 +4848,22 @@ function notifyAdminOrder($orderId) {
         ['text' => UT('reject'),   'callback_data' => 'ano_' . $o['id']],
     ]];
 
+    // 📡 محصولِ عادی (نه شارژ کیف‌پول) هم اگر کانالِ گزارشِ همون بخش وصل
+    // باشه، رسیدش همون‌جا میره — مثلِ رسیدِ شارژ، نه چتِ خصوصیِ ادمین
+    if ($o['type'] !== 'topup' && function_exists('chOrderReceipt')) {
+        $p = Product::get($o['product_id']);
+        if ($p) {
+            $sentToChannel = chOrderReceipt(
+                (int)$o['user_id'], (string)($o['username'] ?? ''),
+                trim(($p['emoji'] ?? '') . ' ' . $p['name']),
+                (float)(($m['qty'] ?? 0) ?: 1), (float)$o['amount'], $o['id'],
+                'aok_' . $o['id'], 'ano_' . $o['id'],
+                $o['receipt_type'] === 'photo' ? $o['receipt'] : null
+            );
+            if ($sentToChannel) return;
+        }
+    }
+
     if ($o['receipt_type'] === 'photo') {
         tg(BOT_TOKEN, 'sendPhoto', [
             'chat_id' => ADMIN_ID, 'photo' => $o['receipt'],

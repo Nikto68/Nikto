@@ -3409,6 +3409,19 @@ function maNotifyAdmin($o, $head = '🆕 <b>سفارش تازه مینی‌اپ<
         $rows[] = [btnCb('📤 تحویل سفارش', 'madlv_' . $o['id'], 'link')];
     }
 
+    // 📡 رسیدِ کارت‌به‌کارتِ در انتظارِ تایید هم اگر کانالِ گزارشِ همین
+    // مینی‌اپ وصل باشه، همون‌جا میره — مثلِ رسیدِ شارژِ کیف‌پول
+    if ($o['status'] === MaOrder::REVIEW && function_exists('chOrderReceipt')) {
+        $sentToChannel = chOrderReceipt(
+            (int)$o['user_id'], (string)($o['username'] ?? ''), maOrderTitle($o),
+            (float)($o['qty'] ?? 1), (float)$o['total'], $o['id'],
+            'maok_' . $o['id'], 'mano_' . $o['id'],
+            $o['receipt_type'] === 'photo' ? $o['receipt'] : null,
+            (string)($o['app'] ?? '')
+        );
+        if ($sentToChannel) return;
+    }
+
     if ($o['receipt_type'] === 'photo') {
         tg(BOT_TOKEN, 'sendPhoto', [
             'chat_id' => ADMIN_ID, 'photo' => $o['receipt'],
