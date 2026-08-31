@@ -125,15 +125,16 @@ function renderLogin($error) { ?>
 <title>ورود — پنل مدیریت</title><style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{min-height:100vh;display:grid;place-items:center;font-family:system-ui,'Segoe UI',Tahoma,sans-serif;
-background:linear-gradient(135deg,#667eea,#764ba2);padding:20px}
-.card{background:#fff;padding:40px 32px;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:100%;max-width:380px;text-align:center}
-h1{font-size:22px;margin-bottom:6px;color:#2d3748}
-p.sub{color:#718096;font-size:13px;margin-bottom:24px}
-input{width:100%;padding:14px 16px;border:2px solid #e2e8f0;border-radius:12px;font-size:15px;font-family:inherit;margin-bottom:14px;text-align:center}
-input:focus{outline:none;border-color:#667eea}
-button{width:100%;padding:14px;border:0;border-radius:12px;background:linear-gradient(135deg,#667eea,#764ba2);
+background:#111;padding:20px}
+.card{background:#fff;padding:40px 32px;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:380px;text-align:center;border:1px solid #222}
+h1{font-size:22px;margin-bottom:6px;color:#111}
+p.sub{color:#666;font-size:13px;margin-bottom:24px}
+input{width:100%;padding:14px 16px;border:1.5px solid #ddd;border-radius:10px;font-size:15px;font-family:inherit;margin-bottom:14px;text-align:center}
+input:focus{outline:none;border-color:#111}
+button{width:100%;padding:14px;border:1.5px solid #111;border-radius:10px;background:#111;
 color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit}
-.err{background:#fed7d7;color:#c53030;padding:10px;border-radius:10px;font-size:13px;margin-bottom:14px}
+button:hover{opacity:.85}
+.err{background:#fbeaea;color:#7a2323;border:1px solid #eec3c3;padding:10px;border-radius:10px;font-size:13px;margin-bottom:14px}
 </style></head><body>
 <form class="card" method="post">
   <div style="font-size:44px">👑</div><h1>پنل مدیریت</h1><p class="sub">فروشگاه تلگرام</p>
@@ -975,6 +976,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ---- ربات‌ها ----
+    if ($a === 'locks_rebalance') {
+        $n = 0;
+        foreach (Campaign::all() as $c) {
+            if (empty($c['active']) || Campaign::isDone($c)) continue;
+            mutate('campaigns', function (&$a2) use ($c) { if (isset($a2[$c['id']])) $a2[$c['id']]['bots'] = []; });
+            assignCampaignBots($c['id']);
+            $n++;
+        }
+        go("✅ {$n} کمپین دوباره بین ربات‌ها پخش شد.");
+    }
     if ($a === 'add_bot') {
         $token = trim($_POST['token'] ?? '');
         if (!preg_match('/^\d{6,}:[A-Za-z0-9_\-]{30,}$/', $token)) go('فرمت توکن درست نیست.', 'err');
@@ -1191,81 +1202,107 @@ function oBadge($s) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>پنل مدیریت فروشگاه</title>
 <style>
+:root{--bg:#f2f2f2;--panel:#ffffff;--ink:#111111;--ink-soft:#4a4a4a;--muted:#8a8a8a;
+--line:#dcdcdc;--line-soft:#ececec}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,'Segoe UI',Tahoma,sans-serif;background:#f0f2f8;color:#2d3748;padding-bottom:60px}
+body{font-family:system-ui,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:60px}
 a{color:inherit;text-decoration:none}
-header{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:24px 20px}
+header{background:#111;color:#fff;padding:16px 20px;border-bottom:1px solid #000}
 .wrap{max-width:1200px;margin:0 auto;padding:0 16px}
-header h1{font-size:23px}
+header h1{font-size:19px;font-weight:800}
 header .row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
-.logout{background:rgba(255,255,255,.2);padding:8px 16px;border-radius:10px;font-size:14px}
-nav{background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.06);position:sticky;top:0;z-index:10;overflow-x:auto}
-nav .wrap{display:flex;gap:2px}
-nav a{padding:14px 15px;font-size:13.5px;font-weight:600;color:#718096;border-bottom:3px solid transparent;white-space:nowrap}
-nav a.on{color:#667eea;border-bottom-color:#667eea}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:22px 0}
-.stat{background:#fff;padding:20px;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.06)}
-.stat .n{font-size:27px;font-weight:800;background:linear-gradient(135deg,#667eea,#764ba2);
--webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.stat .l{color:#718096;font-size:12.5px;margin-top:5px}
-.card{background:#fff;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.06);margin-bottom:20px;overflow:hidden}
-.card h2{padding:17px 20px;font-size:15.5px;border-bottom:1px solid #edf2f7}
-.card .body{padding:20px}
+.logout{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);padding:8px 16px;border-radius:8px;font-size:13px}
+.logout:hover{background:rgba(255,255,255,.2)}
+
+/* ---------- shell: right sidebar + content (folder-grouped nav) ---------- */
+.nav-toggle-cb{display:none}
+.nav-toggle-btn{display:none}
+.nav-backdrop{display:none}
+.shell{display:flex;align-items:flex-start;max-width:1320px;margin:0 auto}
+.sidebar{width:225px;flex:0 0 225px;background:#fff;border-left:1px solid var(--line);
+min-height:calc(100vh - 57px);position:sticky;top:0;align-self:flex-start;overflow-y:auto}
+.sidebar-inner{padding:14px 10px}
+.nav-folder{margin-bottom:14px}
+.nav-folder-title{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;
+letter-spacing:.4px;padding:6px 10px 4px}
+.sidebar a{display:block;padding:9px 12px;border-radius:8px;font-size:13.5px;font-weight:600;
+color:var(--ink-soft);margin-bottom:2px}
+.sidebar a:hover{background:#f0f0f0}
+.sidebar a.on{background:#111;color:#fff}
+.content{flex:1;min-width:0;padding:18px 16px}
+.content .wrap{max-width:1000px;margin:0;padding:0}
+@media(max-width:900px){
+  .nav-toggle-btn{display:block;margin:10px 16px;padding:10px 14px;background:#111;color:#fff;
+    border-radius:8px;font-weight:700;font-size:13.5px;text-align:center;cursor:pointer;
+    max-width:1200px;margin-left:auto;margin-right:auto}
+  .sidebar{position:fixed;top:0;right:0;height:100vh;z-index:50;transform:translateX(100%);
+    transition:transform .22s ease;box-shadow:-6px 0 24px rgba(0,0,0,.18);width:250px}
+  .nav-toggle-cb:checked ~ .shell .sidebar{transform:translateX(0)}
+  .nav-toggle-cb:checked ~ .nav-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+  .content{padding:6px 16px}
+}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:0 0 20px}
+.stat{background:#fff;padding:18px;border-radius:12px;border:1px solid var(--line)}
+.stat .n{font-size:26px;font-weight:800;color:#111}
+.stat .l{color:var(--muted);font-size:12.5px;margin-top:5px}
+.card{background:#fff;border-radius:12px;border:1px solid var(--line);margin-bottom:18px;overflow:hidden}
+.card h2{padding:15px 18px;font-size:14.5px;font-weight:800;border-bottom:1px solid var(--line-soft);background:#fafafa}
+.card .body{padding:18px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:13px}
-label{display:block;font-size:12.5px;font-weight:600;color:#4a5568;margin-bottom:5px}
-input,select,textarea{width:100%;padding:10px 12px;border:2px solid #e2e8f0;border-radius:10px;
-font-size:13.5px;font-family:inherit;background:#fff}
-input:focus,select:focus,textarea:focus{outline:none;border-color:#667eea}
+label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:5px}
+input,select,textarea{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;
+font-size:13.5px;font-family:inherit;background:#fff;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#111}
 textarea{min-height:90px;resize:vertical;line-height:1.9}
-.btn{display:inline-block;padding:10px 18px;border:0;border-radius:10px;font-size:13.5px;font-weight:700;
-cursor:pointer;font-family:inherit;color:#fff;background:#667eea}
-.btn:hover{opacity:.9}
-.btn.g{background:#38a169}.btn.r{background:#e53e3e}.btn.b{background:#3182ce}
+.btn{display:inline-block;padding:10px 18px;border:1.5px solid #111;border-radius:8px;font-size:13.5px;font-weight:700;
+cursor:pointer;font-family:inherit;color:#fff;background:#111}
+.btn:hover{opacity:.85}
+.btn.g{background:#2f7a44;border-color:#2f7a44}.btn.r{background:#b83a3a;border-color:#b83a3a}.btn.b{background:#33587a;border-color:#33587a}
 .btn.sm{padding:6px 12px;font-size:12px}
-.btn.ghost{background:#edf2f7;color:#4a5568}
+.btn.ghost{background:#fff;color:#111;border-color:var(--line)}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#f7fafc;padding:11px;text-align:right;font-weight:700;color:#4a5568;white-space:nowrap}
-td{padding:11px;border-top:1px solid #edf2f7;vertical-align:middle}
+th{background:#fafafa;padding:11px;text-align:right;font-weight:700;color:var(--ink-soft);white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:11px;border-top:1px solid var(--line-soft);vertical-align:middle}
 .scroll{overflow-x:auto}
-.badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:700;white-space:nowrap}
-.badge.green{background:#c6f6d5;color:#22543d}.badge.amber{background:#feebc8;color:#7b341e}
-.badge.red{background:#fed7d7;color:#742a2a}.badge.gray{background:#e2e8f0;color:#4a5568}
-.flash{padding:13px 17px;border-radius:12px;margin:18px 0;font-size:13.5px;font-weight:600}
-.flash.ok{background:#c6f6d5;color:#22543d}.flash.err{background:#fed7d7;color:#742a2a}
-.flash.warn{background:#feebc8;color:#7b341e}
-.empty{text-align:center;padding:32px;color:#a0aec0;font-size:13.5px}
-code{background:#edf2f7;padding:2px 6px;border-radius:5px;font-size:11.5px;direction:ltr;display:inline-block}
-.muted{color:#718096;font-size:12px}
+.badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:700;white-space:nowrap;border:1px solid var(--line)}
+.badge.green{background:#eaf6ee;color:#245432;border-color:#bfe2c9}.badge.amber{background:#fdf3e3;color:#7b4e12;border-color:#f0d9ac}
+.badge.red{background:#fbeaea;color:#7a2323;border-color:#eec3c3}.badge.gray{background:#f0f0f0;color:#444;border-color:var(--line)}
+.flash{padding:13px 17px;border-radius:10px;margin:16px 0;font-size:13.5px;font-weight:600;border:1px solid var(--line)}
+.flash.ok{background:#eaf6ee;color:#245432;border-color:#bfe2c9}.flash.err{background:#fbeaea;color:#7a2323;border-color:#eec3c3}
+.flash.warn{background:#fdf3e3;color:#7b4e12;border-color:#f0d9ac}
+.empty{text-align:center;padding:32px;color:var(--muted);font-size:13.5px}
+code{background:#f0f0f0;padding:2px 6px;border-radius:5px;font-size:11.5px;direction:ltr;display:inline-block}
+.muted{color:var(--muted);font-size:12px}
 .inline{display:inline}
 .brow8{grid-template-columns:44px 1fr 96px 52px 90px 52px 52px 40px!important;gap:7px!important}
 .brow{display:grid;grid-template-columns:44px 1fr 90px 70px 60px 46px;gap:8px;align-items:center;
-padding:10px;border:1px solid #edf2f7;border-radius:10px;margin-bottom:8px}
+padding:10px;border:1px solid var(--line-soft);border-radius:8px;margin-bottom:8px}
 .brow input,.brow select{padding:8px;font-size:13px}
-.prev{background:#e8f0fe;border-radius:12px;padding:14px;margin-top:12px}
-.pbtn{background:#fff;border-radius:9px;padding:10px;text-align:center;font-size:13.5px;
-margin:4px 0;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.prev{background:#f7f7f7;border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px}
+.pbtn{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center;font-size:13.5px;margin:4px 0}
 .pgrid{display:flex;gap:6px}
 .pgrid .pbtn{flex:1;margin:0}
 .srow{display:grid;grid-template-columns:40px 90px 100px 60px 1fr 1.4fr;gap:8px;align-items:center;
-padding:9px;border:1px solid #edf2f7;border-radius:10px;margin-bottom:8px}
+padding:9px;border:1px solid var(--line-soft);border-radius:8px;margin-bottom:8px}
 .srow input,.srow select{padding:8px;font-size:12.5px}
 .tgrid{display:grid;gap:14px}
-.bar{height:9px;background:#edf2f7;border-radius:20px;overflow:hidden}
-.bar-in{height:100%;background:linear-gradient(90deg,#667eea,#38a169);border-radius:20px;transition:width .3s}
-pre.code{background:#2d3748;color:#e2e8f0;padding:13px;border-radius:10px;font-size:11.5px;
+.bar{height:9px;background:#ececec;border-radius:20px;overflow:hidden}
+.bar-in{height:100%;background:#111;border-radius:20px;transition:width .3s}
+pre.code{background:#111;color:#eee;padding:13px;border-radius:8px;font-size:11.5px;
 line-height:1.75;overflow-x:auto;direction:ltr;text-align:left;white-space:pre;margin:0}
 details summary::-webkit-details-marker{display:none}
-.note{background:#e8f0fe;border-right:4px solid #667eea;border-radius:10px;padding:12px 14px;
-margin-bottom:14px;font-size:12.5px;line-height:1.95;color:#2d3748}
+.note{background:#f5f5f5;border-right:4px solid #111;border-radius:8px;padding:12px 14px;
+margin-bottom:14px;font-size:12.5px;line-height:1.95;color:#222}
 .tbar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
-.tbar button{background:#edf2f7;border:0;border-radius:7px;padding:5px 10px;font-size:11.5px;
-cursor:pointer;font-family:inherit;color:#4a5568}
-.tbar button:hover{background:#dde5ef}
-.pbtn.pb-b{background:#3182ce;color:#fff}
-.pbtn.pb-g{background:#38a169;color:#fff}
-.pbtn.pb-r{background:#e53e3e;color:#fff}
+.tbar button{background:#f0f0f0;border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:11.5px;
+cursor:pointer;font-family:inherit;color:var(--ink-soft)}
+.tbar button:hover{background:#e5e5e5}
+.pbtn.pb-b{background:#33587a;color:#fff;border-color:#33587a}
+.pbtn.pb-g{background:#2f7a44;color:#fff;border-color:#2f7a44}
+.pbtn.pb-r{background:#b83a3a;color:#fff;border-color:#b83a3a}
 @media(max-width:900px){.brow,.brow8,.srow{grid-template-columns:1fr 1fr!important;gap:6px!important}}
-@media(max-width:640px){.card .body{padding:15px}header h1{font-size:18px}}
+@media(max-width:640px){.card .body{padding:15px}header h1{font-size:16px}}
 </style>
 </head>
 <body>
@@ -1275,7 +1312,6 @@ cursor:pointer;font-family:inherit;color:#4a5568}
   <a class="logout" href="?logout=1">🚪 خروج</a>
 </div></header>
 
-<nav><div class="wrap">
 <?php
 $tabs = [
   'dashboard' => '📊 داشبورد',
@@ -1292,12 +1328,32 @@ $tabs = [
   'auto'      => '⚡ خودکارسازی',
   'settings'  => '⚙️ تنظیمات',
 ];
-foreach ($tabs as $k => $l): ?>
-  <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>"><?= $l ?></a>
-<?php endforeach; ?>
-</div></nav>
+// 📁 فولدربندیِ تب‌ها — هر دسته زیرِ عنوانِ خودش تو سایدبار
+$tabFolders = [
+  'نمای کلی'  => ['dashboard'],
+  'فروش'      => ['orders', 'products', 'profit'],
+  'کاربران'   => ['users', 'referral', 'support'],
+  'زیرساخت'   => ['bots', 'channels', 'campaigns', 'partners'],
+  'سیستم'     => ['auto', 'settings'],
+];
+?>
+<input type="checkbox" id="navToggle" class="nav-toggle-cb">
+<label for="navToggle" class="nav-toggle-btn">☰ منو</label>
+<label for="navToggle" class="nav-backdrop"></label>
 
-<div class="wrap">
+<div class="shell">
+  <aside class="sidebar"><div class="sidebar-inner">
+    <?php foreach ($tabFolders as $folderTitle => $folderTabs): ?>
+      <div class="nav-folder">
+        <div class="nav-folder-title"><?= h($folderTitle) ?></div>
+        <?php foreach ($folderTabs as $k): ?>
+          <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>"><?= $tabs[$k] ?></a>
+        <?php endforeach; ?>
+      </div>
+    <?php endforeach; ?>
+  </div></aside>
+
+  <main class="content"><div class="wrap">
 <?php if ($flash): ?>
   <div class="flash <?= h($flash['type']) ?>" style="line-height:2">
     <?= nl2br(strip_tags((string)$flash['msg'], '<code><b>')) ?>
@@ -2149,6 +2205,44 @@ foreach ($tabs as $k => $l): ?>
 
 <?php // ================= ربات‌های اپلودر ================= ?>
 <?php elseif ($tab === 'bots'): ?>
+  <?php
+    $lkActiveBots = array_filter($bots, fn($b) => !empty($b['active']));
+    $lkCamps = [];
+    foreach (Campaign::all() as $c) if (!empty($c['active']) && !Campaign::isDone($c)) $lkCamps[] = $c;
+  ?>
+  <div class="card"><h2>🔒 قفل‌های عضویت اجباری</h2><div class="body">
+    <div class="note">
+      هر کانال روی <b><?= (int)BOTS_PER_CAMPAIGN ?> ربات</b> قفل می‌شود، و هر کاربر حداکثر
+      <b><?= (int)MAX_JOIN_PER_BOT ?> کانال</b> می‌بیند.
+    </div>
+    <?php if (!$lkActiveBots): ?>
+      <div class="empty">هیچ ربات اپلودرِ فعالی ندارید — تا ربات اضافه نکنید، هیچ کانالی قفل نمی‌شود.</div>
+    <?php elseif (!$lkCamps): ?>
+      <div class="muted">الان کمپین فعالی نیست. 🤖 ربات‌ها: <b><?= count($lkActiveBots) ?></b></div>
+    <?php else: ?>
+      <table>
+        <tr><th>ربات</th><th>تعداد کانال</th></tr>
+        <?php foreach ($lkActiveBots as $b): $mine = 0;
+          foreach ($lkCamps as $c) { $on = $c['bots'] ?? []; if (!$on || in_array($b['id'], $on, true)) $mine++; }
+          $fixed = count(Channels::all($b['id']));
+          $tot = $mine + $fixed;
+        ?>
+          <tr>
+            <td>@<?= h($b['username']) ?></td>
+            <td><?= $tot > MAX_JOIN_PER_BOT ? '<span class="badge red">⚠️ ' . $tot . '</span>' : $tot ?>
+              <?= $fixed ? '<span class="muted">(' . $fixed . ' ثابت)</span>' : '' ?></td>
+          </tr>
+        <?php endforeach; ?>
+      </table>
+      <div class="muted" style="margin-top:8px">📣 کمپین فعال: <b><?= count($lkCamps) ?></b></div>
+    <?php endif; ?>
+    <form method="post" style="margin-top:12px" onsubmit="return confirm('کمپین‌های فعال دوباره بین ربات‌ها پخش شوند؟')">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="bots">
+      <input type="hidden" name="action" value="locks_rebalance">
+      <button class="btn b">🔄 پخش دوباره بین ربات‌ها</button>
+    </form>
+  </div></div>
+
   <div class="card"><h2>➕ افزودن ربات اپلودر</h2><div class="body">
     <div class="note">
       ربات‌های اپلودر <b>لازم نیست در هیچ کانالی عضو یا ادمین باشند</b> —
@@ -3281,6 +3375,7 @@ def join_gate(user_id):
   </div></div>
 <?php endif; ?>
 
+  </div></main>
 </div>
 
 <script>
