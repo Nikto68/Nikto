@@ -1108,6 +1108,39 @@ $curBot = $_GET['bot'] ?? '';
  * متنیِ ساده برای واردکردنِ دستیِ شماره — تا وقتی هنوز لیستی نگرفته‌ای
  * هم چیزی خراب نشود.
  */
+/** سرویس‌های کش‌شده به شکلِ [{v: شناسه, t: برچسب}] — برای رندرِ سلکت و فیلترِ جاوااسکریپتی هر دو */
+function smmOptionsList($list) {
+    $out = [];
+    foreach ($list as $s) {
+        $sid = (string)($s['service'] ?? '');
+        if ($sid === '') continue;
+        $out[] = ['v' => $sid, 't' => trim(($s['name'] ?? 'سرویس ' . $sid) . ' — ' . ($s['rate'] ?? '?') . '/1000')];
+    }
+    return $out;
+}
+
+/**
+ * سلکتِ قابلِ‌جستجوی یک سرویسِ پنل. پنل‌های SMM معمولاً هزاران سرویس (همه‌ی
+ * پلتفرم‌ها) دارند، نه فقط بوستِ تلگرام — بدونِ جستجو، پیداکردنِ یک موردِ
+ * خاص (مثلاً «بوستِ ۱۴ روزه») توی یک سلکتِ چند-هزارتایی عملاً غیرممکنه.
+ */
+function smmSelectHtml($name, $opts, $current, $emptyLabel = '— دستی نیست، وصل نکن —') {
+    echo '<input type="text" class="smm-search" placeholder="🔎 جستجو در سرویس‌ها (اسم یا شماره)…" ' .
+         'oninput="smmFilterSelect(this)" style="margin-bottom:6px">';
+    echo '<select name="' . h($name) . '" data-options="' . h(json_encode($opts, JSON_UNESCAPED_UNICODE)) . '" ' .
+         'data-empty="' . h($emptyLabel) . '" style="max-width:100%">';
+    echo '<option value="">' . h($emptyLabel) . '</option>';
+    foreach ($opts as $o) {
+        echo '<option value="' . h($o['v']) . '"' . ((string)$current === (string)$o['v'] ? ' selected' : '') . '>' .
+             h($o['t']) . '</option>';
+    }
+    // اگر شماره‌ی فعلی توی لیستِ تازه نبود (مثلا از پنلی دیگر یا حذف شده)، گمش نکن
+    if ($current !== '' && !in_array((string)$current, array_map(fn($o) => (string)$o['v'], $opts), true)) {
+        echo '<option value="' . h($current) . '" selected>سرویسِ فعلی (' . h($current) . ') — دیگر در لیست نیست</option>';
+    }
+    echo '</select>';
+}
+
 function smmServiceField($current, $autoOn = false) {
     $list = function_exists('smmServicesCached') ? smmServicesCached() : [];
     if (!$list) {
@@ -1115,19 +1148,7 @@ function smmServiceField($current, $autoOn = false) {
         echo '<small class="muted">لیستِ سرویس‌ها هنوز گرفته نشده — بالای همین تب، «🔄 بروزرسانی لیست سرویس‌ها» را بزن. ' .
              'تا وقتی نگرفتی، می‌تونی همین‌جا شماره‌ی سرویس رو دستی از پنلِ خودت بنویسی.</small>';
     } else {
-        echo '<select name="smm_service"><option value="">— دستی نیست، وصل نکن —</option>';
-        foreach ($list as $s) {
-            $sid = (string)($s['service'] ?? '');
-            if ($sid === '') continue;
-            $label = trim(($s['name'] ?? 'سرویس ' . $sid) . ' — ' . ($s['rate'] ?? '?') . '/1000');
-            echo '<option value="' . h($sid) . '"' . ((string)$current === $sid ? ' selected' : '') . '>' .
-                 h($label) . '</option>';
-        }
-        // اگر شماره‌ی فعلی توی لیستِ تازه نبود (مثلا از پنلی دیگر یا حذف شده)، گمش نکن
-        if ($current !== '' && !in_array($current, array_map(fn($s) => (string)($s['service'] ?? ''), $list), true)) {
-            echo '<option value="' . h($current) . '" selected>سرویسِ فعلی (' . h($current) . ') — دیگر در لیست نیست</option>';
-        }
-        echo '</select>';
+        smmSelectHtml('smm_service', smmOptionsList($list), $current);
     }
     // ⚠️ این چک‌باکس باید همیشه دیده بشه — حتی وقتی لیستِ سرویس‌ها هنوز نیومده و بالا
     // فقط یک اینپوتِ متنی داریم؛ وگرنه ادمین راهی برای روشن‌کردنِ قیمتِ خودکار نداره.
@@ -1652,17 +1673,8 @@ foreach ($tabs as $k => $l): ?>
                     $spCur = (string)($sp['smm_service'] ?? '');
                   ?>
                   <?php if ($svcList): ?>
-                  <select name="spsmm[<?= h($sp['id']) ?>]" style="max-width:100%">
-                    <option value="">— مشترک با بقیه، ضریبِ بالا حساب می‌شود —</option>
-                    <?php foreach ($svcList as $s): $ssid = (string)($s['service'] ?? ''); if ($ssid === '') continue; ?>
-                      <option value="<?= h($ssid) ?>" <?= $spCur === $ssid ? 'selected' : '' ?>>
-                        <?= h(trim(($s['name'] ?? 'سرویس ' . $ssid) . ' — ' . ($s['rate'] ?? '?') . '/1000')) ?>
-                      </option>
-                    <?php endforeach; ?>
-                    <?php if ($spCur !== '' && !in_array($spCur, array_map(fn($s) => (string)($s['service'] ?? ''), $svcList), true)): ?>
-                      <option value="<?= h($spCur) ?>" selected>سرویسِ فعلی (<?= h($spCur) ?>) — دیگر در لیست نیست</option>
-                    <?php endif; ?>
-                  </select>
+                    <?php smmSelectHtml('spsmm[' . $sp['id'] . ']', smmOptionsList($svcList), $spCur,
+                        '— مشترک با بقیه، ضریبِ بالا حساب می‌شود —'); ?>
                   <?php else: ?>
                     <input name="spsmm[<?= h($sp['id']) ?>]" value="<?= h($spCur) ?>" placeholder="خالی = مشترک"
                            style="direction:ltr">
@@ -3275,6 +3287,33 @@ function resetTpl(id, text) {
   if (!el) return;
   el.value = text;
   el.focus();
+}
+// فیلترِ زنده‌ی سلکت‌های سرویسِ پنلِ SMM — پنل‌ها معمولاً هزاران سرویس دارند،
+// پس سلکت از رویِ data-options دوباره ساخته می‌شود تا فقط موارد منطبق بمانند.
+function smmFilterSelect(input) {
+  var sel = input.nextElementSibling;
+  if (!sel || sel.tagName !== 'SELECT') return;
+  var opts;
+  try { opts = JSON.parse(sel.getAttribute('data-options') || '[]'); } catch (e) { opts = []; }
+  var q = input.value.trim().toLowerCase();
+  var cur = sel.value;
+  var html = '<option value="">' + (sel.getAttribute('data-empty') || '') + '</option>';
+  var foundCur = (cur === '');
+  opts.forEach(function (o) {
+    var v = String(o.v), t = String(o.t);
+    if (q !== '' && t.toLowerCase().indexOf(q) === -1 && v.indexOf(q) === -1) return;
+    if (v === cur) foundCur = true;
+    html += '<option value="' + v.replace(/"/g, '&quot;') + '"' + (v === cur ? ' selected' : '') + '>' +
+            t.replace(/</g, '&lt;') + '</option>';
+  });
+  // انتخابِ فعلی هیچ‌وقت با فیلترکردن گم نشود، حتی اگر با متنِ جستجو جور نباشد
+  if (!foundCur) {
+    var match = opts.find(function (o) { return String(o.v) === cur; });
+    html += '<option value="' + cur.replace(/"/g, '&quot;') + '" selected>' +
+            (match ? String(match.t).replace(/</g, '&lt;') : 'سرویسِ فعلی (' + cur + ') — دیگر در لیست نیست') +
+            '</option>';
+  }
+  sel.innerHTML = html;
 }
 function wrapSel(id, open, close) {
   var el = document.getElementById(id);
