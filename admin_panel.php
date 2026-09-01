@@ -943,6 +943,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('چیدمان محصولات ذخیره شد.');
     }
 
+    // ---- 🧲 چیدمانِ دستیِ محصولات: گریدِ ۷ ردیف × ۳ دکمه ----
+    // هر خانه یعنی یک (row, order) مشخص. اول همان ۲۱ خانه از هر مالکِ
+    // قبلی‌شان پاک می‌شود، بعد مقدارهای تازه از فرم روی‌شان می‌نشیند —
+    // این‌طور جابه‌جایی، پاک‌کردن و جای‌گزینی همه با یک قانون ساده جواب می‌دهند.
+    if ($a === 'save_product_grid') {
+        $grid = (array)($_POST['grid'] ?? []);
+        mutate('products', function (&$all) use ($grid) {
+            for ($r = 1; $r <= 7; $r++) {
+                for ($c = 1; $c <= 3; $c++) {
+                    $ord = $r * 10 + $c;
+                    foreach ($all as $pid => &$p) {
+                        if ((int)($p['row'] ?? 0) === $r && (int)($p['order'] ?? 0) === $ord) $p['row'] = 0;
+                    }
+                    unset($p);
+                }
+            }
+            for ($r = 1; $r <= 7; $r++) {
+                for ($c = 1; $c <= 3; $c++) {
+                    $pid = trim((string)($grid[$r][$c] ?? ''));
+                    if ($pid === '' || !isset($all[$pid])) continue;
+                    $all[$pid]['row']   = $r;
+                    $all[$pid]['order'] = $r * 10 + $c;
+                }
+            }
+        });
+        go('چیدمانِ دستیِ محصولات ذخیره شد.');
+    }
+
     // ---- دکمه سفارشی ----
 
     // ---- شرکا ----
@@ -1631,6 +1659,18 @@ padding:10px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;ba
 .pbtn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center;font-size:13.5px;margin:4px 0;color:var(--ink)}
 .pgrid{display:flex;gap:6px}
 .pgrid .pbtn{flex:1;margin:0}
+
+/* ---------- 🧲 گریدِ چیدمانِ دستی — ۷ ردیف × ۳ خانه‌ی شیشه‌ای ---------- */
+.layoutgrid{display:flex;flex-direction:column;gap:8px}
+.layoutgrid .lrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.gridslot{position:relative}
+.gridslot select{appearance:none;-webkit-appearance:none;width:100%;padding:14px 10px;border-radius:12px;
+  border:1.5px dashed var(--line);background:var(--panel-alt);color:var(--muted);
+  font-family:inherit;font-size:12.5px;font-weight:800;text-align:center;text-align-last:center;
+  cursor:pointer;transition:.15s}
+.gridslot select.filled{border-style:solid;border-color:var(--blue);background:linear-gradient(135deg,var(--blue),#4f9cf0);color:#fff}
+.gridslot select:focus{outline:none;box-shadow:0 0 0 3px rgba(47,125,225,.25)}
+@media(max-width:640px){.layoutgrid .lrow{gap:5px}.gridslot select{padding:11px 4px;font-size:11px}}
 .srow{display:grid;grid-template-columns:40px 90px 100px 60px 1fr 1.4fr;gap:8px;align-items:center;
 padding:9px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--panel-alt)}
 .srow input,.srow select{padding:8px;font-size:12.5px}
@@ -2395,7 +2435,53 @@ $tabFolders = [
     </form>
   </div></div>
 
-  <div class="card"><h2>📐 چیدمان دکمه‌های محصول</h2><div class="body">
+  <?php
+    // 🧲 خانه‌ی اشغال‌شده‌ی هر محصول را از (row, order) خودش پیدا می‌کنیم —
+    // همان دو فیلدی که هر محصول از قبل دارد، فقط این‌جا به‌جای عدد تایپ‌کردن
+    // با کلیک روی خانه‌ی گرید تنظیم می‌شوند.
+    $gridOcc = [];
+    foreach ($products as $pp) {
+        $gr = (int)($pp['row'] ?? 0); $go = (int)($pp['order'] ?? 0);
+        if ($gr >= 1 && $gr <= 7 && $go >= $gr * 10 + 1 && $go <= $gr * 10 + 3) $gridOcc[$gr][$go - $gr * 10] = $pp['id'];
+    }
+  ?>
+  <div class="card"><h2>🧲 چیدمانِ دستی — گریدِ ۷×۳</h2><div class="body">
+    <div class="note">
+      هر خانه یک جای دکمه است. روی «+» بزنید و محصول موردنظر را انتخاب کنید —
+      اگر یک محصول تنها عضوِ یک ردیف باشد، همان‌جا (وسطِ آن ردیف) تنها می‌نشیند؛
+      اگر دو یا سه محصول را در خانه‌های همان ردیف بگذارید، درست کنارِ هم می‌آیند.
+      برای خالی‌کردن یک خانه، دوباره روی آن بزنید و «+» را انتخاب کنید.
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
+      <input type="hidden" name="action" value="save_product_grid">
+      <div class="layoutgrid">
+        <?php for ($gr = 1; $gr <= 7; $gr++): ?>
+        <div class="lrow">
+          <?php for ($gc = 1; $gc <= 3; $gc++): $cur = $gridOcc[$gr][$gc] ?? ''; ?>
+          <div class="gridslot">
+            <select name="grid[<?= $gr ?>][<?= $gc ?>]" onchange="gridSlotChanged(this)" class="<?= $cur !== '' ? 'filled' : '' ?>">
+              <option value="">+</option>
+              <?php foreach ($products as $pp): ?>
+                <option value="<?= h($pp['id']) ?>" <?= $cur === $pp['id'] ? 'selected' : '' ?>>
+                  <?= h(trim(($pp['emoji'] ?? '') . ' ' . $pp['name'] . ' — ' . fmtNum($pp['price']))) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <?php endfor; ?>
+        </div>
+        <?php endfor; ?>
+      </div>
+      <div style="margin-top:14px"><button class="btn g">💾 ذخیره چیدمانِ دستی</button></div>
+    </form>
+    <?php if (!$products): ?><div class="empty"><div class="ic">🧲</div>اول یک محصول بسازید، بعد اینجا بچینیدش.</div><?php endif; ?>
+  </div></div>
+
+  <div class="card"><h2>📐 چیدمانِ خودکار (برای محصول‌هایی که دستی جایشان را نگذاشته‌اید)</h2><div class="body">
+    <div class="note" style="margin:0 0 12px">
+      این الگو فقط برای محصولی اجرا می‌شود که در گریدِ بالا جایش را نگذاشته‌اید (یعنی «ردیف»‌اش هنوز صفر است).
+    </div>
     <form method="post" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
       <input type="hidden" name="action" value="save_product_layout">
@@ -4371,6 +4457,11 @@ document.getElementById('cmOk').onclick = function () {
   this.disabled = true; this.textContent = '🔄 در حال انجام...';
   _cmForm.submit();
 };
+
+// ---- 🧲 گریدِ چیدمانِ دستی — رنگِ خانه بسته به خالی/پر بودن ----
+function gridSlotChanged(sel) {
+  sel.classList.toggle('filled', sel.value !== '');
+}
 
 // ---- 🔎 جستجوی زنده‌ی محصولات — فقط نمایش/عدم‌نمایش، بدون درخواستِ تازه ----
 function filterProducts(q) {
