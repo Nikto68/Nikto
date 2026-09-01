@@ -193,6 +193,28 @@ function checkCsrf() {
     }
 }
 
+/**
+ * 🔐 متنِ فلش را امن می‌کند — قبلا با strip_tags($s, '<code><b>') رندر
+ * می‌شد، که برچسب‌های مجاز را با هر ویژگی‌ای که داشتند عینا رد می‌کرد
+ * (strip_tags فقط اسمِ تگ را چک می‌کند، نه صفاتش). خیلی از این پیام‌ها
+ * عنوانِ کانال/گروهِ تلگرام را عینا داخلشان می‌گذارند — و برخلافِ
+ * یوزرنیم، عنوانِ کانال هیچ محدودیتِ نویسه‌ای ندارد. یعنی یک عنوانِ
+ * کانالِ مخرب مثلِ «<b onmouseover="...">‌» با اضافه‌کردنِ همان کانال
+ * به فهرستِ عضویتِ اجباری، مستقیم توی جلسه‌ی ادمین اجرا می‌شد.
+ *
+ * اینجا اول همه‌چیز escape می‌شود، بعد فقط همین چهار برچسبِ ساده و
+ * بدونِ‌هیچ‌ویژگی دوباره باز می‌شوند — همان‌هایی که خودِ این فایل عمداً
+ * برای تاکید/کد می‌گذارد. حتی اگر متنِ مخرب دقیقاً همین رشته‌ها را
+ * داشته باشد، حداکثر بولد/کد نشان داده می‌شود، نه اسکریپت.
+ */
+function flashSafeHtml($s) {
+    $s = h((string)$s);
+    return strtr($s, [
+        '&lt;b&gt;' => '<b>', '&lt;/b&gt;' => '</b>',
+        '&lt;code&gt;' => '<code>', '&lt;/code&gt;' => '</code>',
+    ]);
+}
+
 function go($flash = null, $type = 'ok') {
     if ($flash !== null) $_SESSION['flash'] = ['msg' => $flash, 'type' => $type];
     $tab = $_POST['tab'] ?? $_GET['tab'] ?? 'dashboard';
@@ -259,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         axSet(function (&$c) use ($addr, $mn, $pw, $api, $akey) {
             if ($addr !== '') { $c['wallet']['address'] = $addr;  $c['wallet']['verified'] = 0; }
-            if ($mn   !== '') { $c['wallet']['mnemonic'] = $mn;   $c['wallet']['verified'] = 0; }
+            if ($mn   !== '') { $c['wallet']['mnemonic'] = axWalletEncrypt($mn);   $c['wallet']['verified'] = 0; }
             // «-» یعنی پاکش کن؛ خالی یعنی دست نزن
             if ($pw === '-')  { $c['wallet']['passphrase'] = '';  $c['wallet']['verified'] = 0; }
             elseif ($pw !== ''){ $c['wallet']['passphrase'] = $pw; $c['wallet']['verified'] = 0; }
@@ -503,7 +525,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($a === 'save_numbers') {
         $post = $_POST;
         $prov = ($post['provider'] ?? '5sim') === 'numberland' ? 'numberland' : '5sim';
-        numSet(function (&$c) use ($post, $prov) {
+        // 🛡 آدرسِ فروشنده — همان سدِ SSRF که ذخیره‌سازیِ داخلِ خودِ ربات
+        //    هم دارد؛ فرمِ وب مسیرِ جدایی بود و این چک را نداشت.
+        $baseIn = trim((string)($post['base'] ?? ''));
+        if ($baseIn !== '' && !preg_match('#^https?://[^\s]+$#i', $baseIn)) {
+            go('⚠️ آدرسِ فروشنده باید با http:// یا https:// شروع شود.', 'err');
+        }
+        if ($baseIn !== '' && function_exists('ssrfSafeUrl') && !ssrfSafeUrl($baseIn, $ssrfWhy)) {
+            go('⚠️ آدرسِ فروشنده رد شد: ' . $ssrfWhy, 'err');
+        }
+        numSet(function (&$c) use ($post, $prov, $baseIn) {
             $c['provider']   = $prov;
             $c['wait']       = max(60, min(86400, (int)($post['wait'] ?? 900)));
             $c['poll']       = max(2, min(300, (int)($post['poll'] ?? 6)));
@@ -513,7 +544,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c['api']['timeout'] = max(5, (int)($post['timeout'] ?? 15));
             $c['api']['rate']    = max(0, (float)str_replace([',', '،'], '', $post['rate'] ?? 0));
             $c['api']['max']     = max(0, (float)str_replace([',', '،'], '', $post['max'] ?? 0));
-            $c['api']['base']    = trim((string)($post['base'] ?? ''));
+            $c['api']['base']    = $baseIn;
             $c['api']['nl_svc']  = trim((string)($post['nl_svc'] ?? '')) ?: '1';
             $key = trim((string)($post['api_key'] ?? ''));
             if ($key !== '') { if ($prov === 'numberland') $c['api']['nl_key'] = $key; else $c['api']['token'] = $key; }
@@ -1833,7 +1864,7 @@ $tabFolders = [
 <?php if ($flash): ?>
   <div class="flash <?= h($flash['type']) ?>" id="flashToast" style="line-height:2">
     <button type="button" class="fx" aria-label="بستن" onclick="this.parentElement.style.display='none'">✕</button>
-    <?= nl2br(strip_tags((string)$flash['msg'], '<code><b>')) ?>
+    <?= nl2br(flashSafeHtml($flash['msg'])) ?>
   </div>
 <?php endif; ?>
 <?php if (strlen(ADMIN_PASSWORD) < 12 || !preg_match('/[^A-Za-z0-9]/', ADMIN_PASSWORD)): ?>

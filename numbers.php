@@ -2835,6 +2835,13 @@ function numStateHandle($action, $msg, $uid, $chatId) {
                 sendMsg(BOT_TOKEN, $chatId, "⚠️ آدرس باید با <code>http://</code> یا <code>https://</code> شروع شود.", $back);
                 return true;
             }
+            // 🛡 همان سدِ SSRF که maHttp/درگاهِ پرداخت هم دارند — وگرنه
+            //    این آدرس با کلیدِ فروشنده روی هر پرسش سرِ شماره صدا
+            //    زده می‌شود؛ نباید بشود آن را رو به شبکه‌ی داخلی چرخاند.
+            if ($v !== '' && function_exists('ssrfSafeUrl') && !ssrfSafeUrl($v, $ssrfWhy)) {
+                sendMsg(BOT_TOKEN, $chatId, "⚠️ این آدرس رد شد: " . h($ssrfWhy), $back);
+                return true;
+            }
             numSet(function (&$c) use ($v) { $c['api']['base'] = $v; });
             $done($v === '' ? '✅ آدرسِ رسمیِ فروشنده استفاده می‌شود: <code>' . h(numBase()) . '</code>'
                             : '✅ آدرس: <code>' . h($v) . '</code>');

@@ -207,10 +207,68 @@ function axMerge($def, $saved) {
     return $def;
 }
 
+/**
+ * 🔐 رمزنگاریِ عبارتِ بازیابیِ ولت — دیسک این کلید را با متنِ ساده نگه
+ * نمی‌دارد.
+ *
+ * تنها سپرِ فایلِ data_master همین حالا فقط .htaccess/web.config است —
+ * روی Nginx (که اصلا .htaccess نمی‌خواند) یا هر هاستی با AllowOverride
+ * خاموش، یک درخواستِ ساده به ext.json کلِ عبارتِ ۲۴کلمه‌ای، یعنی
+ * دسترسیِ کامل به ولت، را می‌دهد. اینجا کلید از چند رازِ خودِ
+ * config.local.php (که یک فایلِ PHP اجراشونده است، نه فایلِ استاتیکِ
+ * قابلِ سرو) ساخته می‌شود — یعنی لو رفتنِ خودِ ext.json به‌تنهایی کافی
+ * نیست. اگر sodium یا هیچ‌کدام از این رازها نبود، رفتارِ قدیمی (متنِ
+ * ساده) ادامه پیدا می‌کند — نصبِ موجود نمی‌شکند، فقط بدونِ این لایه.
+ */
+function axWalletKeyBytes() {
+    if (!function_exists('sodium_crypto_secretbox')) return null;
+    $material = (defined('ADMIN_PANEL_PASS') ? ADMIN_PANEL_PASS : '') . '|' .
+                (defined('CRON_KEY') ? CRON_KEY : '') . '|' .
+                (defined('HEALTH_KEY') ? HEALTH_KEY : '') . '|nikto-wallet-v1';
+    if (trim($material, '|') === 'nikto-wallet-v1') return null; // هیچ رازی تنظیم نشده
+    return sodium_crypto_generichash($material, '', SODIUM_CRYPTO_SECRETBOX_KEYBYTES);
+}
+
+/** متنِ ساده → رشته‌ای برای نوشتن روی دیسک (رمزنگاری‌شده اگر ممکن بود) */
+function axWalletEncrypt($plain) {
+    $plain = (string)$plain;
+    if ($plain === '') return '';
+    $key = axWalletKeyBytes();
+    if ($key === null) return $plain;
+    $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+    return 'wsec1:' . base64_encode($nonce . sodium_crypto_secretbox($plain, $nonce, $key));
+}
+
+/**
+ * رشته‌ی رویِ دیسک → متنِ ساده.
+ *
+ * بدونِ پیشوندِ wsec1: یعنی یا خالی است یا از قبلِ این تغییر متنِ ساده
+ * مانده — همان‌طور برگردانده می‌شود (سازگاریِ عقب‌رو، تا نصبِ موجود
+ * نشکند). اگر رمزنگاری‌شده بود ولی الان کلیدش نبود یا باز نشد، عمداً
+ * رشته‌ی خالی برمی‌گردد — هیچ‌وقت بایتِ نادرست/حدسی به کدِ امضاکننده
+ * نمی‌رسد.
+ */
+function axWalletDecrypt($stored) {
+    $stored = (string)$stored;
+    if ($stored === '' || !str_starts_with($stored, 'wsec1:')) return $stored;
+    $key = axWalletKeyBytes();
+    if ($key === null) return '';
+    $raw = base64_decode(substr($stored, 6), true);
+    if ($raw === false || strlen($raw) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) return '';
+    $nonce = substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+    $ct    = substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+    $pt = sodium_crypto_secretbox_open($ct, $nonce, $key);
+    return $pt === false ? '' : $pt;
+}
+
 function axCfg() {
     static $c = null, $gen = -1;
     $now = (int)($GLOBALS['__ax_gen'] ?? 0);
-    if ($c === null || $gen !== $now) { $c = axMerge(axDefaults(), load('ext')); $gen = $now; }
+    if ($c === null || $gen !== $now) {
+        $c = axMerge(axDefaults(), load('ext'));
+        if (!empty($c['wallet']['mnemonic'])) $c['wallet']['mnemonic'] = axWalletDecrypt($c['wallet']['mnemonic']);
+        $gen = $now;
+    }
     return $c;
 }
 
@@ -1791,7 +1849,7 @@ function axStateHandle($action, $sd, $msg, $uid, $chatId) {
             catch (Throwable $e) { sendMsg(BOT_TOKEN, $chatId, "❌ " . h($e->getMessage())); return true; }
 
             axSet(function (&$c) use ($words) {
-                $c['wallet']['mnemonic'] = implode(' ', array_map('strtolower', $words));
+                $c['wallet']['mnemonic'] = axWalletEncrypt(implode(' ', array_map('strtolower', $words)));
                 $c['wallet']['verified'] = 0;
             });
             // پیام حاوی عبارت بازیابی نباید در گفتگو بماند
