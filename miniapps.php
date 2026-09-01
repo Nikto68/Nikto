@@ -4201,7 +4201,11 @@ function maStateHandle($action, $sd, $msg, $uid, $chatId) {
         }
         if (!$sent) { sendMsg(BOT_TOKEN, $chatId, '⚠️ محتوایی نفرستادید.'); return true; }
 
-        MaOrder::set($id, function (&$x) { $x['status'] = MaOrder::DONE; $x['delivered_at'] = nowStr(); });
+        MaOrder::set($id, function (&$x) { $x['status'] = MaOrder::DONE; $x['delivered_at'] = nowStr(); $x['delivered_by'] = 'manual'; });
+        // 📡 گزارش تحویل — همان چیزی که تحویلِ خودکار/مخزن/سفارشِ دستیِ
+        // کانالی هم می‌گویند؛ این مسیر (ادمین مستقیم داخلِ چت محتوا می‌فرستد)
+        // تنها راهِ تحویلی بود که این خبر را نمی‌داد.
+        if (function_exists('axReportOrder')) axReportOrder(MaOrder::get($id), 'done');
         clearState($uid);
         sendMsg(BOT_TOKEN, $chatId, '✅ تحویل شد و سفارش بسته شد.',
             inlineKb([[btnCb('🚀 مینی‌اپ‌ها', 'maadm_home', 'admin')]]));
