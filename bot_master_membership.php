@@ -8819,11 +8819,12 @@ function masterHandle($update) {
     // می‌کنند: قیمت لحظه‌ای، و بازی الماس. بقیه‌ی ربات همچنان ساکت است.
     if (($msg['chat']['type'] ?? 'private') !== 'private') {
         $rt = $msg['message_id'] ?? null;
+        // 💹 قیمت اول — قبل از هرکاری. «بیت کوین» نباید منتظرِ housekeeping
+        // بازی (gmTick) یا پارس‌کردنِ بازی/الماس بماند؛ اول با کشِ موجود
+        // جواب بده، بعد کش را تازه کن.
+        if (pxAnswerThenWarm($text, $chatId, $rt)) return;
         if (gmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false)) return;
-
-        // 💹 قیمت: اول با کشِ موجود جواب بده، بعد کش را تازه کن
-        if (pxAnswerThenWarm($text, $chatId, $rt)) return;
         return;
     }
 
@@ -8906,9 +8907,10 @@ function masterHandle($update) {
     if (!$st) {
         // چیزی وسط کار نیست؟ شاید دنبال قیمت است — «پریمیوم»، «استارز»، «بیتکوین»
         $rt = $msg['message_id'] ?? null;
+        // 💹 همان‌طور که در گروه — قیمت اول، بدون معطلیِ بازی/الماس.
+        if (pxAnswerThenWarm($text, $chatId, $rt)) return;
         if (gmHandleText($text, $uid, $chatId, $fname, $uname, $rt, true, $msg)) return;
         if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, true)) return;
-        if (pxAnswerThenWarm($text, $chatId, $rt)) return;
         return;
     }
     $action = $st['action'];
