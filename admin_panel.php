@@ -1575,12 +1575,22 @@ box-shadow:0 14px 34px -24px rgba(0,0,0,.7);animation:cardIn .35s cubic-bezier(.
 .card>summary{list-style:none;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;
   gap:10px;flex-wrap:wrap;padding:15px 18px;font-size:14.5px;font-weight:800;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
 .card>summary::-webkit-details-marker{display:none}
+.card>summary::after{content:'▾';color:var(--muted);font-size:12px;font-weight:400;transition:transform .2s;flex:0 0 auto}
+.card[open]>summary::after{transform:rotate(180deg)}
+.card:not([open])>summary{border-bottom:0}
 .card.prodcard.filtered-out{display:none}
 .card .body{padding:18px}
 .subcard{background:var(--panel-alt);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:16px;transition:border-color .15s}
 .subcard:hover{border-color:rgba(255,255,255,.16)}
 .subcard:last-child{margin-bottom:0}
 .subcard>h3{font-size:13px;font-weight:800;color:var(--ink);margin-bottom:11px;display:flex;align-items:center;gap:6px}
+/* ---------- بخش‌های جمع‌شونده: فقط عنوان دیده می‌شود، کلیک باز می‌کند ---------- */
+.subcard>summary{list-style:none;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.subcard>summary::-webkit-details-marker{display:none}
+.subcard>summary>h3{margin-bottom:0;flex:1}
+.subcard>summary::after{content:'▾';color:var(--muted);font-size:12px;transition:transform .2s;flex:0 0 auto}
+.subcard[open]>summary{margin-bottom:11px}
+.subcard[open]>summary::after{transform:rotate(180deg)}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:13px}
 label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:5px}
 input,select,textarea{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;
@@ -3987,7 +3997,7 @@ def join_gate(user_id):
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="numbers">
       <input type="hidden" name="action" value="save_numbers">
 
-      <div class="subcard"><h3>🏪 فروشنده و اتصال</h3>
+      <details class="subcard" open><summary><h3>🏪 فروشنده و اتصال</h3></summary>
         <div style="margin-bottom:10px">
           <label style="font-weight:500"><input type="checkbox" name="num_on" style="width:auto"
             <?= !empty($NAPI['on']) ? 'checked' : '' ?>> روشن باشد</label>
@@ -4011,9 +4021,9 @@ def join_gate(user_id):
             <input name="base" value="<?= h($NAPI['base'] ?? '') ?>" placeholder="<?= h($NPI['base']) ?>" style="direction:ltr"></div>
         </div>
         <div class="muted" style="margin-top:8px"><?= h($NPI['help']) ?></div>
-      </div>
+      </details>
 
-      <div class="subcard"><h3>💰 قیمت و سود</h3>
+      <details class="subcard"><summary><h3>💰 قیمت و سود</h3></summary>
         <div class="grid2">
           <div><label>📈 درصد سود</label>
             <input name="markup" value="<?= h(rtrim(rtrim(number_format((float)numVal('markup', 0), 2), '0'), '.')) ?>" style="direction:ltr"></div>
@@ -4030,9 +4040,9 @@ def join_gate(user_id):
         <?php if (numNeedsRate() && numRate() <= 0): ?>
           <div class="flash warn" style="margin-top:10px">⚠️ بدون نرخِ دلار، قیمتی وارد نمی‌شود.</div>
         <?php endif; ?>
-      </div>
+      </details>
 
-      <div class="subcard"><h3>⏱ زمان‌بندی</h3>
+      <details class="subcard"><summary><h3>⏱ زمان‌بندی</h3></summary>
         <div class="grid2">
           <div><label>⏳ مهلتِ انتظارِ کد (ثانیه)</label>
             <input name="wait" type="number" min="60" value="<?= (int)numVal('wait', 900) ?>"></div>
@@ -4043,7 +4053,7 @@ def join_gate(user_id):
           <div><label>🌍 تعدادِ کشورِ صفحه‌ی اولِ مینی‌اپ (۰ = همه)</label>
             <input name="cats_max" type="number" min="0" value="<?= $numCatsMax ?>" placeholder="همه"></div>
         </div>
-      </div>
+      </details>
 
       <div style="margin-top:14px"><button class="btn g">ذخیره تنظیماتِ شماره مجازی</button></div>
     </form>
@@ -4083,14 +4093,14 @@ def join_gate(user_id):
     <form method="post">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="miniapps">
       <input type="hidden" name="action" value="save_miniapp_app"><input type="hidden" name="key" value="<?= h($mk) ?>">
-      <div class="subcard"><h3>🔌 وضعیت</h3>
+      <details class="subcard" open><summary><h3>🔌 وضعیت</h3></summary>
         <label style="font-weight:500"><input type="checkbox" name="app_on" style="width:auto"
           <?= !empty($app['on']) ? 'checked' : '' ?>> این مینی‌اپ روشن باشد</label>
         <?php $mu = maUrl($mk); if ($mu !== ''): ?>
           <div class="muted" style="margin-top:6px"><code style="direction:ltr;display:inline-block"><?= h($mu) ?></code></div>
         <?php endif; ?>
-      </div>
-      <div class="subcard"><h3>🎨 تمِ گرافیکی</h3>
+      </details>
+      <details class="subcard"><summary><h3>🎨 تمِ گرافیکی</h3></summary>
         <div class="grid2">
           <div><label>رنگِ اصلی</label><input type="color" name="theme_c1" value="<?= h($th['c1'] ?? '#7C4DFF') ?>" style="padding:4px;height:42px"></div>
           <div><label>رنگِ دوم</label><input type="color" name="theme_c2" value="<?= h($th['c2'] ?? '#00E5FF') ?>" style="padding:4px;height:42px"></div>
@@ -4110,7 +4120,7 @@ def join_gate(user_id):
         </div>
         <div style="margin-top:10px;max-width:240px"><label>سطحِ افکت (۰ خاموش تا ۲ کامل)</label>
           <input name="theme_fx" type="number" min="0" max="2" value="<?= (int)($th['fx'] ?? 2) ?>"></div>
-      </div>
+      </details>
       <div style="margin-top:14px"><button class="btn g">ذخیره این مینی‌اپ</button></div>
     </form>
 
@@ -4118,7 +4128,7 @@ def join_gate(user_id):
     <form method="post" style="margin-top:16px">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="miniapps">
       <input type="hidden" name="action" value="save_miniapp_cats"><input type="hidden" name="key" value="<?= h($mk) ?>">
-      <div class="subcard"><h3>📂 دسته‌بندی‌ها</h3>
+      <details class="subcard"><summary><h3>📂 دسته‌بندی‌ها</h3></summary>
         <div style="display:flex;flex-wrap:wrap;gap:9px">
           <?php foreach ($app['cats'] as $c): ?>
             <label style="font-weight:500;background:#1e1e1e;padding:7px 12px;border-radius:9px">
@@ -4128,7 +4138,7 @@ def join_gate(user_id):
           <?php endforeach; ?>
         </div>
         <div style="margin-top:14px"><button class="btn g">ذخیره دسته‌بندی‌ها</button></div>
-      </div>
+      </details>
     </form>
     <?php endif; ?>
 
@@ -4136,7 +4146,7 @@ def join_gate(user_id):
     <form method="post" style="margin-top:16px">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="miniapps">
       <input type="hidden" name="action" value="save_miniapp_items"><input type="hidden" name="key" value="<?= h($mk) ?>">
-      <div class="subcard"><h3>🛒 سرویس‌ها (<?= count($app['items']) ?>)</h3>
+      <details class="subcard"><summary><h3>🛒 سرویس‌ها (<?= count($app['items']) ?>)</h3></summary>
         <div class="note">
           «حداقل/حداکثر تعداد» فقط برای مواردی است که مشتری خودش تعداد وارد می‌کند (تون، ترون، استارزِ دلخواه...) —
           برای اعشار (مثلا <code>0.5</code> تون) همان‌جا با نقطه بنویسید.
@@ -4165,7 +4175,7 @@ def join_gate(user_id):
         </details>
         <?php endforeach; ?>
         <div style="margin-top:14px"><button class="btn g">ذخیره سرویس‌ها</button></div>
-      </div>
+      </details>
     </form>
     <?php endif; ?>
   </div></div>
@@ -4190,7 +4200,7 @@ def join_gate(user_id):
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="diamond">
       <input type="hidden" name="action" value="save_diamond">
 
-      <div class="subcard"><h3>🔌 وضعیت و کلمه</h3>
+      <details class="subcard" open><summary><h3>🔌 وضعیت و کلمه</h3></summary>
         <div style="margin-bottom:10px">
           <label style="font-weight:500"><input type="checkbox" name="dm_on" style="width:auto" <?= !empty($DM['on']) ? 'checked' : '' ?>> روشن باشد</label>
           <label style="font-weight:500"><input type="checkbox" name="group_only" style="width:auto" <?= !empty($DM['group_only']) ? 'checked' : '' ?>> فقط داخلِ گروه کار کند</label>
@@ -4199,9 +4209,9 @@ def join_gate(user_id):
           <div><label>💬 کلمه</label><input name="word" value="<?= h($DM['word'] ?? 'الماس') ?>"></div>
           <div><label>➕ کلمه‌های دیگر (با ویرگول)</label><input name="aliases" value="<?= h($DM['aliases'] ?? '') ?>"></div>
         </div>
-      </div>
+      </details>
 
-      <div class="subcard"><h3>🎁 جایزه</h3>
+      <details class="subcard"><summary><h3>🎁 جایزه</h3></summary>
         <div class="grid2">
           <div><label>⏳ فاصله بینِ دو الماس (ثانیه)</label><input name="cooldown" type="number" min="0" value="<?= (int)($DM['cooldown'] ?? 300) ?>"></div>
           <div><label>🎁 جایزه‌ی پایه (سطح ۱)</label><input name="base" value="<?= h($DM['base'] ?? 56.74) ?>" style="direction:ltr"></div>
@@ -4211,16 +4221,16 @@ def join_gate(user_id):
           <div><label>⭐️ امتیاز لازم برای هر سطح</label><input name="level_step" type="number" min="1" value="<?= (int)($DM['level_step'] ?? 10000) ?>"></div>
           <div><label>🏆 تعدادِ نفراتِ لیستِ برترین‌ها</label><input name="top_n" type="number" min="1" value="<?= (int)($DM['top_n'] ?? 10) ?>"></div>
         </div>
-      </div>
+      </details>
 
-      <div class="subcard"><h3>🔁 تبدیل به کیف پول (۰ = خاموش)</h3>
+      <details class="subcard"><summary><h3>🔁 تبدیل به کیف پول (۰ = خاموش)</h3></summary>
         <div class="grid2">
           <div><label>هر ۱ الماس چند تومان</label><input name="to_wallet" value="<?= h($DM['to_wallet'] ?? 0) ?>" placeholder="0 = خاموش" style="direction:ltr"></div>
           <div><label>حداقلِ الماس برای تبدیل</label><input name="min_swap" value="<?= h($DM['min_swap'] ?? 10000) ?>" style="direction:ltr"></div>
         </div>
-      </div>
+      </details>
 
-      <div class="subcard"><h3>🎁 هدیه با الماس</h3>
+      <details class="subcard"><summary><h3>🎁 هدیه با الماس</h3></summary>
         <div style="margin-bottom:10px">
           <label style="font-weight:500"><input type="checkbox" name="gift_on" style="width:auto" <?= !empty($DM['gift']['on']) ? 'checked' : '' ?>> روشن باشد</label>
         </div>
@@ -4237,9 +4247,9 @@ def join_gate(user_id):
           <div><label>🔢 سقفِ دفعات برای هر نفر (۰ = بی‌نهایت)</label>
             <input name="gift_limit" type="number" min="0" value="<?= (int)($DM['gift']['limit'] ?? 0) ?>"></div>
         </div>
-      </div>
+      </details>
 
-      <div class="subcard"><h3>🚨 زندان</h3>
+      <details class="subcard"><summary><h3>🚨 زندان</h3></summary>
         <div class="grid2">
           <div><label>کلمه‌های دام (با ویرگول)</label><input name="jail_words" value="<?= h($DM['jail']['words'] ?? '') ?>"></div>
           <div><label>چند نفرِ متفاوت باید تایید کنن</label><input name="jail_need" type="number" min="1" value="<?= (int)($DM['jail']['need'] ?? 3) ?>"></div>
@@ -4251,7 +4261,7 @@ def join_gate(user_id):
               <?php endforeach; ?>
             </select></div>
         </div>
-      </div>
+      </details>
 
       <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ الماس</button></div>
     </form>
@@ -4271,37 +4281,37 @@ def join_gate(user_id):
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="games">
       <input type="hidden" name="action" value="save_games">
 
-      <div class="subcard"><h3>🔌 وضعیت</h3>
+      <details class="subcard" open><summary><h3>🔌 وضعیت</h3></summary>
         <label style="font-weight:500"><input type="checkbox" name="gm_on" style="width:auto" <?= !empty($GM['on']) ? 'checked' : '' ?>> بازی‌ها روشن باشند</label>
         <label style="font-weight:500;margin-right:14px"><input type="checkbox" name="duel_board" style="width:auto" <?= !empty($GM['duel_board']) ? 'checked' : '' ?>> چالش با صفحه‌ی دوز (نه نتیجه‌ی درجا)</label>
-      </div>
+      </details>
 
-      <div class="subcard"><h3>💬 کلمه‌های شروع</h3>
+      <details class="subcard"><summary><h3>💬 کلمه‌های شروع</h3></summary>
         <div class="grid2">
           <div><label>🎯 چالش (با ویرگول)</label><input name="word_duel" value="<?= h($GM['word_duel'] ?? 'چالش,دوز') ?>"></div>
           <div><label>🎲 قرعه</label><input name="word_rand" value="<?= h($GM['word_rand'] ?? 'بازی') ?>"></div>
           <div><label>💎 موجودی</label><input name="word_bal" value="<?= h($GM['word_bal'] ?? 'موجودی') ?>"></div>
           <div><label>📤 انتقال (با ویرگول)</label><input name="word_send" value="<?= h($GM['word_send'] ?? 'انتقال') ?>"></div>
         </div>
-      </div>
+      </details>
 
-      <div class="subcard"><h3>💰 شرط و مالیات</h3>
+      <details class="subcard"><summary><h3>💰 شرط و مالیات</h3></summary>
         <div class="grid2">
           <div><label>کمترینِ شرط (الماس)</label><input name="gm_min" value="<?= h($GM['min'] ?? 10) ?>" style="direction:ltr"></div>
           <div><label>بیشترینِ شرط (الماس)</label><input name="gm_max" value="<?= h($GM['max'] ?? 1000000000) ?>" style="direction:ltr"></div>
           <div><label>🧾 مالیاتِ برد (٪)</label><input name="tax" value="<?= h($GM['tax'] ?? 10) ?>" style="direction:ltr"></div>
           <div><label>🧾 مالیاتِ انتقال (٪)</label><input name="send_tax" value="<?= h($GM['send_tax'] ?? 10) ?>" style="direction:ltr"></div>
         </div>
-      </div>
+      </details>
 
-      <div class="subcard"><h3>⏱ محدودیت‌ها</h3>
+      <details class="subcard"><summary><h3>⏱ محدودیت‌ها</h3></summary>
         <div class="grid2">
           <div><label>حداکثرِ بازیِ بازِ هم‌زمانِ هر نفر</label><input name="open_max" type="number" min="1" value="<?= (int)($GM['open_max'] ?? 2) ?>"></div>
           <div><label>مهلتِ بی‌حریف تا لغوِ خودکار (ثانیه)</label><input name="expire" type="number" min="10" value="<?= (int)($GM['expire'] ?? 180) ?>"></div>
           <div><label>مهلتِ انتظارِ قرعه (ثانیه)</label><input name="wait" type="number" min="1" value="<?= (int)($GM['wait'] ?? 8) ?>"></div>
           <div><label>حداکثرِ شرکت‌کننده در قرعه</label><input name="join_max" type="number" min="2" value="<?= (int)($GM['join_max'] ?? 50) ?>"></div>
         </div>
-      </div>
+      </details>
 
       <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ بازی‌ها</button></div>
     </form>
@@ -4317,16 +4327,16 @@ def join_gate(user_id):
     <input type="hidden" name="action" value="save_settings">
     <input type="hidden" name="adv_scope" value="1">
 
-    <div class="card"><h2>💳 پرداخت</h2><div class="body">
+    <details class="card"><summary><h2 style="border:0;padding:0;background:none">💳 پرداخت</h2></summary><div class="body">
       <div class="grid2">
         <div><label>آدرس USDT (TRC20)</label><input name="usdt" value="<?= h($C['wallets']['usdt']) ?>" style="direction:ltr"></div>
         <div><label>آدرس TRX</label><input name="trx" value="<?= h($C['wallets']['trx']) ?>" style="direction:ltr"></div>
         <div><label>شماره کارت</label><input name="card" value="<?= h($C['wallets']['card']) ?>" style="direction:ltr"></div>
         <div><label>به نام</label><input name="card_name" value="<?= h($C['wallets']['card_name']) ?>"></div>
       </div>
-    </div></div>
+    </div></details>
 
-    <div class="card"><h2>👥 زیرمجموعه‌گیری (رفرال)</h2><div class="body">
+    <details class="card"><summary><h2 style="border:0;padding:0;background:none">👥 زیرمجموعه‌گیری (رفرال)</h2></summary><div class="body">
       <div class="grid2">
         <div><label>درصد پورسانت</label><input name="ref_percent" type="number" min="0" max="100" step="0.5"
              value="<?= h($C['referral']['percent']) ?>"></div>
@@ -4334,9 +4344,9 @@ def join_gate(user_id):
           <input type="checkbox" name="ref_on" style="width:auto" <?= !empty($C['referral']['on']) ? 'checked' : '' ?>>
           سیستم معرفی فعال باشد</label></div>
       </div>
-    </div></div>
+    </div></details>
 
-    <div class="card"><h2>🤖 پیش‌فرض ربات‌های اپلودر</h2><div class="body">
+    <details class="card"><summary><h2 style="border:0;padding:0;background:none">🤖 پیش‌فرض ربات‌های اپلودر</h2></summary><div class="body">
       <p class="muted" style="margin-bottom:10px">این مقادیر روی ربات‌های <b>جدید</b> اعمال می‌شود. برای ربات‌های موجود از تب «ربات‌های اپلودر» استفاده کنید.</p>
       <div class="grid2">
         <div><label>⏱ حذف فایل بعد از (ثانیه)</label>
@@ -4347,9 +4357,9 @@ def join_gate(user_id):
           <label style="font-weight:500"><input type="checkbox" name="protect" style="width:auto"
             <?= !empty($C['uploader']['protect_content']) ? 'checked' : '' ?>> 🛡 محافظت فایل</label></div>
       </div>
-    </div></div>
+    </div></details>
 
-    <div class="card"><h2>🧪 تست و نمایش</h2><div class="body">
+    <details class="card"><summary><h2 style="border:0;padding:0;background:none">🧪 تست و نمایش</h2></summary><div class="body">
       <div class="note">
         <b>حالت تست</b> اجازه می‌دهد سفارش با مبلغ <b>صفر</b> تا آخر برود — بدون پرداخت،
         خودکار تایید می‌شود و کمپین قفل کانالش هم ساخته می‌شود.
@@ -4362,9 +4372,9 @@ def join_gate(user_id):
           <?= !empty($C['ui']['speed_show_perday']) ? 'checked' : '' ?>>
           🚀 «نفر در روز» روی دکمه سرعت هم نوشته شود</label>
       </div>
-    </div></div>
+    </div></details>
 
-    <div class="card"><h2>🤖 کار خودکار</h2><div class="body">
+    <details class="card"><summary><h2 style="border:0;padding:0;background:none">🤖 کار خودکار</h2></summary><div class="body">
       <div class="note">
         با <b>درگاه پرداخت</b> همه چیز از قبل خودکار است و نیازی به حضور شما نیست.
         گزینه زیر فقط برای <b>رسید کارت به کارت</b> است: رسید که برسد، بدون بررسی تایید می‌شود.
@@ -4377,12 +4387,12 @@ def join_gate(user_id):
       </div>
       <div style="margin-top:10px;max-width:320px"><label>🧹 پاک کردن کمپین‌های تمام‌شده بعد از (روز · ۰ = هیچ‌وقت)</label>
         <input name="keep_days" type="number" min="0" value="<?= (int)($C['campaign_keep_days'] ?? 3) ?>"></div>
-    </div></div>
+    </div></details>
 
     <div class="card"><div class="body"><button class="btn g">💾 ذخیره تغییرات</button></div></div>
   </form>
 
-  <div class="card"><h2>🩺 تشخیص و سرعت</h2><div class="body">
+  <details class="card"><summary><h2 style="border:0;padding:0;background:none">🩺 تشخیص و سرعت</h2></summary><div class="body">
     <div class="note">
       این ابزارها قبلا فقط داخل <code>/panel</code> ربات بودند؛ هرکدام یک گزارشِ لحظه‌ای می‌سازد —
       نتیجه همین‌جا بالای صفحه نشان داده می‌شود.
@@ -4401,11 +4411,11 @@ def join_gate(user_id):
         <input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="adm_write_test">
         <button class="btn">🩺 تست نوشتن روی دیسک</button></form>
     </div>
-  </div></div>
+  </div></details>
 
   <?php $G = cfg()['gateway'] ?? []; $J = cfg()['join'] ?? []; ?>
 
-  <div class="card"><h2>💠 درگاه پرداخت خودکار <?= (!empty($G['on']) && trim((string)$G['api_key']) !== '' && trim((string)$G['base_url']) !== '') ? '<span class="badge green">آماده</span>' : '<span class="badge">خاموش</span>' ?></h2><div class="body">
+  <details class="card"><summary><h2 style="border:0;padding:0;background:none">💠 درگاه پرداخت خودکار <?= (!empty($G['on']) && trim((string)$G['api_key']) !== '' && trim((string)$G['base_url']) !== '') ? '<span class="badge green">آماده</span>' : '<span class="badge">خاموش</span>' ?></h2></summary><div class="body">
     <div class="note">
       مشتری «افزایش موجودی» می‌زند → ربات از درگاه یک <b>لینک پرداخت + آدرس ولت + مهلت</b> می‌گیرد →
       به‌محض واریز، درگاه به ربات خبر می‌دهد و کیف پول <b>خودکار</b> شارژ می‌شود.
@@ -4460,9 +4470,9 @@ def join_gate(user_id):
       </div>
       <div style="margin-top:14px"><button class="btn g">ذخیره درگاه</button></div>
     </form>
-  </div></div>
+  </div></details>
 
-  <div class="card"><h2>🔒 عضویت اجباری ربات مادر <?= !empty($J['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?></h2><div class="body">
+  <details class="card"><summary><h2 style="border:0;padding:0;background:none">🔒 عضویت اجباری ربات مادر <?= !empty($J['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?></h2></summary><div class="body">
     <div class="note">
       تا کاربر عضو کانال‌های زیر نشود، نمی‌تواند از ربات فروشگاه استفاده کند.
       ربات مادر باید در هر کانال <b>ادمین</b> باشد. خودتان هیچ‌وقت پشت این قفل نمی‌مانید.
@@ -4511,9 +4521,9 @@ def join_gate(user_id):
       <div class="muted">📝 متنِ قفل و متنِ دکمه فقط داخل خودِ ربات ویرایش می‌شوند: <code>/panel</code> ← 🔒 عضویت اجباری</div>
       <div style="margin-top:14px"><button class="btn g">ذخیره</button></div>
     </form>
-  </div></div>
+  </div></details>
 
-  <div class="card"><h2>🔐 امنیت</h2><div class="body">
+  <details class="card"><summary><h2 style="border:0;padding:0;background:none">🔐 امنیت</h2></summary><div class="body">
     <p class="muted" style="line-height:2">
       • رمز پنل در خط ۱۰ فایل <code>admin_panel.php</code><br>
       • آیدی مدیرها: <code><?= h(implode('، ', ADMIN_IDS)) ?></code> — کنار BOT_TOKEN در config.local.php<br>
@@ -4526,7 +4536,7 @@ def join_gate(user_id):
         — خط ۲۸ فایل ربات، حتما عوضش کنید<br>
       • پوشه <code>data_master/</code> شامل توکن ربات‌هاست؛ دسترسی عمومی به آن را ببندید
     </p>
-  </div></div>
+  </div></details>
 <?php endif; ?>
 
   </div></main>
