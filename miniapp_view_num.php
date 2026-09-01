@@ -461,6 +461,10 @@ body::before{
 .mask{position:fixed;inset:0;z-index:60;background:rgba(2,6,14,.72);backdrop-filter:blur(6px);
   opacity:0;pointer-events:none;transition:.25s var(--ease)}
 .mask.on{opacity:1;pointer-events:auto}
+/* ⌨️ کیبورد باز = بلور خاموش (توضیح بالای «kb-open» را در JS ببینید).
+   transition:none روی خودِ این قانون تا خاموش‌شدنش آنی باشد — وگرنه محوشدنِ
+   تدریجی دقیقاً همان بازمحاسبه‌ی فریم‌به‌فریمی می‌شد که می‌خواستیم کنار برود. */
+body.kb-open .mask{backdrop-filter:none;-webkit-backdrop-filter:none;transition:opacity .25s var(--ease)}
 .sheet{
   position:fixed;inset:auto 0 0 0;z-index:61;max-width:640px;margin:0 auto;
   background:var(--s1);border:1px solid var(--hair);border-bottom:0;
@@ -1051,6 +1055,16 @@ function sheet(build) {
 }
 function closeSheet() { $('#mask').classList.remove('on'); $('#sheet').classList.remove('on'); }
 $('#mask').addEventListener('click', closeSheet);
+
+// ⌨️ کیبورد که بالا می‌آید، بلورِ mask هر فریم دوباره حساب می‌شود —
+// همان چیزی که موبایل‌های ضعیف‌تر را یک لحظه هنگ می‌کند. تا کیبورد
+// بازه خاموشش می‌کنیم، با بسته‌شدنش برمی‌گردد.
+document.addEventListener('focusin', (ev) => {
+  if (ev.target.closest && ev.target.closest('#sheet')) document.body.classList.add('kb-open');
+});
+document.addEventListener('focusout', (ev) => {
+  if (ev.target.closest && ev.target.closest('#sheet')) document.body.classList.remove('kb-open');
+});
 
 function askBuy(it) {
   sheet(box => {

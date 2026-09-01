@@ -877,25 +877,39 @@ function open(id){
   var hasQty = it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username' || it.ask === 'qty_link';
   if (hasQty){
     var isCoin = it.ask === 'qty_wallet';
-    // بسته‌های آماده با تیک، بعد کادر مقدار دلخواه — به‌جای دکمه‌های ±
-    // که برای «۵۰۰ استارز» یعنی چهارصد و پنجاه بار زدن.
-    html += '<div class="lbl">' + esc(U.plans) + '</div><div class="plans" id="fPlans">' +
-              planRows(it).map(function(q){
-                return '<i data-q="' + q + '"' + (q === S.qty ? ' class="on"' : '') + '>' +
-                       '<s class="pg">' + esc(it.emoji || '💠') + '</s>' +
-                       '<b>' + fa(q) + (it.unit ? ' ' + esc(it.unit) : '') + '</b>' +
-                       '<u>' + fa(Math.round(it.price * q)) + ' ' + esc(B.currency) + '</u>' +
-                       '<em class="chk">✓</em></i>';
-              }).join('') +
-            '</div>' +
-            '<div class="lbl">' + esc(U.custom.replace('{min}', fa(it.min || 1))) + '</div>' +
-            '<div class="field">' +
-              '<input id="fQty" type="text" inputmode="' + (isCoin ? 'decimal' : 'numeric') +
-                '" value="' + S.qty + '">' +
+    if (isCoin){
+      // پول است، نه بسته‌ی آماده — این‌جا یک استپرِ کم/زیاد (با گامِ
+      // همان حداقل، مثلا ۰.۵ تون) از چیپ‌های آماده‌ی «۱×/۲×/۵×» طبیعی‌تر
+      // است؛ کادرِ وسط هم برای تایپِ مستقیمِ یک عددِ دلخواه باز می‌ماند.
+      html += '<div class="lbl">' + esc(U.custom.replace('{min}', fa(it.min || 1))) + '</div>' +
+              '<div class="step">' +
+                '<button type="button" id="fQtyMinus" aria-label="کم کردن">−</button>' +
+                '<input id="fQty" type="text" inputmode="decimal" value="' + S.qty + '">' +
+                '<button type="button" id="fQtyPlus" aria-label="زیاد کردن">+</button>' +
+              '</div>' +
               '<div class="hint">حداقل ' + fa(it.min || 1) +
                 (it.max > 0 ? ' · حداکثر ' + fa(it.max) : '') +
-                (isCoin ? ' · قیمت هر ' + esc(it.unit || 'واحد') + ': ' + fa(it.price) + ' ' + esc(B.currency) : '') +
-              '</div></div>';
+                ' · قیمت هر ' + esc(it.unit || 'واحد') + ': ' + fa(it.price) + ' ' + esc(B.currency) +
+              '</div>';
+    } else {
+      // بسته‌های آماده با تیک، بعد کادر مقدار دلخواه — به‌جای دکمه‌های ±
+      // که برای «۵۰۰ استارز» یعنی چهارصد و پنجاه بار زدن.
+      html += '<div class="lbl">' + esc(U.plans) + '</div><div class="plans" id="fPlans">' +
+                planRows(it).map(function(q){
+                  return '<i data-q="' + q + '"' + (q === S.qty ? ' class="on"' : '') + '>' +
+                         '<s class="pg">' + esc(it.emoji || '💠') + '</s>' +
+                         '<b>' + fa(q) + (it.unit ? ' ' + esc(it.unit) : '') + '</b>' +
+                         '<u>' + fa(Math.round(it.price * q)) + ' ' + esc(B.currency) + '</u>' +
+                         '<em class="chk">✓</em></i>';
+                }).join('') +
+              '</div>' +
+              '<div class="lbl">' + esc(U.custom.replace('{min}', fa(it.min || 1))) + '</div>' +
+              '<div class="field">' +
+                '<input id="fQty" type="text" inputmode="numeric" value="' + S.qty + '">' +
+                '<div class="hint">حداقل ' + fa(it.min || 1) +
+                  (it.max > 0 ? ' · حداکثر ' + fa(it.max) : '') +
+                '</div></div>';
+    }
   }
   // تعداد دلخواه استارز: هم تعداد می‌خواهد هم آیدی گیرنده
   if (it.ask === 'qty_username'){
@@ -965,8 +979,17 @@ function open(id){
       var raw = digits(this.value) || this.value.replace(/[^\d.]/g,'');
       setQty(parseFloat(raw) || 0, true);
     });
+    // استپرِ کم/زیاد — فقط برای آیتم‌های ارزی؛ گام همان حداقلِ خودِ آیتم است
+    // (مثلا ۰.۵ تون)، پس هیچ‌وقت به عددی زیرِ حداقل نمی‌رسد — همان کاری که
+    // setQty(..., false) خودش هم انجام می‌دهد.
+    var mBtn = $('fQtyMinus'), pBtn = $('fQtyPlus');
+    if (mBtn && pBtn){
+      var stepQ = Number(it.min) > 0 ? Number(it.min) : (it.ask === 'qty_wallet' ? 0.5 : 1);
+      mBtn.addEventListener('click', function(){ tap(); setQty(S.qty - stepQ); });
+      pBtn.addEventListener('click', function(){ tap(); setQty(S.qty + stepQ); });
+    }
   }
-  total();
+  setQty(S.qty); // هم total() را صدا می‌زند هم وضعیتِ غیرفعال‌بودنِ دکمه‌های استپر را از همین اول درست می‌کند
 
   if (it.stale){ $('sGo').disabled = true; $('sWal').disabled = true; }
 
@@ -989,6 +1012,9 @@ function setQty(v, typing){
   var qi = $('fQty');
   if (qi && !typing) qi.value = v;
   markPlan();
+  var mBtn = $('fQtyMinus'), pBtn = $('fQtyPlus');
+  if (mBtn) mBtn.disabled = v <= (it.min || 1);
+  if (pBtn) pBtn.disabled = it.max > 0 && v >= it.max;
   total();
 }
 
@@ -1044,6 +1070,17 @@ function shut(){
   backBtn();
 }
 $('scrim').onclick = shut;
+
+// ⌨️ کیبورد که بالا می‌آید، مرورگر باید بلورِ scrim را هر فریم دوباره
+// حساب کند (چون کلِ صفحه دارد اندازه‌اش عوض می‌شود) — همان چیزی که
+// موبایل‌های ضعیف‌تر را موقعِ باز شدنِ کیبورد یک لحظه هنگ می‌کند.
+// تا کیبورد بازه، بلور را خاموش می‌کنیم؛ با بسته‌شدنش برمی‌گردد.
+document.addEventListener('focusin', function(ev){
+  if (ev.target.closest && ev.target.closest('#sheet')) document.body.classList.add('kb-open');
+});
+document.addEventListener('focusout', function(ev){
+  if (ev.target.closest && ev.target.closest('#sheet')) document.body.classList.remove('kb-open');
+});
 $('sNo').onclick   = function(){ tap(); shut(); };
 
 function validate(){
@@ -1643,6 +1680,11 @@ body.is-admin .dock b[data-p="adm"]{display:flex}
 .scrim{position:fixed;inset:0;z-index:40;background:rgba(4,2,10,.74);backdrop-filter:blur(7px);
   opacity:0;pointer-events:none;transition:.28s}
 .scrim.on{opacity:1;pointer-events:auto}
+/* ⌨️ کیبورد باز = بلور خاموش (توضیح بالای «kb-open» را در JS ببینید).
+   transition:none روی خودِ این قانون تا خاموش‌شدنش آنی باشد — وگرنه
+   ۲۸۰ میلی‌ثانیه‌ی محوشدنِ تدریجی دقیقاً همان چیزی می‌شد که می‌خواستیم
+   کنارش بگذاریم: بازمحاسبه‌ی بلور فریم‌به‌فریم، درست وسطِ انیمیشنِ کیبورد. */
+body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition:opacity .28s}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;transform:translateY(102%);
   transition:transform .38s cubic-bezier(.2,.9,.25,1);
   background:linear-gradient(180deg,#17112E,#0B0718);
@@ -1703,6 +1745,7 @@ body.is-admin .dock b[data-p="adm"]{display:flex}
 .step button{width:46px;height:46px;flex:0 0 auto;border-radius:15px;border:1px solid var(--line);
   background:rgba(255,255,255,.06);color:var(--ink);font-size:21px;font-weight:700;cursor:pointer;transition:.16s}
 .step button:active{transform:scale(.92);background:color-mix(in srgb,var(--c1) 28%,transparent)}
+.step button[disabled]{opacity:.35;pointer-events:none}
 .step input{text-align:center;font-weight:900;font-size:17px}
 
 .total{display:flex;justify-content:space-between;align-items:center;margin:16px 0;padding:15px 16px;
