@@ -2229,9 +2229,10 @@ function maAutoFulfill($orderId, $manual = false) {
         $x['auto'] = true;
     });
 
+    // 📬 اول تحویل به خودِ خریدار، بعد خبرِ کانال — نه برعکس
     $o = MaOrder::get($orderId);
-    if (function_exists('axReportOrder')) axReportOrder($o, 'done');
     maTellUser($o, maDoneMsg($o, $ref));
+    if (function_exists('axReportOrder')) axReportOrder($o, 'done');
 
     // 🔕 خبرِ موفقیت فقط اگر ادمین خودش خواسته باشد — پیش‌فرض بی‌صداست.
     //    کار انجام شده، گزارشش هم رفته؛ پیامِ اضافه فقط چت را پر می‌کند.
@@ -2301,9 +2302,10 @@ function maTonFulfill($orderId, $o) {
         $x['auto']         = true;
     });
 
+    // 📬 اول تحویل به خودِ خریدار، بعد خبرِ کانال — نه برعکس
     $o = MaOrder::get($orderId);
-    if (function_exists('axReportOrder')) axReportOrder($o, 'done');
     maTellUser($o, maDoneMsg($o, (string)($o['provider_ref'] ?? '')));
+    if (function_exists('axReportOrder')) axReportOrder($o, 'done');
     return [true, (string)($o['provider_ref'] ?? '')];
 }
 
