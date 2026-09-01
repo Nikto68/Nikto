@@ -2662,17 +2662,41 @@ class Channels
      * 🕒 کشِ عضویت بینِ درخواست‌ها — نه فقط همین یکی.
      *
      * $memCache بالا فقط تا آخرِ همین درخواست زنده است؛ کاربری که پشتِ‌سرِهم
-     * چند پیام می‌فرستد (یا چند دکمه می‌زند)، هر پیامش یک getChatMember
-     * تازه می‌خرید. این‌جا فقط اگر APCu روی سرور باشد فعال می‌شود — نبودنش
-     * یعنی دقیقا همان رفتارِ قبلی (بدونِ این لایه)، نه خطا.
+     * چند پیام می‌فرستد (یا چند دکمه می‌زند، یا هر سه مینی‌اپ را باز
+     * می‌کند)، هر پیامش یک getChatMember تازه می‌خرید.
+     *
+     * اول APCu را امتحان می‌کند (سریع‌ترین حالت)، ولی خیلی از هاست‌های
+     * اشتراکی APCu را روشن ندارند — قبلا در آن حالت این لایه بی‌صدا
+     * خاموش می‌شد و هر «خرید» یک رفت‌وبرگشتِ زنده به تلگرام می‌خرید؛
+     * دقیقا همان چیزی که زیرِ فشارِ هم‌زمانِ چند مینی‌اپ، کارگرهای
+     * PHP-FPM را قفل نگه می‌داشت. حالا وقتی APCu نیست، به همان صندوقِ
+     * فایلیِ تکه‌شده‌ای برمی‌گردد که rate-limit مینی‌اپ‌ها هم استفاده
+     * می‌کند — دیسکِ محلی، نه شبکه، پس چه با چه بی APCu همیشه یک لایه
+     * کش هست.
      */
+    private static function joinCacheShardFile($k) {
+        return 'mjoin_cache_' . (hexdec(substr(md5((string)$k), 0, 4)) % 16);
+    }
     private static function joinCacheGet($k) {
-        if (!function_exists('apcu_fetch')) return null;
-        $v = @apcu_fetch('mjoin_' . $k, $ok);
-        return $ok ? $v : null;
+        if (function_exists('apcu_fetch')) {
+            $v = @apcu_fetch('mjoin_' . $k, $ok);
+            if ($ok) return $v;
+        }
+        $bag = load(self::joinCacheShardFile($k));
+        $e = $bag[$k] ?? null;
+        if (!is_array($e) || (int)($e['exp'] ?? 0) < time()) return null;
+        return $e['v'];
     }
     private static function joinCachePut($k, $v) {
         if (function_exists('apcu_store')) @apcu_store('mjoin_' . $k, $v, 45);
+        mutate(self::joinCacheShardFile($k), function (&$bag) use ($k, $v) {
+            $bag[$k] = ['v' => $v, 'exp' => time() + 45];
+            // خانه‌تکانی تا تکه بی‌نهایت بزرگ نشود
+            if (count($bag) > 400) {
+                $now = time();
+                foreach ($bag as $kk => $e) if ((int)($e['exp'] ?? 0) < $now) unset($bag[$kk]);
+            }
+        });
     }
 
     /** پاسخ خام تلگرام را به نتیجه‌ی قابل استفاده تبدیل می‌کند */

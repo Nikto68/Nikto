@@ -370,8 +370,15 @@ function numCall($op, array $vars = []) {
 
         case 'status':
             if ($id === '') return [null, 'شناسه ندارد'];
-            return $nl ? num5Get('/v2.php/?method=checkstatus&id=' . rawurlencode($id))
-                       : num5Get('/user/check/' . rawurlencode($id));
+            // ⏱ این یکی را مینی‌اپ هر چند ثانیه صدا می‌زند (پرسشِ دوره‌ای
+            //    برای رسیدنِ کد) — اگر فروشنده کند شود، نباید هر تیکِ
+            //    پرسش یک کارگرِ PHP-FPM را تا سقفِ timeout عمومی (که
+            //    برای خرید/لغو لازم است) قفل نگه دارد؛ همان قفل بود که
+            //    هر سه مینی‌اپ را هم‌زمان هنگ می‌کرد. سقفِ کوتاه‌تر:
+            //    یا جواب زود می‌آید یا تیکِ بعدی دوباره امتحان می‌کند.
+            $t = min(6, (int)numVal('api.timeout', 15));
+            return $nl ? num5Get('/v2.php/?method=checkstatus&id=' . rawurlencode($id), $t)
+                       : num5Get('/user/check/' . rawurlencode($id), $t);
 
         case 'cancel':
             if ($id === '') return [null, 'شناسه ندارد'];

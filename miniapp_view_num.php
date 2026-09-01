@@ -19,10 +19,11 @@
 function maViewNum($a, $boot) {
     $th = $a['theme'] ?? [];
     return strtr(maTplNum(), [
-        '__C1__'    => $th['c1'] ?? '#2E7DFF',
-        '__C2__'    => $th['c2'] ?? '#00E0C6',
-        '__C3__'    => $th['c3'] ?? '#7C4DFF',
-        '__BG__'    => $th['bg'] ?? '#050B18',
+        '__C1__'    => $th['c1'] ?? '#2F6FED',
+        '__C2__'    => $th['c2'] ?? '#17C978',
+        '__C3__'    => $th['c3'] ?? '#8B5CF6',
+        '__C4__'    => $th['c4'] ?? '#F23557',
+        '__BG__'    => '#FFFFFF', // 🔒 مثل مینی‌اپ ری‌اکشن، پس‌زمینه همیشه سفید است — قابل تغییر از پنل نیست
         '__GLOW__'  => !empty($th['glow']) ? '1' : '0',
         '__FX__'    => (string)maFxLevel($th),
         '__TITLE__' => htmlspecialchars((string)$a['title'], ENT_QUOTES, 'UTF-8'),
@@ -43,27 +44,30 @@ function maTplNum() {
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{
-  --c1:__C1__; --c2:__C2__; --c3:__C3__; --bg:__BG__;
+  /* 🎨 همان چهار رنگِ تاکیدِ مینی‌اپ ری‌اکشن — آبی/سبز/بنفش/قرمز —
+     تا هر سه مینی‌اپ یک هویتِ رنگیِ واحد داشته باشند. */
+  --c1:__C1__; --c2:__C2__; --c3:__C3__; --c4:__C4__; --bg:__BG__;
   /* رنگِ عمل: از تمِ پنل می‌آید ولی کم‌جان‌تر، تا صفحه آرام بماند */
-  --act:color-mix(in srgb, var(--c1) 62%, #8FB8F0);
+  --act:color-mix(in srgb, var(--c1) 70%, var(--dim));
 
-  /* سطح‌ها: مشکیِ عمیق با ته‌مایه‌ی آبی — نه خاکستریِ خنثی */
-  --s1:#080D16;      /* کارت */
-  --s2:#0C131F;      /* کارت برجسته */
-  --s3:#111A29;      /* فشرده / فعال */
-  --hair:rgba(150,190,255,.09);
+  /* سطح‌ها: پس‌زمینه‌ی سفیدِ منشور — همان سطح‌بندیِ روشنِ ری‌اکشن */
+  --s1:#FFFFFF;      /* کارت */
+  --s2:#F6F8FC;      /* کارت برجسته */
+  --s3:#EEF1F7;      /* فشرده / فعال */
+  --hair:rgba(15,23,42,.09);
 
-  /* متن: سفیدِ خالص نه — آبیِ خیلی کم‌رنگ، چشم را نمی‌زند */
-  --ink:#D7E4F5;
-  --dim:#7C90AE;
-  --dim2:#4E5F79;
+  /* متن: مشکیِ نرم روی سفید — دقیقا همان جفت‌رنگِ ری‌اکشن */
+  --ink:#161A2B;
+  --dim:#6B7280;
+  --dim2:#8B93A4;
 
-  /* دو رنگِ کم‌جانِ کاری: آبیِ پریده و سبزِ پریده */
-  --pale:#8FB8F0;
-  --mint:#7FD4A8;
-  --ok:#7FD4A8;
-  --warn:#E8B778;
-  --bad:#E8808F;
+  /* پریده = آبیِ کم‌جان روی سفید؛ بقیه مستقیم از همان چهار رنگِ تاکید */
+  --pale:color-mix(in srgb, var(--c1) 68%, var(--dim));
+  --mint:var(--c2);
+  --ok:var(--c2);
+  --ok-ink:color-mix(in srgb, var(--c2) 78%, black); /* سبزِ c2 روی سفید برای متن، تیره‌تر تا خوانا بماند */
+  --warn:#C9821B;
+  --bad:var(--c4);
 
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Vazirmatn,Tahoma,sans-serif;
@@ -157,7 +161,7 @@ body::before{
 .hero{
   position:relative;overflow:hidden;border-radius:var(--r-lg);padding:18px 16px;margin-bottom:16px;
   background:linear-gradient(140deg,color-mix(in srgb,var(--c1) 30%,var(--s1)) 0%,var(--s1) 55%,color-mix(in srgb,var(--c3) 22%,var(--s1)) 100%);
-  border:1px solid var(--hair);box-shadow:0 18px 44px -26px rgba(0,0,0,.9)
+  border:1px solid var(--hair);box-shadow:0 18px 44px -26px rgba(20,25,45,.35)
 }
 .hero h1{margin:0 0 4px;font-size:20px;font-weight:800;letter-spacing:-.2px}
 .hero p{margin:0;font-size:12.5px;color:var(--dim);line-height:1.75}
@@ -284,7 +288,7 @@ body::before{
 @keyframes pulse{70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
 .big{
   display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:var(--r-md);
-  background:rgba(0,0,0,.28);border:1px solid var(--hair);margin-bottom:9px
+  background:rgba(15,23,42,.045);border:1px solid var(--hair);margin-bottom:9px
 }
 .big .v{flex:1;min-width:0;font-family:var(--mono);font-size:20px;font-weight:800;
   direction:ltr;text-align:left;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -295,9 +299,9 @@ body::before{
 }
 .cp:active{transform:scale(.94)}
 .cp.done{background:color-mix(in srgb,var(--ok) 24%,var(--s3));border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
-.code .v{color:var(--ok);font-size:26px;letter-spacing:4px}
+.code .v{color:var(--ok-ink);font-size:26px;letter-spacing:4px}
 .timer{display:flex;align-items:center;gap:9px;margin:12px 0 4px}
-.bar{flex:1;height:6px;border-radius:6px;background:rgba(0,0,0,.35);overflow:hidden}
+.bar{flex:1;height:6px;border-radius:6px;background:rgba(15,23,42,.08);overflow:hidden}
 .bar i{display:block;height:100%;border-radius:6px;transition:width 1s linear;
   background:linear-gradient(90deg,var(--c2),var(--c1))}
 .timer b{font-family:var(--mono);font-size:13px;font-weight:800;direction:ltr;color:var(--dim)}
@@ -312,7 +316,7 @@ body::before{
 .btn:active{transform:scale(.98)}
 .btn[disabled]{opacity:.5;pointer-events:none}
 .btn.ghost{background:var(--s2);border:1px solid var(--hair);box-shadow:none;color:var(--ink)}
-.btn.danger{background:linear-gradient(135deg,var(--bad),#C7304A);box-shadow:0 12px 28px -14px var(--bad)}
+.btn.danger{background:linear-gradient(135deg,var(--bad),#B1003A);box-shadow:0 12px 28px -14px var(--bad)}
 .btn.sm{padding:11px;font-size:13px;border-radius:13px}
 
 /* ── 📖 «شماره مجازی چیست؟» ────────────────
@@ -322,7 +326,7 @@ body::before{
 .about{
   position:relative;overflow:hidden;border-radius:var(--r-lg);padding:18px 16px 16px;margin-bottom:14px;
   background:linear-gradient(155deg,color-mix(in srgb,var(--c1) 13%,var(--s1)),var(--s1) 62%,color-mix(in srgb,var(--c3) 12%,var(--s1)));
-  border:1px solid var(--hair);box-shadow:0 20px 50px -30px rgba(0,0,0,.9)
+  border:1px solid var(--hair);box-shadow:0 20px 50px -30px rgba(20,25,45,.3)
 }
 .about::after{
   content:'';position:absolute;inset:auto -25% -75% -25%;height:160px;
@@ -340,9 +344,8 @@ body::before{
 .about h2{
   margin:0;font-family:var(--dis);font-weight:900;font-size:20.5px;line-height:1.5;
   letter-spacing:.3px;
-  background:linear-gradient(95deg,#fff 0%,color-mix(in srgb,var(--c2) 85%,#fff) 45%,color-mix(in srgb,var(--c1) 80%,#fff) 100%);
-  -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;
-  text-shadow:0 6px 22px color-mix(in srgb,var(--c2) 26%,transparent)
+  background:linear-gradient(92deg,var(--c1),var(--c3));
+  -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent
 }
 .about p{margin:0;font-size:12.8px;line-height:2.05;color:var(--dim);text-align:justify}
 /* ✨ ویژگی‌ها — سه‌تایی، شیشه‌ای */
@@ -351,9 +354,8 @@ body::before{
 .feat{
   display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 5px 9px;
   border-radius:14px;text-align:center;
-  background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.012));
-  border:1px solid color-mix(in srgb,#fff 8%,transparent);
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)
+  background:var(--s2);
+  border:1px solid var(--hair)
 }
 .feat i{font-style:normal;font-size:17px;line-height:1}
 .feat b{font-size:10.8px;font-weight:700;color:var(--pale);line-height:1.4}
@@ -364,7 +366,7 @@ body::before{
   border:1px solid color-mix(in srgb,var(--ok) 22%,transparent)
 }
 .trust i{font-style:normal;font-size:17px;flex:0 0 auto}
-.trust b{display:block;font-size:12.5px;font-weight:800;color:color-mix(in srgb,var(--ok) 78%,#fff)}
+.trust b{display:block;font-size:12.5px;font-weight:800;color:var(--ok-ink)}
 .trust span{display:block;font-size:11px;color:var(--dim2);line-height:1.7;margin-top:1px}
 
 /* ── ناوبری پایین — جزیره‌ی شیشه‌ای ───────
@@ -376,15 +378,10 @@ body::before{
   position:fixed;z-index:40;inset:auto 12px calc(10px + var(--safe)) 12px;
   max-width:616px;margin:0 auto;display:flex;justify-content:space-around;
   padding:7px 6px;border-radius:24px;isolation:isolate;
-  backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);
-  background:
-    linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.02) 45%,rgba(0,0,0,.10)),
-    color-mix(in srgb,var(--s1) 62%,transparent);
-  border:1px solid color-mix(in srgb,#fff 12%,transparent);
-  box-shadow:
-    0 24px 60px -28px rgba(0,0,0,.95),
-    0 2px 0 0 rgba(255,255,255,.06) inset,
-    0 -1px 0 0 rgba(0,0,0,.35) inset
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  background:rgba(255,255,255,.86);
+  border:1px solid var(--hair);
+  box-shadow:0 18px 44px -12px rgba(20,25,45,.28)
 }
 /* ✨ نوارِ نوریِ بالای شیشه — همان برقی که روی لبه‌ی شیشه می‌افتد */
 .nav::before{
@@ -439,7 +436,7 @@ body::before{
 .row .tx span{display:block;font-size:11px;color:var(--dim2);font-family:var(--mono);direction:ltr;text-align:right}
 .pill{font-size:10px;font-weight:800;padding:4px 9px;border-radius:9px;white-space:nowrap;flex:0 0 auto}
 .pill.w{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
-.pill.d{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok)}
+.pill.d{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok-ink)}
 .pill.x{background:color-mix(in srgb,var(--bad) 20%,transparent);color:var(--bad)}
 
 /* ── 📋 کارتِ سفارش ──────────────────────── */
@@ -458,7 +455,7 @@ body::before{
 .ocard .timer{margin:10px 0 12px}
 
 /* ── شیت و توست ──────────────────────────── */
-.mask{position:fixed;inset:0;z-index:60;background:rgba(2,6,14,.72);backdrop-filter:blur(6px);
+.mask{position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.32);backdrop-filter:blur(6px);
   opacity:0;pointer-events:none;transition:.25s var(--ease)}
 .mask.on{opacity:1;pointer-events:auto}
 /* ⌨️ کیبورد باز = بلور خاموش (توضیح بالای «kb-open» را در JS ببینید).
@@ -489,7 +486,7 @@ body.kb-open .mask{backdrop-filter:none;-webkit-backdrop-filter:none;transition:
 .toast{
   position:fixed;left:50%;bottom:calc(var(--nav) + var(--safe) + 16px);transform:translate(-50%,20px);
   z-index:80;padding:11px 18px;border-radius:14px;background:var(--s3);border:1px solid var(--hair);
-  font-size:13px;font-weight:600;box-shadow:0 16px 40px -16px rgba(0,0,0,.9);
+  font-size:13px;font-weight:600;box-shadow:0 14px 30px -14px rgba(20,25,45,.3);
   opacity:0;pointer-events:none;transition:.26s var(--ease);max-width:88vw;text-align:center
 }
 .toast.on{opacity:1;transform:translate(-50%,0)}
@@ -507,15 +504,15 @@ body.kb-open .mask{backdrop-filter:none;-webkit-backdrop-filter:none;transition:
 #splash.hide{opacity:0;visibility:hidden;pointer-events:none}
 .splash-card{display:flex;flex-direction:column;align-items:center;gap:14px;
   padding:34px 30px;border-radius:32px;text-align:center;background:var(--s1);
-  box-shadow:0 22px 60px -20px color-mix(in srgb,var(--c1) 45%,transparent),
-             inset 0 1px 0 rgba(255,255,255,.05);
+  border:1px solid var(--hair);
+  box-shadow:0 22px 60px -20px color-mix(in srgb,var(--c1) 30%,transparent);
   animation:splashPop .55s cubic-bezier(.2,1.4,.4,1) both}
 .splash-badge{width:66px;height:66px;border-radius:22px;display:flex;align-items:center;justify-content:center;
-  font-size:28px;background:linear-gradient(135deg,var(--c1),var(--c2));
-  box-shadow:0 10px 26px -8px color-mix(in srgb,var(--c2) 55%,transparent);
+  font-size:28px;background:linear-gradient(135deg,var(--c1),var(--c3));
+  box-shadow:0 10px 26px -8px color-mix(in srgb,var(--c1) 45%,transparent);
   animation:splashFloat 2.4s ease-in-out infinite}
 .splash-hi{font-size:19px;font-weight:800;
-  background:linear-gradient(90deg,var(--c1),var(--c2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  background:linear-gradient(90deg,var(--c1),var(--c3));-webkit-background-clip:text;background-clip:text;color:transparent}
 .splash-sub{font-size:12.5px;color:var(--dim)}
 .splash-dots{display:flex;gap:6px;margin-top:2px}
 .splash-dots i{width:6px;height:6px;border-radius:50%;background:var(--c2);
@@ -676,22 +673,30 @@ function toast(msg, kind) {
 async function api(action, data) {
   if (!B.api) return { ok: false, error: 'no_api' };
   const payload = Object.assign({ action, app: B.app, initData: TG ? TG.initData : '' }, data || {});
+  // ⏱ بدونِ این، یک سرورِ کند یک fetch را تا هر چند دقیقه معلق نگه
+  //   می‌داشت و آن تبِ باز، صفحه‌ای «هنگ‌کرده» به نظر می‌رسید — نه به‌خاطرِ
+  //   جاوااسکریپت، بلکه چون منتظرِ جوابی بود که هیچ‌وقت زود نمی‌رسید.
+  let ctl = null, timer = null;
+  try { ctl = new AbortController(); timer = setTimeout(() => ctl.abort(), 12000); } catch (e) {}
   try {
     const r = await fetch(B.api, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       cache: 'no-store',
+      signal: ctl ? ctl.signal : undefined,
     });
     const j = await r.json().catch(() => null);
     return j && typeof j === 'object' ? j : { ok: false, error: 'bad_json' };
   } catch (e) {
     return { ok: false, error: 'net' };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
 /* ── وضعیت ───────────────────────────────── */
-const S = { me: null, cat: 'all', live: null, tick: 0, poll: 0, page: 'home',
+const S = { me: null, cat: 'all', live: null, tick: 0, poll: 0, polling: false, page: 'home',
             q: '', shown: 0, hits: [], notes: 0 };
 
 /* ── ساخت کارت محصول ─────────────────────── */
@@ -1024,7 +1029,14 @@ function startPoll() {
     if (document.hidden) return;
     if (S.tick > 0) { S.tick--; paintTimer(S.tick); }
     if (S.tick % 5 !== 0 && S.tick > 0) return;
-    const r = await api('num_state', S.live ? { order: S.live.order } : {});
+    // 🔒 اگر پرسشِ قبلی هنوز جواب نگرفته (سرور یا فروشنده کند بوده)،
+    //    یکی دیگر رویش تلنبار نکن — همان تلنبارشدن بود که هر چند
+    //    نفرِ منتظر، چند برابر کارگرِ PHP را هم‌زمان قفل می‌کرد.
+    if (S.polling) return;
+    S.polling = true;
+    let r;
+    try { r = await api('num_state', S.live ? { order: S.live.order } : {}); }
+    finally { S.polling = false; }
     if (r && r.ok) {
       if (typeof r.balance === 'number') setBal(r.balance);
       if (r.active === false) { paintLive(null); return; }

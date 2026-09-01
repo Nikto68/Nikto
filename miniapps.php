@@ -213,15 +213,17 @@ function maDefaultTg() {
             'color' => 'primary', 'icon' => '', 'order' => 1, 'row' => 0,
         ],
 
-        // 🎨 تم گرافیکی
+        // 🎨 تم «منشور» — همان چهار رنگِ مینی‌اپ ری‌اکشن (آبی/سبز/بنفش/قرمز)
+        // و همان پس‌زمینه‌ی سفید، تا هر سه مینی‌اپ یک هویتِ رنگیِ واحد داشته باشند.
         'theme' => [
-            'preset' => 'aurora',
-            'c1'  => '#7C4DFF',   // رنگ اصلی
-            'c2'  => '#00E5FF',   // رنگ دوم
-            'c3'  => '#FF3D9A',   // رنگ تاکید
-            'bg'  => '#080512',   // پس‌زمینه
+            'preset' => 'prism',
+            'c1'  => '#2F6FED',   // آبی
+            'c2'  => '#17C978',   // سبز
+            'c3'  => '#8B5CF6',   // بنفش
+            'c4'  => '#F23557',   // قرمز
+            'bg'  => '#FFFFFF',   // سفید — اکید
             'glow' => 1,          // درخشش
-            'grain' => 1,         // بافت
+            'grain' => 0,         // بافت
             'fx'    => 2,         // سطح افکت: ۲ کامل · ۱ سبک · ۰ خاموش
         ],
 
@@ -440,13 +442,14 @@ function maDefaultNum() {
         ],
 
         'theme' => [
-            // ⚫️ مشکی و سبزِ پررنگ، با سفید به‌عنوان تاکید — تا با بنفشِ
-            // «خدمات تلگرام» قاطی نشود و از دور هم شناخته شود.
-            'preset' => 'emerald',
-            'c1'  => '#0B7A3E',
-            'c2'  => '#39D98A',
-            'c3'  => '#F4F6F2',
-            'bg'  => '#050B07',
+            // 🎨 تم «منشور» — همان چهار رنگِ مینی‌اپ ری‌اکشن (آبی/سبز/بنفش/قرمز)
+            // و همان پس‌زمینه‌ی سفید، تا هر سه مینی‌اپ یک هویتِ رنگیِ واحد داشته باشند.
+            'preset' => 'prism',
+            'c1'  => '#2F6FED',
+            'c2'  => '#17C978',
+            'c3'  => '#8B5CF6',
+            'c4'  => '#F23557',
+            'bg'  => '#FFFFFF',
             'glow' => 1,
             'grain' => 0,
             'fx'    => 1,
@@ -3606,6 +3609,13 @@ if (!defined('MA_NOTE_TTL'))  define('MA_NOTE_TTL', 2592000);  // ۳۰ روز
 
 function maNoteKey($app, $uid) { return (string)$app . '_' . (int)$uid; }
 
+/* 📁 صندوقِ اعلان‌ها هم مثل rate-limit و کشِ عضویت، روی N فایلِ کوچک
+   پخش می‌شود — نه یک فایلِ مشترکِ بزرگ. وگرنه هر کاربری که تبِ زنگ را
+   باز می‌کرد یا برایش خبری می‌آمد، پشتِ یک flock واحد صف می‌کشید:
+   دقیقا همان‌جور گلوگاهی که برای سفارش‌ها (SQLite) و rate-limit
+   (شارد) قبلا برطرف شده بود، اینجا هنوز مانده بود. */
+function maNoteFile($key) { return 'ma_notes_' . maShardOf($key); }
+
 /**
  * متنی که برای تلگرام نوشته شده بود → اعلانِ ساختاریافته.
  *
@@ -3651,7 +3661,7 @@ function maNoteAdd($app, $uid, $html, $order = '') {
 
     $id  = 'n' . base_convert((string)time(), 10, 36) . bin2hex(random_bytes(2));
     $key = maNoteKey($app, $uid);
-    mutate('ma_notes', function (&$d) use ($key, $id, $emoji, $title, $body, $copy, $order) {
+    mutate(maNoteFile($key), function (&$d) use ($key, $id, $emoji, $title, $body, $copy, $order) {
         if (!is_array($d[$key] ?? null)) $d[$key] = ['seen_id' => '', 'list' => []];
 
         // 🔁 همان خبر، همین الان دوباره؟ ننویسش.
@@ -3688,7 +3698,8 @@ function maNoteAdd($app, $uid, $html, $order = '') {
  *    بود، برای همیشه دیده‌شده حساب می‌شد و نقطه‌اش هیچ‌وقت روشن نمی‌شد.
  */
 function maNotes($app, $uid, $limit = 40) {
-    $box = load('ma_notes')[maNoteKey($app, $uid)] ?? null;
+    $key = maNoteKey($app, $uid);
+    $box = load(maNoteFile($key))[$key] ?? null;
     if (!is_array($box)) return [[], 0];
     $all  = (array)($box['list'] ?? []);
     $mark = (string)($box['seen_id'] ?? '');
@@ -3709,7 +3720,7 @@ function maNoteUnseen($app, $uid) { [, $n] = maNotes($app, $uid, MA_NOTE_KEEP); 
 /** همه را خوانده‌شده علامت بزن — با شناسه‌ی تازه‌ترین خبر */
 function maNotesSeen($app, $uid) {
     $key = maNoteKey($app, $uid);
-    mutate('ma_notes', function (&$d) use ($key) {
+    mutate(maNoteFile($key), function (&$d) use ($key) {
         if (!is_array($d[$key] ?? null)) $d[$key] = ['seen_id' => '', 'list' => []];
         $d[$key]['seen_id'] = (string)($d[$key]['list'][0]['id'] ?? '');
     });

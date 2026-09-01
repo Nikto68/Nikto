@@ -4102,18 +4102,12 @@ def join_gate(user_id):
       </details>
       <details class="subcard"><summary><h3>🎨 تمِ گرافیکی</h3></summary>
         <div class="grid2">
-          <div><label>رنگِ اصلی</label><input type="color" name="theme_c1" value="<?= h($th['c1'] ?? '#7C4DFF') ?>" style="padding:4px;height:42px"></div>
-          <div><label>رنگِ دوم</label><input type="color" name="theme_c2" value="<?= h($th['c2'] ?? '#00E5FF') ?>" style="padding:4px;height:42px"></div>
-          <div><label>رنگِ تاکید</label><input type="color" name="theme_c3" value="<?= h($th['c3'] ?? '#FF3D9A') ?>" style="padding:4px;height:42px"></div>
-          <?php if ($mk === 'react'): ?>
+          <div><label>رنگِ اصلی (آبی)</label><input type="color" name="theme_c1" value="<?= h($th['c1'] ?? '#2F6FED') ?>" style="padding:4px;height:42px"></div>
+          <div><label>رنگِ دوم (سبز)</label><input type="color" name="theme_c2" value="<?= h($th['c2'] ?? '#17C978') ?>" style="padding:4px;height:42px"></div>
+          <div><label>رنگِ تاکید (بنفش)</label><input type="color" name="theme_c3" value="<?= h($th['c3'] ?? '#8B5CF6') ?>" style="padding:4px;height:42px"></div>
           <div><label>رنگِ قرمز (خطا)</label><input type="color" name="theme_c4" value="<?= h($th['c4'] ?? '#F23557') ?>" style="padding:4px;height:42px"></div>
-          <?php else: ?>
-          <div><label>پس‌زمینه</label><input type="color" name="theme_bg" value="<?= h($th['bg'] ?? '#080512') ?>" style="padding:4px;height:42px"></div>
-          <?php endif; ?>
         </div>
-        <?php if ($mk === 'react'): ?>
-        <div class="muted" style="margin-top:8px">🔒 پس‌زمینه‌ی این مینی‌اپ همیشه سفید است — قابل تغییر نیست.</div>
-        <?php endif; ?>
+        <div class="muted" style="margin-top:8px">🔒 هر سه مینی‌اپ یک پالتِ رنگی مشترک دارند و پس‌زمینه‌شان همیشه سفید است — قابل تغییر نیست.</div>
         <div style="margin-top:10px">
           <label style="font-weight:500"><input type="checkbox" name="theme_glow" style="width:auto" <?= !empty($th['glow']) ? 'checked' : '' ?>> ✨ درخشش</label>
           <label style="font-weight:500"><input type="checkbox" name="theme_grain" style="width:auto" <?= !empty($th['grain']) ? 'checked' : '' ?>> بافت</label>
