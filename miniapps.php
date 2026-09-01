@@ -2803,14 +2803,28 @@ function maUiAll($key) {
 function maCatsPublic($a, $key = '') {
     // 📁 هر دسته یک پوشه است، پس باید بگوید چند شماره دارد و از چند تومان
     //    شروع می‌شود — وگرنه کاربر باید همه را باز کند تا بفهمد.
-    $n = $from = [];
-    foreach ((array)($a['items'] ?? []) as $i) {
-        if (empty($i['on'])) continue;
-        $c = (string)($i['cat'] ?? '');
-        if ($c === '') continue;
-        $n[$c] = ($n[$c] ?? 0) + 1;
-        $p = maItemPrice($i);
-        if ($p > 0 && (!isset($from[$c]) || $p < $from[$c])) $from[$c] = $p;
+    //
+    // ⚡️ این حلقه رویِ کلِ کاتالوگ می‌رود (با چند هزار شماره یعنی
+    //    ده‌ها میلی‌ثانیه) و maBoot() آن را برای هر بازشدنِ صفحه، برای
+    //    هر کاربر، صدا می‌زند. قیمت‌ها آن‌قدر سریع عوض نمی‌شوند که
+    //    لازم باشد هر بار از نو حساب شوند — پس مثلِ نرخِ ارز/مارکت،
+    //    چند ثانیه کش می‌شود. بدترین حالت: قیمتِ «از ...» تا ۲۰ ثانیه
+    //    از پنل عقب می‌افتد؛ همان مصالحه‌ای که برای نرخ‌های زنده هم
+    //    همین‌جا پذیرفته شده.
+    $ck = 'cats_from_' . ($key !== '' ? $key : 'x');
+    $cached = maCacheGet($ck, 20);
+    if (is_array($cached)) { [$n, $from] = $cached; }
+    else {
+        $n = $from = [];
+        foreach ((array)($a['items'] ?? []) as $i) {
+            if (empty($i['on'])) continue;
+            $c = (string)($i['cat'] ?? '');
+            if ($c === '') continue;
+            $n[$c] = ($n[$c] ?? 0) + 1;
+            $p = maItemPrice($i);
+            if ($p > 0 && (!isset($from[$c]) || $p < $from[$c])) $from[$c] = $p;
+        }
+        maCachePut($ck, [$n, $from]);
     }
 
     $out = [];
