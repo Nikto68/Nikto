@@ -31,7 +31,8 @@ if (!is_string($H_KEY) || strlen($H_KEY) < 16) {
 }
 
 // مقایسه‌ی زمان‌ثابت تا با آزمون‌وخطای زمانی حدس زده نشود
-$given = (string)($_GET['key'] ?? '');
+// (فرمِ POSTِ «ست‌کردنِ وبهوک» هم همین کلید را در بدنه می‌فرستد)
+$given = (string)($_POST['key'] ?? $_GET['key'] ?? '');
 if (!hash_equals($H_KEY, $given)) {
     // تاخیر کوچک تا حدس‌زدن پشت‌سرهم بی‌صرفه شود
     usleep(300000);
@@ -224,11 +225,14 @@ row($rows, $whUrl !== '', 'آدرس وبهوک',
     $whUrl !== '' ? $whUrl : '<b>ست نشده</b>',
     'وبهوک ست نشده. از دکمه‌ی زیر استفاده کنید (توکن عمدا اینجا چاپ نمی‌شود ' .
     'تا اگر کسی این صفحه را دید نتواند ربات را بدزدد):<br>' .
-    '<a class="fixbtn" href="?key=' . rawurlencode($given) . '&amp;setwebhook=1">🔗 وبهوک را همین‌جا ست کن</a>' .
+    '<form method="post" style="display:inline"><input type="hidden" name="key" value="' . htmlspecialchars($given, ENT_QUOTES, 'UTF-8') . '">' .
+    '<input type="hidden" name="setwebhook" value="1">' .
+    '<button type="submit" class="fixbtn">🔗 وبهوک را همین‌جا ست کن</button></form>' .
     '<br><span class="muted">مقصد: <code>' . htmlspecialchars($guess, ENT_QUOTES, 'UTF-8') . '</code></span>');
 
-// ست کردن وبهوک از خود همین صفحه — بدون اینکه توکن جایی چاپ شود
-if (!empty($_GET['setwebhook']) && function_exists('curl_init')) {
+// ست کردن وبهوک از خود همین صفحه — فقط با POST (این صفحه هرگز با یک
+// GET/لینک نباید چیزی تغییر بدهد، حتی پشتِ کلید)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['setwebhook']) && function_exists('curl_init')) {
     $sw = h_api('setWebhook', ['url' => $guess, 'drop_pending_updates' => 'true', 'secret_token' => defined('WEBHOOK_SECRET') ? WEBHOOK_SECRET : '']);
     row($rows, !empty($sw['ok']), 'ست کردن وبهوک',
         !empty($sw['ok']) ? 'انجام شد → ' . $guess : ($sw['description'] ?? 'ناموفق'),

@@ -930,6 +930,7 @@ function maNum($v) {
 function maHttp($url, $method = 'GET', $headersRaw = '', $body = '', $timeout = 8) {
     $url = trim((string)$url);
     if ($url === '' || !preg_match('#^https?://#i', $url)) return [null, 'آدرس نامعتبر'];
+    if (function_exists('ssrfSafeUrl') && !ssrfSafeUrl($url, $ssrfWhy)) return [null, 'آدرس رد شد: ' . $ssrfWhy];
 
     $headers = [];
     foreach (preg_split('/\r?\n/', (string)$headersRaw) as $line) {
@@ -985,6 +986,7 @@ function maHttp($url, $method = 'GET', $headersRaw = '', $body = '', $timeout = 
 function maHttpRaw($url, $timeout = 12) {
     $url = trim((string)$url);
     if ($url === '' || !preg_match('#^https?://#i', $url)) return [null, 'آدرس نامعتبر'];
+    if (function_exists('ssrfSafeUrl') && !ssrfSafeUrl($url, $ssrfWhy)) return [null, 'آدرس رد شد: ' . $ssrfWhy];
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,

@@ -80,21 +80,65 @@ if (!defined('WEBHOOK_SECRET'))
     define('WEBHOOK_SECRET', getenv('WEBHOOK_SECRET') ?: '');
 
 /**
- * تا وبهوک با این کلید دوباره ست نشود، تلگرام اصلا این هدر را نمی‌فرستد؛
- * برای این‌که همین حالا آپدیت کردنِ فایل، رباتِ در حالِ کارِ کسی را قطع
- * نکند، اولین باری که این هدرِ درست را دیدیم یک نشانه ذخیره می‌کنیم و از
- * آن به بعد سخت‌گیری فعال می‌شود — قبلش، فقط اجازه می‌دهد (سخت‌گیری فقط
- * می‌تواند فعال شود، هیچ‌وقت به‌خاطرِ نبودِ نشانه غیرفعال نمی‌شود).
+ * Fail-closed: بدون WEBHOOK_SECRETِ تنظیم‌شده، یا بدون هدرِ درست، هیچ
+ * آپدیتی پذیرفته نمی‌شود — نه یک پنجره‌ی گذارِ اول‌بار، نه هیچ راهِ دیگر.
+ *
+ * توالیِ درست راه‌اندازی/تعویضِ کلید: اول WEBHOOK_SECRET را در
+ * config.local.php بگذارید، بعد یک‌بار «تنظیم وبهوک» را بزنید (پنل ←
+ * داشبورد، یا در ربات) — همان لحظه تلگرام شروع می‌کند به فرستادنِ این
+ * هدر روی هر آپدیتِ بعدی، پس هیچ پنجره‌ی بی‌دفاعی لازم نیست.
  */
 function webhookSecretOk() {
-    if (WEBHOOK_SECRET === '') return true;
-    $got    = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
-    $marker = DATA_DIR . '/.webhook_secret_verified';
-    if (is_string($got) && $got !== '' && hash_equals(WEBHOOK_SECRET, $got)) {
-        if (!is_file($marker)) { @mkdir(DATA_DIR, 0755, true); @touch($marker); }
-        return true;
+    if (WEBHOOK_SECRET === '') {
+        if (function_exists('adminAlertOnce')) {
+            adminAlertOnce('webhook_secret_missing',
+                "🔴 WEBHOOK_SECRET تنظیم نشده — تا وقتی تنظیم نشود، هیچ آپدیتی از تلگرام پذیرفته نمی‌شود.\n" .
+                "در config.local.php مقدارش را بگذارید، بعد یک‌بار «تنظیم وبهوک» را از پنل یا ربات بزنید.", 3600);
+        }
+        return false;
     }
-    return !is_file($marker);
+    $got = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
+    return is_string($got) && $got !== '' && hash_equals(WEBHOOK_SECRET, $got);
+}
+
+/**
+ * 🛡 سدِ SSRF — قبل از هر curl به آدرسی که ادمین خودش تنظیم کرده
+ * (پنل SMM، مارکتِ گیفت، پنلِ تحویلِ خودکار) این تابع را صدا بزنید.
+ *
+ * تهدید: اگر یک روز، از هر راهی، کسی غیر از ادمینِ واقعی بتواند این
+ * آدرس‌ها را عوض کند (یا خودِ ادمین اشتباهی چیزی بچسباند)، سرور نباید
+ * به شبکه‌ی داخلیِ خودش یا آدرسِ متادیتای کلاود درخواست بفرستد.
+ *
+ * DNS rebinding را کامل نمی‌بندد (آن نیاز به قفل‌کردنِ IP در لحظه‌ی
+ * اتصال دارد، نه فقط لحظه‌ی resolve) — این یک سدِ عملیِ ساده است، نه
+ * یک ضمانتِ کامل.
+ */
+function ssrfSafeUrl($url, &$reason = null) {
+    $url = trim((string)$url);
+    $p = parse_url($url);
+    if (!$p || empty($p['scheme']) || empty($p['host']) || !in_array(strtolower($p['scheme']), ['http', 'https'], true)) {
+        $reason = 'آدرس نامعتبر است';
+        return false;
+    }
+    $host = $p['host'];
+    $ips = [];
+    if (filter_var($host, FILTER_VALIDATE_IP)) {
+        $ips = [$host];
+    } else {
+        $ips = @dns_get_record($host, DNS_A + DNS_AAAA) ?: [];
+        $ips = array_filter(array_map(fn($r) => $r['ip'] ?? ($r['ipv6'] ?? null), $ips));
+        if (!$ips) $ips = [gethostbyname($host)]; // آخرین راه — اگر dns_get_record چیزی نداد
+    }
+    foreach ($ips as $ip) {
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) continue;
+        $isPublic = filter_var($ip, FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+        if ($isPublic === false || $ip === '169.254.169.254') {
+            $reason = 'این آدرس به شبکه‌ی داخلی/محلی اشاره می‌کند — اجازه‌ی درخواست به آن نیست';
+            return false;
+        }
+    }
+    return true;
 }
 
 // کاربران روی SQLite ذخیره می‌شوند (نه یک فایل JSON بزرگ) — بدون این
@@ -1759,6 +1803,7 @@ function smmCall($action, array $params = []) {
     $base = trim((string)$c['base']);
     $key  = trim((string)$c['key']);
     if ($base === '' || $key === '') return [false, null, 'آدرس یا کلیدِ پنل هنوز ست نشده.'];
+    if (!ssrfSafeUrl($base, $ssrfWhy)) return [false, null, 'آدرس پنل رد شد: ' . $ssrfWhy];
 
     $post = array_merge(['key' => $key, 'action' => $action], $params);
     $ch = curl_init($base);
