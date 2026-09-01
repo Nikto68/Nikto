@@ -39,6 +39,7 @@ function chStreams() {
         'mem_no'  => ['🔞 ممبر غیراخلاقی', 'سفارش‌های ممبر غیراخلاقی.'],
         'buy'     => ['🛒 بقیه‌ی فروش‌ها', 'هر فروشی که در دسته‌های بالا نیفتد.'],
         'tech'    => ['🛠 گزارش فنی', 'خطا، افت سرعت، کمبود بودجه — هرچیزی که نشان می‌دهد ربات دارد مشکل پیدا می‌کند.'],
+        'ticket'  => ['🎫 تیکت پشتیبانی', 'پیام‌هایی که کاربر با «ارسال تیکت» — ارتباطِ غیرمستقیم با پشتیبانی — می‌فرستد.'],
     ];
 }
 
@@ -124,11 +125,16 @@ function chDefaults() {
             'text' => "<b>گزارش فنی</b>\n\n{text}\n\n{date}",
             'photo' => false, 'buttons' => [],
         ],
+        'ticket' => [
+            'on' => false, 'chat_id' => '', 'thread_id' => 0,
+            'text' => "<b>تیکت پشتیبانی</b>\n\n{user} (<code>{uid}</code>)\n\n{text}\n\n{date}",
+            'photo' => false, 'buttons' => [],
+        ],
     ];
 
     // بقیه‌ی جریان‌ها همه فروشند و یک شکل دارند
     foreach (chStreams() as $k => [$label, $desc]) {
-        if ($k === 'topup' || $k === 'tech') continue;
+        if ($k === 'topup' || $k === 'tech' || $k === 'ticket') continue;
         $out[$k] = [
             'on' => false, 'chat_id' => '', 'thread_id' => 0,
             'text' => $saleText, 'photo' => false, 'buttons' => $saleBtns,
@@ -460,7 +466,7 @@ function chAdminStream($chatId, $msgId, $k) {
             ? '<code>' . h((string)$s['chat_id']) . '</code>' : '— تنظیم نشده') . "\n";
     $t .= 'تاپیک: ' . ((int)$s['thread_id'] > 0 ? (int)$s['thread_id'] : 'بدون تاپیک') . "\n";
     if ($k === 'topup') $t .= 'عکس رسید: ' . (!empty($s['photo']) ? '✅ فرستاده شود' : '❌ فقط متن') . "\n";
-    if ($k !== 'topup' && $k !== 'tech') {
+    if ($k !== 'topup' && $k !== 'tech' && $k !== 'ticket') {
         $pid = trim((string)($s['premium_icon'] ?? ''));
         $t .= '🌟 ایموجیِ پریمیوم: ' . ($pid !== '' ? '<tg-emoji emoji-id="' . h($pid) . '">🛒</tg-emoji> تنظیم‌شده' : 'تنظیم‌نشده') . "\n";
     }
@@ -473,7 +479,7 @@ function chAdminStream($chatId, $msgId, $k) {
         [btnCb('🔗 گروه و تاپیک', 'chl_' . $k, 'admin')],
         [btnCb('✏️ متن گزارش', 'chm_' . $k, 'admin')],
     ];
-    $resetRow = $k !== 'topup' && $k !== 'tech'
+    $resetRow = $k !== 'topup' && $k !== 'tech' && $k !== 'ticket'
         ? [btnCb('🌟 ایموجیِ پریمیوم', 'chi_' . $k, 'admin'), btnCb('🔄 بازنشانی متن', 'chrs_' . $k, 'confirm')]
         : [btnCb('🔄 بازنشانی متن به پیش‌فرض', 'chrs_' . $k, 'confirm')];
     $rows[] = $resetRow;
@@ -498,8 +504,9 @@ function chAdminStream($chatId, $msgId, $k) {
 }
 
 function chVarsOf($k) {
-    if ($k === 'topup') return ['user', 'uid', 'amount', 'balance', 'code', 'receipt', 'date'];
-    if ($k === 'tech')  return ['text', 'date'];
+    if ($k === 'topup')  return ['user', 'uid', 'amount', 'balance', 'code', 'receipt', 'date'];
+    if ($k === 'tech')   return ['text', 'date'];
+    if ($k === 'ticket') return ['user', 'uid', 'text', 'date'];
     return ['user', 'uid', 'product', 'qty', 'amount', 'code', 'section', 'icon', 'date'];
 }
 
@@ -520,6 +527,22 @@ function chTechAlert($text, $kb = null) {
     $rows = (is_array($kb) && !empty($kb['inline_keyboard'])) ? $kb['inline_keyboard'] : [];
     $sent = chReady('tech') ? chSend('tech', ['text' => $text], null, $rows) : false;
     if (!$sent && function_exists('notifyAdmins')) notifyAdmins($text, $kb);
+    return $sent;
+}
+
+/**
+ * 🎫 یک تیکت — ارتباطِ غیرمستقیمِ کاربر با پشتیبانی — به همان گروه/تاپیکی
+ * می‌رود که برای «تیکت پشتیبانی» تنظیم شده، دقیقا همان الگوی chTechAlert.
+ * اگر تنظیم نشده، همان قبلی: پیام خصوصی به مدیرها.
+ */
+function chTicketAlert($uid, $uname, $fname, $text, $kb = null) {
+    $vars = ['user' => chUser($uid, $uname, $fname), 'uid' => (int)$uid, 'text' => $text];
+    $rows = (is_array($kb) && !empty($kb['inline_keyboard'])) ? $kb['inline_keyboard'] : [];
+    $sent = chReady('ticket') ? chSend('ticket', $vars, null, $rows) : false;
+    if (!$sent && function_exists('notifyAdmins')) {
+        $plain = "🎫 <b>تیکت جدید</b>\n\n" . $vars['user'] . " (<code>{$uid}</code>)\n\n" . $text;
+        notifyAdmins($plain, $kb);
+    }
     return $sent;
 }
 
@@ -627,6 +650,8 @@ function chSampleVars($k) {
     if ($k === 'topup') return ['user' => '@testuser', 'uid' => 123456789, 'amount' => fmtNum(500000),
                                 'balance' => fmtNum(750000), 'code' => 'TEST-1234', 'receipt' => 'آزمایشی'];
     if ($k === 'tech')  return ['text' => '🧪 این یک گزارشِ فنیِ آزمایشی است.'];
+    if ($k === 'ticket') return ['user' => '@testuser', 'uid' => 123456789,
+                                 'text' => '🧪 این یک تیکتِ آزمایشی است.'];
     [$label] = chStreams()[$k] ?? ['🛒 فروش'];
     $plainIcon = '🛒';
     if (preg_match('/^(\X)\s+(.*)$/u', $label, $m)) { $plainIcon = $m[1]; $label = $m[2]; }

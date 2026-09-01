@@ -9890,9 +9890,9 @@ function masterHandle($update) {
         // ۲) اول تایید کاربر — تا اگر ارسال به ادمین گیر کرد، کاربر بلاتکلیف نماند
         sendMsg(BOT_TOKEN, $chatId, T('sup_sent'), mainKeyboard());
 
-        // ۳) بعد اطلاع به ادمین (اگر ناموفق بود فقط لاگ می‌شود)
-        $r = notifyAdmins(
-            "🎫 <b>تیکت جدید</b>\n\n👤 " . h($uname ? '@' . $uname : $fname) . " (<code>{$uid}</code>)\n\n" . $body,
+        // ۳) بعد اطلاع به پشتیبانی — روی همان تاپیکی که برای «تیکت پشتیبانی»
+        //    تنظیم شده (📡 کانال‌های متصل)؛ تنظیم نشده باشد، مثل قبل پی‌وی مدیرها
+        $r = chTicketAlert($uid, $uname, $fname, $body,
             inlineKb([[btnCb('💬 پاسخ', 'reply_' . $uid, 'admin')]]));
         if (!$r) error_log('[ticket] admin notify failed for all admins');
         return;
