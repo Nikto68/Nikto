@@ -168,7 +168,7 @@ __SKIN__
 
     <div id="rateBox" style="display:none">
       <div class="sect"><h2><s></s><span id="ratesTtl">نرخ لحظه‌ای</span></h2></div>
-      <div class="rates" id="rateList"></div>
+      <div class="grid" id="rateList"></div>
     </div>
   </section>
 
@@ -685,17 +685,9 @@ function buildHot(){
 function buildRates(){
   var live = B.items.filter(function(i){ return i.live; }).slice(0, 5);
   if (!live.length) return;
+  // مثل بخش «پیشنهاد ویژه» — همان کارتِ محصولِ باکسی، نه لیستِ ردیفی
   var h = '';
-  live.forEach(function(i){
-    h += '<div class="rate" data-i="' + esc(i.id) + '">' +
-           '<span class="e">' + esc(i.emoji || '💠') + '</span>' +
-           '<span class="n">' + esc(i.name) +
-             (i.unit ? '<em>هر ' + esc(i.unit) + '</em>' : '') + '</span>' +
-           (i.stale
-             ? '<span class="p down">موقتا بسته</span>'
-             : '<span class="p">' + fa(i.price) + '</span>') +
-         '</div>';
-  });
+  for (var k=0;k<live.length;k++) h += tileHtml(live[k], k);
   $('rateList').innerHTML = h;
   $('rateBox').style.display = '';
 }
@@ -1504,10 +1496,15 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
 .tile.hot{border-color:color-mix(in srgb,var(--c1) 45%,transparent)}
 .tile.hide{display:none}
 .orb{position:relative;width:52px;height:52px;border-radius:18px;display:grid;place-items:center;font-size:25px;
-  margin-bottom:11px;
-  background:linear-gradient(140deg,color-mix(in srgb,var(--c1) 36%,transparent),color-mix(in srgb,var(--c2) 22%,transparent));
-  border:1px solid rgba(255,255,255,.14)}
-body.glow-on .orb{box-shadow:0 10px 24px -13px var(--c1)}
+  margin-bottom:11px;background-size:220% 220%;
+  background-image:linear-gradient(140deg,color-mix(in srgb,var(--c1) 36%,transparent),color-mix(in srgb,var(--c2) 22%,transparent));
+  border:1px solid rgba(255,255,255,.14);
+  animation:orbShine 3.2s ease-in-out infinite,orbFloat 2.4s ease-in-out infinite}
+@keyframes orbShine{0%,100%{background-position:10% 30%}50%{background-position:90% 70%}}
+@keyframes orbFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.04)}}
+body.glow-on .orb{animation:orbShine 3.2s ease-in-out infinite,orbFloat 2.4s ease-in-out infinite,orbPulse 2.4s ease-in-out infinite}
+@keyframes orbPulse{0%,100%{box-shadow:0 10px 24px -13px var(--c1)}50%{box-shadow:0 15px 30px -10px var(--c1)}}
+@media (prefers-reduced-motion:reduce){ .orb{animation:none!important} }
 .tile h3{position:relative;margin:0;font-size:13px;font-weight:800;line-height:1.55;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .tile p{position:relative;margin:4px 0 0;font-size:10.5px;color:var(--dim);line-height:1.65;
@@ -1525,16 +1522,6 @@ body.glow-on .orb{box-shadow:0 10px 24px -13px var(--c1)}
   color:#0B0616;background:var(--c2);letter-spacing:.3px}
 .tile.hasbadge .livedot{top:31px}
 .tile.off{opacity:.55}
-
-/* ═══ نرخ لحظه‌ای ═══ */
-.rates{display:grid;gap:9px}
-.rate{display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:18px;
-  border:1px solid var(--line);background:var(--pane)}
-.rate .e{font-size:22px;flex:0 0 auto}
-.rate .n{flex:1;min-width:0;font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rate .n em{display:block;font-style:normal;font-size:10px;color:var(--dim);font-weight:600;margin-top:2px}
-.rate .p{font-size:13.5px;font-weight:900;color:var(--c2);flex:0 0 auto}
-.rate .p.down{color:#FF6A8A;font-size:11px}
 
 /* ═══ فهرست سفارش ═══ */
 .ord{display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:18px;margin-bottom:9px;
