@@ -2467,6 +2467,23 @@ class Channels
         return true;
     }
 
+    /**
+     * 🕒 کشِ عضویت بینِ درخواست‌ها — نه فقط همین یکی.
+     *
+     * $memCache بالا فقط تا آخرِ همین درخواست زنده است؛ کاربری که پشتِ‌سرِهم
+     * چند پیام می‌فرستد (یا چند دکمه می‌زند)، هر پیامش یک getChatMember
+     * تازه می‌خرید. این‌جا فقط اگر APCu روی سرور باشد فعال می‌شود — نبودنش
+     * یعنی دقیقا همان رفتارِ قبلی (بدونِ این لایه)، نه خطا.
+     */
+    private static function joinCacheGet($k) {
+        if (!function_exists('apcu_fetch')) return null;
+        $v = @apcu_fetch('mjoin_' . $k, $ok);
+        return $ok ? $v : null;
+    }
+    private static function joinCachePut($k, $v) {
+        if (function_exists('apcu_store')) @apcu_store('mjoin_' . $k, $v, 45);
+    }
+
     /** پاسخ خام تلگرام را به نتیجه‌ی قابل استفاده تبدیل می‌کند */
     private static function memberResult($r) {
         if (empty($r['ok'])) {
@@ -2494,12 +2511,18 @@ class Channels
             $k = $cid . ':' . $userId;
             if ($fresh && !self::takeFresh($k)) unset(self::$memCache[$k]);
             if (isset(self::$memCache[$k]) || isset($need[$k])) continue;
+            // کشِ بینِ‌درخواستی — قبل از اینکه اصلا بگذاریمش تو صفِ پرسیدن
+            if (!$fresh) {
+                $cached = self::joinCacheGet($k);
+                if ($cached !== null) { self::$memCache[$k] = $cached; continue; }
+            }
             $need[$k] = ['chat_id' => $cid, 'user_id' => $userId];
         }
         if (count($need) < 2) return;            // یکی بود، همان مسیر عادی ارزان‌تر است
         foreach (tgMulti(BOT_TOKEN, 'getChatMember', $need, 6) as $k => $r) {
             self::$memCache[$k] = self::memberResult($r);
             self::$memFresh[$k] = true;          // دیگر در همین درخواست دوباره پرسیده نشود
+            self::joinCachePut($k, self::$memCache[$k]);
         }
     }
 
@@ -2509,10 +2532,18 @@ class Channels
         if ($fresh && !self::takeFresh($k)) unset(self::$memCache[$k]);
         if (isset(self::$memCache[$k])) return self::$memCache[$k];
 
+        // 🕒 کشِ بینِ‌درخواستی — مثلا کاربری که چند پیامِ پشتِ‌سرِهم می‌فرستد
+        if (!$fresh) {
+            $cached = self::joinCacheGet($k);
+            if ($cached !== null) return self::$memCache[$k] = $cached;
+        }
+
         $r = tg(BOT_TOKEN, 'getChatMember',
                 ['chat_id' => $chatId, 'user_id' => $userId], 6);
         unset(self::$memFresh[$k]);
-        return self::$memCache[$k] = self::memberResult($r);
+        $res = self::memberResult($r);
+        self::joinCachePut($k, $res);
+        return self::$memCache[$k] = $res;
     }
 
     /** کانال‌هایی که کاربر هنوز عضو نشده — برای این ربات */
@@ -2983,6 +3014,15 @@ class Links
 }
 
 function botUserTouch($botId, $userId, $username, $firstName = '') {
+    // 🔎 نگاه ارزان قبل از قفل — این تابع برای هر پیام صدا زده می‌شود، ولی
+    //    بیشترِ پیام‌ها از کاربری می‌آید که همین اواخر (کمتر از ۶۰ ثانیه)
+    //    دیده شده؛ برایش دوباره قفل‌گرفتن و کلِ فایلِ کاربران را بازنویسی
+    //    کردن لازم نیست. فقط کاربرِ تازه یا کاربرِ کهنه‌شده واقعا نوشته
+    //    می‌شود — خودِ اطلاعاتِ کاربر جایی کم نمی‌شود، فقط نوشتنِ زائد.
+    $k    = (string)$userId;
+    $prev = load('bots/' . $botId . '/users')[$k] ?? null;
+    if ($prev && (time() - (strtotime((string)($prev['seen_at'] ?? '')) ?: 0)) < 60) return;
+
     mutate('bots/' . $botId . '/users', function (&$a) use ($userId, $username, $firstName) {
         $k = (string)$userId;
         $a[$k] = array_merge(['joined_at' => nowStr()], $a[$k] ?? [], [
