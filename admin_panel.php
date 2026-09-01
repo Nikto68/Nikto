@@ -534,12 +534,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ آدرس و چیدمانِ مینی‌اپ‌ها ذخیره شد.');
     }
     if ($a === 'save_miniapp_app') {
-        $key = ($_POST['key'] ?? '') === 'num' ? 'num' : 'tg';
+        $key = in_array((string)($_POST['key'] ?? ''), maKeys(), true) ? (string)$_POST['key'] : 'tg';
         $post = $_POST;
         maSet($key, function (&$app) use ($post) {
             $app['on'] = !empty($post['app_on']);
             if (!is_array($app['theme'] ?? null)) $app['theme'] = [];
-            foreach (['c1', 'c2', 'c3', 'bg'] as $ck) {
+            foreach (['c1', 'c2', 'c3', 'c4', 'bg'] as $ck) {
                 $v = trim((string)($post['theme_' . $ck] ?? ''));
                 if (preg_match('/^#[0-9a-fA-F]{6}$/', $v)) $app['theme'][$ck] = $v;
             }
@@ -550,7 +550,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ تنظیماتِ این مینی‌اپ ذخیره شد.');
     }
     if ($a === 'save_miniapp_cats') {
-        $key = ($_POST['key'] ?? '') === 'num' ? 'num' : 'tg';
+        $key = in_array((string)($_POST['key'] ?? ''), maKeys(), true) ? (string)$_POST['key'] : 'tg';
         $onIds = (array)($_POST['cat_on'] ?? []);
         maSet($key, function (&$app) use ($onIds) {
             if (!is_array($app['cats'] ?? null)) return;
@@ -561,12 +561,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ دسته‌بندی‌ها ذخیره شد.');
     }
     if ($a === 'save_miniapp_items') {
-        $key = ($_POST['key'] ?? '') === 'num' ? 'num' : 'tg';
+        $key = in_array((string)($_POST['key'] ?? ''), maKeys(), true) ? (string)$_POST['key'] : 'tg';
         $onIds  = (array)($_POST['item_on'] ?? []);
         $prices = (array)($_POST['item_price'] ?? []);
         $mins   = (array)($_POST['item_min'] ?? []);
         $maxs   = (array)($_POST['item_max'] ?? []);
-        $qtyAsk = ['qty', 'qty_wallet', 'qty_username'];
+        $qtyAsk = ['qty', 'qty_wallet', 'qty_username', 'qty_link'];
         maSet($key, function (&$app) use ($onIds, $prices, $mins, $maxs, $qtyAsk) {
             if (!is_array($app['items'] ?? null)) return;
             foreach ($app['items'] as $i => $it) {
@@ -1344,34 +1344,45 @@ function oBadge($s) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>پنل مدیریت فروشگاه</title>
 <style>
-:root{--bg:#0c0c0c;--panel:#161616;--panel-alt:#1e1e1e;--ink:#f2f2f2;--ink-soft:#c2c2c2;--muted:#8a8a8a;
---line:#2b2b2b;--line-soft:#232323;--blue:#2f7de1;--blue-dim:#1c3f66;--red:#e5484d;--red-dim:#5c2224;
---green:#2fbf6f;--green-dim:#1d4a32;--amber:#e0a72e;--amber-dim:#54430f}
+:root{--bg:#0a0a10;--panel:rgba(26,26,36,.66);--panel-alt:rgba(38,38,50,.5);--ink:#f2f2f2;--ink-soft:#c2c2c2;--muted:#8a8a8a;
+--line:rgba(255,255,255,.09);--line-soft:rgba(255,255,255,.06);--blue:#2f7de1;--blue-dim:#1c3f66;--red:#e5484d;--red-dim:#5c2224;
+--green:#2fbf6f;--green-dim:#1d4a32;--amber:#e0a72e;--amber-dim:#54430f;--blur:18px}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:60px}
+html{background:var(--bg)}
+body{font-family:system-ui,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:60px;
+position:relative;min-height:100vh}
+/* 🌌 اتمسفرِ شیشه‌ای — چند لکه‌ی رنگیِ ثابت پشتِ همه‌چیز، بدونِ filter، هزینه‌ی اسکرول صفر */
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(46vw 46vw at 92% -6%,rgba(47,125,225,.16),transparent 68%),
+    radial-gradient(40vw 40vw at 2% 18%,rgba(47,191,111,.12),transparent 66%),
+    radial-gradient(36vw 36vw at 78% 108%,rgba(150,80,230,.1),transparent 64%)}
+header,.shell{position:relative;z-index:1}
 a{color:inherit;text-decoration:none}
-header{background:#000;color:#fff;padding:16px 20px;border-bottom:1px solid var(--line)}
+header{background:rgba(8,8,12,.62);backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+color:#fff;padding:16px 20px;border-bottom:1px solid var(--line)}
 .wrap{max-width:1200px;margin:0 auto;padding:0 16px}
 header h1{font-size:19px;font-weight:800}
 header .row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
-.logout{background:var(--red-dim);border:1px solid var(--red);color:#fff;padding:8px 16px;border-radius:8px;font-size:13px}
-.logout:hover{opacity:.85}
+.logout{background:var(--red-dim);border:1px solid var(--red);color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;transition:transform .15s,opacity .15s}
+.logout:hover{opacity:.85;transform:translateY(-1px)}
 
 /* ---------- shell: right sidebar + content (folder-grouped nav) ---------- */
 .nav-toggle-cb{display:none}
 .nav-toggle-btn{display:none}
 .nav-backdrop{display:none}
 .shell{display:flex;align-items:flex-start;max-width:1320px;margin:0 auto}
-.sidebar{width:225px;flex:0 0 225px;background:#000;border-left:1px solid var(--line);
+.sidebar{width:225px;flex:0 0 225px;background:rgba(6,6,10,.58);backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+border-left:1px solid var(--line);
 min-height:calc(100vh - 57px);position:sticky;top:0;align-self:flex-start;overflow-y:auto}
 .sidebar-inner{padding:14px 10px}
 .nav-folder{margin-bottom:14px}
 .nav-folder-title{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;
 letter-spacing:.4px;padding:6px 10px 4px}
 .sidebar a{display:block;padding:9px 12px;border-radius:8px;font-size:13.5px;font-weight:600;
-color:var(--ink-soft);margin-bottom:2px}
-.sidebar a:hover{background:var(--panel-alt)}
-.sidebar a.on{background:var(--blue);color:#fff}
+color:var(--ink-soft);margin-bottom:2px;transition:background .15s,color .15s,transform .15s}
+.sidebar a:hover{background:var(--panel-alt);transform:translateX(-2px)}
+.sidebar a.on{background:linear-gradient(135deg,var(--blue),#4f9cf0);color:#fff;box-shadow:0 6px 16px -8px rgba(47,125,225,.6)}
 .content{flex:1;min-width:0;padding:18px 16px}
 .content .wrap{max-width:1000px;margin:0;padding:0}
 @media(max-width:900px){
@@ -1386,31 +1397,51 @@ color:var(--ink-soft);margin-bottom:2px}
 }
 
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:0 0 20px}
-.stat{background:var(--panel);padding:18px;border-radius:12px;border:1px solid var(--line)}
+.stat{background:var(--panel);backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+padding:18px;border-radius:12px;border:1px solid var(--line);transition:transform .18s,box-shadow .18s}
+.stat:hover{transform:translateY(-2px);box-shadow:0 12px 28px -18px rgba(0,0,0,.6)}
 .stat .n{font-size:26px;font-weight:800;color:var(--blue)}
 .stat .l{color:var(--muted);font-size:12.5px;margin-top:5px}
-.card{background:var(--panel);border-radius:12px;border:1px solid var(--line);margin-bottom:18px;overflow:hidden}
-.card h2{padding:15px 18px;font-size:14.5px;font-weight:800;border-bottom:1px solid var(--line);background:var(--panel-alt)}
+.card{background:var(--panel);backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+border-radius:12px;border:1px solid var(--line);margin-bottom:18px;overflow:hidden;
+box-shadow:0 14px 34px -24px rgba(0,0,0,.7);animation:cardIn .35s cubic-bezier(.2,.9,.3,1) backwards}
+@keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.card h2{padding:15px 18px;font-size:14.5px;font-weight:800;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
 .card .body{padding:18px}
-.subcard{background:var(--panel-alt);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:16px}
+.subcard{background:var(--panel-alt);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:16px;transition:border-color .15s}
+.subcard:hover{border-color:rgba(255,255,255,.16)}
 .subcard:last-child{margin-bottom:0}
 .subcard>h3{font-size:13px;font-weight:800;color:var(--ink);margin-bottom:11px;display:flex;align-items:center;gap:6px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:13px}
 label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:5px}
 input,select,textarea{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;
-font-size:13.5px;font-family:inherit;background:var(--panel-alt);color:var(--ink)}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)}
+font-size:13.5px;font-family:inherit;background:var(--panel-alt);color:var(--ink);transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,125,225,.18)}
 textarea{min-height:90px;resize:vertical;line-height:1.9}
 .btn{display:inline-block;padding:10px 18px;border:1.5px solid var(--blue);border-radius:8px;font-size:13.5px;font-weight:700;
-cursor:pointer;font-family:inherit;color:#fff;background:var(--blue)}
-.btn:hover{opacity:.85}
+cursor:pointer;font-family:inherit;color:#fff;background:var(--blue);transition:transform .15s,opacity .15s,box-shadow .15s}
+.btn:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 8px 20px -12px rgba(47,125,225,.7)}
+.btn:active{transform:translateY(0) scale(.98)}
 .btn.g{background:var(--green);border-color:var(--green)}.btn.r{background:var(--red);border-color:var(--red)}.btn.b{background:var(--blue);border-color:var(--blue)}
 .btn.sm{padding:6px 12px;font-size:12px}
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:var(--panel-alt);padding:11px;text-align:right;font-weight:700;color:var(--ink-soft);white-space:nowrap;border-bottom:1px solid var(--line)}
+th{background:rgba(255,255,255,.03);padding:11px;text-align:right;font-weight:700;color:var(--ink-soft);white-space:nowrap;border-bottom:1px solid var(--line)}
 td{padding:11px;border-top:1px solid var(--line-soft);vertical-align:middle;color:var(--ink)}
 .scroll{overflow-x:auto}
+
+/* ---------- 📦 محصول‌ها: جمع‌شونده — فقط خلاصه دیده می‌شود، کلیک باز می‌کند ---------- */
+.itemrow{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--panel-alt);overflow:hidden}
+.itemrow[open]{border-color:rgba(47,125,225,.4)}
+.itemrow>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:11px 13px;user-select:none}
+.itemrow>summary::-webkit-details-marker{display:none}
+.itemrow>summary .ir-name{flex:1;min-width:0;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.itemrow>summary .ir-price{flex:0 0 auto;font-size:12.5px;color:var(--muted);direction:ltr}
+.itemrow>summary .ir-car{flex:0 0 auto;transition:transform .2s;color:var(--muted);font-size:12px}
+.itemrow[open]>summary .ir-car{transform:rotate(180deg)}
+.itemrow .ir-body{padding:4px 13px 13px;border-top:1px solid var(--line-soft);
+animation:pgIn .22s cubic-bezier(.2,.9,.3,1)}
+@keyframes pgIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:700;white-space:nowrap;border:1px solid var(--line)}
 .badge.green{background:var(--green-dim);color:#8fe6b6;border-color:var(--green)}.badge.amber{background:var(--amber-dim);color:#f0cb75;border-color:var(--amber)}
 .badge.red{background:var(--red-dim);color:#f5a3a6;border-color:var(--red)}.badge.gray{background:var(--panel-alt);color:var(--ink-soft);border-color:var(--line)}
@@ -1449,6 +1480,12 @@ cursor:pointer;font-family:inherit;color:var(--ink-soft)}
 .pbtn.pb-r{background:var(--red);color:#fff;border-color:var(--red)}
 @media(max-width:900px){.brow,.brow8,.srow{grid-template-columns:1fr 1fr!important;gap:6px!important}}
 @media(max-width:640px){.card .body{padding:15px}header h1{font-size:16px}}
+@media(prefers-reduced-motion:reduce){
+  .card,.itemrow .ir-body,.sidebar a,.stat,.btn,.logout{animation:none!important;transition:none!important}
+}
+@supports not (backdrop-filter:blur(1px)){
+  header,.sidebar,.card,.stat{background:#141420}
+}
 </style>
 </head>
 <body>
@@ -3442,8 +3479,15 @@ def join_gate(user_id):
           <div><label>رنگِ اصلی</label><input type="color" name="theme_c1" value="<?= h($th['c1'] ?? '#7C4DFF') ?>" style="padding:4px;height:42px"></div>
           <div><label>رنگِ دوم</label><input type="color" name="theme_c2" value="<?= h($th['c2'] ?? '#00E5FF') ?>" style="padding:4px;height:42px"></div>
           <div><label>رنگِ تاکید</label><input type="color" name="theme_c3" value="<?= h($th['c3'] ?? '#FF3D9A') ?>" style="padding:4px;height:42px"></div>
+          <?php if ($mk === 'react'): ?>
+          <div><label>رنگِ قرمز (خطا)</label><input type="color" name="theme_c4" value="<?= h($th['c4'] ?? '#F23557') ?>" style="padding:4px;height:42px"></div>
+          <?php else: ?>
           <div><label>پس‌زمینه</label><input type="color" name="theme_bg" value="<?= h($th['bg'] ?? '#080512') ?>" style="padding:4px;height:42px"></div>
+          <?php endif; ?>
         </div>
+        <?php if ($mk === 'react'): ?>
+        <div class="muted" style="margin-top:8px">🔒 پس‌زمینه‌ی این مینی‌اپ همیشه سفید است — قابل تغییر نیست.</div>
+        <?php endif; ?>
         <div style="margin-top:10px">
           <label style="font-weight:500"><input type="checkbox" name="theme_glow" style="width:auto" <?= !empty($th['glow']) ? 'checked' : '' ?>> ✨ درخشش</label>
           <label style="font-weight:500"><input type="checkbox" name="theme_grain" style="width:auto" <?= !empty($th['grain']) ? 'checked' : '' ?>> بافت</label>
@@ -3481,24 +3525,29 @@ def join_gate(user_id):
           «حداقل/حداکثر تعداد» فقط برای مواردی است که مشتری خودش تعداد وارد می‌کند (تون، ترون، استارزِ دلخواه...) —
           برای اعشار (مثلا <code>0.5</code> تون) همان‌جا با نقطه بنویسید.
         </div>
-        <div class="scroll"><table>
-          <tr><th>سرویس</th><th>قیمت</th><th>حداقل تعداد</th><th>حداکثر تعداد</th><th>روشن</th></tr>
-          <?php foreach ($app['items'] as $it): $iid = (string)($it['id'] ?? ''); if ($iid === '') continue;
-                $isQty = in_array((string)($it['ask'] ?? ''), ['qty', 'qty_wallet', 'qty_username'], true); ?>
-            <tr>
-              <td><?= h(trim(($it['emoji'] ?? '') . ' ' . $it['name'])) ?>
-                <?php if (!empty($it['desc'])): ?><div class="muted"><?= h(mb_substr($it['desc'], 0, 50)) ?></div><?php endif; ?></td>
-              <td><input name="item_price[<?= h($iid) ?>]" value="<?= h(number_format((float)($it['price'] ?? 0))) ?>" style="direction:ltr;min-width:110px"></td>
+        <?php foreach ($app['items'] as $it): $iid = (string)($it['id'] ?? ''); if ($iid === '') continue;
+              $isQty = in_array((string)($it['ask'] ?? ''), ['qty', 'qty_wallet', 'qty_username', 'qty_link'], true); ?>
+        <details class="itemrow">
+          <summary>
+            <span class="ir-name"><?= h(trim(($it['emoji'] ?? '') . ' ' . $it['name'])) ?></span>
+            <span class="ir-price"><?= h(number_format((float)($it['price'] ?? 0))) ?></span>
+            <label class="inline" onclick="event.stopPropagation()" style="margin:0">
+              <input type="checkbox" name="item_on[]" value="<?= h($iid) ?>" style="width:auto" <?= !empty($it['on']) ? 'checked' : '' ?>>
+            </label>
+            <span class="ir-car">▾</span>
+          </summary>
+          <div class="ir-body">
+            <?php if (!empty($it['desc'])): ?><div class="muted" style="margin-bottom:8px"><?= h(mb_substr($it['desc'], 0, 80)) ?></div><?php endif; ?>
+            <div class="grid2">
+              <div><label>قیمت</label><input name="item_price[<?= h($iid) ?>]" value="<?= h(number_format((float)($it['price'] ?? 0))) ?>" style="direction:ltr"></div>
               <?php if ($isQty): ?>
-              <td><input name="item_min[<?= h($iid) ?>]" value="<?= h(rtrim(rtrim(number_format((float)($it['min'] ?? 1), 4, '.', ''), '0'), '.')) ?>" style="direction:ltr;min-width:70px"></td>
-              <td><input name="item_max[<?= h($iid) ?>]" value="<?= h(rtrim(rtrim(number_format((float)($it['max'] ?? 1), 4, '.', ''), '0'), '.')) ?>" style="direction:ltr;min-width:70px"></td>
-              <?php else: ?>
-              <td class="muted">—</td><td class="muted">—</td>
+              <div><label>حداقل تعداد</label><input name="item_min[<?= h($iid) ?>]" value="<?= h(rtrim(rtrim(number_format((float)($it['min'] ?? 1), 4, '.', ''), '0'), '.')) ?>" style="direction:ltr"></div>
+              <div><label>حداکثر تعداد</label><input name="item_max[<?= h($iid) ?>]" value="<?= h(rtrim(rtrim(number_format((float)($it['max'] ?? 1), 4, '.', ''), '0'), '.')) ?>" style="direction:ltr"></div>
               <?php endif; ?>
-              <td><input type="checkbox" name="item_on[]" value="<?= h($iid) ?>" style="width:auto" <?= !empty($it['on']) ? 'checked' : '' ?>></td>
-            </tr>
-          <?php endforeach; ?>
-        </table></div>
+            </div>
+          </div>
+        </details>
+        <?php endforeach; ?>
         <div style="margin-top:14px"><button class="btn g">ذخیره سرویس‌ها</button></div>
       </div>
     </form>
