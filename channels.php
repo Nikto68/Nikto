@@ -33,6 +33,7 @@ function chStreams() {
         'topup'   => ['🧾 رسید شارژ حساب', 'رسیدهای شارژ کیف پول — از همین‌جا تایید کنید.'],
         'mini_tg' => ['🌟 خدمات تلگرام', 'هر فروشِ مینی‌اپ خدمات تلگرام — استارز، پریمیوم، گیفت و بقیه‌ی دسته‌ها.'],
         'mini_num'=> ['☎️ شماره مجازی', 'هر فروشِ مینی‌اپ شماره مجازی.'],
+        'mini_react'=> ['💫 ری‌اکشن و استوری', 'هر فروشِ مینی‌اپ ری‌اکشن و استوری.'],
         'mem_vip' => ['💎 ممبر ویژه', 'سفارش‌های ممبر ویژه.'],
         'mem_ok'  => ['✅ ممبر اخلاقی', 'سفارش‌های ممبر اخلاقی.'],
         'mem_no'  => ['🔞 ممبر غیراخلاقی', 'سفارش‌های ممبر غیراخلاقی.'],
@@ -51,8 +52,9 @@ function chStreams() {
 function chStreamFor($app, $productName = '', $cat = '') {
     $app = strtolower(trim((string)$app));
     if ($app !== '') {
-        if ($app === 'tg')  return 'mini_tg';
-        if ($app === 'num') return 'mini_num';
+        if ($app === 'tg')    return 'mini_tg';
+        if ($app === 'num')   return 'mini_num';
+        if ($app === 'react') return 'mini_react';
         return 'buy';
     }
 

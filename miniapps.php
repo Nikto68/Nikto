@@ -19,13 +19,14 @@
 
 require_once __DIR__ . '/miniapp_view_tg.php';
 require_once __DIR__ . '/miniapp_view_num.php';
+require_once __DIR__ . '/miniapp_view_react.php';
 
 // ============================================================
 // ⚙️ پیکربندی پیش‌فرض
 // ============================================================
 
-/** کلیدهای دو مینی‌اپ — همیشه همین دوتا، جدا از هم */
-function maKeys() { return ['tg', 'num']; }
+/** کلیدهای مینی‌اپ‌ها — کاملا جدا از هم */
+function maKeys() { return ['tg', 'num', 'react']; }
 
 /**
  * ⚡️ سطح افکت گرافیکی: ۲ کامل · ۱ سبک · ۰ خاموش.
@@ -37,7 +38,14 @@ function maFxLevel($th) {
 }
 
 function maAppLabels() {
-    return ['tg' => '🌟 خدمات تلگرام', 'num' => '☎️ شماره مجازی'];
+    return ['tg' => '🌟 خدمات تلگرام', 'num' => '☎️ شماره مجازی', 'react' => '💫 ری‌اکشن و استوری'];
+}
+
+/** پیکربندی پیش‌فرض یک مینی‌اپ، بر اساس کلیدش — جایگزین ترنری‌های دوتایی قدیمی */
+function maDefaultFor($key) {
+    if ($key === 'num') return maDefaultNum();
+    if ($key === 'react') return maDefaultReact();
+    return maDefaultTg();
 }
 
 /** عملیات تحویل خودکار روی پنل فروش */
@@ -62,6 +70,7 @@ function maAskLabels() {
         'wallet'   => '💼 آدرس ولت',
         'qty_wallet' => '🔢 مقدار + 💼 آدرس ولت (برای ارز)',
         'qty_username' => '🔢 تعداد + 📎 آیدی تلگرام',
+        'qty_link' => '🔢 تعداد + 🔗 لینک پست/استوری',
         'text'     => '✍️ توضیح دلخواه',
     ];
 }
@@ -176,8 +185,9 @@ function maDefaultConfig() {
         ],
 
         'apps' => [
-            'tg'  => maDefaultTg(),
-            'num' => maDefaultNum(),
+            'tg'    => maDefaultTg(),
+            'num'   => maDefaultNum(),
+            'react' => maDefaultReact(),
         ],
     ];
 }
@@ -575,6 +585,139 @@ function maDefaultNum() {
     ];
 }
 
+/**
+ * 💫 مینی‌اپ «ری‌اکشن و استوری» — تم «منشور» روشن/سفید.
+ *
+ * جانشینِ «ری‌اکشنِ پست» که قبلا زیردکمه‌ی ساده‌ای در ثبتِ سفارش بود؛
+ * حالا مینی‌اپِ کاملا جدا با فروشگاه، سبد، و پیگیریِ سفارش دارد —
+ * برای ری‌اکشنِ پست، ری‌اکشن/بازدیدِ استوری، و بقیه‌ی خدماتِ پستِ کانال.
+ *
+ * سفارش‌ها همیشه دستی تحویل می‌شوند (لینکِ پست را ادمین می‌بیند و
+ * روی پنلِ خودش ثبت می‌کند) — برخلافِ استارز/پریمیوم که تحویلِ خودکار
+ * دارند، اینجا هیچ «auto» تنظیم نشده و سفارش پرداخت‌شده مستقیم به
+ * ادمین اطلاع داده می‌شود (maAutoWhy همان دلیل را هم توضیح می‌دهد).
+ */
+function maDefaultReact() {
+    static $d = null;
+    if ($d !== null) return $d;
+    return $d = [
+        'on'    => true,
+        'title' => 'ری‌اکشن و استوری',
+        'sub'   => 'ری‌اکشن پست · استوری · بازدید و اشتراک‌گذاری',
+        'hero'  => 'رشدِ واقعیِ کانال، با لینکِ پست یا استوری',
+        'note'  => 'بعد از پرداخت، لینک را بررسی و طیِ چند دقیقه اجرا می‌کنیم.',
+        'currency' => 'تومان',
+
+        // دکمه‌ای که زیر محصولات نشان داده می‌شود — بعد از «خدمات تلگرام»
+        // و «شماره مجازی» (order=1,2)، همیشه در ردیفِ سوم و تنها
+        'btn' => [
+            'emoji' => '💫', 'text' => 'ری‌اکشن و استوری',
+            'color' => 'success', 'icon' => '', 'order' => 3, 'row' => 0,
+        ],
+
+        // 🎨 تم «منشور» — پس‌زمینه‌ی کاملا سفید، با چهار رنگِ تاکید
+        // (آبی/سبز/قرمز/بنفش) که هرکدام برای یک دسته به‌کار می‌رود
+        'theme' => [
+            'preset' => 'prism',
+            'c1'  => '#2F6FED',   // آبی
+            'c2'  => '#17C978',   // سبز
+            'c3'  => '#8B5CF6',   // بنفش
+            'c4'  => '#F23557',   // قرمز
+            'bg'  => '#FFFFFF',   // سفید — اکید
+            'glow' => 1,
+            'grain' => 0,
+            'fx'    => 2,
+        ],
+
+        'ui' => [
+            'balance'  => 'موجودی شما',
+            'all'      => 'همه',
+            'buy'      => 'ثبت سفارش',
+            'submit'   => 'تایید و ادامه',
+            'close'    => 'بستن',
+            'sending'  => 'در حال ثبت…',
+            'done'     => 'سفارش ثبت شد',
+            'done_sub' => 'لینک شما بررسی و طی چند دقیقه اجرا می‌شود.',
+            'search'   => 'جستجو در خدمات…',
+            'empty'    => 'فعلا سرویسی در این بخش نیست.',
+            'pay_wallet' => 'پرداخت از کیف پول',
+            'pay_other'  => 'روش‌های دیگر پرداخت',
+            'low_bal'    => 'موجودی کافی نیست',
+            'paid_ok'    => 'پرداخت شد',
+            'topup_hint' => 'برای شارژ، دکمه‌ی «شارژ حساب» را بزنید — همین‌جا انجام می‌شود.',
+            'nav_home'   => 'خانه',
+            'nav_shop'   => 'فروشگاه',
+            'nav_orders' => 'سفارش‌ها',
+            'nav_me'     => 'حساب من',
+            'hot'        => 'پیشنهاد ویژه',
+            'cats_ttl'   => 'دسته‌بندی‌ها',
+            'rates_ttl'  => 'نرخ لحظه‌ای',
+            'orders_ttl' => 'سفارش‌های اخیر',
+            'no_orders'  => 'هنوز سفارشی ثبت نکرده‌اید.',
+            'me_ttl'     => 'حساب کاربری',
+            'topup'      => 'شارژ کیف پول',
+            'topup_do'   => 'ثبت درخواست شارژ',
+            'topup_amt'  => 'مبلغ شارژ (تومان)',
+            'card_ttl'   => 'کارت به کارت',
+            'copy'       => 'کپی شماره کارت',
+            'copied'     => 'کپی شد ✓',
+            'see_all'    => 'همه',
+            'hi'         => 'سلام {name} 👋',
+            'plans'      => 'انتخاب بسته',
+            'custom'     => 'یا مقدار دلخواه (حداقل {min})',
+            'buy_now'    => 'خرید',
+            'topup_btn'  => '＋ شارژ',
+        ],
+
+        'glass' => [
+            'wallet'  => ['emoji' => '💰', 'text' => 'پرداخت از کیف پول', 'color' => 'success', 'icon' => ''],
+            'card'    => ['emoji' => '💳', 'text' => 'کارت به کارت',      'color' => 'primary', 'icon' => ''],
+            'receipt' => ['emoji' => '🧾', 'text' => 'ارسال رسید',        'color' => 'success', 'icon' => ''],
+            'cancel'  => ['emoji' => '🔴', 'text' => 'انصراف',            'color' => 'danger',  'icon' => ''],
+            'open'    => ['emoji' => '🚀', 'text' => 'باز کردن مینی‌اپ',   'color' => 'primary', 'icon' => ''],
+        ],
+        'glass_layout' => '1,1,1',
+
+        'cats' => [
+            ['id' => 'c_postr',  'emoji' => '👍', 'name' => 'ری‌اکشن پست',  'on' => true, 'order' => 1],
+            ['id' => 'c_storyr', 'emoji' => '📖', 'name' => 'استوری',       'on' => true, 'order' => 2],
+            ['id' => 'c_postsv', 'emoji' => '🚀', 'name' => 'سایر خدمات پست', 'on' => true, 'order' => 3],
+        ],
+
+        'items' => [
+            // ── 👍 ری‌اکشن پست ──
+            ['id' => 'i_pr_mix', 'cat' => 'c_postr', 'emoji' => '🎉', 'name' => 'ری‌اکشنِ میکس روی پست',
+             'desc' => 'ترکیبی از ری‌اکشن‌های پرطرفدار — لینکِ پست را بفرستید', 'price' => 140, 'unit' => 'ری‌اکشن',
+             'badge' => 'پرفروش', 'ask' => 'qty_link', 'min' => 20, 'max' => 100000, 'on' => true, 'order' => 1],
+            ['id' => 'i_pr_heart', 'cat' => 'c_postr', 'emoji' => '❤️', 'name' => 'ری‌اکشنِ قلب روی پست',
+             'desc' => 'فقط ری‌اکشنِ ❤️ روی پستِ موردنظر', 'price' => 150, 'unit' => 'ری‌اکشن',
+             'badge' => '', 'ask' => 'qty_link', 'min' => 20, 'max' => 100000, 'on' => true, 'order' => 2],
+            ['id' => 'i_pr_fire', 'cat' => 'c_postr', 'emoji' => '🔥', 'name' => 'ری‌اکشنِ آتش روی پست',
+             'desc' => 'فقط ری‌اکشنِ 🔥 روی پستِ موردنظر', 'price' => 150, 'unit' => 'ری‌اکشن',
+             'badge' => '', 'ask' => 'qty_link', 'min' => 20, 'max' => 100000, 'on' => true, 'order' => 3],
+
+            // ── 📖 استوری ──
+            ['id' => 'i_sr_view', 'cat' => 'c_storyr', 'emoji' => '👁', 'name' => 'بازدیدِ استوری',
+             'desc' => 'افزایشِ تعدادِ بازدیدِ استوریِ کانال/کاربر', 'price' => 90, 'unit' => 'بازدید',
+             'badge' => 'ارزان', 'ask' => 'qty_link', 'min' => 50, 'max' => 500000, 'on' => true, 'order' => 1],
+            ['id' => 'i_sr_react', 'cat' => 'c_storyr', 'emoji' => '❤️', 'name' => 'ری‌اکشنِ استوری',
+             'desc' => 'ری‌اکشنِ قلب روی استوری', 'price' => 160, 'unit' => 'ری‌اکشن',
+             'badge' => '', 'ask' => 'qty_link', 'min' => 20, 'max' => 50000, 'on' => true, 'order' => 2],
+
+            // ── 🚀 سایر خدمات پست ──
+            ['id' => 'i_ps_view', 'cat' => 'c_postsv', 'emoji' => '👁', 'name' => 'بازدیدِ پست',
+             'desc' => 'افزایشِ بازدیدِ زیرِ پستِ کانال', 'price' => 70, 'unit' => 'بازدید',
+             'badge' => '', 'ask' => 'qty_link', 'min' => 100, 'max' => 1000000, 'on' => true, 'order' => 1],
+            ['id' => 'i_ps_share', 'cat' => 'c_postsv', 'emoji' => '🔁', 'name' => 'اشتراک‌گذاریِ پست',
+             'desc' => 'فوروارد/اشتراک‌گذاریِ پست به دیگر گفتگوها', 'price' => 250, 'unit' => 'اشتراک',
+             'badge' => '', 'ask' => 'qty_link', 'min' => 20, 'max' => 50000, 'on' => true, 'order' => 2],
+            ['id' => 'i_ps_poll', 'cat' => 'c_postsv', 'emoji' => '📊', 'name' => 'رایِ نظرسنجیِ پست',
+             'desc' => 'رای روی نظرسنجیِ داخلِ پست', 'price' => 180, 'unit' => 'رای',
+             'badge' => 'ویژه', 'ask' => 'qty_link', 'min' => 20, 'max' => 100000, 'on' => true, 'order' => 3],
+        ],
+    ];
+}
+
 // ============================================================
 // 🧩 خواندن و نوشتن پیکربندی
 // ============================================================
@@ -716,7 +859,7 @@ function maSetRoot(callable $fn) {
 /** متن دکمه‌های داخل مینی‌اپ */
 function maUT($key, $slug) {
     $a = maGet($key);
-    $d = ($key === 'tg' ? maDefaultTg() : maDefaultNum())['ui'];
+    $d = maDefaultFor($key)['ui'];
     $v = trim((string)($a['ui'][$slug] ?? ''));
     return $v !== '' ? $v : ($d[$slug] ?? $slug);
 }
@@ -724,7 +867,7 @@ function maUT($key, $slug) {
 /** یک دکمه شیشه‌ای قابل ویرایش (متن + ایموجی + رنگ + ایموجی پریمیوم) */
 function maGlassBtn($key, $slug, $callbackData) {
     $a = maGet($key);
-    $d = ($key === 'tg' ? maDefaultTg() : maDefaultNum())['glass'][$slug] ?? [];
+    $d = maDefaultFor($key)['glass'][$slug] ?? [];
     $g = $a['glass'][$slug] ?? $d;
 
     $label = trim((string)($g['emoji'] ?? '') . ' ' . (string)($g['text'] ?? ($d['text'] ?? $slug)));
@@ -2554,7 +2697,9 @@ function maServe($key) {
     }
 
     maSecurityHeaders();
-    echo $key === 'tg' ? maViewTg($a, maBoot($key, $a)) : maViewNum($a, maBoot($key, $a));
+    if ($key === 'num')   echo maViewNum($a, maBoot($key, $a));
+    elseif ($key === 'react') echo maViewReact($a, maBoot($key, $a));
+    else                  echo maViewTg($a, maBoot($key, $a));
     exit;
 }
 
@@ -2624,7 +2769,7 @@ function maApiUrl() {
 }
 
 function maUiAll($key) {
-    $d = ($key === 'tg' ? maDefaultTg() : maDefaultNum())['ui'];
+    $d = maDefaultFor($key)['ui'];
     $out = [];
     foreach ($d as $slug => $_) $out[$slug] = maUT($key, $slug);
     return $out;
@@ -3137,7 +3282,7 @@ function maApi() {
         $qty = 1.0;
         // «qty» تعداد صحیح می‌خواهد (۵۰ استارز)، ولی «qty_wallet» برای ارز است
         // و مقدار اعشاری هم می‌گیرد (۲٫۵ تون) — چون کسی مجبور نیست عدد رند بخرد.
-        if ($ask === 'qty' || $ask === 'qty_wallet' || $ask === 'qty_username') {
+        if ($ask === 'qty' || $ask === 'qty_wallet' || $ask === 'qty_username' || $ask === 'qty_link') {
             $frac = ($ask === 'qty_wallet');
             $qty = maNum($body['qty'] ?? 0);
             if (!is_finite($qty) || $qty < 0) $qty = 0;
@@ -3150,7 +3295,7 @@ function maApi() {
         }
 
         $field = trim((string)($body['field'] ?? ''));
-        if (in_array($ask, ['username', 'wallet', 'qty_wallet', 'qty_username', 'text'], true) && $field === '') {
+        if (in_array($ask, ['username', 'wallet', 'qty_wallet', 'qty_username', 'qty_link', 'text'], true) && $field === '') {
             maApiOut(['ok' => false, 'error' => 'need_field', 'message' => 'لطفا فیلد خواسته‌شده را پر کنید.'], 400);
         }
         if ($ask === 'username' || $ask === 'qty_username') {
@@ -3162,6 +3307,9 @@ function maApi() {
         if (($ask === 'wallet' || $ask === 'qty_wallet') && mb_strlen($field) < 8) {
             maApiOut(['ok' => false, 'error' => 'bad_wallet', 'message' => 'آدرس ولت معتبر نیست.'], 400);
         }
+        if ($ask === 'qty_link' && !preg_match('#^https?://[^\s]{6,290}$#i', $field)) {
+            maApiOut(['ok' => false, 'error' => 'bad_link', 'message' => 'لینک پست/استوری معتبر نیست.'], 400);
+        }
         if (mb_strlen($field) > 300) $field = mb_substr($field, 0, 300);
 
         $item['currency'] = (string)($a['currency'] ?? 'تومان');
@@ -3170,7 +3318,7 @@ function maApi() {
         $unitPrice = maItemPrice($item);
 
         $item['price'] = $unitPrice;
-        $total = maMoney($unitPrice * (in_array($ask, ['qty', 'qty_wallet', 'qty_username'], true) ? $qty : 1));
+        $total = maMoney($unitPrice * (in_array($ask, ['qty', 'qty_wallet', 'qty_username', 'qty_link'], true) ? $qty : 1));
 
         // 🛑 نرخ زنده نیامده؟ نفروش. قیمت قدیمی یعنی ضرر.
         if (maPriceStale($item)) {
@@ -3377,7 +3525,7 @@ function maFieldLabel($o) {
     foreach ($a['items'] ?? [] as $i) {
         if ((string)$i['id'] !== (string)$o['item_id']) continue;
         return ['username' => '📎 آیدی', 'wallet' => '💼 ولت', 'qty_wallet' => '💼 ولت',
-                'qty_username' => '📎 آیدی', 'text' => '📝 توضیح'][$i['ask'] ?? ''] ?? '';
+                'qty_username' => '📎 آیدی', 'qty_link' => '🔗 لینک', 'text' => '📝 توضیح'][$i['ask'] ?? ''] ?? '';
     }
     return '';
 }
@@ -4505,7 +4653,7 @@ function maAdmItem($chatId, $msgId, $key, $iid) {
     $text .= '📝 توضیح: ' . h($i['desc'] ?: '—') . "\n";
     $text .= '🏷 برچسب: ' . h($i['badge'] ?: '—') . "\n";
     $text .= '❓ سوال از کاربر: ' . h(maAskLabels()[$i['ask'] ?? 'none'] ?? '—') . "\n";
-    if (in_array($i['ask'] ?? '', ['qty', 'qty_wallet', 'qty_username'], true)) {
+    if (in_array($i['ask'] ?? '', ['qty', 'qty_wallet', 'qty_username', 'qty_link'], true)) {
         $text .= '🔢 حداقل: ' . fmtNum($i['min'] ?? 1) . ' · حداکثر: ' . fmtNum($i['max'] ?? 0) . "\n";
         $text .= '📐 واحد: ' . h($i['unit'] ?: '—') . "\n";
     }

@@ -641,7 +641,7 @@ $('tabs').addEventListener('click', function(ev){
 /* ── کارت محصول ── */
 function tileHtml(i, n){
   return '<div class="tile' + (i.badge ? ' hot hasbadge' : '') + (i.stale ? ' off' : '') +
-           '" data-i="' + esc(i.id) + '" style="animation-delay:' + Math.min(n*35, 300) + 'ms">' +
+           '" data-i="' + esc(i.id) + '" data-cat="' + esc(i.cat || '') + '" style="animation-delay:' + Math.min(n*35, 300) + 'ms">' +
            (i.badge ? '<span class="tag">' + esc(i.badge) + '</span>' : '') +
            (i.live  ? '<span class="livedot">زنده</span>' : '') +
            '<div class="orb">' + esc(i.emoji || '💠') + '</div>' +
@@ -650,7 +650,7 @@ function tileHtml(i, n){
            '<div class="foot"><div class="cost"><b>' +
              (i.stale ? '—'
                : fa(i.price)) + '</b><i>' + esc(B.currency) +
-             (i.unit && ['qty','qty_wallet','qty_username'].indexOf(i.ask) >= 0 ? ' / ' + esc(i.unit) : '') + '</i></div>' +
+             (i.unit && ['qty','qty_wallet','qty_username','qty_link'].indexOf(i.ask) >= 0 ? ' / ' + esc(i.unit) : '') + '</i></div>' +
              '<div class="plus">+</div></div>' +
          '</div>';
 }
@@ -858,7 +858,7 @@ function open(id){
   // ۰.۵ است، «حداقلِ ۱» را جای «حداقلِ واقعیِ محصول» می‌گذاشت —
   // یعنی هیچ‌وقت کمتر از ۱ پیشنهاد نمی‌شد، حتی وقتی خودِ محصول
   // اعشار قبول می‌کرد.
-  S.qty  = (it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username')
+  S.qty  = (it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username' || it.ask === 'qty_link')
              ? (Number(it.min) > 0 ? Number(it.min) : 1) : 1;
 
   $('sOrb').textContent  = it.emoji || '💠';
@@ -872,7 +872,7 @@ function open(id){
     html += '<div class="field"><div class="hint">⏸ نرخ لحظه‌ای این سرویس الان در دسترس نیست، ' +
             'برای همین فروشش موقتا بسته است. چند دقیقه دیگر دوباره سر بزنید.</div></div>';
   }
-  var hasQty = it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username';
+  var hasQty = it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username' || it.ask === 'qty_link';
   if (hasQty){
     var isCoin = it.ask === 'qty_wallet';
     // بسته‌های آماده با تیک، بعد کادر مقدار دلخواه — به‌جای دکمه‌های ±
@@ -910,6 +910,13 @@ function open(id){
             'autocomplete="off" spellcheck="false" maxlength="128">' +
             '<div class="hint">آدرس را کامل و بدون فاصله وارد کنید. ارز به همین آدرس فرستاده می‌شود ' +
             'و بعد از ارسال برگشت‌پذیر نیست.</div></div>';
+  }
+  // ری‌اکشن/بازدید پست یا استوری: هم تعداد می‌خواهد هم لینک همان پست
+  if (it.ask === 'qty_link'){
+    html += '<div class="field"><label>🔗 لینک پست یا استوری</label>' +
+            '<input id="fTxt" type="text" placeholder="https://t.me/channel/123" dir="ltr" style="text-align:left" ' +
+            'autocomplete="off" spellcheck="false" maxlength="300">' +
+            '<div class="hint">لینک را کامل بفرستید — پست باید در کانال/گروهی باشد که ربات در آن عضو است.</div></div>';
   }
   if (it.ask === 'username'){
     html += '<div class="field"><label>📎 آیدی تلگرام گیرنده</label>' +
@@ -1006,7 +1013,7 @@ function markPlan(){
 
 function sum(){
   var it = S.item; if (!it) return 0;
-  if (it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username')
+  if (it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username' || it.ask === 'qty_link')
     return Math.round(it.price * Math.max(0, S.qty));
   return it.price;
 }
@@ -1041,11 +1048,11 @@ function validate(){
   var it = S.item, fv = '';
   var fx = $('fTxt');
   if (fx) fv = fx.value.trim();
-  if (it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username'){
+  if (it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username' || it.ask === 'qty_link'){
     if (!S.qty || S.qty < (it.min || 1)) { toast('حداقل مقدار ' + fa(it.min || 1) + ' است.'); return null; }
     if (it.max > 0 && S.qty > it.max)    { toast('حداکثر مقدار ' + fa(it.max) + ' است.'); return null; }
   }
-  if (['username','wallet','qty_wallet','qty_username','text'].indexOf(it.ask) >= 0 && !fv){
+  if (['username','wallet','qty_wallet','qty_username','qty_link','text'].indexOf(it.ask) >= 0 && !fv){
     toast('لطفا فیلد بالا را پر کنید.'); return null;
   }
   return fv;

@@ -3422,7 +3422,7 @@ def join_gate(user_id):
 
   <?php foreach (maKeys() as $mk):
     $app = maGet($mk); $th = $app['theme'] ?? [];
-    $appLbl = $mk === 'tg' ? '🌟 خدمات تلگرام' : '☎️ شماره مجازی';
+    $appLbl = maAppLabels()[$mk] ?? $mk;
   ?>
   <div class="card"><h2><?= h($appLbl) ?>
     <?= !empty($app['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>

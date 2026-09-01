@@ -481,7 +481,7 @@ function axPayLabel($p) {
 }
 
 function axAppName($app) {
-    return ['tg' => 'خدمات تلگرام', 'num' => 'شماره مجازی'][$app] ?? '—';
+    return ['tg' => 'خدمات تلگرام', 'num' => 'شماره مجازی', 'react' => 'ری‌اکشن و استوری'][$app] ?? '—';
 }
 
 /** فرم سفارش را در کانال بگذار، با دکمه‌ی «انجام شد» */
@@ -926,6 +926,7 @@ function axHome($chatId, $msgId = null) {
         [btnCb('🎁 سفارش دستی گیفت/تون', 'ax_manual', 'admin')],
         [btnCb('📊 گزارش خدمات تلگرام', 'ax_rep_tg', 'admin'),
          btnCb('📊 گزارش شماره مجازی', 'ax_rep_num', 'admin')],
+        [btnCb('📊 گزارش ری‌اکشن و استوری', 'ax_rep_react', 'admin')],
         [btnCb('💵 سود و قیمت', 'ax_price', 'admin')],
         [btnCb('👛 خودکارسازی ولت TON', 'ax_wallet', 'admin')],
         [btnCb('💱 نرخ ارز', 'ax_rates', 'admin'),
@@ -1037,7 +1038,7 @@ function axManualItems($chatId, $msgId) {
 function axCatalogItems() {
     $out = [];
     if (!function_exists('maGet')) return $out;
-    foreach (['tg', 'num'] as $app) {
+    foreach (function_exists('maKeys') ? maKeys() : ['tg', 'num'] as $app) {
         foreach ((array)(maGet($app)['items'] ?? []) as $it) {
             if (!is_array($it) || empty($it['id'])) continue;
             $out[] = [
@@ -1298,8 +1299,9 @@ function axCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
             inlineKb([[btnCb('❌ انصراف', 'axpim_' . $id, 'cancel')]]));
         return true;
     }
-    if ($data === 'ax_rep_tg') { $ack(); axReportHome($chatId, $msgId, 'tg');  return true; }
-    if ($data === 'ax_rep_num'){ $ack(); axReportHome($chatId, $msgId, 'num'); return true; }
+    if ($data === 'ax_rep_tg')   { $ack(); axReportHome($chatId, $msgId, 'tg');    return true; }
+    if ($data === 'ax_rep_num')  { $ack(); axReportHome($chatId, $msgId, 'num');   return true; }
+    if ($data === 'ax_rep_react'){ $ack(); axReportHome($chatId, $msgId, 'react'); return true; }
 
     if ($data === 'ax_wallet') { $ack(); axWalletHome($chatId, $msgId); return true; }
     if ($data === 'ax_audit')  { $ack('⏳ در حال بررسی…'); axAuditShow($chatId, $msgId); return true; }
@@ -1471,7 +1473,7 @@ function axCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
     foreach (['axrtog' => 'on', 'axrpaid' => 'on_paid', 'axrdone' => 'on_done'] as $pre => $key) {
         if (str_starts_with($data, $pre . '_')) {
             $app = substr($data, strlen($pre) + 1);
-            if (!in_array($app, ['tg', 'num'], true)) { $ack(); return true; }
+            if (!in_array($app, ['tg', 'num', 'react'], true)) { $ack(); return true; }
             axSet(function (&$c) use ($app, $key) { $c['report'][$app][$key] = empty($c['report'][$app][$key]); });
             $ack('✅');
             axReportHome($chatId, $msgId, $app);
@@ -1496,8 +1498,8 @@ function axCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
 
     if (str_starts_with($data, 'axrreset_')) {
         $app = substr($data, 9);
-        if (!in_array($app, ['tg', 'num'], true)) { $ack(); return true; }
-        $head = $app === 'tg' ? '<b>فروش خدمات تلگرام</b>' : '<b>شماره مجازی</b>';
+        if (!in_array($app, ['tg', 'num', 'react'], true)) { $ack(); return true; }
+        $head = '<b>' . h(axAppName($app)) . '</b>';
         $def  = axDefaultReport($head);
         axSet(function (&$c) use ($app, $def) { $c['report'][$app]['text'] = $def['text']; });
         $ack('✅ بازنشانی شد');
@@ -1574,7 +1576,7 @@ function axCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
     if (str_starts_with($data, 'axrchat_') || str_starts_with($data, 'axrtxt_')) {
         $isTxt = str_starts_with($data, 'axrtxt_');
         $app   = substr($data, $isTxt ? 7 : 8);
-        if (!in_array($app, ['tg', 'num'], true)) { $ack(); return true; }
+        if (!in_array($app, ['tg', 'num', 'react'], true)) { $ack(); return true; }
         setState($uid, $isTxt ? 'ax_rep_text' : 'ax_rep_chat', ['app' => $app]);
         $ack();
         sendMsg(BOT_TOKEN, $chatId, $isTxt
@@ -2595,7 +2597,7 @@ function axAudit() {
                      : (trim((string)$m['chat_id']) === '' ? $nMan . ' محصول دستی دارید ولی کانال تنظیم نشده!' : $nMan . ' محصول دستی'));
 
     // ── گزارش‌ها ──
-    foreach (['tg' => 'خدمات تلگرام', 'num' => 'شماره مجازی'] as $k => $lbl) {
+    foreach (['tg' => 'خدمات تلگرام', 'num' => 'شماره مجازی', 'react' => 'ری‌اکشن و استوری'] as $k => $lbl) {
         $rp = axVal('report.' . $k);
         $add('گزارش ' . $lbl, !empty($rp['on']) && trim((string)$rp['chat_id']) !== '',
              trim((string)$rp['chat_id']) === '' ? 'مقصد تنظیم نشده' : (empty($rp['on']) ? 'خاموش است' : ''));
