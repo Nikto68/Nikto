@@ -862,8 +862,12 @@ function open(id){
   tap('medium');
 
   S.item = it;
+  // Math.max(1, …) اینجا اشتباه بود: برای چیزی مثل تون که حداقلش
+  // ۰.۵ است، «حداقلِ ۱» را جای «حداقلِ واقعیِ محصول» می‌گذاشت —
+  // یعنی هیچ‌وقت کمتر از ۱ پیشنهاد نمی‌شد، حتی وقتی خودِ محصول
+  // اعشار قبول می‌کرد.
   S.qty  = (it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username')
-             ? Math.max(1, it.min || 1) : 1;
+             ? (Number(it.min) > 0 ? Number(it.min) : 1) : 1;
 
   $('sOrb').textContent  = it.emoji || '💠';
   $('sName').textContent = it.name;
@@ -989,7 +993,7 @@ function setQty(v, typing){
 
 /* بسته‌های پیشنهادی یک محصول — از حداقلش ساخته می‌شوند */
 function planRows(it){
-  var min = Math.max(1, Number(it.min) || 1);
+  var min = Number(it.min) > 0 ? Number(it.min) : 1;
   var out = [], mults = [1, 2, 5, 10];
   for (var i = 0; i < mults.length; i++){
     var q = min * mults[i];

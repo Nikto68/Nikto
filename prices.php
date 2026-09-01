@@ -1924,26 +1924,34 @@ function pxCoinName($sym) {
 
 /**
  * ⏳ روی پیامِ کاربر یک ری‌اکشن می‌زند تا وقتی کارت در حالِ ساخته‌شدن/
- * آپلود است، حسِ «بی‌جواب موندن» نده. ✅ ایموجیِ پایه است — بر خلافِ
- * ایموجیِ سفارشی، توی هر گروهی (حتی وقتی Reactions روی «فقط چندتای پایه»
- * است) قبول می‌شود. Best-effort است — تایم‌اوت یا شکست، بی‌صدا رد می‌شود
- * و هیچ‌جای مسیرِ اصلیِ جواب‌دادن را کند یا متوقف نمی‌کند.
+ * آپلود است، حسِ «بی‌جواب موندن» نده.
+ *
+ * اول 🐳 را امتحان می‌کند؛ اگر گروه دقیقا همین یکی را در فهرستِ
+ * ری‌اکشن‌های مجازش نداشت (REACTION_INVALID)، ✅ را هم امتحان می‌کند —
+ * ✅ معمولا در هر گروهی هست، حتی وقتی Reactions روی «فقط چندتای پایه»
+ * است. Best-effort است — اگر هیچ‌کدام نگرفت، بی‌صدا رد می‌شود و
+ * هیچ‌جای مسیرِ اصلیِ جواب‌دادن را کند یا متوقف نمی‌کند.
  */
 function pxWaitReact($chatId, $msgId, $on = true) {
     if (!$msgId) return;
-    $r = tg(BOT_TOKEN, 'setMessageReaction', [
-        'chat_id'    => $chatId,
-        'message_id' => $msgId,
-        'reaction'   => $on
-            ? json_encode([['type' => 'emoji', 'emoji' => '✅']])
-            : json_encode([]),
-    ], 4);
-    // 🔔 فقط روی زدنِ ری‌اکشن (نه پاک‌کردنش) خبر بده — وگرنه یک شکست، دو هشدار می‌شود
-    if ($on && function_exists('adminAlertOnce') && empty($r['ok'])) {
+    if (!$on) { tg(BOT_TOKEN, 'setMessageReaction', ['chat_id' => $chatId, 'message_id' => $msgId, 'reaction' => json_encode([])], 4); return; }
+
+    $tryEmoji = function ($emoji) use ($chatId, $msgId) {
+        return tg(BOT_TOKEN, 'setMessageReaction', [
+            'chat_id' => $chatId, 'message_id' => $msgId,
+            'reaction' => json_encode([['type' => 'emoji', 'emoji' => $emoji]]),
+        ], 4);
+    };
+
+    $r = $tryEmoji('🐳');
+    if (empty($r['ok']) && str_contains((string)($r['description'] ?? ''), 'REACTION_INVALID')) {
+        $r = $tryEmoji('✅');
+    }
+    if (function_exists('adminAlertOnce') && empty($r['ok'])) {
         adminAlertOnce('px_react_fail',
             '⚠️ ری‌اکشنِ «در حالِ ساخت» روی هیچ پیامی نمی‌نشیند:' . "\n" .
             '<code>' . h((string)($r['description'] ?? 'پاسخ نامشخص')) . '</code>' . "\n\n" .
-            'چون ✅ ایموجیِ پایه است، معمولا یعنی توی گروه، Reactions کلا خاموش است — ' .
+            'هم 🐳 هم ✅ رد شدند — معمولا یعنی توی گروه، Reactions کلا خاموش است — ' .
             'از تنظیمات گروه ← Reactions ببینید روشن است یا نه.');
     }
 }

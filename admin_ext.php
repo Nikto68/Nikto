@@ -2342,6 +2342,17 @@ function axWalletSend($msgs, $note = '') {
 
         [$sent, $sendErr] = tonSendBoc((string)$w['api'], $boc, (string)$w['api_key']);
         if (!$sent) {
+            // ⚠️ اینجا واقعا معلوم نیست تراکنش رفت یا نه — شبکه‌ی تون
+            // برای «پیامِ بیرونی» جوابِ قطعی نمی‌دهد، و «قبول نشد» می‌تواند
+            // یعنی واقعا رد شده، یا یعنی رفته ولی جوابش گم شده (مثلا
+            // همان LITE_SERVER_UNKNOWN). اگر همین‌جا بگوییم «نشد»، ادمین
+            // «تلاش دوباره» می‌زند — و اگر واقعا رفته بود، پول دوبار
+            // می‌رود. پس قبل از هر قضاوتی چند ثانیه صبر و seqno را
+            // دوباره می‌پرسیم.
+            sleep(3);
+            [$seqnoAfter, ] = tonGetSeqno((string)$w['api'], (string)$w['address'], (string)$w['api_key']);
+            $ambiguous = tonAmbiguousSendMessage((int)$seqno, $seqnoAfter, (string)$sendErr, (string)$w['address']);
+            if ($ambiguous !== null) return [false, $ambiguous];
             $refund();
             return [false, 'شبکه تراکنش را نپذیرفت: ' . mb_substr((string)$sendErr, 0, 200)];
         }

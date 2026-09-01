@@ -832,11 +832,6 @@ function defaultConfig() {
             'orders'   => ['emoji' => '📊', 'text' => 'پیگیری سفارش',                   'color' => 'primary', 'dot' => '🔵', 'icon' => '', 'row' => 4, 'order' => 5, 'on' => true, 'action' => ''],
             'support'  => ['emoji' => '📞', 'text' => 'پشتیبانی',                       'color' => 'primary', 'dot' => '🔵', 'icon' => '', 'row' => 4, 'order' => 6, 'on' => true, 'action' => ''],
             'trust'    => ['emoji' => '💚', 'text' => 'چطوری میتوانم به شما اعتماد کنم', 'color' => 'danger',  'dot' => '🔴', 'icon' => '', 'row' => 5, 'order' => 7, 'on' => true, 'action' => ''],
-            // 🌟 دکمه‌ی زیردکمه‌هایش به‌جای توری، یکی‌یکی کاروسلی نشان
-            //    داده می‌شود — برای وقتی زیردکمه‌ها زیادند (لیستِ محصولِ
-            //    ممبر پریمیوم). زیردکمه‌ها را از همان «💠 زیردکمه‌های
-            //    شیشه‌ای» همیشگی اضافه کنید؛ فقط نمایششان کاروسلی است.
-            'pmem'     => ['emoji' => '🌟', 'text' => 'خدمات ممبر پریمیوم', 'color' => 'success', 'dot' => '🟢', 'icon' => '', 'row' => 6, 'order' => 8, 'on' => true, 'action' => '', 'subs_mode' => 'carousel'],
         ],
 
         // متن دکمه‌های ثابت ربات — همه از داخل ربات قابل ویرایش
@@ -2122,85 +2117,6 @@ function postReactQuickSetup($bid, $sid) {
     return true;
 }
 
-/**
- * ⭐ راه‌اندازیِ یک‌کلیکِ «ممبر پریمیوم» — همون مکانیزمِ بوست/ری‌اکشن
- * (پنلِ SMM + قیمتِ خودکار)، ولی مثلِ محصولِ ممبرِ واقعی: لینکِ کانال،
- * تعداد، و ادمین‌شدنِ ربات (چون ممبرِ واقعی بدونِ ادمین اضافه نمی‌شود —
- * برخلافِ بوست/ری‌اکشن که نیاز به این ندارند).
- */
-function premiumMemberQuickSetup($bid, $sid) {
-    if (!findSub($bid, $sid)) return false;
-    subMutate($bid, $sid, function (&$x) {
-        $x['text']     = '⭐ ممبر پریمیوم';
-        $x['sale_cat'] = 'member';
-        $x['smm_auto_price'] = true;
-        $x['flow_texts'] = [
-            'flow_link' => "⭐ <b>لینکِ کانال یا گروهی که می‌خواهید ممبر پریمیوم بگیرد را ارسال کنید</b>\n\n" .
-                "🔗 لینک عمومی کانال یا یوزرنیم را بفرستید.",
-            'flow_link_bad' => "❌ لینک معتبر نیست.\nلینک کانال یا یوزرنیم را دوباره بفرستید.",
-            'flow_qty' => "🔢 چند ممبر پریمیوم می‌خواهید؟ بین <b>{min}</b> و <b>{max}</b> وارد کنید.",
-            'flow_qty_bad' => "❌ عدد واردشده معتبر نیست.\nحداقل <b>{min}</b> و حداکثر <b>{max}</b>.",
-            'flow_invoice' => "⭐ <b>فاکتور خرید ممبر پریمیوم</b>\n\n" .
-                "📈 سرویس: {product}\n" .
-                "🎯 مقصد: <code>{link}</code>\n" .
-                "🔢 تعداد: <b>{qty}</b>\n" .
-                "💵 قیمت هر عدد: <b>{rate} {currency}</b>\n" .
-                "⭐ نرخ سرویس (پنل): <b>{usd_rate} / 1000</b>\n" .
-                "⭐ نرخ لحظه‌ای تتر: <b>{usdt_irt}</b>\n\n" .
-                "💳 مبلغ قابل پرداخت: <b>{total} {currency}</b>\n\n" .
-                "❗️ قیمت‌ها لحظه‌ای و مستقیم از پنل و نرخ تتر محاسبه می‌شوند — سفارش‌ها بلافاصله و به‌صورت سیستمی ثبت می‌شوند.\n\n" .
-                "✅ قبل از تایید، مقصد و تعداد را بررسی کنید.",
-        ];
-        if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
-        $x['flow'] = array_merge(defaultFlow(), $x['flow'], [
-            'on' => true, 'ask_link' => true, 'ask_qty' => true, 'ask_admin' => true,
-            'min' => 10, 'max' => 50000, 'per' => 1,
-            'speeds' => [
-                ['id' => 'pmstd', 'text' => '⭐ پریمیوم', 'emoji' => '', 'mult' => 1, 'per_day' => 0,
-                 'color' => 'primary', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][0]['smm_service'] ?? '')],
-            ],
-        ]);
-    });
-    return true;
-}
-
-/**
- * ➕ یک زیردکمه‌ی کاملاً خام و تازه می‌سازد — پایه‌ای برای راه‌اندازیِ
- * یک‌کلیکی که نیازی به انتخابِ دستیِ یک دکمه‌ی موجود نداشته باشد.
- */
-function newEmptySub($bid, $text) {
-    if (!isset(cfg()['buttons'][$bid])) return null;
-    $sid = 's' . bin2hex(random_bytes(3));
-    cfgSet(function (&$c) use ($bid, $sid, $text) {
-        if (!isset($c['buttons'][$bid])) return;
-        if (!isset($c['buttons'][$bid]['subs']) || !is_array($c['buttons'][$bid]['subs'])) $c['buttons'][$bid]['subs'] = [];
-        $c['buttons'][$bid]['subs'][] = [
-            'id' => $sid, 'emoji' => '', 'text' => $text, 'color' => 'none',
-            'icon' => '', 'row' => 0, 'order' => 50, 'on' => true, 'action' => '',
-            'price' => 0, 'currency' => cfg()['currency'] ?? 'تومان',
-            'buyers' => [], 'flow' => defaultFlow(), 'report' => defaultReport(),
-        ];
-    });
-    return $sid;
-}
-
-/**
- * ⚡️ «ری‌اکشن پست» و «ممبر پریمیوم» را از صفر می‌سازد و آماده‌ی فروش
- * می‌کند — بدون اینکه ادمین اول خودش یک زیردکمه‌ی خالی بسازد.
- * برگشتِ [$ok, $msg].
- */
-function autoCreateReactAndPremium($bid = 'buy') {
-    if (!isset(cfg()['buttons'][$bid])) return [false, 'دکمه‌ی مادر پیدا نشد.'];
-
-    $rsid = newEmptySub($bid, 'در حال ساخت…');
-    if (!$rsid || !postReactQuickSetup($bid, $rsid)) return [false, 'ساختِ دکمه‌ی ری‌اکشن ناموفق بود.'];
-
-    $psid = newEmptySub($bid, 'در حال ساخت…');
-    if (!$psid || !premiumMemberQuickSetup($bid, $psid)) return [false, 'ساختِ دکمه‌ی ممبر پریمیوم ناموفق بود.'];
-
-    return [true, '✅ هر دو دکمه ساخته شدند: «😍 ری‌اکشن پست تلگرام» و «⭐ ممبر پریمیوم». ' .
-        'حالا برو رو هرکدوم، سرویسِ واقعیِ پنل رو از دراپ‌داون انتخاب کن.'];
-}
 
 /**
  * 🧲 دکمه‌های «🚀 بوست تلگرام» و «😍 ری‌اکشن پست تلگرام» (همان‌هایی که
@@ -11639,6 +11555,22 @@ function runBackgroundQueues() {
     migrateOnce('v14_ref_approved_counts', function () {
         backfillRefCounts();
         backfillApprovedOrderCounts();
+    });
+    // 🧹 دکمه‌ی «خدمات ممبر پریمیوم» و دو زیردکمه‌ای که راه‌اندازیِ
+    // خودکارش ساخته بود، به‌درخواستِ ادمین حذف شدند — این نصب‌های در
+    // حالِ کار را هم پاک می‌کند، نه فقط نصب‌های تازه را.
+    migrateOnce('v15_drop_pmem', function () {
+        cfgSet(function (&$c) {
+            unset($c['buttons']['pmem']);
+            foreach ($c['buttons'] as $bid => &$b) {
+                if (empty($b['subs']) || !is_array($b['subs'])) continue;
+                $b['subs'] = array_values(array_filter($b['subs'], function ($sub) {
+                    $t = trim((string)($sub['text'] ?? ''));
+                    return $t !== '⭐ ممبر پریمیوم' && $t !== '😍 ری‌اکشن پست تلگرام';
+                }));
+            }
+            unset($b);
+        });
     });
     migrateOnce('v5', function () {
         if (function_exists('gmDropDoubleIcons')) gmDropDoubleIcons();
