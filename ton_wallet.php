@@ -1102,6 +1102,10 @@ function tonSignedExternalB64($keys, $walletAddr, $seqno, $messages, $opts = [])
 
 /** درخواست به API شبکه — toncenter یا سازگارش */
 function tonApiCall($base, $path, $method, $body, $apiKey, $timeout = 20) {
+    // 🧪 قلابِ آزمون — مثل __pxHttpHook/__smmHook، تا رفتارِ ۴۲۹/تکرار
+    //    بدونِ شبکه‌ی واقعی سنجیده شود
+    if (function_exists('__tonApiHook')) return __tonApiHook($base, $path, $method, $body, $apiKey);
+
     $url = rtrim((string)$base, '/') . $path;
     $ch  = curl_init($url);
     $headers = ['Content-Type: application/json'];
@@ -1160,9 +1164,17 @@ function tonApiCallRetry($base, $path, $method, $body, $apiKey, $timeout = 20, $
     return [null, $lastErr];
 }
 
-/** seqno فعلی ولت — بدون آن نمی‌شود تراکنش ساخت */
+/**
+ * seqno فعلی ولت — بدون آن نمی‌شود تراکنش ساخت.
+ *
+ * ⚠️ قبلا با tonApiCall() ساده (بدون تکرار) می‌رفت، درحالی‌که
+ * tonVerifyWallet() درست قبلش چند درخواست به همین سرویسِ رایگان
+ * (حدود ۱ درخواست در ثانیه) زده — یعنی همین درخواست اغلب ۴۲۹ می‌خورد
+ * و کلِ تراکنش با «شبکه تراکنش را نپذیرفت: [rate] کد ۴۲۹» شکست
+ * می‌خورد، درحالی‌که چیزی واقعا رد نشده بود، فقط باید کمی صبر می‌کرد.
+ */
 function tonGetSeqno($base, $address, $apiKey) {
-    [$j, $err] = tonApiCall($base, '/getWalletInformation?address=' . rawurlencode($address), 'GET', null, $apiKey);
+    [$j, $err] = tonApiCallRetry($base, '/getWalletInformation?address=' . rawurlencode($address), 'GET', null, $apiKey);
     if (!$j) return [null, $err];
     $r = $j['result'] ?? $j;
     if (isset($r['seqno']))  return [(int)$r['seqno'], ''];
@@ -1172,15 +1184,15 @@ function tonGetSeqno($base, $address, $apiKey) {
 
 /** موجودی ولت به nanoTON */
 function tonGetBalance($base, $address, $apiKey) {
-    [$j, $err] = tonApiCall($base, '/getAddressBalance?address=' . rawurlencode($address), 'GET', null, $apiKey);
+    [$j, $err] = tonApiCallRetry($base, '/getAddressBalance?address=' . rawurlencode($address), 'GET', null, $apiKey);
     if (!$j) return [null, $err];
     $v = $j['result'] ?? null;
     return is_scalar($v) ? [(string)$v, ''] : [null, 'موجودی خوانده نشد'];
 }
 
-/** ارسال BOC امضاشده به شبکه */
+/** ارسال BOC امضاشده به شبکه — آخرین و مهم‌ترین قدم، همان دلیل که نباید با اولین ۴۲۹ تسلیم شود */
 function tonSendBoc($base, $bocB64, $apiKey) {
-    [$j, $err] = tonApiCall($base, '/sendBoc', 'POST', ['boc' => $bocB64], $apiKey, 30);
+    [$j, $err] = tonApiCallRetry($base, '/sendBoc', 'POST', ['boc' => $bocB64], $apiKey, 30);
     if (!$j) return [false, $err];
     if (isset($j['ok']) && !$j['ok']) return [false, $j['error'] ?? 'شبکه رد کرد'];
     return [true, ''];

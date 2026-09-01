@@ -564,7 +564,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $key = ($_POST['key'] ?? '') === 'num' ? 'num' : 'tg';
         $onIds  = (array)($_POST['item_on'] ?? []);
         $prices = (array)($_POST['item_price'] ?? []);
-        maSet($key, function (&$app) use ($onIds, $prices) {
+        $mins   = (array)($_POST['item_min'] ?? []);
+        $maxs   = (array)($_POST['item_max'] ?? []);
+        $qtyAsk = ['qty', 'qty_wallet', 'qty_username'];
+        maSet($key, function (&$app) use ($onIds, $prices, $mins, $maxs, $qtyAsk) {
             if (!is_array($app['items'] ?? null)) return;
             foreach ($app['items'] as $i => $it) {
                 $id = (string)($it['id'] ?? '');
@@ -572,6 +575,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (isset($prices[$id]) && is_numeric(str_replace([',', '،'], '', $prices[$id]))) {
                     $app['items'][$i]['price'] = (float)str_replace([',', '،'], '', $prices[$id]);
                 }
+                // 🔢 حداقل/حداکثرِ تعداد — فقط برای موارد قابل‌تعداد (تون/ترون/استارزِ
+                // دلخواه...)؛ بقیه (هدیه‌ها، بسته‌های ثابت) همیشه دقیقا ۱ می‌مانند.
+                if (!in_array((string)($it['ask'] ?? ''), $qtyAsk, true)) continue;
+                if (isset($mins[$id])) { $v = maNum($mins[$id]); if ($v > 0) $app['items'][$i]['min'] = $v; }
+                if (isset($maxs[$id])) { $v = maNum($maxs[$id]); if ($v > 0) $app['items'][$i]['max'] = $v; }
             }
         });
         go('✅ سرویس‌ها ذخیره شد.');
@@ -3538,13 +3546,24 @@ def join_gate(user_id):
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="miniapps">
       <input type="hidden" name="action" value="save_miniapp_items"><input type="hidden" name="key" value="<?= h($mk) ?>">
       <div class="subcard"><h3>🛒 سرویس‌ها (<?= count($app['items']) ?>)</h3>
+        <div class="note">
+          «حداقل/حداکثر تعداد» فقط برای مواردی است که مشتری خودش تعداد وارد می‌کند (تون، ترون، استارزِ دلخواه...) —
+          برای اعشار (مثلا <code>0.5</code> تون) همان‌جا با نقطه بنویسید.
+        </div>
         <div class="scroll"><table>
-          <tr><th>سرویس</th><th>قیمت</th><th>روشن</th></tr>
-          <?php foreach ($app['items'] as $it): $iid = (string)($it['id'] ?? ''); if ($iid === '') continue; ?>
+          <tr><th>سرویس</th><th>قیمت</th><th>حداقل تعداد</th><th>حداکثر تعداد</th><th>روشن</th></tr>
+          <?php foreach ($app['items'] as $it): $iid = (string)($it['id'] ?? ''); if ($iid === '') continue;
+                $isQty = in_array((string)($it['ask'] ?? ''), ['qty', 'qty_wallet', 'qty_username'], true); ?>
             <tr>
               <td><?= h(trim(($it['emoji'] ?? '') . ' ' . $it['name'])) ?>
                 <?php if (!empty($it['desc'])): ?><div class="muted"><?= h(mb_substr($it['desc'], 0, 50)) ?></div><?php endif; ?></td>
               <td><input name="item_price[<?= h($iid) ?>]" value="<?= h(number_format((float)($it['price'] ?? 0))) ?>" style="direction:ltr;min-width:110px"></td>
+              <?php if ($isQty): ?>
+              <td><input name="item_min[<?= h($iid) ?>]" value="<?= h(rtrim(rtrim(number_format((float)($it['min'] ?? 1), 4, '.', ''), '0'), '.')) ?>" style="direction:ltr;min-width:70px"></td>
+              <td><input name="item_max[<?= h($iid) ?>]" value="<?= h(rtrim(rtrim(number_format((float)($it['max'] ?? 1), 4, '.', ''), '0'), '.')) ?>" style="direction:ltr;min-width:70px"></td>
+              <?php else: ?>
+              <td class="muted">—</td><td class="muted">—</td>
+              <?php endif; ?>
               <td><input type="checkbox" name="item_on[]" value="<?= h($iid) ?>" style="width:auto" <?= !empty($it['on']) ? 'checked' : '' ?>></td>
             </tr>
           <?php endforeach; ?>

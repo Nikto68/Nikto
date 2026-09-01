@@ -387,11 +387,11 @@ function maDefaultTg() {
             // ── 💱 ارز ──
             ['id' => 'i_ton', 'cat' => 'c_coin', 'emoji' => '💎', 'name' => 'تون (TON)',
              'desc' => 'قیمت هر ۱ TON — تحویل مستقیم به ولت', 'price' => 210000, 'unit' => 'TON',
-             'badge' => '', 'ask' => 'qty_wallet', 'min' => 1, 'max' => 5000, 'on' => true, 'order' => 1,
+             'badge' => '', 'ask' => 'qty_wallet', 'min' => 0.5, 'max' => 5000, 'on' => true, 'order' => 1,
              'rate_key' => 'ton', 'auto' => 'ton'],
             ['id' => 'i_trx', 'cat' => 'c_coin', 'emoji' => '🚀', 'name' => 'ترون (TRX)',
              'desc' => 'قیمت هر ۱ TRX — شبکه TRC20', 'price' => 21000, 'unit' => 'TRX',
-             'badge' => '', 'ask' => 'qty_wallet', 'min' => 10, 'max' => 100000, 'on' => true, 'order' => 2,
+             'badge' => '', 'ask' => 'qty_wallet', 'min' => 5, 'max' => 100000, 'on' => true, 'order' => 2,
              'rate_key' => 'trx'],
         ],
     ];

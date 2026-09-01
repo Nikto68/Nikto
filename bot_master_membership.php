@@ -4909,8 +4909,7 @@ function flowFinish($uid, $chatId, $uname) {
         Order::approve($oid, ADMIN_ID);
         $od = Order::get($oid);
         panelShow($uid, $chatId, 'shop', orderDoneText($od), orderDoneKb($od));
-        announceSale($od);
-        reportSale($od);
+        if (orderReadyToReport($od)) { announceSale($od); reportSale($od); }
         return true;
     }
 
@@ -5040,6 +5039,32 @@ function campaignFromOrder($o) {
     // بدون پیام اضافه به ادمین — وضعیت قفل‌ها در /panel ← 🔒 قفل‌ها دیده می‌شود
 
     return $c;
+}
+
+/**
+ * 📢 آیا این سفارش واقعا «رفته» — یعنی گزارشِ فروش الان فرستاده شود؟
+ *
+ * قبلا همین‌که سفارش تایید می‌شد (پول کسر/تایید می‌شد)، گزارش هم
+ * همان لحظه می‌رفت — حتی اگر smmAutoFulfill() همان لحظه به پنل زنگ
+ * زده و پنل ردش کرده بود (لینک نامعتبر، موجودیِ پنل تمام، خطای پنل...).
+ * یعنی کانالِ گزارشات می‌گفت «فروخته شد» درحالی‌که هیچ ممبری نرفته
+ * بود و فقط یک هشدارِ جدا برای ادمین ثبت می‌شد.
+ *
+ * محصولی که اصلا به پنل وصل نیست (تحویلِ دستی/فایل/لینک) همیشه بله
+ * است — چیزی برای «رسیدنِ به پنل» ندارد. محصولی که وصل است، فقط وقتی
+ * بله می‌گوید که خودِ smmAutoFulfill() ثبتش را در پنل تایید کرده باشد.
+ */
+function orderReadyToReport($order) {
+    if (($order['type'] ?? '') !== 'product') return true;
+    $p = Product::get($order['product_id'] ?? '');
+    if (!$p) return true;
+    if (empty(cfg()['smm']['on'])) return true;
+
+    $sid = trim((string)($order['meta']['smm_service'] ?? ''));
+    if ($sid === '') $sid = productSmmService($p);
+    if ($sid === '') return true;              // این محصول اصلا به پنل وصل نیست
+
+    return !empty($order['smm']['ok']);        // فقط وقتی پنل واقعا قبول کرده
 }
 
 /**
@@ -5219,8 +5244,7 @@ function completeApprovedOrder($order) {
             }
             $od2 = $r;
             sendMsg(BOT_TOKEN, $uidT, orderDoneText($od2), orderDoneKb($od2));
-            announceSale($od2);
-            reportSale($od2);
+            if (orderReadyToReport($od2)) { announceSale($od2); reportSale($od2); }
             return;
         }
 
@@ -5239,8 +5263,7 @@ function completeApprovedOrder($order) {
     }
     // 📩 یک پیام کامل — نه سه تا
     sendMsg(BOT_TOKEN, $order['user_id'], orderDoneText($order), orderDoneKb($order));
-    announceSale($order);
-    reportSale($order);
+    if (orderReadyToReport($order)) { announceSale($order); reportSale($order); }
 }
 
 /**
@@ -5300,8 +5323,7 @@ function settlePurchase($uid, $chatId, $uname, $p, $total, $meta = []) {
 
     $od = $r;
     panelShow($uid, $chatId, 'shop', orderDoneText($od), orderDoneKb($od));
-    announceSale($od);
-    reportSale($od);
+    if (orderReadyToReport($od)) { announceSale($od); reportSale($od); }
     return true;
 }
 
@@ -7581,8 +7603,7 @@ function masterHandle($update) {
             answerCb(BOT_TOKEN, $cbId, '✅ خرید انجام شد');
             $od = $r;
             sendMsg(BOT_TOKEN, $chatId, orderDoneText($od), orderDoneKb($od));
-            announceSale($od);
-            reportSale($od);
+            if (orderReadyToReport($od)) { announceSale($od); reportSale($od); }
             return;
         }
 
