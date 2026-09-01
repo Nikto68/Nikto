@@ -1263,6 +1263,24 @@ function maMarketKey($s) {
  * هم موقع نمایش و هم موقع ثبت سفارش از همین تابع استفاده می‌شود
  * تا قیمت نمایش‌داده‌شده و قیمت فاکتور هیچ‌وقت از هم جدا نشوند.
  */
+/**
+ * کشِ درون‌درخواستیِ maLivePrice() به‌ازای هر محصول.
+ *
+ * maItemPrice()، maIsLive() و maPriceStale() هرسه برای همان یک محصول
+ * maLivePrice() صدا می‌زدند — یعنی برای هر ردیف در فهرست، سه بار همان
+ * کارِ سنگین (نگاه به مارکت/استارز/پریمیوم/نرخ) تکرار می‌شد. اینجا
+ * فقط یک‌بار حساب می‌شود؛ null هم نتیجه‌ی معتبری است (یعنی «نرخ نیامده»)
+ * پس با array_key_exists چک می‌شود، نه isset.
+ */
+function maLivePriceCached($item, $drop = false) {
+    static $m = [];
+    if ($drop) { $m = []; return null; }
+    $k = (string)($item['id'] ?? '');
+    if ($k === '') return maLivePrice($item);
+    if (array_key_exists($k, $m)) return $m[$k];
+    return $m[$k] = maLivePrice($item);
+}
+
 function maLivePrice($item) {
     $c = maCfg();
 
@@ -1338,7 +1356,7 @@ function maItemPrice($item) {
     $k = (string)($item['id'] ?? '') . '|' . (string)($item['price'] ?? '');
     if ($k !== '|' && isset($memo[$k])) return $memo[$k];
 
-    $live = maLivePrice($item);
+    $live = maLivePriceCached($item);
     $base = $live !== null ? (float)$live : (float)($item['price'] ?? 0);
 
     if (function_exists('axPrice')) {
@@ -1370,7 +1388,7 @@ function maPriceMemo($k = null, $v = null) {
     $m[$k] = $v;
     return $v;
 }
-function maPriceMemoDrop() { maPriceMemo('drop'); }
+function maPriceMemoDrop() { maPriceMemo('drop'); maLivePriceCached(null, true); }
 
 /**
  * آیا این سرویس قیمتش باید زنده باشد؟ (تون، ترون، تتر و گیفت مارکت)
@@ -1391,12 +1409,12 @@ function maNeedsLive($item) {
 
 /** سرویسی که نرخ زنده می‌خواهد ولی نرخش نیامده — یعنی فعلا قابل فروش نیست */
 function maPriceStale($item) {
-    return maNeedsLive($item) && maLivePrice($item) === null;
+    return maNeedsLive($item) && maLivePriceCached($item) === null;
 }
 
 /** آیا این سرویس قیمتش زنده است؟ (برای نشان دادن نشانه در مینی‌اپ) */
 function maIsLive($item) {
-    return maLivePrice($item) !== null;
+    return maLivePriceCached($item) !== null;
 }
 
 // ============================================================
@@ -2845,20 +2863,24 @@ function maHasFlag($e) {
  *    گوشی یعنی مینی‌اپ اصلا باز نمی‌شود. پس فقط چند ده‌تای اول می‌روند
  *    و بقیه با جستجو از سرور می‌آیند (اکشنِ num_search).
  */
-function maItemsPublic($a, $limit = 0) {
+function maItemsPublic($a, $limit = 0, $cat = '') {
     // ترتیب دسته‌ها، تا در تب «همه» سرویس‌های یک دسته کنار هم بمانند
     $catPos = []; $n = 0;
     foreach ($a['cats'] ?? [] as $c) $catPos[(string)$c['id']] = $n++;
 
-    // ⚡️ اول مرتب و برش، بعد کارِ سنگین.
+    // ⚡️ اول فیلتر و برش، بعد کارِ سنگین.
     //
     //    قبلا برعکس بود: برای هر چهارصد ردیف قیمت حساب می‌شد و بعد
     //    چهل‌تای اول برداشته می‌شد — یعنی سیصد و شصت‌تایش دور ریخته
-    //    می‌شد. کلیدِ مرتب‌سازی (جای دسته و ترتیب) ارزان است و برای
-    //    همه‌شان حساب می‌شود؛ گران‌ها فقط برای بازمانده‌ها.
+    //    می‌شد. با $cat هم همین قصه بود: صدای «شماره مجازی» با باز کردن
+    //    پوشه‌ی یک کشور، قیمتِ کلِ کاتالوگ (چند هزار شماره‌ی هر کشور) را
+    //    حساب می‌کرد و بعد فیلتر می‌کرد — دقیقا همان دکمه‌ای که کاربر
+    //    هنگش را حس می‌کرد. فیلترِ دسته و کلیدِ مرتب‌سازی ارزان‌اند و
+    //    برای همه‌شان حساب می‌شوند؛ گران‌ها فقط برای بازمانده‌ها.
     $keys = [];
     foreach ($a['items'] ?? [] as $k => $i) {
         if (empty($i['on'])) continue;
+        if ($cat !== '' && (string)($i['cat'] ?? '') !== $cat) continue;
         $keys[] = [$catPos[(string)($i['cat'] ?? '')] ?? 999, (int)($i['order'] ?? 99), $k];
     }
     usort($keys, fn($x, $y) => [$x[0], $x[1]] <=> [$y[0], $y[1]]);
@@ -3441,13 +3463,7 @@ function maApi() {
         $cid = trim((string)($body['cat'] ?? ''));
         if ($cid === '') maApiOut(['ok' => true, 'items' => []]);
 
-        $out = [];
-        foreach (maItemsPublic($a, 0) as $i) {
-            if ((string)$i['cat'] !== $cid) continue;
-            $out[] = $i;
-            if (count($out) >= 60) break;
-        }
-        maApiOut(['ok' => true, 'items' => $out]);
+        maApiOut(['ok' => true, 'items' => maItemsPublic($a, 60, $cid)]);
     }
 
     // ---- 📋 شماره مجازی: سفارش‌های من ----

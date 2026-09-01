@@ -382,24 +382,31 @@ function numCall($op, array $vars = []) {
 
         case 'cancel':
             if ($id === '') return [null, 'شناسه ندارد'];
-            return $nl ? num5Get('/v2.php/?method=cancelnumber&id=' . rawurlencode($id))
-                       : num5Get('/user/cancel/' . rawurlencode($id));
+            // ⏱ همان سقفِ کوتاهِ status — این هم از دلِ پرسشِ دوره‌ای صدا زده
+            //    می‌شود (numState وقتی مهلت تمام شود)، پس نباید کارگرِ
+            //    PHP-FPM را تا سقفِ عمومیِ ۶۰ثانیه‌ای قفل نگه دارد.
+            $t = min(8, (int)numVal('api.timeout', 15));
+            return $nl ? num5Get('/v2.php/?method=cancelnumber&id=' . rawurlencode($id), $t)
+                       : num5Get('/user/cancel/' . rawurlencode($id), $t);
 
         case 'close':
             if ($id === '') return [null, 'شناسه ندارد'];
-            return $nl ? num5Get('/v2.php/?method=closenumber&id=' . rawurlencode($id))
-                       : num5Get('/user/finish/' . rawurlencode($id));
+            $t = min(8, (int)numVal('api.timeout', 15));
+            return $nl ? num5Get('/v2.php/?method=closenumber&id=' . rawurlencode($id), $t)
+                       : num5Get('/user/finish/' . rawurlencode($id), $t);
 
         case 'repeat':
             if ($id === '') return [null, 'شناسه ندارد'];
             // ۵سیم «کد مجدد» جدا ندارد؛ تا finish نزنیم پیامکِ بعدی خودش می‌آید
-            return $nl ? num5Get('/v2.php/?method=repeat&id=' . rawurlencode($id))
+            $t = min(8, (int)numVal('api.timeout', 15));
+            return $nl ? num5Get('/v2.php/?method=repeat&id=' . rawurlencode($id), $t)
                        : [[], ''];
 
         case 'ban':
             if ($id === '') return [null, 'شناسه ندارد'];
-            return $nl ? num5Get('/v2.php/?method=bannumber&id=' . rawurlencode($id))
-                       : num5Get('/user/ban/' . rawurlencode($id));
+            $t = min(8, (int)numVal('api.timeout', 15));
+            return $nl ? num5Get('/v2.php/?method=bannumber&id=' . rawurlencode($id), $t)
+                       : num5Get('/user/ban/' . rawurlencode($id), $t);
 
         case 'balance':
             return $nl ? num5Get('/v2.php/?method=getbalance')
@@ -1021,7 +1028,13 @@ function numRepeat($orderId) {
     if (numProv() === 'numberland') {
         [$ok, $e] = numOpDo('repeat', (string)$act['aid']);
         if (!$ok) {
+            // ⚠️ فقط وقتی برگردان که هنوز همان «waiting»ی است که خودمان
+            //    الان گذاشتیمش — این عملیات ثانیه‌ها طول می‌کشد و در
+            //    همین فاصله ممکن است تیکِ پس‌زمینه یا پرسشِ دوره‌ای مهلت
+            //    را تمام‌شده/لغو‌شده حساب کرده باشد؛ بی‌قیدوشرط نوشتنِ
+            //    status='done' آن تغییرِ واقعی را پاک می‌کرد.
             numSetAct($orderId, function (&$x) {
+                if (($x['status'] ?? '') !== 'waiting') return false;
                 $x['status'] = 'done'; $x['repeats'] = max(0, (int)($x['repeats'] ?? 1) - 1);
                 return true;
             });

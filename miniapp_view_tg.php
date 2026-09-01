@@ -1143,6 +1143,7 @@ function send(payMode, btn){
         if (typeof j.balance === 'number') { S.bal = j.balance; setBal(j.balance); }
         walletState();
         toast((j && j.message) ? j.message : U.low_bal);
+        shut();                          // وگرنه شیت روی صفحه‌ی شارژ می‌ماند
         go('me');                        // بخش شارژ همان‌جاست
         return;
       }
@@ -1294,9 +1295,12 @@ function admSave(){
 
 function admDel(){
   if (!ADM.edit || !ADM.edit.id) { shut(); return; }
+  var btn = $('sGo');
+  if (btn.disabled) return;         // یک تقه‌ی تندِ دوباره، دو درخواستِ حذف نسازد
+  btn.disabled = true;
   api('adm_item_del', { id: ADM.edit.id }, function(){
-    shut(); toast('حذف شد ✓', true); admLoad();
-  }, function(j){ toast((j && j.message) ? j.message : 'حذف نشد.'); });
+    btn.disabled = false; shut(); toast('حذف شد ✓', true); admLoad();
+  }, function(j){ btn.disabled = false; toast((j && j.message) ? j.message : 'حذف نشد.'); });
 }
 
 drawTabs();
@@ -1642,6 +1646,12 @@ body.glow-on .orb{animation:orbShine 3.2s ease-in-out infinite,orbFloat 2.4s eas
 /* ═══ 👑 صفحه‌ی مدیریت — فقط برای مدیر ═══ */
 .adm{display:none}
 body.is-admin .adm{display:block}
+/* 🐛 #pgAdm هم .pg است هم .adm — و «body.is-admin .adm» به‌خاطرِ
+   سلکتورِ body یک واحد اسپسیفیسیتی بیشتر از «.pg.on» دارد، پس همیشه
+   می‌برد، حتی وقتی صفحه‌ی مدیریت باز نیست. نتیجه: برای هر مدیری، روی
+   هر صفحه‌ای، جعبه‌ی «👑 در حال خواندن…» همیشه‌روشن می‌ماند — دقیقا
+   شبیهِ هنگ. این خط با ۴ کلاس، آن ترکیب را می‌بَرد. */
+body.is-admin .pg.adm:not(.on){display:none}
 .arow{display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:16px;margin-bottom:8px;
   border:1px solid var(--line);background:var(--pane);cursor:pointer}
 .arow .e{width:38px;height:38px;flex:0 0 auto;border-radius:13px;display:grid;place-items:center;font-size:19px;

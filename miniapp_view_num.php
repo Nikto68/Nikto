@@ -39,7 +39,7 @@ function maTplNum() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="light">
 <title>__TITLE__</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -118,7 +118,7 @@ body::before{
 /* 🔔 زنگ — با همان نقطه‌ای که هر برنامه‌ای دارد */
 .bell{
   position:relative;flex:0 0 auto;width:42px;height:42px;border-radius:14px;
-  border:1px solid var(--line);background:var(--s2);color:var(--fg);
+  border:1px solid var(--hair);background:var(--s2);color:var(--ink);
   display:grid;place-items:center;font-size:18px;cursor:pointer;
   transition:transform .16s var(--ease),background .16s
 }
@@ -134,10 +134,10 @@ body::before{
 
 /* 🔔 کارت‌های اعلان */
 .note{
-  border:1px solid var(--line);background:var(--s1);border-radius:var(--r2);
+  border:1px solid var(--hair);background:var(--s1);border-radius:var(--r-md);
   padding:13px 14px;margin-bottom:10px;position:relative;overflow:hidden
 }
-.note.new{border-color:color-mix(in srgb,var(--c1) 45%,var(--line))}
+.note.new{border-color:color-mix(in srgb,var(--c1) 45%,var(--hair))}
 .note.new::before{
   content:'';position:absolute;inset-inline-start:0;top:0;bottom:0;width:3px;background:var(--c1)
 }
@@ -148,7 +148,7 @@ body::before{
 .note p{font-size:12.5px;color:var(--dim);line-height:1.75;white-space:pre-line;margin:0}
 .note .ncp{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
 .note .ncp button{
-  border:1px solid var(--line);background:var(--s2);color:var(--fg);
+  border:1px solid var(--hair);background:var(--s2);color:var(--ink);
   border-radius:10px;padding:5px 10px;font-size:11.5px;font-family:var(--mono);
   cursor:pointer;transition:transform .14s var(--ease)
 }
@@ -214,7 +214,7 @@ body::before{
   margin-top:6px;font-family:var(--mono);font-size:12.5px;font-weight:700;
   color:color-mix(in srgb,var(--tint) 62%,var(--ink));direction:rtl
 }
-.folder.off{opacity:.42;filter:grayscale(.55)}
+.folder.off{opacity:.42;filter:grayscale(.55);pointer-events:none}
 
 /* 🏳️ پرچم‌ها تکان می‌خورند — مثل پرچمِ واقعی در باد.
    تکانِ کم و کُند: قرار است زنده باشد، نه اینکه حواس را ببرد. */
@@ -259,7 +259,7 @@ body::before{
 .card .fl b.flag{font-size:20px;line-height:1;margin-bottom:0}
 .card .badge{
   margin-inline-start:auto;font-size:9.5px;font-weight:800;padding:3px 7px;border-radius:8px;
-  background:color-mix(in srgb,var(--tint) 24%,transparent);color:color-mix(in srgb,var(--tint) 70%,#fff);
+  background:color-mix(in srgb,var(--tint) 24%,transparent);color:color-mix(in srgb,var(--tint) 78%,black);
   border:1px solid color-mix(in srgb,var(--tint) 34%,transparent);white-space:nowrap
 }
 .card h3{margin:0 0 3px;font-size:13.5px;font-weight:700;line-height:1.45}
@@ -393,9 +393,12 @@ body::before{
 .nav .pill{
   position:absolute;z-index:-1;top:7px;bottom:7px;inset-inline-start:0;
   width:0;border-radius:18px;pointer-events:none;
-  background:linear-gradient(150deg,color-mix(in srgb,var(--c1) 60%,transparent),color-mix(in srgb,var(--c3) 45%,transparent));
-  border:1px solid color-mix(in srgb,var(--c2) 34%,transparent);
-  box-shadow:0 10px 24px -12px var(--c1), 0 0 0 1px rgba(255,255,255,.05) inset;
+  /* 🐛 قبلا رنگش نیمه‌شفاف بود (color-mix با transparent) — روی شیشه‌ی
+     روشنِ نوار، به یک لکه‌ی کم‌رنگ تبدیل می‌شد و متنِ سفیدِ روی آن
+     (button[aria-selected] رنگش #fff است) عملا دیده نمی‌شد. حالا مثل
+     بقیه‌ی دکمه‌های رنگی صفحه (مثلا .btn)، گرادیانِ کامل و توپر است. */
+  background:linear-gradient(150deg,var(--c1),var(--c3));
+  box-shadow:0 10px 24px -12px var(--c1);
   transition:transform .38s var(--ease), width .38s var(--ease), opacity .25s var(--ease);
   opacity:0
 }
@@ -696,7 +699,7 @@ async function api(action, data) {
 }
 
 /* ── وضعیت ───────────────────────────────── */
-const S = { me: null, cat: 'all', live: null, tick: 0, poll: 0, polling: false, page: 'home',
+const S = { me: null, cat: 'all', live: null, tick: 0, poll: 0, polling: false, buying: false, page: 'home',
             q: '', shown: 0, hits: [], notes: 0 };
 
 /* ── ساخت کارت محصول ─────────────────────── */
@@ -1103,9 +1106,19 @@ function askBuy(it) {
 }
 
 async function doBuy(it, btn) {
+  // 🔒 قفلِ سطحِ برنامه، نه فقط دکمه — وگرنه با بستنِ شیت (مثلا کلیک
+  //    روی mask) و باز کردنِ دوباره‌ش، یک دکمه‌ی تازه و فعال می‌ساختیم
+  //    درحالی‌که درخواستِ قبلی هنوز برنگشته بود، و سفارش دوبار می‌رفت.
+  if (S.buying) return;
+  S.buying = true;
   btn.disabled = true; btn.textContent = U('sending', '…');
-  const r = await api('order', { item: it.id, qty: 1, seen_price: it.price });
-  btn.disabled = false; btn.textContent = U('buy', 'گرفتن شماره');
+  let r;
+  try {
+    r = await api('order', { item: it.id, qty: 1, seen_price: it.price });
+  } finally {
+    S.buying = false;
+    btn.disabled = false; btn.textContent = U('buy', 'گرفتن شماره');
+  }
 
   if (r.ok) {
     closeSheet(); buzz('medium');

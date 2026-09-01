@@ -2688,7 +2688,10 @@ class Channels
         return $e['v'];
     }
     private static function joinCachePut($k, $v) {
-        if (function_exists('apcu_store')) @apcu_store('mjoin_' . $k, $v, 45);
+        // ⚡️ اگر APCu هست، همان کافی است — نوشتنِ فایل هم رویش، دقیقا
+        //    همان قفل‌وانتظارِ دیسکی‌ای بود که این کش قرار بود کنارش بزند.
+        //    فایل فقط برای وقتی است که APCu نباشد.
+        if (function_exists('apcu_store')) { @apcu_store('mjoin_' . $k, $v, 45); return; }
         mutate(self::joinCacheShardFile($k), function (&$bag) use ($k, $v) {
             $bag[$k] = ['v' => $v, 'exp' => time() + 45];
             // خانه‌تکانی تا تکه بی‌نهایت بزرگ نشود

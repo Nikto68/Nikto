@@ -364,6 +364,12 @@ body.glow-on .orb{animation:orbShine 3.2s ease-in-out infinite,orbFloat 2.4s eas
 /* ═══ 👑 صفحه‌ی مدیریت — فقط برای مدیر ═══ */
 .adm{display:none}
 body.is-admin .adm{display:block}
+/* 🐛 #pgAdm هم .pg است هم .adm — و «body.is-admin .adm» به‌خاطرِ
+   سلکتورِ body یک واحد اسپسیفیسیتی بیشتر از «.pg.on» دارد، پس همیشه
+   می‌برد، حتی وقتی صفحه‌ی مدیریت باز نیست. نتیجه: برای هر مدیری، روی
+   هر صفحه‌ای، جعبه‌ی «👑 در حال خواندن…» همیشه‌روشن می‌ماند — دقیقا
+   شبیهِ هنگ. این خط با ۴ کلاس، آن ترکیب را می‌بَرد. */
+body.is-admin .pg.adm:not(.on){display:none}
 .arow{display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:16px;margin-bottom:8px;
   border:1px solid var(--line);background:var(--pane);cursor:pointer}
 .arow .e{width:38px;height:38px;flex:0 0 auto;border-radius:13px;display:grid;place-items:center;font-size:19px;
@@ -407,6 +413,9 @@ body.is-admin .dock b[data-p="adm"]{display:flex}
 .scrim{position:fixed;inset:0;z-index:40;background:rgba(15,23,42,.32);backdrop-filter:blur(6px);
   opacity:0;pointer-events:none;transition:.28s}
 .scrim.on{opacity:1;pointer-events:auto}
+/* ⌨️ کیبورد باز = بلور خاموش — همان قاعده‌ای که در tg.php هست، اینجا
+   جا افتاده بود؛ بدونش هر تقه روی فیلدهای شیت خرید یک لحظه هنگ می‌کرد. */
+body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition:opacity .28s}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;transform:translateY(102%);
   transition:transform .38s cubic-bezier(.2,.9,.25,1);
   background:#FFFFFF;
@@ -463,6 +472,7 @@ body.is-admin .dock b[data-p="adm"]{display:flex}
 .step button{width:46px;height:46px;flex:0 0 auto;border-radius:15px;border:1px solid var(--line);
   background:var(--pane2);color:var(--ink);font-size:21px;font-weight:700;cursor:pointer;transition:.16s}
 .step button:active{transform:scale(.92);background:color-mix(in srgb,var(--c1) 20%,transparent)}
+.step button[disabled]{opacity:.35;pointer-events:none}
 .step input{text-align:center;font-weight:900;font-size:17px}
 
 .total{display:flex;justify-content:space-between;align-items:center;margin:16px 0;padding:15px 16px;
