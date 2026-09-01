@@ -971,6 +971,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('چیدمانِ دستیِ محصولات ذخیره شد.');
     }
 
+    // ---- 🧲 چیدمانِ دستیِ دکمه‌های واقعیِ «ثبت سفارش»: گریدِ ۷×۳ ----
+    // همان قانونِ گریدِ محصولات، ولی این‌بار روی خودِ زیردکمه‌های دکمه‌ی
+    // buy — همان چیزی که در ربات زیرِ «ثبت سفارش» به مشتری نشان داده
+    // می‌شود (چه محصول‌محور، چه خودقیمت‌گذار مثلِ ممبر/بوست، چه دکمه‌های
+    // مینی‌اپِ ادغام‌شده). دکمه‌های مینی‌اپ رکوردِ subs ندارند، پس جای
+    // row/order‌شان جدا (میان‌اپ) است — با شناسه‌ی مصنوعیِ __ma_<کلید>
+    // تشخیص داده می‌شوند و در همان یک cfgSet اتمیک ذخیره می‌شوند.
+    if ($a === 'save_button_grid') {
+        $grid = (array)($_POST['grid'] ?? []);
+        cfgSet(function (&$c) use ($grid) {
+            for ($gr = 1; $gr <= 7; $gr++) {
+                for ($gc = 1; $gc <= 3; $gc++) {
+                    $ord = $gr * 10 + $gc;
+                    if (!empty($c['buttons']['buy']['subs'])) {
+                        foreach ($c['buttons']['buy']['subs'] as $i => &$sub) {
+                            if ((int)($sub['row'] ?? 0) === $gr && (int)($sub['order'] ?? 0) === $ord) $sub['row'] = 0;
+                        }
+                        unset($sub);
+                    }
+                    foreach (array_keys($c['miniapps']['apps'] ?? []) as $mk) {
+                        if (!is_array($c['miniapps']['apps'][$mk]['btn'] ?? null)) continue;
+                        $btn = &$c['miniapps']['apps'][$mk]['btn'];
+                        if ((int)($btn['row'] ?? 0) === $gr && (int)($btn['order'] ?? 0) === $ord) $btn['row'] = 0;
+                        unset($btn);
+                    }
+                }
+            }
+            for ($gr = 1; $gr <= 7; $gr++) {
+                for ($gc = 1; $gc <= 3; $gc++) {
+                    $id = trim((string)($grid[$gr][$gc] ?? ''));
+                    if ($id === '') continue;
+                    $ord = $gr * 10 + $gc;
+                    if (str_starts_with($id, '__ma_')) {
+                        $mk = substr($id, 5);
+                        if (!isset($c['miniapps']['apps'][$mk])) continue;
+                        if (!is_array($c['miniapps']['apps'][$mk]['btn'] ?? null)) $c['miniapps']['apps'][$mk]['btn'] = [];
+                        $c['miniapps']['apps'][$mk]['btn']['row']   = $gr;
+                        $c['miniapps']['apps'][$mk]['btn']['order'] = $ord;
+                        continue;
+                    }
+                    if (empty($c['buttons']['buy']['subs'])) continue;
+                    foreach ($c['buttons']['buy']['subs'] as $i => &$sub) {
+                        if (($sub['id'] ?? '') === $id) { $sub['row'] = $gr; $sub['order'] = $ord; break; }
+                    }
+                    unset($sub);
+                }
+            }
+        });
+        go('چیدمانِ دستیِ دکمه‌های ثبت سفارش ذخیره شد.');
+    }
+
     // ---- دکمه سفارشی ----
 
     // ---- شرکا ----
@@ -2098,6 +2149,72 @@ $tabFolders = [
       <div style="margin-top:16px"><label>👁 پیش‌نمایش جدول</label>
         <div class="prev" style="white-space:pre-wrap;line-height:2"><?= $tbl ?></div></div>
     <?php endif; ?>
+  </div></div>
+
+  <?php
+    // 🧲 چیدمانِ دستیِ خودِ دکمه‌های واقعیِ «ثبت سفارش» — همان دکمه‌هایی
+    // که در ربات زیرِ خرید می‌بینید (ممبر/بوست/فیک/پریمیوم + دکمه‌های
+    // مینی‌اپِ ادغام‌شده). «لیست سفارشات» و «لیست تعرفه‌ها» همیشه اول و
+    // آخرِ صفحه‌اند و جزوِ این گرید نیستند، پس این‌جا هم نمی‌آیند.
+    // این بخش وابسته به saleButtons() نیست — همیشه نشان داده می‌شود.
+    $buyGridItems = [];
+    foreach ((cfg()['buttons']['buy']['subs'] ?? []) as $sub) {
+        $sid2 = (string)($sub['id'] ?? ''); if ($sid2 === '') continue;
+        $buyGridItems[] = [
+            'id' => $sid2,
+            'label' => trim(($sub['emoji'] ?? '') . ' ' . ($sub['text'] ?? '')) ?: $sid2,
+            'on' => !empty($sub['on']),
+            'row' => (int)($sub['row'] ?? 0), 'order' => (int)($sub['order'] ?? 0),
+        ];
+    }
+    if (function_exists('maMergeOn') && maMergeOn() && function_exists('maSubItems')) {
+        foreach (maSubItems() as $mi) {
+            $buyGridItems[] = [
+                'id' => $mi['id'],
+                'label' => trim(($mi['emoji'] ?? '') . ' ' . ($mi['text'] ?? '')) ?: $mi['id'],
+                'on' => true,
+                'row' => (int)($mi['row'] ?? 0), 'order' => (int)($mi['order'] ?? 0),
+            ];
+        }
+    }
+    $buyGridOcc = [];
+    foreach ($buyGridItems as $gi) {
+        $gr = $gi['row']; $go = $gi['order'];
+        if ($gr >= 1 && $gr <= 7 && $go >= $gr * 10 + 1 && $go <= $gr * 10 + 3) $buyGridOcc[$gr][$go - $gr * 10] = $gi['id'];
+    }
+  ?>
+  <div class="card"><h2>🧲 چیدمانِ دستیِ دکمه‌های ثبت سفارش — گریدِ ۷×۳</h2><div class="body">
+    <div class="note">
+      دقیقا همان گریدِ محصولات، ولی این‌بار روی خودِ دکمه‌های ممبر/بوست/فیک/پریمیوم و
+      دکمه‌های مینی‌اپ. روی «+» بزنید و دکمه موردنظر را انتخاب کنید — یک دکمه‌ی تنها در
+      یک ردیف، وسطِ همان ردیف می‌نشیند؛ دو یا سه‌تا در همان ردیف، کنارِ هم.
+      «لیست سفارشات» همیشه بالای همه و «لیست تعرفه‌ها» همیشه پایینِ همه می‌ماند — این دو
+      جزوِ گرید نیستند.
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
+      <input type="hidden" name="action" value="save_button_grid">
+      <div class="layoutgrid">
+        <?php for ($gr = 1; $gr <= 7; $gr++): ?>
+        <div class="lrow">
+          <?php for ($gc = 1; $gc <= 3; $gc++): $cur = $buyGridOcc[$gr][$gc] ?? ''; ?>
+          <div class="gridslot">
+            <select name="grid[<?= $gr ?>][<?= $gc ?>]" onchange="gridSlotChanged(this)" class="<?= $cur !== '' ? 'filled' : '' ?>">
+              <option value="">+</option>
+              <?php foreach ($buyGridItems as $gi): ?>
+                <option value="<?= h($gi['id']) ?>" <?= $cur === $gi['id'] ? 'selected' : '' ?>>
+                  <?= h($gi['label'] . (!$gi['on'] ? ' (خاموش)' : '')) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <?php endfor; ?>
+        </div>
+        <?php endfor; ?>
+      </div>
+      <div style="margin-top:14px"><button class="btn g">💾 ذخیره چیدمانِ دکمه‌ها</button></div>
+    </form>
+    <?php if (!$buyGridItems): ?><div class="empty"><div class="ic">🧲</div>هنوز دکمه‌ای زیرِ «ثبت سفارش» نساخته‌اید.</div><?php endif; ?>
   </div></div>
 
   <?php $saleBtns = saleButtons(); ?>
