@@ -2065,125 +2065,6 @@ function boostQuickSetup($bid, $sid) {
     return true;
 }
 
-/**
- * 😍 راه‌اندازیِ یک‌کلیکِ «ری‌اکشن پست تلگرام» — دقیقاً همان مکانیزمِ
- * بوست (پنلِ SMM + قیمتِ خودکار)، فقط به‌جای انتخابِ مدت، مشتری نوعِ
- * ری‌اکشن را انتخاب می‌کند و به‌جای لینکِ کانال، لینکِ خودِ پست را
- * می‌دهد. ادمین بعداً برای هرکدام از ری‌اکشن‌ها سرویسِ واقعیِ پنل را
- * از همان دراپ‌داونِ همیشگی انتخاب می‌کند.
- */
-function postReactQuickSetup($bid, $sid) {
-    if (!findSub($bid, $sid)) return false;
-    subMutate($bid, $sid, function (&$x) {
-        $x['text']     = '😍 ری‌اکشن پست تلگرام';
-        $x['sale_cat'] = 'boost';
-        $x['smm_auto_price'] = true;
-        $x['flow_texts'] = [
-            'flow_link' => "😍 <b>لینکِ پستی که می‌خواهید ری‌اکشن بگیرد را ارسال کنید</b>\n\n" .
-                "🔗 لینکِ همان پست را بفرستید (مثلاً <code>https://t.me/channel/123</code>).\n" .
-                "⚠️ پست باید در کانال یا گروهِ عمومی باشد.",
-            'flow_link_bad' => "❌ لینک معتبر نیست.\nلینکِ خودِ پست را دوباره بفرستید.",
-            'flow_qty' => "🔢 چند تا ری‌اکشن می‌خواهید؟ بین <b>{min}</b> و <b>{max}</b> وارد کنید.",
-            'flow_qty_bad' => "❌ عدد واردشده معتبر نیست.\nحداقل <b>{min}</b> و حداکثر <b>{max}</b>.",
-            'flow_speed' => "😍 کدام ری‌اکشن را می‌خواهید؟",
-            'flow_invoice' => "😍 <b>فاکتور خرید ری‌اکشن پست</b>\n\n" .
-                "📈 سرویس: {product}\n" .
-                "😍 ری‌اکشن: {speed}\n" .
-                "🎯 پست: <code>{link}</code>\n" .
-                "🔢 تعداد: <b>{qty}</b>\n" .
-                "💵 قیمت هر عدد: <b>{rate} {currency}</b>\n" .
-                "⭐ نرخ سرویس (پنل): <b>{usd_rate} / 1000</b>\n" .
-                "⭐ نرخ لحظه‌ای تتر: <b>{usdt_irt}</b>\n\n" .
-                "💳 مبلغ قابل پرداخت: <b>{total} {currency}</b>\n\n" .
-                "❗️ قیمت‌ها لحظه‌ای و مستقیم از پنل و نرخ تتر محاسبه می‌شوند — سفارش‌ها بلافاصله و به‌صورت سیستمی ثبت می‌شوند.\n\n" .
-                "✅ قبل از تایید، لینکِ پست و تعداد را بررسی کنید.",
-        ];
-        if (!is_array($x['flow'] ?? null)) $x['flow'] = [];
-        $x['flow'] = array_merge(defaultFlow(), $x['flow'], [
-            'on' => true, 'ask_link' => true, 'ask_qty' => true, 'ask_admin' => false,
-            'min' => 1, 'max' => 2000, 'per' => 1, 'speed_layout' => '2,2',
-            'speeds' => [
-                ['id' => 'prlike', 'text' => '👍 پسندیدم',  'emoji' => '', 'mult' => 1, 'per_day' => 0,
-                 'color' => 'primary', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][0]['smm_service'] ?? '')],
-                ['id' => 'prlove', 'text' => '❤️ عاشقشم',   'emoji' => '', 'mult' => 1, 'per_day' => 0,
-                 'color' => 'danger', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][1]['smm_service'] ?? '')],
-                ['id' => 'prfire', 'text' => '🔥 آتیشیه',   'emoji' => '', 'mult' => 1, 'per_day' => 0,
-                 'color' => 'success', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][2]['smm_service'] ?? '')],
-                ['id' => 'prparty','text' => '🎉 تبریک',    'emoji' => '', 'mult' => 1, 'per_day' => 0,
-                 'color' => 'primary', 'icon' => '', 'on' => true, 'smm_service' => (string)($x['flow']['speeds'][3]['smm_service'] ?? '')],
-            ],
-        ]);
-    });
-    return true;
-}
-
-
-/**
- * 🧲 دکمه‌های «🚀 بوست تلگرام» و «😍 ری‌اکشن پست تلگرام» (همان‌هایی که
- * راه‌اندازیِ یک‌کلیک می‌سازد) را کنار هم می‌گذارد، درست زیرِ زیردکمه‌ای
- * که تویِ متنش «ممبر فیک» دارد — بدون اینکه ترتیبِ نسبیِ بقیه‌ی
- * زیردکمه‌ها به‌هم بریزد. هر زیردکمه یک ردیفِ صریح می‌گیرد (چندبرابرِ
- * ۱۰، تا بعداً بدونِ شماره‌گذاریِ دوباره‌ی همه چیز بشود چیزی وسطش جا داد).
- */
-function arrangeBoostReactAfterFake($btnId = 'buy') {
-    $groups = subGroups($btnId);
-    if (!$groups) return [false, 'زیردکمه‌ای پیدا نشد.'];
-
-    $hasBoost = $hasReact = false;
-    foreach ($groups as $line) foreach ($line as $it) {
-        $t = trim((string)($it['text'] ?? ''));
-        if ($t === '🚀 بوست تلگرام') $hasBoost = true;
-        if ($t === '😍 ری‌اکشن پست تلگرام') $hasReact = true;
-    }
-    if (!$hasBoost || !$hasReact) {
-        return [false, 'دکمه‌ی «بوست تلگرام» یا «ری‌اکشن پست تلگرام» پیدا نشد — اول از راه‌اندازیِ یک‌کلیک بسازشان.'];
-    }
-
-    $boostItem = $reactItem = null;
-    $newGroups = [];
-    foreach ($groups as $line) {
-        $rest = [];
-        foreach ($line as $it) {
-            $t = trim((string)($it['text'] ?? ''));
-            if ($t === '🚀 بوست تلگرام')            { $boostItem = $it; continue; }
-            if ($t === '😍 ری‌اکشن پست تلگرام')     { $reactItem = $it; continue; }
-            $rest[] = $it;
-        }
-        if ($rest) $newGroups[] = $rest;
-    }
-
-    $fakeIdx = null;
-    foreach ($newGroups as $gi => $line) foreach ($line as $it)
-        if (str_contains(trim((string)($it['text'] ?? '')), 'ممبر فیک')) $fakeIdx = $gi;
-    if ($fakeIdx === null) {
-        return [false, 'زیردکمه‌ای با متنِ «ممبر فیک» پیدا نشد — بدونِ اون نمی‌دونم کجا بذارمشون.'];
-    }
-
-    array_splice($newGroups, $fakeIdx + 1, 0, [[$boostItem, $reactItem]]);
-
-    // 🔢 ردیف کنترل می‌کند کدام‌ها کنار هم‌اند؛ ولی چپ‌وراستِ داخلِ همان
-    // ردیف را فیلدِ «order» تعیین می‌کند (subGroups قبل از گروه‌بندی
-    // روی order مرتب می‌کند) — پس اگر order را هم صریح ننویسیم، چپ‌راستِ
-    // بوست/ری‌اکشن به مقدارِ قبلی‌شان بستگی دارد، نه چیزی که اینجا
-    // تصمیم گرفتیم. با نوشتنِ هر دو، نتیجه همیشه یکسان و قابل‌پیش‌بینی
-    // می‌ماند.
-    $rowById = $orderById = [];
-    $seq = 0;
-    foreach ($newGroups as $gi => $line) foreach ($line as $it) {
-        $rowById[$it['id']]   = ($gi + 1) * 10;
-        $orderById[$it['id']] = ++$seq;
-    }
-
-    cfgSet(function (&$c) use ($btnId, $rowById, $orderById) {
-        if (!is_array($c['buttons'][$btnId]['subs'] ?? null)) return;
-        foreach ($c['buttons'][$btnId]['subs'] as &$sub) {
-            if (!isset($sub['id']) || !isset($rowById[$sub['id']])) continue;
-            $sub['row']   = $rowById[$sub['id']];
-            $sub['order'] = $orderById[$sub['id']];
-        }
-    });
-    return [true, '✅ چیده شد — «بوست تلگرام» و «ری‌اکشن پست تلگرام» کنار هم، درست زیرِ «ممبر فیک».'];
-}
 
 class Product
 {
@@ -11560,13 +11441,18 @@ function runBackgroundQueues() {
     // خودکارش ساخته بود، به‌درخواستِ ادمین حذف شدند — این نصب‌های در
     // حالِ کار را هم پاک می‌کند، نه فقط نصب‌های تازه را.
     migrateOnce('v15_drop_pmem', function () {
+        // فقط دکمه‌ی سردرگم‌کننده‌ی بالای اصلی حذف شود — «ممبر پریمیوم»ی
+        // که زیرِ «ثبت سفارش» نشسته یک محصولِ واقعی است و می‌ماند.
+        cfgSet(function (&$c) { unset($c['buttons']['pmem']); });
+    });
+    // 😍 «ری‌اکشن پست» به‌عنوان زیردکمه‌ی معمولی جمع شد — جایش را یک
+    // مینی‌اپِ مستقل برای ری‌اکشن/استوری/بقیه‌ی خدماتِ پستِ کانال گرفت.
+    migrateOnce('v16_drop_postreact', function () {
         cfgSet(function (&$c) {
-            unset($c['buttons']['pmem']);
             foreach ($c['buttons'] as $bid => &$b) {
                 if (empty($b['subs']) || !is_array($b['subs'])) continue;
                 $b['subs'] = array_values(array_filter($b['subs'], function ($sub) {
-                    $t = trim((string)($sub['text'] ?? ''));
-                    return $t !== '⭐ ممبر پریمیوم' && $t !== '😍 ری‌اکشن پست تلگرام';
+                    return trim((string)($sub['text'] ?? '')) !== '😍 ری‌اکشن پست تلگرام';
                 }));
             }
             unset($b);
