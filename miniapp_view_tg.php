@@ -272,15 +272,17 @@ document.body.classList.add('fx' + FX);
 if (__GLOW__)  document.body.classList.add('glow-on');
 if (__GRAIN__) document.body.classList.add('grain-on');
 
-/* خوش‌آمدگویی تا جوابِ api('me') برسه (یا حداکثر ۴ ثانیه، که یه
-   شبکه‌ی کند اسیرمون نکنه) پنهان می‌مونه — یه‌بار که مخفی شد، دیگه
-   برنمی‌گرده، چون فقط لحظه‌ی اولِ ورود معنی داره. */
+/* خوش‌آمدگویی تا جوابِ api('me') برسه پنهان می‌مونه — یه‌بار که مخفی
+   شد، دیگه برنمی‌گرده، چون فقط لحظه‌ی اولِ ورود معنی داره. */
 var splashStart = Date.now();
 var splashGone = false;
-// ⚠️ عمداً حداقل ۴ ثانیه نگه داشته می‌شه — اگه api('me') زودتر جواب بده،
-// همچنان تا رسیدن به این حداقل صبر می‌کنه؛ اگه دیرتر جواب بده، همون لحظه
-// (بدون معطلیِ اضافه) بسته می‌شه. یعنی سقفِ ۴ ثانیه، هم کف‌شه هم سقف.
-var SPLASH_MIN = 4000;
+// کف و سقف حالا از هم جدا شدن — قبلاً یک عدد (۴ ثانیه) هر دو نقش را
+// داشت، یعنی حتی یک اتصالِ خیلی سریع هم مجبور بود تا ۴ ثانیه صبر کند.
+// SPLASH_MIN فقط جلوی «پلک‌زدنِ» چندصدمیلی‌ثانیه‌ای را می‌گیرد؛
+// SPLASH_MAX همان سقفِ قبلی برای شبکه‌ی کند است — بدونش api('me')ی که
+// جواب نمی‌دهد، اسپلش را برای همیشه نگه می‌داشت.
+var SPLASH_MIN = 350;
+var SPLASH_MAX = 4000;
 function hideSplash(){
   if (splashGone) return; splashGone = true;
   var wait = Math.max(0, SPLASH_MIN - (Date.now() - splashStart));
@@ -290,7 +292,7 @@ function hideSplash(){
     setTimeout(function(){ s.remove(); }, 400);
   }, wait);
 }
-setTimeout(hideSplash, SPLASH_MIN);
+setTimeout(hideSplash, SPLASH_MAX);
 
 if (TG) {
   try { TG.ready(); TG.expand(); } catch(e){}

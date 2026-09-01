@@ -615,12 +615,15 @@ const B = __BOOT__;
 const TG = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 if (TG) { try { TG.ready(); TG.expand(); TG.setHeaderColor && TG.setHeaderColor(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()); } catch (e) {} }
 
-/* خوش‌آمدگویی تا جوابِ api('me') برسه (یا حداکثر ۴ ثانیه) پنهان می‌مونه */
+/* خوش‌آمدگویی تا جوابِ api('me') برسه پنهان می‌مونه */
 const splashStart = Date.now();
 let splashGone = false;
-// ⚠️ عمداً حداقل ۴ ثانیه نگه داشته می‌شه — سریع‌تر جواب بدن هم فرقی نداره،
-// همون ۴ ثانیه هم کف‌شه هم سقف (سقف برای شبکه‌ی کند).
-const SPLASH_MIN = 4000;
+// کف و سقف جدا شدن — قبلاً یک عددِ ۴-ثانیه‌ای هر دو نقش را داشت، یعنی
+// حتی اتصالِ خیلی سریع هم ۴ ثانیه معطل می‌ماند. SPLASH_MIN فقط جلوی
+// پلک‌زدنِ چندصدمیلی‌ثانیه‌ای را می‌گیرد؛ SPLASH_MAX همان سقفِ قبلی برای
+// شبکه‌ی کند است.
+const SPLASH_MIN = 350;
+const SPLASH_MAX = 4000;
 function hideSplash() {
   if (splashGone) return; splashGone = true;
   const wait = Math.max(0, SPLASH_MIN - (Date.now() - splashStart));
@@ -630,7 +633,7 @@ function hideSplash() {
     setTimeout(() => s.remove(), 400);
   }, wait);
 }
-setTimeout(hideSplash, SPLASH_MIN);
+setTimeout(hideSplash, SPLASH_MAX);
 
 /* 🎨 رنگِ هر کشور.
    همه از یک خانواده‌اند — آبیِ پریده تا سبزِ پریده — تا شبکه یکدست و
