@@ -2917,7 +2917,7 @@ class Campaign
         });
         if ($paused) {
             [$title, $w] = explode('|', $paused, 2);
-            notifyAdmins(
+            chTechAlert(
                 "⚠️ <b>کمپین موقتا متوقف شد</b>\n\n" .
                 "کانال: <b>" . h($title) . "</b>\n" .
                 "دلیل: ربات نمی‌تواند عضویت را بررسی کند (" . h($w) . ")\n\n" .
@@ -4284,7 +4284,7 @@ function askDirectPay($uid, $chatId, $p, $amount, $meta = []) {
     if (str_contains($wallet, 'تنظیم نشده')) {
         sendMsg(BOT_TOKEN, $chatId,
             "⚠️ روش پرداخت هنوز تنظیم نشده است.\nلطفا با پشتیبانی تماس بگیرید.");
-        notifyAdmins(
+        chTechAlert(
             "🔴 <b>فروش از دست رفت — مقصد پرداخت خالی است!</b>\n\n" .
             "کاربر <code>{$uid}</code> می‌خواست <b>" . fmtNum($amount) . ' ' . h($p['currency']) .
             "</b> بابت «" . h($p['name']) . "» بپردازد.\n\n" .
@@ -4527,7 +4527,7 @@ function createOrderAndAsk($uid, $chatId, $username, $type, $productId, $amount,
         }
         // درگاه جواب نداد → برگرد به کارت به کارت
         Order::delete($oid);
-        notifyAdmins(
+        chTechAlert(
             "⚠️ <b>درگاه پرداخت جواب نداد</b>\n\n<code>" . h($err) . "</code>\n\n" .
             "فعلا کارت به کارت استفاده می‌شود. /panel ← 💠 درگاه پرداخت");
     }
@@ -4537,7 +4537,7 @@ function createOrderAndAsk($uid, $chatId, $username, $type, $productId, $amount,
     if (str_contains($wallet, 'تنظیم نشده')) {
         sendMsg(BOT_TOKEN, $chatId,
             "⚠️ روش پرداخت هنوز تنظیم نشده است.\nلطفا با پشتیبانی تماس بگیرید.");
-        notifyAdmins(
+        chTechAlert(
             "🔴 <b>مقصد پرداخت خالی است!</b>\n\n" .
             "کاربر <code>{$uid}</code> می‌خواست <b>" . fmtNum($amount) . ' ' . h($currency) . "</b> بپردازد.\n\n" .
             "پنل وب ← ⚙️ تنظیمات ← شماره کارت را پر کنید.");
@@ -4990,7 +4990,7 @@ function flowFinish($uid, $chatId, $uname) {
     if (!$p) {
         clearState($uid);
         sendMsg(BOT_TOKEN, $chatId, "⚠️ این محصول دیگر در دسترس نیست.", mainKeyboard());
-        if (!isAdmin($uid)) notifyAdmins(
+        if (!isAdmin($uid)) chTechAlert(
             "⚠️ کاربر <code>{$uid}</code> روی محصولی سفارش داد که دیگر وجود ندارد: <code>" .
             h((string)($sd['pid'] ?? '')) . "</code>");
         return false;
@@ -5039,7 +5039,7 @@ function flowFinish($uid, $chatId, $uname) {
             sendMsg(BOT_TOKEN, $chatId,
                 "⚠️ قیمت این محصول هنوز تنظیم نشده است.\nلطفا با پشتیبانی تماس بگیرید.",
                 mainKeyboard());
-            notifyAdmins(
+            chTechAlert(
                 "🔴 <b>فروش از دست رفت!</b>\n\n" .
                 "کاربر <code>{$uid}</code> خواست «<b>" . h($p['name']) . "</b>» بخرد " .
                 "ولی قیمتش صفر است.\n\nهمین حالا قیمتش را بگذارید:",
@@ -5128,7 +5128,7 @@ function campaignFromOrder($o) {
             $a[$c['id']]['active'] = false;
             $a[$c['id']]['paused_reason'] = 'ربات در کانال ادمین نیست';
         });
-        notifyAdmins(
+        chTechAlert(
             "⏸ <b>" . h($title) . "</b> — قفل نشد، ربات در کانال ادمین نیست.\n" .
             "<code>" . h($o['id']) . "</code> · /panel ← 🔒 قفل‌ها");
         return Campaign::get($c['id']);
@@ -5248,7 +5248,7 @@ function reportSale($order, $force = false) {
 
     $res = sendMsg(BOT_TOKEN, $r['chat_id'], $text, $rows ? inlineKb($rows) : null, $extra);
     if (empty($res['ok'])) {
-        notifyAdmins(
+        chTechAlert(
             "⚠️ <b>گزارش خرید ارسال نشد</b>\n\n" .
             "محصول: <b>" . h($p['name']) . "</b>\n" .
             "گروه: <code>" . h((string)$r['chat_id']) . "</code>" .
@@ -10904,7 +10904,7 @@ function notifyChannelProblem($bot) {
     $st = load($flag);
     if (!empty($st['warned_at']) && (time() - (int)$st['warned_at']) < 21600) return;
     save($flag, ['warned_at' => time()]);
-    notifyAdmins(
+    chTechAlert(
         "⚠️ <b>مشکل عضویت اجباری</b>\n\n<b>ربات مادر</b> نمی‌تواند عضویت کانال‌های مربوط به " .
         "@" . h($bot['username']) . " را بررسی کند.\n\n" .
         "فقط کافی است <b>ربات مادر</b> را در آن کانال ادمین کنید — ربات‌های اپلودر لازم نیست عضو کانال باشند.");

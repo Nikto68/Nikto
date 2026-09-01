@@ -2333,7 +2333,7 @@ function maAutoFailNotice($orderId, $err) {
                 ? ' — کد پنل: <code>' . h((string)$o['provider_ref']) . '</code>' : '') . "\n" .
               "پس تلاش خودکار متوقف شد؛ وگرنه یک سفارش دیگر ثبت می‌شد و دو بار پول می‌رفت.\n" .
               "اول روی پنل ببینید چه شده، بعد یکی را انتخاب کنید:";
-        notifyAdmins($t, inlineKb([
+        chTechAlert($t, inlineKb([
             [btnCb('✅ انجام شد، ببندش', 'madone_' . $o['id'], 'confirm')],
             [btnCb('📤 تحویل دستی', 'madlv_' . $o['id'], 'link')],
             [btnCb('💰 برگشت پول به کاربر', 'marefund_' . $o['id'], 'reject')],
@@ -2344,7 +2344,7 @@ function maAutoFailNotice($orderId, $err) {
         ? 'خودکار دوباره تلاش می‌شود. می‌توانید همین حالا هم دستی اقدام کنید:'
         : '<b>تلاش خودکار تمام شد</b> — پول کاربر گرفته شده و سفارش تحویل نشده. یکی را انتخاب کنید:');
 
-    notifyAdmins($t, inlineKb([
+    chTechAlert($t, inlineKb([
         [btnCb('🔁 تلاش دوباره', 'maretry_' . $o['id'], 'confirm')],
         [btnCb('📤 تحویل دستی', 'madlv_' . $o['id'], 'link')],
         [btnCb('💰 برگشت پول به کاربر', 'marefund_' . $o['id'], 'reject')],
@@ -4000,7 +4000,7 @@ function maCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
         [$method, $wallet] = walletFor($o['currency']);
         if (str_contains($wallet, 'تنظیم نشده')) {
             answerCb(BOT_TOKEN, $cbId, '⚠️ روش پرداخت تنظیم نشده — با پشتیبانی تماس بگیرید.', true);
-            notifyAdmins("🔴 <b>مقصد پرداخت خالی است!</b>\n\nکاربر <code>{$uid}</code> نتوانست فاکتور مینی‌اپ را بپردازد.");
+            chTechAlert("🔴 <b>مقصد پرداخت خالی است!</b>\n\nکاربر <code>{$uid}</code> نتوانست فاکتور مینی‌اپ را بپردازد.");
             return true;
         }
         answerCb(BOT_TOKEN, $cbId);

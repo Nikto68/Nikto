@@ -397,6 +397,10 @@ function axStockDeliver($order) {
 }
 
 function axNotifyAdmin($text, $kb = null) {
+    // 🛠 اول تاپیکِ گزارشِ فنی — دقیقا همان جایی که «مشکل مخزن»،
+    //    «سفارش دستی ارسال نشد» و بقیه‌ی همین دست خبرها باید بنشینند،
+    //    نه پخش‌شده در پی‌وی مدیرها.
+    if (function_exists('chTechAlert')) { @chTechAlert($text, $kb); return; }
     if (function_exists('notifyAdmins')) @notifyAdmins($text, $kb);
     elseif (defined('ADMIN_ID')) @sendMsg(BOT_TOKEN, ADMIN_ID, $text, $kb);
 }

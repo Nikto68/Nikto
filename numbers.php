@@ -1245,8 +1245,8 @@ function numRetryPanel($limit = 5) {
         // بی‌آنکه کسی خبردار شود. حالا یک هشدارِ زودهنگام هم هست — سرِ
         // سومین شکست (چند دقیقه‌ی اول) — تا ادمین بتواند دستی جلویش را
         // بگیرد، نه اینکه ساعت‌ها بعد بفهمد.
-        if (!$ok && $tries + 1 === 3 && function_exists('notifyAdmins')) {
-            notifyAdmins(
+        if (!$ok && $tries + 1 === 3 && function_exists('chTechAlert')) {
+            chTechAlert(
                 "⏳ <b>لغو روی " . h(numProvName()) . " هنوز نگرفته</b>\n\n" .
                 '☎️ <code>' . h((string)($act['phone'] ?? '')) . "</code>\n" .
                 '🧾 <code>' . h($oid) . "</code>\n" .
@@ -1257,8 +1257,8 @@ function numRetryPanel($limit = 5) {
         }
 
         // درست سرِ تلاشِ آخر، یک بار هم خبر بده که دیگر خودش تلاش نمی‌کند
-        if (!$ok && $tries + 1 >= NUM_PANEL_TRIES && function_exists('notifyAdmins')) {
-            notifyAdmins(
+        if (!$ok && $tries + 1 >= NUM_PANEL_TRIES && function_exists('chTechAlert')) {
+            chTechAlert(
                 "⚠️ <b>لغو روی " . h(numProvName()) . " نگرفت</b>\n\n" .
                 '☎️ <code>' . h((string)($act['phone'] ?? '')) . "</code>\n" .
                 '🧾 <code>' . h($oid) . "</code>\n" .

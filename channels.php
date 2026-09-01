@@ -504,14 +504,22 @@ function chVarsOf($k) {
 }
 
 /**
- * 🛠 یک خبرِ فنی — خطا، افت سرعت، کمبود بودجه — به گروهِ گزارش فنی.
+ * 🛠 یک خبرِ فنی — خطا، افت سرعت، کمبود بودجه، هر مشکلی — به همان
+ * گروه/تاپیکی می‌رود که برای «گزارش فنی» تنظیم شده. کوچک‌ترین باگ هم
+ * از همین در رد می‌شود؛ هیچ گزارشِ فنیِ دیگری نباید مستقیم notifyAdmins
+ * بزند، وگرنه دوباره پخش می‌شود بینِ پی‌وی مدیرها و این تاپیک.
+ *
+ * $kb اختیاری است — همان شکلِ همیشگیِ کیبورد (['inline_keyboard'=>[...]])
+ * که notifyAdmins می‌گرفت؛ اگر بود، جلوترِ دکمه‌های خودِ تنظیماتِ این
+ * جریان می‌نشیند، نه به‌جایش.
  *
  * اگر آن گروه تنظیم نشده، همان قبلی: پیام خصوصی به مدیرها. یعنی این
  * یک لایه‌ی اضافه است، نه جایگزینِ notifyAdmins — چیزی گم نمی‌شود.
  */
-function chTechAlert($text) {
-    $sent = chReady('tech') ? chSend('tech', ['text' => $text]) : false;
-    if (!$sent && function_exists('notifyAdmins')) notifyAdmins($text);
+function chTechAlert($text, $kb = null) {
+    $rows = (is_array($kb) && !empty($kb['inline_keyboard'])) ? $kb['inline_keyboard'] : [];
+    $sent = chReady('tech') ? chSend('tech', ['text' => $text], null, $rows) : false;
+    if (!$sent && function_exists('notifyAdmins')) notifyAdmins($text, $kb);
     return $sent;
 }
 
