@@ -1324,6 +1324,28 @@ function saleCatField($current) {
     echo '</select>';
 }
 
+/** لینکِ همین صفحه با چند پارامترِ GET عوض‌شده — برای فیلتر/مرتب‌سازی/صفحه‌بندی */
+function qsWith($params) {
+    $q = array_merge($_GET, $params);
+    unset($q['bot']); // پارامترِ ربات مالِ تبِ ربات‌هاست، اینجا بی‌ربط است
+    return '?' . http_build_query($q);
+}
+
+/** نوارِ صفحه‌بندیِ ساده — ۱ … قبل، فعلی، بعد … آخر */
+function pager($page, $pages) {
+    if ($pages <= 1) return;
+    echo '<div class="pager">';
+    if ($page > 1) echo '<a href="' . h(qsWith(['page' => $page - 1])) . '">‹ قبلی</a>';
+    $start = max(1, $page - 2); $end = min($pages, $page + 2);
+    if ($start > 1) { echo '<a href="' . h(qsWith(['page' => 1])) . '">1</a>'; if ($start > 2) echo '<span class="dots">…</span>'; }
+    for ($i = $start; $i <= $end; $i++) {
+        echo $i === $page ? '<span class="cur">' . $i . '</span>' : '<a href="' . h(qsWith(['page' => $i])) . '">' . $i . '</a>';
+    }
+    if ($end < $pages) { if ($end < $pages - 1) echo '<span class="dots">…</span>'; echo '<a href="' . h(qsWith(['page' => $pages])) . '">' . $pages . '</a>'; }
+    if ($page < $pages) echo '<a href="' . h(qsWith(['page' => $page + 1])) . '">بعدی ›</a>';
+    echo '</div>';
+}
+
 function uLabel($users, $id) {
     $u = $users[(string)$id] ?? null;
     if ($u && !empty($u['username']))   return '@' . $u['username'];
@@ -1335,6 +1357,33 @@ function oBadge($s) {
           'approved' => ['✅ تایید', 'green'], 'rejected' => ['❌ رد', 'red']];
     [$l, $c] = $m[$s] ?? ['—', 'gray'];
     return '<span class="badge ' . $c . '">' . $l . '</span>';
+}
+
+/**
+ * 📈 نمودارِ خطیِ ۷ روزِ اخیر — از همان $orders که قبلا خوانده شده،
+ * بدون هیچ کوئری یا فراخوانیِ اضافه. فقط SVG خام، بدونِ کتابخانه.
+ */
+function dashSparkline($orders, $days = 7) {
+    $buckets = [];
+    for ($i = $days - 1; $i >= 0; $i--) $buckets[date('Y-m-d', strtotime("-$i day"))] = 0;
+    foreach ($orders as $o) {
+        $d = substr((string)($o['created_at'] ?? ''), 0, 10);
+        if (isset($buckets[$d])) $buckets[$d]++;
+    }
+    $vals = array_values($buckets);
+    $max = max(1, max($vals));
+    $w = 280; $h = 52; $step = $w / max(1, count($vals) - 1);
+    $pts = [];
+    foreach ($vals as $i => $v) $pts[] = round($i * $step, 1) . ',' . round($h - ($v / $max) * ($h - 6) - 3, 1);
+    $line = implode(' ', $pts);
+    $fillPts = '0,' . $h . ' ' . $line . ' ' . $w . ',' . $h;
+    $total = array_sum($vals);
+    $out = '<svg class="sparkline" viewBox="0 0 ' . $w . ' ' . $h . '" preserveAspectRatio="none" role="img" ' .
+           'aria-label="سفارش‌های ۷ روز اخیر: مجموعا ' . $total . ' سفارش">' .
+           '<polygon points="' . h($fillPts) . '" fill="var(--blue-dim)" opacity=".5"></polygon>' .
+           '<polyline points="' . h($line) . '" fill="none" stroke="var(--blue)" stroke-width="2.2" ' .
+           'stroke-linecap="round" stroke-linejoin="round"></polyline></svg>';
+    return [$out, $total];
 }
 ?>
 <!DOCTYPE html>
@@ -1349,8 +1398,12 @@ function oBadge($s) {
 --green:#2fbf6f;--green-dim:#1d4a32;--amber:#e0a72e;--amber-dim:#54430f;--blur:18px}
 *{box-sizing:border-box;margin:0;padding:0}
 html{background:var(--bg)}
-body{font-family:system-ui,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:60px;
-position:relative;min-height:100vh}
+body{font-family:Vazirmatn,Vazir,'IRANSans','IRANYekan',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;
+background:var(--bg);color:var(--ink);padding-bottom:60px;
+position:relative;min-height:100vh;font-size:14px;line-height:1.6}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
+.ltr{direction:ltr;unicode-bidi:isolate}
+.amount{font-variant-numeric:tabular-nums;font-weight:800;direction:ltr;unicode-bidi:isolate;display:inline-block}
 /* 🌌 اتمسفرِ شیشه‌ای — چند لکه‌ی رنگیِ ثابت پشتِ همه‌چیز، بدونِ filter، هزینه‌ی اسکرول صفر */
 body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
   background:
@@ -1366,6 +1419,17 @@ header h1{font-size:19px;font-weight:800}
 header .row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
 .logout{background:var(--red-dim);border:1px solid var(--red);color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;transition:transform .15s,opacity .15s}
 .logout:hover{opacity:.85;transform:translateY(-1px)}
+.hdr-search input{padding:8px 12px;font-size:12.5px;background:rgba(255,255,255,.06);border-color:var(--line)}
+.hdr-meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.status-pill{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-soft);
+  background:rgba(255,255,255,.05);border:1px solid var(--line);padding:6px 12px;border-radius:20px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-dim);flex:0 0 auto}
+.status-dot.warn{background:var(--amber);box-shadow:0 0 0 3px var(--amber-dim)}
+.status-dot.bad{background:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
+@media(prefers-reduced-motion:no-preference){.status-dot{animation:pulseDot 2.4s ease-in-out infinite}}
+@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.5}}
+.crumb{font-size:12.5px;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.crumb b{color:var(--ink-soft);font-weight:700}
 
 /* ---------- shell: right sidebar + content (folder-grouped nav) ---------- */
 .nav-toggle-cb{display:none}
@@ -1376,24 +1440,46 @@ header .row{display:flex;justify-content:space-between;align-items:center;flex-w
 border-left:1px solid var(--line);
 min-height:calc(100vh - 57px);position:sticky;top:0;align-self:flex-start;overflow-y:auto}
 .sidebar-inner{padding:14px 10px}
-.nav-folder{margin-bottom:14px}
-.nav-folder-title{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;
-letter-spacing:.4px;padding:6px 10px 4px}
-.sidebar a{display:block;padding:9px 12px;border-radius:8px;font-size:13.5px;font-weight:600;
+.nav-folder{margin-bottom:6px;border:none}
+.nav-folder>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;
+letter-spacing:.4px;padding:8px 10px;border-radius:7px;user-select:none}
+.nav-folder>summary::-webkit-details-marker{display:none}
+.nav-folder>summary:hover{background:var(--panel-alt);color:var(--ink-soft)}
+.nav-folder>summary .fc{transition:transform .18s;font-size:10px;opacity:.7}
+.nav-folder[open]>summary .fc{transform:rotate(90deg)}
+.nav-folder-body{padding-top:2px}
+.sidebar a{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-radius:8px;font-size:13.5px;font-weight:600;
 color:var(--ink-soft);margin-bottom:2px;transition:background .15s,color .15s,transform .15s}
 .sidebar a:hover{background:var(--panel-alt);transform:translateX(-2px)}
 .sidebar a.on{background:linear-gradient(135deg,var(--blue),#4f9cf0);color:#fff;box-shadow:0 6px 16px -8px rgba(47,125,225,.6)}
+.sidebar a .nbadge{flex:0 0 auto;background:var(--red);color:#fff;font-size:10.5px;font-weight:800;
+  border-radius:20px;padding:1px 7px;min-width:18px;text-align:center;line-height:1.6}
+.sidebar a.on .nbadge{background:rgba(255,255,255,.28)}
 .content{flex:1;min-width:0;padding:18px 16px}
 .content .wrap{max-width:1000px;margin:0;padding:0}
 @media(max-width:900px){
-  .nav-toggle-btn{display:block;margin:10px 16px;padding:10px 14px;background:var(--blue);color:#fff;
+  .nav-toggle-btn{display:flex;align-items:center;justify-content:center;margin:10px 16px;min-height:46px;
+    padding:10px 14px;background:var(--blue);color:#fff;
     border-radius:8px;font-weight:700;font-size:13.5px;text-align:center;cursor:pointer;
     max-width:1200px;margin-left:auto;margin-right:auto}
   .sidebar{position:fixed;top:0;right:0;height:100vh;z-index:50;transform:translateX(100%);
-    transition:transform .22s ease;box-shadow:-6px 0 24px rgba(0,0,0,.5);width:250px}
+    transition:transform .22s ease;box-shadow:-6px 0 24px rgba(0,0,0,.5);width:270px;max-width:82vw}
   .nav-toggle-cb:checked ~ .shell .sidebar{transform:translateX(0)}
   .nav-toggle-cb:checked ~ .nav-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40}
   .content{padding:6px 16px}
+  .sidebar a{min-height:44px;padding:11px 12px}
+  .nav-folder>summary{min-height:40px}
+  .hdr-meta{gap:8px}
+  .status-pill{padding:5px 9px;font-size:11.5px}
+  .status-pill:nth-child(2){display:none}
+}
+@media(max-width:640px){
+  .hdr-search{display:none}
+}
+@media(max-width:420px){
+  header h1{font-size:15px}
+  .status-pill{display:none}
 }
 
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:0 0 20px}
@@ -1407,6 +1493,10 @@ border-radius:12px;border:1px solid var(--line);margin-bottom:18px;overflow:hidd
 box-shadow:0 14px 34px -24px rgba(0,0,0,.7);animation:cardIn .35s cubic-bezier(.2,.9,.3,1) backwards}
 @keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .card h2{padding:15px 18px;font-size:14.5px;font-weight:800;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
+.card>summary{list-style:none;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;
+  gap:10px;flex-wrap:wrap;padding:15px 18px;font-size:14.5px;font-weight:800;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
+.card>summary::-webkit-details-marker{display:none}
+.card.prodcard.filtered-out{display:none}
 .card .body{padding:18px}
 .subcard{background:var(--panel-alt);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:16px;transition:border-color .15s}
 .subcard:hover{border-color:rgba(255,255,255,.16)}
@@ -1448,7 +1538,88 @@ animation:pgIn .22s cubic-bezier(.2,.9,.3,1)}
 .flash{padding:13px 17px;border-radius:10px;margin:16px 0;font-size:13.5px;font-weight:600;border:1px solid var(--line)}
 .flash.ok{background:var(--green-dim);color:#8fe6b6;border-color:var(--green)}.flash.err{background:var(--red-dim);color:#f5a3a6;border-color:var(--red)}
 .flash.warn{background:var(--amber-dim);color:#f0cb75;border-color:var(--amber)}
-.empty{text-align:center;padding:32px;color:var(--muted);font-size:13.5px}
+.empty{text-align:center;padding:38px 20px;color:var(--muted);font-size:13.5px;line-height:1.9}
+.empty .ic{font-size:34px;margin-bottom:10px;opacity:.6}
+.empty .cta{margin-top:14px}
+
+/* ---------- ⚡ عملیات سریع ---------- */
+.qa-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px}
+.qa{display:flex;flex-direction:column;align-items:center;gap:7px;padding:16px 10px;border-radius:12px;
+  border:1px solid var(--line);background:var(--panel-alt);color:var(--ink);text-align:center;
+  font-size:12.5px;font-weight:700;transition:transform .16s,border-color .16s,background .16s;cursor:pointer}
+.qa:hover{transform:translateY(-2px);border-color:rgba(47,125,225,.5);background:rgba(47,125,225,.08)}
+.qa .e{font-size:22px}
+
+/* ---------- 📣 بنر اقدام (سفارش‌های منتظر و مشابه) ---------- */
+.callout{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 18px;border-radius:12px;
+  border:1px solid var(--amber);background:var(--amber-dim);margin-bottom:18px}
+.callout.ok{border-color:var(--green);background:var(--green-dim)}
+.callout .ic{font-size:26px;flex:0 0 auto}
+.callout .tx{flex:1;min-width:200px}
+.callout .tx b{display:block;font-size:14.5px;margin-bottom:2px}
+.callout .tx span{font-size:12px;color:var(--ink-soft)}
+
+/* ---------- 🔎 جستجو/فیلتر/مرتب‌سازی ---------- */
+.toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.toolbar .search{position:relative;flex:1;min-width:180px}
+.toolbar .search input{padding-right:36px}
+.toolbar .search .si{position:absolute;top:50%;right:12px;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:14px}
+.toolbar select{width:auto;min-width:120px}
+.chiprow{display:flex;gap:6px;flex-wrap:wrap}
+.chiprow a{padding:6px 13px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid var(--line);
+  color:var(--ink-soft);background:var(--panel-alt);transition:.15s}
+.chiprow a.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.chiprow a:hover{border-color:var(--blue)}
+
+/* ---------- 📄 صفحه‌بندی ---------- */
+.pager{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap}
+.pager a,.pager span{min-width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;
+  padding:0 8px;border-radius:8px;font-size:12.5px;font-weight:700;border:1px solid var(--line);color:var(--ink-soft)}
+.pager a:hover{border-color:var(--blue);color:#fff;background:var(--blue)}
+.pager span.cur{background:var(--blue);border-color:var(--blue);color:#fff}
+.pager span.dots{border:none;color:var(--muted)}
+
+/* ---------- 🔐 فیلد سکرت — پنهان با دکمه‌ی نمایش ---------- */
+.secret{position:relative}
+.secret input{padding-left:42px}
+.secret button{position:absolute;top:50%;left:6px;transform:translateY(-50%);background:transparent;border:0;
+  color:var(--muted);cursor:pointer;font-size:15px;padding:6px;line-height:1}
+.secret button:hover{color:var(--ink)}
+.secret-box{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.secret-box code{direction:ltr;word-break:break-all;overflow-wrap:anywhere;max-width:100%}
+.secret-box button{background:var(--panel-alt);border:1px solid var(--line);border-radius:7px;padding:4px 10px;
+  font-size:11.5px;cursor:pointer;color:var(--ink-soft);font-family:inherit}
+
+/* ---------- 🪟 مودالِ تاییدِ عملیات مهم ---------- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(4,4,8,.66);backdrop-filter:blur(4px);
+  z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-backdrop.on{display:flex}
+.modal{background:#16161e;border:1px solid var(--line);border-radius:14px;max-width:400px;width:100%;
+  padding:22px;box-shadow:0 30px 70px rgba(0,0,0,.6);animation:modalIn .2s cubic-bezier(.2,.9,.3,1)}
+@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(6px)}to{opacity:1;transform:none}}
+.modal h3{font-size:15.5px;margin-bottom:12px}
+.modal .mrow{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line-soft);font-size:13px}
+.modal .mrow:first-of-type{border-top:none}
+.modal .mrow b{color:var(--ink)}
+.modal .mwarn{margin-top:12px;font-size:12px;color:#f0cb75;background:var(--amber-dim);border-radius:8px;padding:9px 11px;line-height:1.8}
+.modal .mact{display:flex;gap:10px;margin-top:18px}
+.modal .mact button{flex:1}
+
+/* ---------- 🍞 توست (روی flash موجود) ---------- */
+.flash{position:relative;padding-left:36px}
+.flash .fx{position:absolute;left:8px;top:50%;transform:translateY(-50%);background:transparent;border:0;
+  color:inherit;opacity:.6;cursor:pointer;font-size:15px;padding:4px}
+.flash .fx:hover{opacity:1}
+
+/* ---------- 📱 جدول → کارت روی موبایل ---------- */
+@media(max-width:640px){
+  table.responsive thead{display:none}
+  table.responsive,table.responsive tbody,table.responsive tr,table.responsive td{display:block;width:100%}
+  table.responsive tr{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;padding:6px 4px;background:var(--panel-alt)}
+  table.responsive td{border-top:none;padding:7px 10px;display:flex;justify-content:space-between;gap:10px;text-align:left}
+  table.responsive td:before{content:attr(data-label);font-weight:700;color:var(--muted);font-size:11.5px;text-align:right}
+}
+.sparkline{display:block;width:100%;height:56px}
 code{background:var(--panel-alt);color:var(--ink-soft);padding:2px 6px;border-radius:5px;font-size:11.5px;direction:ltr;display:inline-block}
 .muted{color:var(--muted);font-size:12px}
 .inline{display:inline}
@@ -1481,7 +1652,7 @@ cursor:pointer;font-family:inherit;color:var(--ink-soft)}
 @media(max-width:900px){.brow,.brow8,.srow{grid-template-columns:1fr 1fr!important;gap:6px!important}}
 @media(max-width:640px){.card .body{padding:15px}header h1{font-size:16px}}
 @media(prefers-reduced-motion:reduce){
-  .card,.itemrow .ir-body,.sidebar a,.stat,.btn,.logout{animation:none!important;transition:none!important}
+  .card,.itemrow .ir-body,.sidebar a,.stat,.btn,.logout,.status-dot,.modal{animation:none!important;transition:none!important}
 }
 @supports not (backdrop-filter:blur(1px)){
   header,.sidebar,.card,.stat{background:#141420}
@@ -1492,19 +1663,28 @@ cursor:pointer;font-family:inherit;color:var(--ink-soft)}
 
 <header><div class="wrap row">
   <h1>👑 پنل مدیریت فروشگاه</h1>
-  <a class="logout" href="?logout=1">🚪 خروج</a>
+  <form method="get" class="hdr-search" style="flex:1;min-width:160px;max-width:280px">
+    <input type="hidden" name="tab" value="users">
+    <input type="text" name="q" placeholder="🔎 جستجوی کاربر (آیدی/یوزرنیم)…">
+  </form>
+  <div class="hdr-meta">
+    <span class="status-pill"><span class="status-dot"></span> سیستم فعال</span>
+    <span class="status-pill">👤 مدیر</span>
+    <a class="logout" href="?logout=1">🚪 خروج</a>
+  </div>
 </div></header>
 
 <?php
+// آیکن + برچسبِ متنیِ هر تب — بدون شمارنده؛ شمارنده‌ها جدا زیرِ همین آرایه محاسبه می‌شوند
 $tabs = [
   'dashboard' => '📊 داشبورد',
-  'orders'    => '🧾 سفارش‌ها' . (count($pending) ? ' (' . count($pending) . ')' : ''),
+  'orders'    => '🧾 سفارش‌ها',
   'products'  => '🛒 محصولات',
   'profit'    => '📈 سود',
   'support'   => '📞 پشتیبانی',
   'bots'      => '🤖 ربات‌های اپلودر',
   'channels'  => '📢 کانال‌ها',
-  'campaigns' => '🎯 سفارش ممبر',
+  'campaigns' => '🎯 کمپین‌ها',
   'partners'  => '🤝 ربات‌های شریک',
   'referral'  => '👥 رفرال',
   'users'     => '👥 کاربران',
@@ -1515,13 +1695,15 @@ $tabs = [
   'diamond'   => '💎 الماس',
   'games'     => '🎮 بازی‌ها',
 ];
+// 🔴 فقط جایی که واقعا «نیاز به اقدام» معنی دارد badge می‌گیرد — عددهای الکی شلوغی می‌سازند
+$tabBadges = ['orders' => count($pending)];
 // 📁 فولدربندیِ تب‌ها — هر دسته زیرِ عنوانِ خودش تو سایدبار
 $tabFolders = [
   'نمای کلی'  => ['dashboard'],
   'فروش'      => ['orders', 'products', 'profit'],
   'کاربران'   => ['users', 'referral', 'support'],
   'زیرساخت'   => ['bots', 'channels', 'campaigns', 'partners'],
-  'ویژگی‌های دیگر' => ['numbers', 'miniapps', 'diamond', 'games'],
+  'ویژگی‌ها'  => ['numbers', 'miniapps', 'diamond', 'games'],
   'سیستم'     => ['auto', 'settings'],
 ];
 ?>
@@ -1532,18 +1714,24 @@ $tabFolders = [
 <div class="shell">
   <aside class="sidebar"><div class="sidebar-inner">
     <?php foreach ($tabFolders as $folderTitle => $folderTabs): ?>
-      <div class="nav-folder">
-        <div class="nav-folder-title"><?= h($folderTitle) ?></div>
-        <?php foreach ($folderTabs as $k): ?>
-          <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>"><?= $tabs[$k] ?></a>
+      <details class="nav-folder" open>
+        <summary><span><?= h($folderTitle) ?></span><span class="fc">▸</span></summary>
+        <div class="nav-folder-body">
+        <?php foreach ($folderTabs as $k): $n = $tabBadges[$k] ?? 0; ?>
+          <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>">
+            <span><?= $tabs[$k] ?></span>
+            <?php if ($n > 0): ?><span class="nbadge"><?= $n ?></span><?php endif; ?>
+          </a>
         <?php endforeach; ?>
-      </div>
+        </div>
+      </details>
     <?php endforeach; ?>
   </div></aside>
 
   <main class="content"><div class="wrap">
 <?php if ($flash): ?>
-  <div class="flash <?= h($flash['type']) ?>" style="line-height:2">
+  <div class="flash <?= h($flash['type']) ?>" id="flashToast" style="line-height:2">
+    <button type="button" class="fx" aria-label="بستن" onclick="this.parentElement.style.display='none'">✕</button>
     <?= nl2br(strip_tags((string)$flash['msg'], '<code><b>')) ?>
   </div>
 <?php endif; ?>
@@ -1555,21 +1743,55 @@ $tabFolders = [
 
 <?php // ================= داشبورد ================= ?>
 <?php if ($tab === 'dashboard'): ?>
+  <h2 style="font-size:19px;margin-bottom:4px">خوش آمدید 👋</h2>
+  <p class="muted" style="margin-bottom:18px">خلاصه‌ی وضعیتِ همین الان — برای جزئیات، به تبِ مربوطه بروید.</p>
+
+  <?php if (count($pending) > 0): ?>
+  <div class="callout">
+    <div class="ic">⚠️</div>
+    <div class="tx"><b><?= count($pending) ?> سفارش منتظر تایید</b>
+      <span>این‌ها منتظرِ بررسیِ رسید و تاییدِ شما هستند.</span></div>
+    <a class="btn b" href="?tab=orders">مشاهده سفارش‌ها →</a>
+  </div>
+  <?php else: ?>
+  <div class="callout ok">
+    <div class="ic">✓</div>
+    <div class="tx"><b>سفارشی منتظر بررسی نیست</b><span>همه‌چیز مرتب است.</span></div>
+  </div>
+  <?php endif; ?>
+
   <div class="stats">
     <div class="stat"><div class="n"><?= count($users) ?></div><div class="l">👥 کاربران</div></div>
-    <div class="stat"><div class="n"><?= count($products) ?></div><div class="l">🛒 محصولات</div></div>
-    <div class="stat"><div class="n"><?= count($bots) ?></div><div class="l">🤖 ربات اپلودر</div></div>
-    <div class="stat"><div class="n"><?= count($channels) ?></div><div class="l">📢 کانال اجباری</div></div>
-    <div class="stat"><div class="n"><?= count($pending) ?></div><div class="l">⏳ منتظر تایید</div></div>
-    <div class="stat"><div class="n"><?= count($approved) ?></div><div class="l">✅ سفارش موفق</div></div>
-    <div class="stat"><div class="n"><?= fmtNum($totalBalance) ?></div><div class="l">💰 کیف پول کاربران</div></div>
+    <div class="stat"><div class="n"><?= count($orders) ?></div><div class="l">🛒 سفارش‌ها</div></div>
+    <div class="stat"><div class="n amount"><?= fmtNum(array_sum($revenue)) ?></div><div class="l">💰 فروش تاییدشده</div></div>
+    <div class="stat"><div class="n amount"><?= fmtNum($totalBalance) ?></div><div class="l">💳 موجودی کاربران</div></div>
+    <div class="stat"><div class="n"><?= count(array_filter($bots, fn($b) => !empty($b['active']))) ?></div><div class="l">🤖 ربات‌های فعال</div></div>
   </div>
 
-  <div class="card"><h2>💰 فروش تایید شده</h2><div class="body">
-    <?php if (!$revenue): ?><div class="empty">هنوز فروشی ثبت نشده.</div>
+  <div class="card"><h2>⚡ عملیات سریع</h2><div class="body">
+    <div class="qa-grid">
+      <a class="qa" href="?tab=products"><span class="e">➕</span> افزودن محصول</a>
+      <a class="qa" href="?tab=orders"><span class="e">🧾</span> سفارش‌های منتظر</a>
+      <a class="qa" href="?tab=users"><span class="e">👤</span> جستجوی کاربر</a>
+      <a class="qa" href="?tab=bots"><span class="e">🤖</span> مدیریت ربات</a>
+      <a class="qa" href="?tab=channels"><span class="e">📢</span> مدیریت کانال</a>
+      <a class="qa" href="?tab=settings"><span class="e">⚙️</span> تنظیمات</a>
+    </div>
+  </div></div>
+
+  <div class="card"><h2>📈 سفارش‌های ۷ روز اخیر</h2><div class="body">
+    <?php if (!$orders): ?><div class="empty"><div class="ic">📈</div>هنوز سفارشی ثبت نشده.</div>
+    <?php else: [$spark, $sparkTotal] = dashSparkline($orders); ?>
+      <?= $spark ?>
+      <div class="muted" style="margin-top:8px">مجموع ۷ روز اخیر: <b class="amount"><?= $sparkTotal ?></b> سفارش</div>
+    <?php endif; ?>
+  </div></div>
+
+  <div class="card"><h2>💰 فروش تایید شده — به تفکیک ارز</h2><div class="body">
+    <?php if (!$revenue): ?><div class="empty"><div class="ic">💰</div>هنوز فروشی ثبت نشده.</div>
     <?php else: ?><div class="stats" style="margin:0">
       <?php foreach ($revenue as $cur => $amt): ?>
-        <div class="stat"><div class="n"><?= h(fmtNum($amt)) ?></div><div class="l"><?= h($cur) ?></div></div>
+        <div class="stat"><div class="n amount"><?= h(fmtNum($amt)) ?></div><div class="l"><?= h($cur) ?></div></div>
       <?php endforeach; ?></div><?php endif; ?>
   </div></div>
 
@@ -1592,38 +1814,50 @@ $tabFolders = [
     </form>
     <p class="muted" style="margin-top:14px;line-height:1.9">
       برای اینکه حذف خودکار فایل‌ها حتی بدون فعالیت ربات هم دقیق کار کند،
-      این آدرس را هر دقیقه در کران هاست صدا بزنید:<br>
-      <code><?= h(baseUrl()) ?>/bot_master_membership.php?cron=<?= h(CRON_KEY) ?></code><br>
-      کلید کران در خط ۳۰ فایل ربات قابل تغییر است.
+      این آدرس را هر دقیقه در کران هاست صدا بزنید:
     </p>
+    <?php $cronUrl = baseUrl() . '/bot_master_membership.php?cron=' . CRON_KEY; ?>
+    <div class="secret-box" style="margin-bottom:10px">
+      <code class="ltr"><?= h($cronUrl) ?></code>
+      <button type="button" onclick="copyText('<?= h(addslashes($cronUrl)) ?>',this)">📋 کپی</button>
+    </div>
+    <p class="muted">کلید کران در خط ۳۰ فایل ربات قابل تغییر است.</p>
   </div></div>
 
 <?php // ================= سفارش‌ها ================= ?>
 <?php elseif ($tab === 'orders'): ?>
+  <div class="crumb">فروش <span>/</span> <b>سفارش‌ها</b></div>
   <div class="card"><h2>🧾 منتظر تایید (<?= count($pending) ?>)</h2><div class="body">
-    <?php if (!$pending): ?><div class="empty">موردی در انتظار نیست.</div>
-    <?php else: ?><div class="scroll"><table>
+    <?php if (!$pending): ?><div class="empty"><div class="ic">✓</div>موردی در انتظار نیست.</div>
+    <?php else: ?><div class="scroll"><table class="responsive">
       <tr><th>کاربر</th><th>نوع</th><th>مبلغ</th><th>رسید</th><th>تاریخ</th><th>اقدام</th></tr>
-      <?php foreach ($pending as $o): ?>
+      <?php foreach ($pending as $o):
+        $oUser = uLabel($users, $o['user_id']);
+        $oWhat = $o['type'] === 'topup' ? '➕ شارژ کیف پول' : '🛒 ' . (Product::get($o['product_id'])['name'] ?? '—');
+        $oAmt  = fmtNum($o['amount']) . ' ' . $o['currency'];
+      ?>
       <tr>
-        <td><?= h(uLabel($users, $o['user_id'])) ?><br><span class="muted"><?= h($o['user_id']) ?></span></td>
-        <td><?= $o['type'] === 'topup' ? '➕ شارژ کیف پول'
-              : '🛒 ' . h(Product::get($o['product_id'])['name'] ?? '—') ?></td>
-        <td><b><?= h(fmtNum($o['amount'])) ?></b> <?= h($o['currency']) ?></td>
-        <td><?= $o['receipt_type'] === 'text'
+        <td data-label="کاربر"><?= h($oUser) ?><br><span class="muted"><?= h($o['user_id']) ?></span></td>
+        <td data-label="نوع"><?= h($oWhat) ?></td>
+        <td data-label="مبلغ"><b class="amount"><?= h(fmtNum($o['amount'])) ?></b> <?= h($o['currency']) ?></td>
+        <td data-label="رسید"><?= $o['receipt_type'] === 'text'
               ? '<code>' . h(mb_substr((string)$o['receipt'], 0, 30)) . '</code>'
               : '<span class="muted">🖼️ عکس (در تلگرام)</span>' ?></td>
-        <td class="muted"><?= h($o['created_at']) ?></td>
-        <td style="white-space:nowrap">
-          <form method="post" class="inline" onsubmit="return confirm('تایید سفارش؟')">
+        <td data-label="تاریخ" class="muted"><?= h($o['created_at']) ?></td>
+        <td data-label="اقدام" style="white-space:nowrap">
+          <form method="post" class="inline">
             <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="orders">
             <input type="hidden" name="action" value="approve_order"><input type="hidden" name="id" value="<?= h($o['id']) ?>">
-            <button class="btn g sm">✅ تایید</button>
+            <button type="button" class="btn g sm" onclick="openConfirm(this.form,'تایید سفارش',
+              [['کاربر','<?= h(addslashes($oUser)) ?>'],['نوع','<?= h(addslashes($oWhat)) ?>'],['مبلغ','<?= h(addslashes($oAmt)) ?>']],
+              'این عملیات موجودی کاربر را تغییر می‌دهد یا سفارش را نهایی می‌کند.','g')">✅ تایید</button>
           </form>
-          <form method="post" class="inline" onsubmit="return confirm('رد سفارش؟')">
+          <form method="post" class="inline">
             <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="orders">
             <input type="hidden" name="action" value="reject_order"><input type="hidden" name="id" value="<?= h($o['id']) ?>">
-            <button class="btn r sm">❌ رد</button>
+            <button type="button" class="btn r sm" onclick="openConfirm(this.form,'رد سفارش',
+              [['کاربر','<?= h(addslashes($oUser)) ?>'],['نوع','<?= h(addslashes($oWhat)) ?>'],['مبلغ','<?= h(addslashes($oAmt)) ?>']],
+              'این سفارش رد می‌شود و دیگر قابل بازگشت نیست.','r')">❌ رد</button>
           </form>
         </td>
       </tr>
@@ -1631,19 +1865,75 @@ $tabFolders = [
     </table></div><?php endif; ?>
   </div></div>
 
-  <div class="card"><h2>📜 تاریخچه</h2><div class="body">
-    <?php if (!$orders): ?><div class="empty">سفارشی ثبت نشده.</div>
-    <?php else: ?><div class="scroll"><table>
-      <tr><th>شناسه</th><th>کاربر</th><th>نوع</th><th>مبلغ</th><th>وضعیت</th><th>تاریخ</th></tr>
-      <?php foreach (array_slice($orders, 0, 100, true) as $o): ?>
-      <tr><td><code><?= h($o['id']) ?></code></td>
-        <td><?= h(uLabel($users, $o['user_id'])) ?></td>
-        <td><?= $o['type'] === 'topup' ? 'شارژ' : h(Product::get($o['product_id'])['name'] ?? '—') ?></td>
-        <td><?= h(fmtNum($o['amount'])) ?> <?= h($o['currency']) ?></td>
-        <td><?= oBadge($o['status']) ?></td>
-        <td class="muted"><?= h($o['created_at']) ?></td></tr>
+  <?php
+    // 🔎 جستجو/فیلتر/مرتب‌سازی/صفحه‌بندی — همه روی همان $ordersی که بالا خوانده شده،
+    // هیچ کوئریِ تازه‌ای نمی‌رود؛ فقط چیزی که رندر می‌شود کمتر می‌شود.
+    $oQ      = trim((string)($_GET['q'] ?? ''));
+    $oStatus = (string)($_GET['status'] ?? 'all');
+    $oSort   = (string)($_GET['sort'] ?? 'new');
+    $oPerPage = 25;
+
+    $oList = $orders;
+    if ($oQ !== '') {
+        $needle = mb_strtolower($oQ);
+        $oList = array_filter($oList, function ($o) use ($needle, $users) {
+            $hay = mb_strtolower($o['id'] . ' ' . $o['user_id'] . ' ' . uLabel($users, $o['user_id']));
+            return str_contains($hay, $needle);
+        });
+    }
+    if ($oStatus !== 'all' && $oStatus !== '') {
+        $oList = array_filter($oList, fn($o) => $o['status'] === $oStatus);
+    }
+    $oList = array_values($oList);
+    if ($oSort === 'old')      usort($oList, fn($a, $b) => strcmp($a['created_at'] ?? '', $b['created_at'] ?? ''));
+    elseif ($oSort === 'amt_desc') usort($oList, fn($a, $b) => ((float)($b['amount'] ?? 0)) <=> ((float)($a['amount'] ?? 0)));
+    elseif ($oSort === 'amt_asc')  usort($oList, fn($a, $b) => ((float)($a['amount'] ?? 0)) <=> ((float)($b['amount'] ?? 0)));
+    // پیش‌فرض (new): همان ترتیبِ نزولیِ زمانی که بالا برای کل $orders ساخته شده
+
+    $oTotal = count($oList);
+    $oPages = max(1, (int)ceil($oTotal / $oPerPage));
+    $oPage  = max(1, min((int)($_GET['page'] ?? 1), $oPages));
+    $oSlice = array_slice($oList, ($oPage - 1) * $oPerPage, $oPerPage);
+    $oStatusChips = ['all' => 'همه', Order::REVIEW => 'بررسی', Order::APPROVED => 'تایید شده',
+                     Order::REJECTED => 'رد شده', Order::PENDING => 'منتظر رسید'];
+  ?>
+  <div class="card"><h2>📜 تاریخچه (<?= $oTotal ?>)</h2><div class="body">
+    <form method="get" class="toolbar">
+      <input type="hidden" name="tab" value="orders">
+      <div class="search"><input type="text" name="q" value="<?= h($oQ) ?>" placeholder="🔎 آیدیِ کاربر، یوزرنیم یا شناسه سفارش…"></div>
+      <select name="sort" onchange="this.form.submit()">
+        <option value="new" <?= $oSort === 'new' ? 'selected' : '' ?>>جدیدترین</option>
+        <option value="old" <?= $oSort === 'old' ? 'selected' : '' ?>>قدیمی‌ترین</option>
+        <option value="amt_desc" <?= $oSort === 'amt_desc' ? 'selected' : '' ?>>مبلغ بیشتر</option>
+        <option value="amt_asc" <?= $oSort === 'amt_asc' ? 'selected' : '' ?>>مبلغ کمتر</option>
+      </select>
+      <input type="hidden" name="status" value="<?= h($oStatus) ?>">
+      <button class="btn sm">اعمال</button>
+    </form>
+    <div class="chiprow" style="margin-bottom:14px">
+      <?php foreach ($oStatusChips as $sv => $sl): ?>
+        <a href="<?= h(qsWith(['status' => $sv, 'page' => 1])) ?>" class="<?= $oStatus === $sv ? 'on' : '' ?>"><?= h($sl) ?></a>
       <?php endforeach; ?>
-    </table></div><?php endif; ?>
+    </div>
+    <?php if (!$oSlice): ?>
+      <div class="empty"><div class="ic">🧾</div>
+        <?= $oQ !== '' || $oStatus !== 'all' ? 'با این جستجو/فیلتر سفارشی پیدا نشد.' : 'سفارشی ثبت نشده.' ?>
+      </div>
+    <?php else: ?><div class="scroll"><table class="responsive">
+      <tr><th>شناسه</th><th>کاربر</th><th>نوع</th><th>مبلغ</th><th>وضعیت</th><th>تاریخ</th></tr>
+      <?php foreach ($oSlice as $o): ?>
+      <tr>
+        <td data-label="شناسه"><code><?= h($o['id']) ?></code></td>
+        <td data-label="کاربر"><?= h(uLabel($users, $o['user_id'])) ?></td>
+        <td data-label="نوع"><?= $o['type'] === 'topup' ? 'شارژ' : h(Product::get($o['product_id'])['name'] ?? '—') ?></td>
+        <td data-label="مبلغ"><span class="amount"><?= h(fmtNum($o['amount'])) ?></span> <?= h($o['currency']) ?></td>
+        <td data-label="وضعیت"><?= oBadge($o['status']) ?></td>
+        <td data-label="تاریخ" class="muted"><?= h($o['created_at']) ?></td>
+      </tr>
+      <?php endforeach; ?>
+    </table></div>
+    <?php pager($oPage, $oPages); ?>
+    <?php endif; ?>
   </div></div>
 
 <?php // ================= محصولات ================= ?>
@@ -1663,7 +1953,8 @@ $tabFolders = [
         <div><label>آدرس API پنل</label>
           <input name="smm_base" value="<?= h($SM['base'] ?? '') ?>" placeholder="https://panel.com/api/v2" style="direction:ltr"></div>
         <div><label>کلید API</label>
-          <input name="smm_key" value="<?= h($SM['key'] ?? '') ?>" placeholder="کلیدِ حساب شما در آن پنل" style="direction:ltr"></div>
+          <div class="secret"><input type="password" name="smm_key" autocomplete="off" value="<?= h($SM['key'] ?? '') ?>" placeholder="کلیدِ حساب شما در آن پنل" style="direction:ltr">
+            <button type="button" onclick="toggleSecret(this)">👁</button></div></div>
         <div><label>تایم‌اوت (ثانیه)</label>
           <input name="smm_timeout" type="number" min="5" value="<?= (int)($SM['timeout'] ?? 15) ?>" style="direction:ltr"></div>
       </div>
@@ -1700,7 +1991,7 @@ $tabFolders = [
     </div>
     <?php $sBtns = saleButtons(); ?>
     <?php if (!$sBtns): ?>
-      <div class="empty">هنوز هیچ دکمه‌ی فروشی نساخته‌اید — اول یک دکمه بسازید، بعد اینجا انتخابش کنید.</div>
+      <div class="empty"><div class="ic">🚀</div>هنوز هیچ دکمه‌ی فروشی نساخته‌اید — اول یک دکمه بسازید، بعد اینجا انتخابش کنید.</div>
     <?php else: ?>
     <form method="post" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
@@ -2128,8 +2419,22 @@ $tabFolders = [
     </div>
   </div></div>
 
+  <?php if ($products): ?>
+  <div class="toolbar" style="margin-top:18px">
+    <div class="search"><input type="text" id="prodFilter" oninput="filterProducts(this.value)" placeholder="🔎 جستجو در محصولات…"></div>
+  </div>
+  <?php endif; ?>
   <?php foreach ($products as $p): ?>
-  <div class="card"><h2><?= h(($p['emoji'] ?? '') . ' ' . $p['name']) ?> — <?= count($p['buyers']) ?> خریدار</h2><div class="body">
+  <details class="card prodcard" data-pname="<?= h(mb_strtolower(($p['emoji'] ?? '') . ' ' . $p['name'])) ?>">
+    <summary>
+      <span><?= h(($p['emoji'] ?? '') . ' ' . $p['name']) ?></span>
+      <span class="muted" style="font-weight:600;font-size:12px">
+        <?= count($p['buyers']) ?> خریدار ·
+        <?= (float)$p['price'] > 0 ? h(fmtNum($p['price']) . ' ' . $p['currency']) : 'بدون قیمت' ?>
+        <?= !empty($p['active']) ? '<span class="badge green">فعال</span>' : '<span class="badge gray">غیرفعال</span>' ?>
+      </span>
+    </summary>
+    <div class="body">
     <form method="post">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="products">
       <input type="hidden" name="action" value="link_product"><input type="hidden" name="id" value="<?= h($p['id']) ?>">
@@ -2174,13 +2479,13 @@ $tabFolders = [
         <button class="btn r sm">حذف</button>
       </form>
       <span class="muted" style="margin-right:8px">
-        <?= !empty($p['active']) ? '<span class="badge green">فعال</span>' : '<span class="badge gray">غیرفعال</span>' ?>
         محدودیت: <?= ((int)$p['limit']) > 0 ? (int)$p['limit'] : '∞' ?>
       </span>
     </div>
-  </div></div>
+    </div>
+  </details>
   <?php endforeach; ?>
-  <?php if (!$products): ?><div class="card"><div class="body"><div class="empty">محصولی نساخته‌اید.</div></div></div><?php endif; ?>
+  <?php if (!$products): ?><div class="card"><div class="body"><div class="empty"><div class="ic">🛒</div>محصولی نساخته‌اید.</div></div></div><?php endif; ?>
 
 <?php // ================= سود ================= ?>
 <?php elseif ($tab === 'profit'): ?>
@@ -2304,7 +2609,7 @@ $tabFolders = [
         <?php endforeach; ?>
       </table>
     <?php else: ?>
-      <div class="empty">هنوز محصولِ ممبری نساخته‌اید.</div>
+      <div class="empty"><div class="ic">🛒</div>هنوز محصولِ ممبری نساخته‌اید.</div>
     <?php endif; ?>
   </div></div>
 
@@ -2382,7 +2687,7 @@ $tabFolders = [
       <b><?= (int)MAX_JOIN_PER_BOT ?> کانال</b> می‌بیند.
     </div>
     <?php if (!$lkActiveBots): ?>
-      <div class="empty">هیچ ربات اپلودرِ فعالی ندارید — تا ربات اضافه نکنید، هیچ کانالی قفل نمی‌شود.</div>
+      <div class="empty"><div class="ic">🔒</div>هیچ ربات اپلودرِ فعالی ندارید — تا ربات اضافه نکنید، هیچ کانالی قفل نمی‌شود.</div>
     <?php elseif (!$lkCamps): ?>
       <div class="muted">الان کمپین فعالی نیست. 🤖 ربات‌ها: <b><?= count($lkActiveBots) ?></b></div>
     <?php else: ?>
@@ -2425,7 +2730,7 @@ $tabFolders = [
   </div></div>
 
   <?php if (!$bots): ?>
-    <div class="card"><div class="body"><div class="empty">هنوز ربات اپلودری اضافه نکرده‌اید.</div></div></div>
+    <div class="card"><div class="body"><div class="empty"><div class="ic">🤖</div>هنوز ربات اپلودری اضافه نکرده‌اید.</div></div></div>
   <?php endif; ?>
 
   <?php foreach ($bots as $b):
@@ -2680,7 +2985,7 @@ $tabFolders = [
 
   <div class="card"><h2>📢 کانال‌ها (<?= count($channels) ?>)</h2><div class="body">
     <p class="muted" style="margin-bottom:12px">این کانال‌ها روی <b>همه</b> ربات‌های اپلودر اعمال می‌شوند.</p>
-    <?php if (!$channels): ?><div class="empty">کانالی ثبت نشده.</div>
+    <?php if (!$channels): ?><div class="empty"><div class="ic">📢</div>کانالی ثبت نشده.</div>
     <?php else: ?><div class="scroll"><table>
       <tr><th>عنوان</th><th>آیدی</th><th>ربات‌ها</th><th>وضعیت</th><th>اقدام</th></tr>
       <?php foreach ($channels as $ch): ?>
@@ -2834,7 +3139,7 @@ $tabFolders = [
     </div>
   </div>
   <?php endforeach; ?>
-  <?php if (!$campaigns): ?><div class="card"><div class="body"><div class="empty">هنوز سفارشی ثبت نشده.</div></div></div><?php endif; ?>
+  <?php if (!$campaigns): ?><div class="card"><div class="body"><div class="empty"><div class="ic">🎯</div>هنوز سفارشی ثبت نشده.</div></div></div><?php endif; ?>
 
 <?php // ================= ربات‌های شریک ================= ?>
 <?php elseif ($tab === 'partners'):
@@ -2952,7 +3257,7 @@ def join_gate(user_id):
     </div>
   </div>
   <?php endforeach; ?>
-  <?php if (!$partners): ?><div class="card"><div class="body"><div class="empty">هنوز شریکی اضافه نکرده‌اید.</div></div></div><?php endif; ?>
+  <?php if (!$partners): ?><div class="card"><div class="body"><div class="empty"><div class="ic">🤝</div>هنوز شریکی اضافه نکرده‌اید.</div></div></div><?php endif; ?>
 
 <?php // ================= رفرال ================= ?>
 <?php elseif ($tab === 'referral'):
@@ -2995,7 +3300,7 @@ def join_gate(user_id):
   </div></div>
 
   <div class="card"><h2>🏆 برترین معرف‌ها</h2><div class="body">
-    <?php if (!$refCount): ?><div class="empty">هنوز کسی زیرمجموعه نگرفته.</div>
+    <?php if (!$refCount): ?><div class="empty"><div class="ic">👥</div>هنوز کسی زیرمجموعه نگرفته.</div>
     <?php else: ?><div class="scroll"><table>
       <tr><th>#</th><th>معرف</th><th>آیدی</th><th>تعداد زیرمجموعه</th><th>پورسانت دریافتی</th><th>موجودی</th></tr>
       <?php $i = 1; foreach (array_slice($refCount, 0, 50, true) as $rid => $cnt): ?>
@@ -3057,6 +3362,86 @@ def join_gate(user_id):
 
 <?php // ================= کاربران ================= ?>
 <?php elseif ($tab === 'users'): ?>
+  <?php $uDetailId = trim((string)($_GET['id'] ?? '')); ?>
+  <?php if ($uDetailId !== '' && isset($users[$uDetailId])): $uD = $users[$uDetailId];
+    $uOrders = array_values(array_filter($orders, fn($o) => (string)$o['user_id'] === $uDetailId));
+    uasort($uOrders, fn($a, $b) => strcmp($b['created_at'] ?? '', $a['created_at'] ?? ''));
+    $uSpent = 0; foreach ($uOrders as $o) if ($o['status'] === Order::APPROVED && $o['type'] === 'product') $uSpent += (float)$o['amount'];
+    $uTopup = 0; foreach ($uOrders as $o) if ($o['status'] === Order::APPROVED && $o['type'] === 'topup') $uTopup += (float)$o['amount'];
+    $uRefs = array_filter($users, fn($x) => (int)($x['referrer'] ?? 0) === (int)$uDetailId);
+  ?>
+  <div class="crumb">کاربران <span>/</span> <b><?= h(uLabel($users, $uDetailId)) ?></b></div>
+  <a href="?tab=users" class="btn ghost sm" style="margin-bottom:14px;display:inline-block">→ بازگشت به فهرست</a>
+
+  <div class="card"><h2>👤 اطلاعات کاربر</h2><div class="body">
+    <div class="grid2">
+      <div><label>نام</label><div><?= h(!empty($uD['username']) ? '@' . $uD['username'] : ($uD['first_name'] ?? '—')) ?></div></div>
+      <div><label>آیدی تلگرام</label><div><code><?= h($uDetailId) ?></code></div></div>
+      <div><label>وضعیت</label><div><?= !empty($uD['banned']) ? '<span class="badge red">مسدود</span>' : '<span class="badge green">فعال</span>' ?></div></div>
+      <div><label>تاریخ عضویت</label><div class="muted"><?= h($uD['joined_at'] ?? '—') ?></div></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <form method="post"><input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="users">
+        <input type="hidden" name="action" value="ban_user"><input type="hidden" name="user_id" value="<?= h($uDetailId) ?>">
+        <button type="button" class="btn <?= !empty($uD['banned']) ? 'g' : 'r' ?> sm" onclick="openConfirm(this.form,
+          '<?= !empty($uD['banned']) ? 'آزادکردنِ کاربر' : 'مسدودکردنِ کاربر' ?>',
+          [['کاربر','<?= h(addslashes(uLabel($users, $uDetailId))) ?>']],
+          <?= !empty($uD['banned']) ? "''" : "'کاربر دیگر نمی‌تواند از ربات استفاده کند.'" ?>,
+          '<?= !empty($uD['banned']) ? 'g' : 'r' ?>')"><?= !empty($uD['banned']) ? '✅ آزاد کردن' : '⛔️ مسدود کردن' ?></button>
+      </form>
+    </div>
+  </div></div>
+
+  <div class="card"><h2>💰 کیف پول</h2><div class="body">
+    <div class="stats" style="margin-bottom:14px">
+      <div class="stat"><div class="n amount"><?= h(fmtNum($uD['balance'] ?? 0)) ?></div><div class="l">موجودی فعلی</div></div>
+      <div class="stat"><div class="n amount"><?= h(fmtNum($uTopup)) ?></div><div class="l">مجموع شارژ</div></div>
+      <div class="stat"><div class="n amount"><?= h(fmtNum($uSpent)) ?></div><div class="l">مجموع خرید</div></div>
+    </div>
+    <form method="post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="users">
+      <input type="hidden" name="action" value="set_balance"><input type="hidden" name="user_id" value="<?= h($uDetailId) ?>">
+      <div style="flex:1;min-width:160px"><label>تغییرِ موجودی</label>
+        <input id="uBalNew" name="balance" value="<?= h(fmtNum($uD['balance'] ?? 0)) ?>"></div>
+      <button type="button" class="btn ghost" onclick="openConfirm(this.form,'تغییرِ موجودیِ کاربر',
+        [['کاربر','<?= h(addslashes(uLabel($users, $uDetailId))) ?>'],
+         ['موجودیِ فعلی','<?= h(addslashes(fmtNum($uD['balance'] ?? 0))) ?>'],
+         ['موجودیِ تازه',document.getElementById('uBalNew')?document.getElementById('uBalNew').value:'']],
+        'این عملیات مستقیم موجودیِ کاربر را تغییر می‌دهد.','b')">ذخیره</button>
+    </form>
+  </div></div>
+
+  <div class="card"><h2>🧾 سفارش‌ها (<?= count($uOrders) ?>)</h2><div class="body">
+    <?php if (!$uOrders): ?><div class="empty"><div class="ic">🧾</div>این کاربر هنوز سفارشی ثبت نکرده.</div>
+    <?php else: ?><div class="scroll"><table class="responsive">
+      <tr><th>شناسه</th><th>نوع</th><th>مبلغ</th><th>وضعیت</th><th>تاریخ</th></tr>
+      <?php foreach (array_slice($uOrders, 0, 50) as $o): ?>
+        <tr>
+          <td data-label="شناسه"><code><?= h($o['id']) ?></code></td>
+          <td data-label="نوع"><?= $o['type'] === 'topup' ? 'شارژ' : h(Product::get($o['product_id'])['name'] ?? '—') ?></td>
+          <td data-label="مبلغ"><span class="amount"><?= h(fmtNum($o['amount'])) ?></span> <?= h($o['currency']) ?></td>
+          <td data-label="وضعیت"><?= oBadge($o['status']) ?></td>
+          <td data-label="تاریخ" class="muted"><?= h($o['created_at']) ?></td>
+        </tr>
+      <?php endforeach; ?>
+    </table></div><?php endif; ?>
+  </div></div>
+
+  <div class="card"><h2>👥 رفرال</h2><div class="body">
+    <div class="grid2" style="margin-bottom:12px">
+      <div><label>معرف</label><div><?= !empty($uD['referrer']) ? h(uLabel($users, $uD['referrer'])) : '<span class="muted">—</span>' ?></div></div>
+      <div><label>تعداد زیرمجموعه</label><div><?= count($uRefs) ?></div></div>
+    </div>
+    <?php if ($uRefs): ?><div class="scroll"><table class="responsive">
+      <tr><th>کاربر</th><th>آیدی</th></tr>
+      <?php foreach (array_slice($uRefs, 0, 30) as $ru): ?>
+        <tr><td data-label="کاربر"><a href="?tab=users&id=<?= h($ru['telegram_id']) ?>"><?= h(uLabel($users, $ru['telegram_id'])) ?></a></td>
+          <td data-label="آیدی"><code><?= h($ru['telegram_id']) ?></code></td></tr>
+      <?php endforeach; ?>
+    </table></div><?php endif; ?>
+  </div></div>
+
+  <?php else: ?>
   <div class="card"><h2>📢 پیام همگانی</h2><div class="body">
     <form method="post" onsubmit="return confirm('ارسال به همه کاربران؟')">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="users">
@@ -3078,7 +3463,7 @@ def join_gate(user_id):
       این پیام با توکن <b>خود ربات اپلودر</b> فرستاده می‌شود، پس به کسانی هم می‌رسد
       که فقط با ربات فرعی چت کرده‌اند و ربات مادر را استارت نکرده‌اند.
     </div>
-    <?php if (!$bots): ?><div class="empty">هنوز ربات اپلودری ندارید.</div>
+    <?php if (!$bots): ?><div class="empty"><div class="ic">🤖</div>هنوز ربات اپلودری ندارید.</div>
     <?php else: ?>
     <form method="post" onsubmit="return confirm('ارسال به کاربران ربات‌های انتخاب‌شده؟')">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="users">
@@ -3103,15 +3488,38 @@ def join_gate(user_id):
     <?php endif; ?>
   </div></div>
 
-  <div class="card"><h2>👥 کاربران (<?= count($users) ?>)</h2><div class="body">
-    <?php if (!$users): ?><div class="empty">هنوز کاربری ربات را استارت نکرده.</div>
-    <?php else: ?><div class="scroll"><table>
+  <?php
+    $uQ = trim((string)($_GET['q'] ?? ''));
+    $uPerPage = 25;
+    $uList = $users;
+    if ($uQ !== '') {
+        $needle = mb_strtolower($uQ);
+        $uList = array_filter($uList, function ($u) use ($needle) {
+            $hay = mb_strtolower(($u['username'] ?? '') . ' ' . ($u['first_name'] ?? '') . ' ' . $u['telegram_id']);
+            return str_contains($hay, $needle);
+        });
+    }
+    $uList = array_values($uList);
+    $uTotalN = count($uList);
+    $uPages = max(1, (int)ceil($uTotalN / $uPerPage));
+    $uPage  = max(1, min((int)($_GET['page'] ?? 1), $uPages));
+    $uSlice = array_slice($uList, ($uPage - 1) * $uPerPage, $uPerPage);
+  ?>
+  <div class="card"><h2>👥 کاربران (<?= $uTotalN ?>)</h2><div class="body">
+    <form method="get" class="toolbar">
+      <input type="hidden" name="tab" value="users">
+      <div class="search"><input type="text" name="q" value="<?= h($uQ) ?>" placeholder="🔎 یوزرنیم، نام یا آیدی تلگرام…"></div>
+      <button class="btn sm">جستجو</button>
+    </form>
+    <?php if (!$uSlice): ?>
+      <div class="empty"><div class="ic">👥</div><?= $uQ !== '' ? 'با این جستجو کاربری پیدا نشد.' : 'هنوز کاربری ربات را استارت نکرده.' ?></div>
+    <?php else: ?><div class="scroll"><table class="responsive">
       <tr><th>کاربر</th><th>آیدی</th><th>موجودی</th><th>معرف</th><th>زیرمجموعه</th><th>وضعیت</th><th>اقدام</th></tr>
-      <?php foreach (array_slice($users, 0, 200, true) as $u): ?>
+      <?php foreach ($uSlice as $u): ?>
       <tr>
-        <td><?= h(!empty($u['username']) ? '@' . $u['username'] : ($u['first_name'] ?? '—')) ?></td>
-        <td><code><?= h($u['telegram_id']) ?></code></td>
-        <td>
+        <td data-label="کاربر"><a href="?tab=users&id=<?= h($u['telegram_id']) ?>"><?= h(!empty($u['username']) ? '@' . $u['username'] : ($u['first_name'] ?? '—')) ?></a></td>
+        <td data-label="آیدی"><code><?= h($u['telegram_id']) ?></code></td>
+        <td data-label="موجودی">
           <form method="post" style="display:flex;gap:5px">
             <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="users">
             <input type="hidden" name="action" value="set_balance">
@@ -3120,18 +3528,21 @@ def join_gate(user_id):
             <button class="btn ghost sm">ذخیره</button>
           </form>
         </td>
-        <td><?= !empty($u['referrer']) ? h(uLabel($users, $u['referrer'])) : '<span class="muted">—</span>' ?></td>
-        <td><?= (int)($refCount[(int)$u['telegram_id']] ?? 0) ?></td>
-        <td><?= !empty($u['banned']) ? '<span class="badge red">مسدود</span>' : '<span class="badge green">فعال</span>' ?></td>
-        <td><form method="post">
+        <td data-label="معرف"><?= !empty($u['referrer']) ? h(uLabel($users, $u['referrer'])) : '<span class="muted">—</span>' ?></td>
+        <td data-label="زیرمجموعه"><?= (int)($refCount[(int)$u['telegram_id']] ?? 0) ?></td>
+        <td data-label="وضعیت"><?= !empty($u['banned']) ? '<span class="badge red">مسدود</span>' : '<span class="badge green">فعال</span>' ?></td>
+        <td data-label="اقدام"><form method="post">
           <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="users">
           <input type="hidden" name="action" value="ban_user"><input type="hidden" name="user_id" value="<?= h($u['telegram_id']) ?>">
           <button class="btn <?= !empty($u['banned']) ? 'g' : 'r' ?> sm"><?= !empty($u['banned']) ? 'آزاد' : 'مسدود' ?></button>
         </form></td>
       </tr>
       <?php endforeach; ?>
-    </table></div><?php endif; ?>
+    </table></div>
+    <?php pager($uPage, $uPages); ?>
+    <?php endif; ?>
   </div></div>
+  <?php endif; ?>
 
 <?php // ================= تنظیمات ================= ?>
 <?php elseif ($tab === 'auto'):   // ================= ⚡ خودکارسازی =================
@@ -3386,7 +3797,9 @@ def join_gate(user_id):
               <?php endforeach; ?>
             </select></div>
           <div><label><?= h($NPI['key']) ?> <?= h($NPI['name']) ?> (خالی = بدونِ تغییر)</label>
-            <input name="api_key" value="<?= h($NP === 'numberland' ? ($NAPI['nl_key'] ?? '') : ($NAPI['token'] ?? '')) ?>" style="direction:ltr"></div>
+            <div class="secret"><input type="password" name="api_key" autocomplete="off"
+              value="<?= h($NP === 'numberland' ? ($NAPI['nl_key'] ?? '') : ($NAPI['token'] ?? '')) ?>" style="direction:ltr">
+              <button type="button" onclick="toggleSecret(this)">👁</button></div></div>
           <?php if ($NP === 'numberland'): ?>
           <div><label>🎯 کد سرویسِ تلگرام نزدِ نامبرلند</label>
             <input name="nl_svc" value="<?= h($NAPI['nl_svc'] ?? '1') ?>" style="direction:ltr"></div>
@@ -3692,30 +4105,35 @@ def join_gate(user_id):
   </div></div>
 
 <?php else: ?>
-  <div class="card"><h2>⚙️ تنظیمات عمومی</h2><div class="body">
-    <form method="post">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="settings">
-      <input type="hidden" name="action" value="save_settings">
-      <input type="hidden" name="adv_scope" value="1">
+  <div class="crumb">سیستم <span>/</span> <b>تنظیمات</b></div>
+  <?php // 🧩 پنج بخشِ زیر همه یک فرم/یک submit هستند (همان چیزی که قبلا بود) —
+        // فقط ظاهرا در کارت‌های جدا نشان داده می‌شوند تا صفحه‌ی بلندِ قبلی خرد شود.
+        // این‌طور، هیچ فیلدی از فرم‌های دیگر جا نمی‌ماند و چیزی خالی ذخیره نمی‌شود. ?>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="settings">
+    <input type="hidden" name="action" value="save_settings">
+    <input type="hidden" name="adv_scope" value="1">
 
-      <div class="subcard"><h3>💳 اطلاعات پرداخت</h3>
+    <div class="card"><h2>💳 پرداخت</h2><div class="body">
       <div class="grid2">
         <div><label>آدرس USDT (TRC20)</label><input name="usdt" value="<?= h($C['wallets']['usdt']) ?>" style="direction:ltr"></div>
         <div><label>آدرس TRX</label><input name="trx" value="<?= h($C['wallets']['trx']) ?>" style="direction:ltr"></div>
         <div><label>شماره کارت</label><input name="card" value="<?= h($C['wallets']['card']) ?>" style="direction:ltr"></div>
         <div><label>به نام</label><input name="card_name" value="<?= h($C['wallets']['card_name']) ?>"></div>
-      </div></div>
+      </div>
+    </div></div>
 
-      <div class="subcard"><h3>👥 زیر مجموعه گیری</h3>
+    <div class="card"><h2>👥 زیرمجموعه‌گیری (رفرال)</h2><div class="body">
       <div class="grid2">
         <div><label>درصد پورسانت</label><input name="ref_percent" type="number" min="0" max="100" step="0.5"
              value="<?= h($C['referral']['percent']) ?>"></div>
         <div><label>&nbsp;</label><label style="font-weight:500">
           <input type="checkbox" name="ref_on" style="width:auto" <?= !empty($C['referral']['on']) ? 'checked' : '' ?>>
           سیستم معرفی فعال باشد</label></div>
-      </div></div>
+      </div>
+    </div></div>
 
-      <div class="subcard"><h3>🤖 پیش‌فرض ربات‌های اپلودر</h3>
+    <div class="card"><h2>🤖 پیش‌فرض ربات‌های اپلودر</h2><div class="body">
       <p class="muted" style="margin-bottom:10px">این مقادیر روی ربات‌های <b>جدید</b> اعمال می‌شود. برای ربات‌های موجود از تب «ربات‌های اپلودر» استفاده کنید.</p>
       <div class="grid2">
         <div><label>⏱ حذف فایل بعد از (ثانیه)</label>
@@ -3725,9 +4143,10 @@ def join_gate(user_id):
             <?= !empty($C['uploader']['force_join']) ? 'checked' : '' ?>> 🔒 عضویت اجباری</label>
           <label style="font-weight:500"><input type="checkbox" name="protect" style="width:auto"
             <?= !empty($C['uploader']['protect_content']) ? 'checked' : '' ?>> 🛡 محافظت فایل</label></div>
-      </div></div>
+      </div>
+    </div></div>
 
-      <div class="subcard"><h3>🧪 تست و نمایش</h3>
+    <div class="card"><h2>🧪 تست و نمایش</h2><div class="body">
       <div class="note">
         <b>حالت تست</b> اجازه می‌دهد سفارش با مبلغ <b>صفر</b> تا آخر برود — بدون پرداخت،
         خودکار تایید می‌شود و کمپین قفل کانالش هم ساخته می‌شود.
@@ -3739,9 +4158,10 @@ def join_gate(user_id):
         <label style="font-weight:500"><input type="checkbox" name="speed_perday" style="width:auto"
           <?= !empty($C['ui']['speed_show_perday']) ? 'checked' : '' ?>>
           🚀 «نفر در روز» روی دکمه سرعت هم نوشته شود</label>
-      </div></div>
+      </div>
+    </div></div>
 
-      <div class="subcard"><h3>🤖 کار خودکار</h3>
+    <div class="card"><h2>🤖 کار خودکار</h2><div class="body">
       <div class="note">
         با <b>درگاه پرداخت</b> همه چیز از قبل خودکار است و نیازی به حضور شما نیست.
         گزینه زیر فقط برای <b>رسید کارت به کارت</b> است: رسید که برسد، بدون بررسی تایید می‌شود.
@@ -3754,11 +4174,10 @@ def join_gate(user_id):
       </div>
       <div style="margin-top:10px;max-width:320px"><label>🧹 پاک کردن کمپین‌های تمام‌شده بعد از (روز · ۰ = هیچ‌وقت)</label>
         <input name="keep_days" type="number" min="0" value="<?= (int)($C['campaign_keep_days'] ?? 3) ?>"></div>
-      </div>
+    </div></div>
 
-      <div style="margin-top:16px"><button class="btn g">ذخیره تنظیمات</button></div>
-    </form>
-  </div></div>
+    <div class="card"><div class="body"><button class="btn g">💾 ذخیره تغییرات</button></div></div>
+  </form>
 
   <div class="card"><h2>🩺 تشخیص و سرعت</h2><div class="body">
     <div class="note">
@@ -3815,9 +4234,11 @@ def join_gate(user_id):
             <option value="<?= h($k2) ?>" <?= ($G['provider'] ?? 'oxapay') === $k2 ? 'selected' : '' ?>><?= h($v2) ?></option>
           <?php endforeach; ?></select></div>
         <div><label>کلید API (Merchant Key)</label>
-          <input name="gw_key" value="<?= h($G['api_key'] ?? '') ?>" style="direction:ltr"></div>
+          <div class="secret"><input type="password" name="gw_key" autocomplete="off" value="<?= h($G['api_key'] ?? '') ?>" style="direction:ltr">
+            <button type="button" onclick="toggleSecret(this)">👁</button></div></div>
         <div><label>کلید IPN Secret (فقط NOWPayments)</label>
-          <input name="gw_ipn" value="<?= h($G['ipn_secret'] ?? '') ?>" style="direction:ltr"></div>
+          <div class="secret"><input type="password" name="gw_ipn" autocomplete="off" value="<?= h($G['ipn_secret'] ?? '') ?>" style="direction:ltr">
+            <button type="button" onclick="toggleSecret(this)">👁</button></div></div>
         <div><label>آدرس عمومی فایل ربات</label>
           <input name="gw_base" value="<?= h($G['base_url'] ?? '') ?>" placeholder="https://site.com/bot.php" style="direction:ltr"></div>
         <div><label>ارز</label><input name="gw_coin" value="<?= h($G['coin'] ?? 'USDT') ?>" style="direction:ltr"></div>
@@ -3893,7 +4314,13 @@ def join_gate(user_id):
     <p class="muted" style="line-height:2">
       • رمز پنل در خط ۱۰ فایل <code>admin_panel.php</code><br>
       • آیدی مدیرها: <code><?= h(implode('، ', ADMIN_IDS)) ?></code> — کنار BOT_TOKEN در config.local.php<br>
-      • کلید کران: <code><?= h(CRON_KEY) ?></code> — خط ۲۸ فایل ربات، حتما عوضش کنید<br>
+      • کلید کران:
+        <span class="secret-box">
+          <code data-shown="0" data-masked="••••••••••••"><?= h(str_repeat('•', 12)) ?></code>
+          <button type="button" onclick="revealBox(this,'<?= h(addslashes(CRON_KEY)) ?>')">👁 نمایش</button>
+          <button type="button" onclick="copyText('<?= h(addslashes(CRON_KEY)) ?>',this)">📋 کپی</button>
+        </span>
+        — خط ۲۸ فایل ربات، حتما عوضش کنید<br>
       • پوشه <code>data_master/</code> شامل توکن ربات‌هاست؛ دسترسی عمومی به آن را ببندید
     </p>
   </div></div>
@@ -3902,7 +4329,101 @@ def join_gate(user_id):
   </div></main>
 </div>
 
+<div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="cmTitle">
+  <div class="modal">
+    <h3 id="cmTitle"></h3>
+    <div id="cmBody"></div>
+    <div class="mact">
+      <button type="button" class="btn ghost" onclick="closeConfirm()">انصراف</button>
+      <button type="button" class="btn g" id="cmOk">تایید</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ---- 🪟 مودالِ تاییدِ عملیاتِ مهم — فقط UI؛ خودِ فرم همچنان با POST و CSRF می‌رود ----
+var _cmForm = null;
+function openConfirm(form, title, rows, warnText, okClass) {
+  _cmForm = form;
+  document.getElementById('cmTitle').textContent = title;
+  var html = '';
+  (rows || []).forEach(function (r) {
+    html += '<div class="mrow"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>';
+  });
+  if (warnText) html += '<div class="mwarn">⚠️ ' + warnText + '</div>';
+  document.getElementById('cmBody').innerHTML = html;
+  var ok = document.getElementById('cmOk');
+  ok.className = 'btn ' + (okClass || 'g');
+  document.getElementById('confirmModal').classList.add('on');
+}
+function closeConfirm() {
+  document.getElementById('confirmModal').classList.remove('on');
+  _cmForm = null;
+}
+document.getElementById('confirmModal').addEventListener('click', function (e) {
+  if (e.target === this) closeConfirm();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeConfirm();
+});
+document.getElementById('cmOk').onclick = function () {
+  if (!_cmForm) return;
+  this.disabled = true; this.textContent = '🔄 در حال انجام...';
+  _cmForm.submit();
+};
+
+// ---- 🔎 جستجوی زنده‌ی محصولات — فقط نمایش/عدم‌نمایش، بدون درخواستِ تازه ----
+function filterProducts(q) {
+  q = q.trim().toLowerCase();
+  document.querySelectorAll('.prodcard').forEach(function (c) {
+    var name = c.getAttribute('data-pname') || '';
+    c.classList.toggle('filtered-out', q !== '' && name.indexOf(q) === -1);
+  });
+}
+
+// ---- 🔐 نمایش/مخفیِ فیلدهای سکرت ----
+function toggleSecret(btn) {
+  var inp = btn.previousElementSibling;
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+function revealBox(btn, full) {
+  var code = btn.previousElementSibling;
+  var showing = code.getAttribute('data-shown') === '1';
+  code.textContent = showing ? code.getAttribute('data-masked') : full;
+  code.setAttribute('data-shown', showing ? '0' : '1');
+  btn.textContent = showing ? '👁 نمایش' : '🙈 مخفی';
+}
+function copyText(text, btn) {
+  var done = function () { var old = btn.textContent; btn.textContent = '✓ کپی شد'; setTimeout(function () { btn.textContent = old; }, 1400); };
+  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done); return; }
+  var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) {}
+  document.body.removeChild(ta);
+}
+
+// ---- 🔄 وضعیتِ «در حالِ انجام» روی دکمه‌های فرم — از دوبار کلیک جلوگیری می‌کند ----
+// اگر همان فرم یک onsubmit قدیمی (confirm بومی) دارد و کاربر «لغو» بزند،
+// آن رویداد را preventDefault می‌کند و اینجا دیگر دکمه را قفل نمی‌کنیم.
+document.querySelectorAll('form').forEach(function (f) {
+  f.addEventListener('submit', function (ev) {
+    if (ev.defaultPrevented) return;
+    var btn = f.querySelector('button[type="submit"], button:not([type])');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    btn.innerHTML = '🔄 در حال انجام...';
+  });
+});
+
+// ---- 🍞 بستنِ خودکارِ پیامِ فلش (فقط توستِ لحظه‌ای، نه هشدارهای همیشگی مثل رمزِ ضعیف) ----
+(function () {
+  var f = document.getElementById('flashToast');
+  if (!f) return;
+  setTimeout(function () { if (f) f.style.display = 'none'; }, 7000);
+})();
+
 // انتخاب متن را داخل تگ می‌پیچد (نقل‌قول، پررنگ، ...)
 function premEmoji(id) {
   var code = prompt('کد ایموجی پریمیوم را بگذارید:\n(با دستور /emoji در ربات مادر می‌گیرید)');

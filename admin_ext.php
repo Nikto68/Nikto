@@ -2598,7 +2598,7 @@ function axAudit() {
 
     // ── گزارش‌ها ──
     foreach (['tg' => 'خدمات تلگرام', 'num' => 'شماره مجازی', 'react' => 'ری‌اکشن و استوری'] as $k => $lbl) {
-        $rp = axVal('report.' . $k);
+        $rp = (array)axVal('report.' . $k);
         $add('گزارش ' . $lbl, !empty($rp['on']) && trim((string)$rp['chat_id']) !== '',
              trim((string)$rp['chat_id']) === '' ? 'مقصد تنظیم نشده' : (empty($rp['on']) ? 'خاموش است' : ''));
     }
