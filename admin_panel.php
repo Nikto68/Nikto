@@ -728,6 +728,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ متن‌ها و ایموجیِ دکمه‌های بانک ذخیره شد.');
     }
 
+    // ---- 💣 مین‌یاب ----
+    if ($a === 'save_mine') {
+        $post = $_POST;
+        $num = fn($k, $d = 0) => (float)str_replace([',', '،'], '', $post[$k] ?? $d);
+        mnSet(function (&$c) use ($post, $num) {
+            $c['on']         = !empty($post['mn_on']);
+            $c['group_only'] = !empty($post['mn_group_only']);
+            $c['word']       = trim((string)($post['mn_word'] ?? '')) ?: 'مین';
+            $c['entry_min']  = max(0, $num('entry_min', 100));
+            $c['entry_max']  = max($c['entry_min'], $num('entry_max', 1000000));
+            $c['min_safe_for_protection'] = max(0, (int)$num('min_safe', 3));
+            $c['reward_growth']   = max(1, $num('reward_growth', 1.5));
+            $c['max_active_games']= max(1, (int)$num('max_active', 200));
+            $c['game_timeout']    = max(60, (int)$num('game_timeout', 1800));
+            $c['expire_refund']   = !empty($post['expire_refund']);
+            $c['game_cooldown']   = max(0, (int)$num('game_cooldown', 0));
+
+            $rewards = [];
+            for ($i = 1; $i <= 8; $i++) $rewards[] = max(0, $num('reward_' . $i, 0));
+            $c['rewards'] = $rewards;
+        });
+        go('✅ تنظیماتِ مین‌یاب ذخیره شد.');
+    }
+    if ($a === 'save_mine_texts') {
+        $post = $_POST;
+        mnSet(function (&$c) use ($post) {
+            if (!is_array($c['texts'] ?? null)) $c['texts'] = [];
+            foreach (mnDefaults()['texts'] as $k => $_) {
+                if (isset($post['txt_' . $k])) $c['texts'][$k] = trim((string)$post['txt_' . $k]);
+            }
+            if (!is_array($c['icons'] ?? null)) $c['icons'] = [];
+            if (!is_array($c['btns']  ?? null)) $c['btns']  = [];
+            foreach (['btn_field', 'btn_join', 'btn_cancel', 'btn_cash'] as $k) {
+                if (isset($post['icon_' . $k])) $c['icons'][$k] = trim((string)$post['icon_' . $k]);
+                if (!is_array($c['btns'][$k] ?? null)) $c['btns'][$k] = [];
+                $c['btns'][$k]['color'] = isStyle($post['color_' . $k] ?? '') ? $post['color_' . $k] : 'none';
+            }
+        });
+        go('✅ متن‌ها و ایموجیِ دکمه‌های مین‌یاب ذخیره شد.');
+    }
+
     // ---- 🩺 تشخیص و سرعت ----
     if (in_array($a, ['adm_write_test', 'adm_leak_test', 'adm_speed_test', 'adm_auto_setup'], true)) {
         $report = $a === 'adm_write_test' ? admWriteTestText()
@@ -1884,6 +1925,7 @@ $tabs = [
   'diamond'   => '💎 الماس',
   'games'     => '🎮 بازی‌ها',
   'bank'      => '🏦 بانک',
+  'mine'      => '💣 مین‌یاب',
 ];
 // 🔴 فقط جایی که واقعا «نیاز به اقدام» معنی دارد badge می‌گیرد — عددهای الکی شلوغی می‌سازند
 $tabBadges = ['orders' => count($pending)];
@@ -1893,7 +1935,7 @@ $tabFolders = [
   'فروش'      => ['orders', 'products', 'profit'],
   'کاربران'   => ['users', 'referral', 'support'],
   'زیرساخت'   => ['bots', 'channels', 'campaigns', 'partners'],
-  'ویژگی‌ها'  => ['numbers', 'miniapps', 'diamond', 'games', 'bank'],
+  'ویژگی‌ها'  => ['numbers', 'miniapps', 'diamond', 'games', 'bank', 'mine'],
   'سیستم'     => ['auto', 'settings'],
 ];
 ?>
@@ -4501,6 +4543,91 @@ def join_gate(user_id):
               </div>
             <?php else: ?>
               <textarea name="txt_<?= h($k) ?>" rows="3" style="direction:rtl"><?= h($BK['texts'][$k] ?? $def) ?></textarea>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </details>
+      <div style="margin-top:16px"><button class="btn g">ذخیره متن‌ها</button></div>
+    </form>
+  </div></div>
+
+<?php // ================= 💣 مین‌یاب ================= ?>
+<?php elseif ($tab === 'mine'): ?>
+  <?php $MN = mnCfg(); ?>
+  <div class="card"><h2>💣 مین‌یاب
+    <?= !empty($MN['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
+  </h2><div class="body">
+    <div class="note">
+      همین‌طور روی همان الماسِ بخشِ «💎 الماس» کار می‌کند. دستور: <code>مین ۵۰۰</code> (کلمه‌اش قابلِ تغییر است) —
+      فقط داخلِ گروه.
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="mine">
+      <input type="hidden" name="action" value="save_mine">
+
+      <details class="subcard" open><summary><h3>🔌 وضعیت</h3></summary>
+        <div style="margin-bottom:10px">
+          <label style="font-weight:500"><input type="checkbox" name="mn_on" style="width:auto" <?= !empty($MN['on']) ? 'checked' : '' ?>> روشن باشد</label>
+          <label style="font-weight:500"><input type="checkbox" name="mn_group_only" style="width:auto" <?= !empty($MN['group_only']) ? 'checked' : '' ?>> فقط داخلِ گروه کار کند</label>
+        </div>
+        <div class="grid2">
+          <div><label>💬 کلمه‌ی شروع (قبلِ عدد)</label><input name="mn_word" value="<?= h($MN['word'] ?? 'مین') ?>"></div>
+        </div>
+      </details>
+
+      <details class="subcard"><summary><h3>💎 ورودی و بازی</h3></summary>
+        <div class="grid2">
+          <div><label>حداقلِ ورودی</label><input name="entry_min" value="<?= h($MN['entry_min'] ?? 100) ?>" style="direction:ltr"></div>
+          <div><label>حداکثرِ ورودی</label><input name="entry_max" value="<?= h($MN['entry_max'] ?? 1000000) ?>" style="direction:ltr"></div>
+          <div><label>حداقلِ خانه‌ی امن برایِ حفاظت از جریمه</label><input name="min_safe" type="number" min="0" max="8" value="<?= (int)($MN['min_safe_for_protection'] ?? 3) ?>"></div>
+          <div><label>حداکثرِ بازی‌های فعالِ هم‌زمان (کلِ ربات)</label><input name="max_active" type="number" min="1" value="<?= (int)($MN['max_active_games'] ?? 200) ?>"></div>
+          <div><label>مهلتِ بی‌کاری تا انقضایِ بازی (ثانیه)</label><input name="game_timeout" type="number" min="60" value="<?= (int)($MN['game_timeout'] ?? 1800) ?>"></div>
+          <div><label>فاصله‌ی دو بازیِ همان کاربر (ثانیه، ۰=خاموش)</label><input name="game_cooldown" type="number" min="0" value="<?= (int)($MN['game_cooldown'] ?? 0) ?>"></div>
+        </div>
+        <div style="margin-top:10px">
+          <label style="font-weight:500"><input type="checkbox" name="expire_refund" style="width:auto" <?= !empty($MN['expire_refund']) ? 'checked' : '' ?>> بعدِ انقضا، ورودی به کاربر برگردد</label>
+        </div>
+      </details>
+
+      <details class="subcard"><summary><h3>🏆 جایزه‌ی هر خانه‌ی امن</h3></summary>
+        <div class="note">هرکدام، جایزه‌ی همان شماره خانه‌ی امن است (نه تجمعی) — جمعِ رویِ‌همِ همه‌شان پرداخت می‌شود.</div>
+        <div class="grid2">
+          <?php $RW = $MN['rewards'] ?? mnDefaults()['rewards']; for ($i = 1; $i <= 8; $i++): ?>
+            <div><label>🏆 خانه‌ی امنِ #<?= $i ?></label><input name="reward_<?= $i ?>" value="<?= h($RW[$i - 1] ?? 0) ?>" style="direction:ltr"></div>
+          <?php endfor; ?>
+        </div>
+        <div class="grid2">
+          <div><label>ضریبِ رشد برایِ فراترِ از ۸ (عملا پیش نمی‌آید)</label><input name="reward_growth" value="<?= h($MN['reward_growth'] ?? 1.5) ?>" style="direction:ltr"></div>
+        </div>
+      </details>
+
+      <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ مین‌یاب</button></div>
+    </form>
+
+    <form method="post" style="margin-top:20px">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="mine">
+      <input type="hidden" name="action" value="save_mine_texts">
+      <details class="subcard" open><summary><h3>✏️ متن‌ها و دکمه‌ها</h3></summary>
+        <div class="note">
+          داخلِ متن‌ها ایموجیِ پریمیوم با <code>&lt;tg-emoji emoji-id="..."&gt;✨&lt;/tg-emoji&gt;</code> — کدش را از
+          <code>/panel</code> ← 🔘 ایموجیِ پریمیوم بگیرید. برایِ خودِ دکمه‌ها، شناسه را (بدونِ تگ) در کادرِ زیرِ
+          همان دکمه بگذارید و رنگش را هم از کنارش انتخاب کنید.
+        </div>
+        <?php foreach (mnDefaults()['texts'] as $k => $def): $isBtn = in_array($k, ['btn_field','btn_join','btn_cancel','btn_cash'], true); ?>
+          <div style="margin-bottom:12px">
+            <label><?= h($k) ?><?= $isBtn ? ' (متنِ دکمه)' : '' ?></label>
+            <?php if ($isBtn): ?>
+              <input name="txt_<?= h($k) ?>" value="<?= h($MN['texts'][$k] ?? $def) ?>">
+              <div class="grid2" style="margin-top:6px">
+                <input name="icon_<?= h($k) ?>" value="<?= h($MN['icons'][$k] ?? '') ?>" placeholder="شناسه‌ی ایموجیِ پریمیومِ این دکمه (اختیاری)" style="direction:ltr">
+                <select name="color_<?= h($k) ?>">
+                  <?php foreach (styleMap() as $sk => $sl): ?>
+                    <option value="<?= h($sk) ?>" <?= ($MN['btns'][$k]['color'] ?? 'none') === $sk ? 'selected' : '' ?>><?= h($sl) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            <?php else: ?>
+              <textarea name="txt_<?= h($k) ?>" rows="3" style="direction:rtl"><?= h($MN['texts'][$k] ?? $def) ?></textarea>
             <?php endif; ?>
           </div>
         <?php endforeach; ?>

@@ -219,6 +219,7 @@ require_once __DIR__ . '/diamond.php';
 require_once __DIR__ . '/channels.php';
 require_once __DIR__ . '/games.php';
 require_once __DIR__ . '/bank.php';
+require_once __DIR__ . '/mine.php';
 require_once __DIR__ . '/profit.php';
 
 // ============================================================
@@ -7295,6 +7296,9 @@ function masterHandle($update) {
         // 🏦 دکمه‌های بانک — عمدا در گروه، درست مثلِ بازی‌ها
         if (function_exists('bkCallback') && bkCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
 
+        // 💣 دکمه‌های مین‌یاب — همین‌طور، در گروه
+        if (function_exists('mnCallback') && mnCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
+
         // 🧾 تصمیمِ رسید (تایید/رد) عمدا تو گروه هم کار می‌کند — دقیقا
         // برای همین رسیدها به گروهِ گزارش می‌روند؛ وگرنه دروازه‌ی پایین
         // (که فقط چتِ خصوصی را رد نمی‌کند) دکمه‌اش را همیشه بی‌اثر می‌کرد
@@ -9100,6 +9104,7 @@ function masterHandle($update) {
         if (gmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false)) return;
         if (function_exists('bkHandleText') && bkHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
+        if (function_exists('mnHandleText') && mnHandleText($text, $uid, $chatId, $fname, $uname, false)) return;
         return;
     }
 
@@ -11403,6 +11408,7 @@ if (isset($_GET['cron'])) {
          //    ساعت‌ها هیچ‌کس با ربات کار نکند.
          ' · numbers: ' . (function_exists('numTick') ? numTick(50) : 0) .
          ' · archive: ' . (ordersArchive() + maOrdersArchive()) .
+         ' · mine: ' . (function_exists('mnTick') ? mnTick(50) : 0) .
          ' · broadcast: ' . bcTick(120);
     exit;
 }
