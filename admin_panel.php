@@ -671,6 +671,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go('✅ تنظیماتِ بازی‌ها ذخیره شد.');
     }
 
+    // ---- 🏦 بانک ----
+    if ($a === 'save_bank') {
+        $post = $_POST;
+        $num = fn($k, $d = 0) => (float)str_replace([',', '،'], '', $post[$k] ?? $d);
+        bkSet(function (&$c) use ($post, $num) {
+            $c['on']            = !empty($post['bk_on']);
+            $c['group_only']    = !empty($post['bk_group_only']);
+            $c['word_hack']     = trim((string)($post['word_hack'] ?? '')) ?: 'هک';
+            $c['min_withdraw']  = max(0, $num('min_withdraw', 50000));
+            $c['manual_protect']= max(60, (int)$num('manual_protect', 900));
+            $c['shield_after']  = max(0, (int)$num('shield_after', 300));
+            $c['hack_cooldown'] = max(60, (int)$num('hack_cooldown', 1200));
+            $c['level_step']    = max(1, (int)$num('level_step', 500000));
+            $c['top_n']         = max(1, (int)$num('top_n', 10));
+
+            if (!is_array($c['rng'] ?? null)) $c['rng'] = [];
+            $r = &$c['rng'];
+            $r['base_success']  = max(0, min(100, $num('rng_base', 42)));
+            $r['success_floor'] = max(0, min(100, $num('rng_floor', 18)));
+            $r['success_ceil']  = max(0, min(100, $num('rng_ceil', 72)));
+            $r['jitter_pct']    = max(0, min(50, $num('rng_jitter', 12)));
+            $r['jackpot_pct']   = max(0, min(100, $num('rng_jackpot_pct', 0.4)));
+            $r['perfect_pct']   = max(0, min(100, $num('rng_perfect_pct', 7)));
+            $r['critfail_pct']  = max(0, min(100, $num('rng_critfail_pct', 8)));
+            $r['partial_share'] = max(0, min(1, $num('rng_partial_share', 0.35)));
+            $r['jackpot_min']   = max(0, min(100, $num('rng_jackpot_min', 25)));
+            $r['jackpot_max']   = max(0, min(100, $num('rng_jackpot_max', 40)));
+            $r['perfect_min']   = max(0, min(100, $num('rng_perfect_min', 10)));
+            $r['perfect_max']   = max(0, min(100, $num('rng_perfect_max', 16)));
+            $r['success_min']   = max(0, min(100, $num('rng_success_min', 4)));
+            $r['success_max']   = max(0, min(100, $num('rng_success_max', 10)));
+            $r['partial_min']   = max(0, min(100, $num('rng_partial_min', 1)));
+            $r['partial_max']   = max(0, min(100, $num('rng_partial_max', 4)));
+            $r['critfail_min']  = max(0, min(100, $num('rng_critfail_min', 5)));
+            $r['critfail_max']  = max(0, min(100, $num('rng_critfail_max', 15)));
+            unset($r);
+        });
+        go('✅ تنظیماتِ بانک ذخیره شد.');
+    }
+    if ($a === 'save_bank_texts') {
+        $post = $_POST;
+        bkSet(function (&$c) use ($post) {
+            if (!is_array($c['texts'] ?? null)) $c['texts'] = [];
+            foreach (bkDefaults()['texts'] as $k => $_) {
+                if (isset($post['txt_' . $k])) $c['texts'][$k] = trim((string)$post['txt_' . $k]);
+            }
+            if (!is_array($c['icons'] ?? null)) $c['icons'] = [];
+            if (!is_array($c['btns']  ?? null)) $c['btns']  = [];
+            foreach (['btn_protect', 'btn_deposit', 'btn_withdraw'] as $k) {
+                if (isset($post['icon_' . $k])) $c['icons'][$k] = trim((string)$post['icon_' . $k]);
+                if (!is_array($c['btns'][$k] ?? null)) $c['btns'][$k] = [];
+                $c['btns'][$k]['color'] = isStyle($post['color_' . $k] ?? '') ? $post['color_' . $k] : 'none';
+            }
+        });
+        go('✅ متن‌ها و ایموجیِ دکمه‌های بانک ذخیره شد.');
+    }
+
     // ---- 🩺 تشخیص و سرعت ----
     if (in_array($a, ['adm_write_test', 'adm_leak_test', 'adm_speed_test', 'adm_auto_setup'], true)) {
         $report = $a === 'adm_write_test' ? admWriteTestText()
@@ -1826,6 +1883,7 @@ $tabs = [
   'miniapps'  => '🚀 مینی‌اپ‌ها',
   'diamond'   => '💎 الماس',
   'games'     => '🎮 بازی‌ها',
+  'bank'      => '🏦 بانک',
 ];
 // 🔴 فقط جایی که واقعا «نیاز به اقدام» معنی دارد badge می‌گیرد — عددهای الکی شلوغی می‌سازند
 $tabBadges = ['orders' => count($pending)];
@@ -1835,7 +1893,7 @@ $tabFolders = [
   'فروش'      => ['orders', 'products', 'profit'],
   'کاربران'   => ['users', 'referral', 'support'],
   'زیرساخت'   => ['bots', 'channels', 'campaigns', 'partners'],
-  'ویژگی‌ها'  => ['numbers', 'miniapps', 'diamond', 'games'],
+  'ویژگی‌ها'  => ['numbers', 'miniapps', 'diamond', 'games', 'bank'],
   'سیستم'     => ['auto', 'settings'],
 ];
 ?>
@@ -4339,6 +4397,115 @@ def join_gate(user_id):
       </details>
 
       <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ بازی‌ها</button></div>
+    </form>
+  </div></div>
+
+<?php // ================= 🏦 بانک ================= ?>
+<?php elseif ($tab === 'bank'): ?>
+  <?php $BK = bkCfg(); $BKR = $BK['rng']; ?>
+  <div class="card"><h2>🏦 بانک — بازیِ سرقت/هک با همان الماس
+    <?= !empty($BK['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
+  </h2><div class="body">
+    <div class="note">
+      کیف‌پول همان الماسِ بخشِ «💎 الماس» است — بانک ارزِ جدیدی نیست، فقط بخشی از همان الماس که کاربر
+      کنار گذاشته و قابلِ دزدیدن است. دستورها فقط داخلِ گروه کار می‌کنند: <code>/bank</code>،
+      <code>/bankleader</code>، و هک با ریپلای‌کردنِ پیامِ هدف + نوشتنِ <code>/hack</code> یا کلمه‌ی هک.
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="bank">
+      <input type="hidden" name="action" value="save_bank">
+
+      <details class="subcard" open><summary><h3>🔌 وضعیت</h3></summary>
+        <div style="margin-bottom:10px">
+          <label style="font-weight:500"><input type="checkbox" name="bk_on" style="width:auto" <?= !empty($BK['on']) ? 'checked' : '' ?>> روشن باشد</label>
+          <label style="font-weight:500"><input type="checkbox" name="bk_group_only" style="width:auto" <?= !empty($BK['group_only']) ? 'checked' : '' ?>> فقط داخلِ گروه کار کند</label>
+        </div>
+        <div class="grid2">
+          <div><label>💬 کلمه‌ی هک (جایگزینِ /hack)</label><input name="word_hack" value="<?= h($BK['word_hack'] ?? 'هک') ?>"></div>
+        </div>
+      </details>
+
+      <details class="subcard"><summary><h3>🏦 بانک و برداشت</h3></summary>
+        <div class="grid2">
+          <div><label>حداقلِ موجودیِ بانک برایِ باز شدنِ برداشت</label><input name="min_withdraw" value="<?= h($BK['min_withdraw'] ?? 50000) ?>" style="direction:ltr"></div>
+          <div><label>⭐️ هر چند الماسِ دزدیده‌شده، یک سطحِ بانک</label><input name="level_step" type="number" min="1" value="<?= (int)($BK['level_step'] ?? 500000) ?>"></div>
+          <div><label>🏆 تعدادِ نفراتِ لیستِ برترین‌ها</label><input name="top_n" type="number" min="1" value="<?= (int)($BK['top_n'] ?? 10) ?>"></div>
+        </div>
+      </details>
+
+      <details class="subcard"><summary><h3>🛡 حفاظت و کول‌داون</h3></summary>
+        <div class="grid2">
+          <div><label>⏱ حفاظتِ دستی (ثانیه)</label><input name="manual_protect" type="number" min="60" value="<?= (int)($BK['manual_protect'] ?? 900) ?>"></div>
+          <div><label>🛡 شیلدِ خودکار بعدِ هر هک (ثانیه)</label><input name="shield_after" type="number" min="0" value="<?= (int)($BK['shield_after'] ?? 300) ?>"></div>
+          <div><label>⏳ کول‌داونِ هکِ همان مهاجم (ثانیه)</label><input name="hack_cooldown" type="number" min="60" value="<?= (int)($BK['hack_cooldown'] ?? 1200) ?>"></div>
+        </div>
+      </details>
+
+      <details class="subcard"><summary><h3>🎲 موتورِ رند — شانس و درصدها</h3></summary>
+        <div class="note">
+          نتیجه‌ی هک هیچ‌وقت از رویِ یک عددِ ثابت تعیین نمی‌شود — این‌ها فقط بازه‌ها و وزن‌هایی‌اند که موتورِ
+          رندِ امن (<code>random_int</code>) با جیترِ رندومِ خودش ترکیب‌شان می‌کند.
+        </div>
+        <div class="grid2">
+          <div><label>٪ شانسِ پایه</label><input name="rng_base" value="<?= h($BKR['base_success'] ?? 42) ?>" style="direction:ltr"></div>
+          <div><label>٪ کفِ شانسِ مؤثر</label><input name="rng_floor" value="<?= h($BKR['success_floor'] ?? 18) ?>" style="direction:ltr"></div>
+          <div><label>٪ سقفِ شانسِ مؤثر</label><input name="rng_ceil" value="<?= h($BKR['success_ceil'] ?? 72) ?>" style="direction:ltr"></div>
+          <div><label>٪ جیترِ رندومِ ± روی شانس</label><input name="rng_jitter" value="<?= h($BKR['jitter_pct'] ?? 12) ?>" style="direction:ltr"></div>
+        </div>
+        <div class="grid2">
+          <div><label>٪ سهمِ JACKPOT</label><input name="rng_jackpot_pct" value="<?= h($BKR['jackpot_pct'] ?? 0.4) ?>" style="direction:ltr"></div>
+          <div><label>٪ سهمِ PERFECT HEIST</label><input name="rng_perfect_pct" value="<?= h($BKR['perfect_pct'] ?? 7) ?>" style="direction:ltr"></div>
+          <div><label>٪ سهمِ CRITICAL FAILURE</label><input name="rng_critfail_pct" value="<?= h($BKR['critfail_pct'] ?? 8) ?>" style="direction:ltr"></div>
+          <div><label>سهمِ PARTIAL از موفقیت (۰ تا ۱)</label><input name="rng_partial_share" value="<?= h($BKR['partial_share'] ?? 0.35) ?>" style="direction:ltr"></div>
+        </div>
+        <div class="note">بازه‌ی درصدِ دزدیده‌شده از بانکِ هدف، برایِ هر تیر:</div>
+        <div class="grid2">
+          <div><label>🎯 Jackpot — از</label><input name="rng_jackpot_min" value="<?= h($BKR['jackpot_min'] ?? 25) ?>" style="direction:ltr"></div>
+          <div><label>🎯 Jackpot — تا</label><input name="rng_jackpot_max" value="<?= h($BKR['jackpot_max'] ?? 40) ?>" style="direction:ltr"></div>
+          <div><label>🟢 Perfect — از</label><input name="rng_perfect_min" value="<?= h($BKR['perfect_min'] ?? 10) ?>" style="direction:ltr"></div>
+          <div><label>🟢 Perfect — تا</label><input name="rng_perfect_max" value="<?= h($BKR['perfect_max'] ?? 16) ?>" style="direction:ltr"></div>
+          <div><label>🟢 Success — از</label><input name="rng_success_min" value="<?= h($BKR['success_min'] ?? 4) ?>" style="direction:ltr"></div>
+          <div><label>🟢 Success — تا</label><input name="rng_success_max" value="<?= h($BKR['success_max'] ?? 10) ?>" style="direction:ltr"></div>
+          <div><label>🟡 Partial — از</label><input name="rng_partial_min" value="<?= h($BKR['partial_min'] ?? 1) ?>" style="direction:ltr"></div>
+          <div><label>🟡 Partial — تا</label><input name="rng_partial_max" value="<?= h($BKR['partial_max'] ?? 4) ?>" style="direction:ltr"></div>
+          <div><label>💥 جریمه‌ی Critical Fail (٪ از بانکِ خودِ هکر) — از</label><input name="rng_critfail_min" value="<?= h($BKR['critfail_min'] ?? 5) ?>" style="direction:ltr"></div>
+          <div><label>💥 جریمه‌ی Critical Fail — تا</label><input name="rng_critfail_max" value="<?= h($BKR['critfail_max'] ?? 15) ?>" style="direction:ltr"></div>
+        </div>
+      </details>
+
+      <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ بانک</button></div>
+    </form>
+
+    <form method="post" style="margin-top:20px">
+      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="bank">
+      <input type="hidden" name="action" value="save_bank_texts">
+      <details class="subcard" open><summary><h3>✏️ متن‌ها و دکمه‌ها</h3></summary>
+        <div class="note">
+          داخلِ متن‌ها می‌توانید ایموجیِ پریمیوم هم بگذارید — کدش را از داخلِ خودِ ربات با
+          <code>/panel</code> ← 🔘 ایموجیِ پریمیوم بگیرید و به‌شکلِ <code>&lt;tg-emoji emoji-id="..."&gt;✨&lt;/tg-emoji&gt;</code>
+          داخلِ متن بچسبانید. برایِ خودِ سه‌تا دکمه، شناسه‌ی همان ایموجیِ پریمیوم را (بدونِ تگ، فقط عدد) در
+          کادرِ «ایموجیِ دکمه» زیرِ همان دکمه بگذارید.
+        </div>
+        <?php foreach (bkDefaults()['texts'] as $k => $def): $isBtn = in_array($k, ['btn_protect','btn_deposit','btn_withdraw'], true); ?>
+          <div style="margin-bottom:12px">
+            <label><?= h($k) ?><?= $isBtn ? ' (متنِ دکمه)' : '' ?></label>
+            <?php if ($isBtn): ?>
+              <input name="txt_<?= h($k) ?>" value="<?= h($BK['texts'][$k] ?? $def) ?>">
+              <div class="grid2" style="margin-top:6px">
+                <input name="icon_<?= h($k) ?>" value="<?= h($BK['icons'][$k] ?? '') ?>" placeholder="شناسه‌ی ایموجیِ پریمیومِ این دکمه (اختیاری)" style="direction:ltr">
+                <select name="color_<?= h($k) ?>">
+                  <?php foreach (styleMap() as $sk => $sl): ?>
+                    <option value="<?= h($sk) ?>" <?= ($BK['btns'][$k]['color'] ?? 'none') === $sk ? 'selected' : '' ?>><?= h($sl) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            <?php else: ?>
+              <textarea name="txt_<?= h($k) ?>" rows="3" style="direction:rtl"><?= h($BK['texts'][$k] ?? $def) ?></textarea>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </details>
+      <div style="margin-top:16px"><button class="btn g">ذخیره متن‌ها</button></div>
     </form>
   </div></div>
 

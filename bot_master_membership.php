@@ -218,6 +218,7 @@ require_once __DIR__ . '/prices.php';
 require_once __DIR__ . '/diamond.php';
 require_once __DIR__ . '/channels.php';
 require_once __DIR__ . '/games.php';
+require_once __DIR__ . '/bank.php';
 require_once __DIR__ . '/profit.php';
 
 // ============================================================
@@ -7291,6 +7292,9 @@ function masterHandle($update) {
         // 🚨 دکمه‌های تاییدِ زندانِ الماس — همین‌طور، باید تو گروه کار کنند
         if (function_exists('dmCallback') && dmCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
 
+        // 🏦 دکمه‌های بانک — عمدا در گروه، درست مثلِ بازی‌ها
+        if (function_exists('bkCallback') && bkCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
+
         // 🧾 تصمیمِ رسید (تایید/رد) عمدا تو گروه هم کار می‌کند — دقیقا
         // برای همین رسیدها به گروهِ گزارش می‌روند؛ وگرنه دروازه‌ی پایین
         // (که فقط چتِ خصوصی را رد نمی‌کند) دکمه‌اش را همیشه بی‌اثر می‌کرد
@@ -9095,6 +9099,7 @@ function masterHandle($update) {
         if (pxAnswerThenWarm($text, $chatId, $rt)) return;
         if (gmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false)) return;
+        if (function_exists('bkHandleText') && bkHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         return;
     }
 
