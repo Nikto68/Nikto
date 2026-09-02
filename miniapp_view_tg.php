@@ -161,12 +161,10 @@ __SKIN__
       <a id="goShop">همه</a></div>
     <div class="rail" id="rail"></div>
 
-    <div class="trust"><i>✅</i><div><b id="trTtl"></b><span id="trTxt"></span></div></div>
-
-    <div id="hotBox" style="display:none">
-      <div class="sect"><h2><s></s><span id="hotTtl">پیشنهاد ویژه</span></h2>
-        <a id="goShop2">همه</a></div>
-      <div class="grid" id="hotGrid"></div>
+    <div class="trustwrap">
+      <div class="trust"><i>✅</i><div><b id="trTtl"></b><span id="trTxt"></span></div></div>
+      <div class="trust"><i>🔒</i><div><b id="trTtl2"></b><span id="trTxt2"></span></div></div>
+      <div class="trust"><i>🛟</i><div><b id="trTtl3"></b><span id="trTxt3"></span></div></div>
     </div>
 
     <div id="rateBox" style="display:none">
@@ -385,14 +383,16 @@ $('ava').textContent   = (B.title || '★').trim().charAt(0);
 $('catsTtl').textContent = U.cats_ttl;
 $('trTtl').textContent   = U.trust_ttl;
 $('trTxt').textContent   = U.trust_txt;
-$('hotTtl').textContent  = U.hot;
+$('trTtl2').textContent  = U.trust_ttl2;
+$('trTxt2').textContent  = U.trust_txt2;
+$('trTtl3').textContent  = U.trust_ttl3;
+$('trTxt3').textContent  = U.trust_txt3;
 $('ratesTtl').textContent= U.rates_ttl;
 $('ordTtl').textContent  = U.orders_ttl;
 $('topTtl').textContent  = U.topup;
 $('topGo').textContent   = U.topup_do;
 $('topCta').textContent  = U.topup_btn;
 $('goShop').textContent  = U.see_all;
-$('goShop2').textContent = U.see_all;
 $('meNote').textContent  = B.note || '';
 document.title = B.title;
 
@@ -505,10 +505,20 @@ var PAGES = [
 })();
 var DOCK = [].slice.call($('dock').children);
 
+/* 🐢 ساختِ کاتالوگِ کامل نه رویِ بازشدنِ اول (صفحه‌ی خانه اصلا نشونش
+   نمی‌ده) و نه دقیقا وسطِ تقه‌ی «فروشگاه» (همون‌جا که صفحه داره تغییر
+   می‌کنه و اسکرول نرم در حالِ اجراست — یک کارِ سنگینِ همزمان دقیقا
+   همون لحظه، جهشِ صفحه رو قفل می‌کنه، حسش بدتر از قبل از این فیکس
+   بود). به‌جاش توی وقتِ بیکاریِ مرورگر، اندکی بعد از باز شدنِ خانه،
+   ساخته می‌شه — تا وقتی کاربر برسه به زدنِ فروشگاه، معمولا از قبل
+   آماده است. اگر خیلی سریع زد (نادر)، همون‌جا هم می‌سازدش. */
+function ensureGridBuilt(){
+  if (S.gridBuilt) return;
+  S.gridBuilt = true;
+  buildGrid();
+}
 function go(page, silent){
-  // 🐢 ساختِ کاتالوگِ کامل تا اولین باری که کاربر واقعا فروشگاه را باز
-  // می‌کند عقب می‌افتد — نه هر بار که مینی‌اپ باز می‌شود.
-  if (page === 'shop' && !S.gridBuilt){ S.gridBuilt = true; buildGrid(); }
+  if (page === 'shop') ensureGridBuilt();
   if (S.page === page && silent) return;
   S.page = page;
   var d = 0;
@@ -704,20 +714,6 @@ function buildGrid(){
   setTimeout(function(){ box.classList.remove('first'); }, 640);
 }
 
-/* پیشنهاد ویژه: نشان‌دار‌ها، و اگر نبود، شش تای اول */
-function buildHot(){
-  var pick = [];
-  for (var i=0;i<B.items.length && pick.length<6;i++) if (B.items[i].badge) pick.push(B.items[i]);
-  if (pick.length < 2) pick = B.items.slice(0, 4);
-  if (!pick.length) return;
-  var box = $('hotGrid'), oldEls = [].slice.call(box.children);
-  var h = '';
-  for (var k=0;k<pick.length;k++) h += tileHtml(pick[k], k);
-  box.innerHTML = h;
-  observeTiles(box, oldEls);
-  $('hotBox').style.display = '';
-}
-
 function buildRates(){
   var live = B.items.filter(function(i){ return i.live; }).slice(0, 5);
   if (!live.length) return;
@@ -735,7 +731,6 @@ function openFrom(ev){
   if (el) open(el.getAttribute('data-i'));
 }
 $('grid').addEventListener('click', openFrom);
-$('hotGrid').addEventListener('click', openFrom);
 $('rateList').addEventListener('click', openFrom);
 
 function applyFilter(){
@@ -863,7 +858,6 @@ $('hTop').onclick   = function(){ tap(); go('me'); };
 $('topCta').onclick = function(){ tap(); go('me'); };
 $('hShop').onclick  = function(){ tap(); go('shop'); };
 $('goShop').onclick = function(){ tap(); S.cat=''; drawTabs(); applyFilter(); go('shop'); };
-$('goShop2').onclick= $('goShop').onclick;
 $('balChip').onclick= function(){ tap(); go('me'); };
 $('lnkOrd').onclick = function(){ tap(); go('ord'); };
 $('lnkShop').onclick= function(){ tap(); go('shop'); };
@@ -1347,9 +1341,9 @@ function admDel(){
    ضعیف حس می‌شد. حالا اولین باری که کاربر واقعا به فروشگاه می‌رود
    ساخته می‌شود (پایینِ همین فایل، تویِ go()). */
 drawTabs();
-buildHot();
 buildRates();
 go('home', true);
+(window.requestIdleCallback || function(fn){ setTimeout(fn, 400); })(ensureGridBuilt);
 })();
 </script>
 </body>
@@ -1467,8 +1461,10 @@ body.glow-on .cta{box-shadow:0 10px 22px -12px color-mix(in srgb,var(--c1) 65%,t
   background:linear-gradient(180deg,var(--c2),var(--c1))}
 .sect a{font-size:11.5px;color:var(--c1);font-weight:700;cursor:pointer}
 
-/* 🛡 خطِ اعتماد — همان چیزی که مینی‌اپ شماره مجازی دارد */
-.trust{display:flex;align-items:center;gap:10px;margin:15px 2px 2px;padding:11px 12px;border-radius:14px;
+/* 🛡 چند خطِ اعتماد پشتِ هم — همان ایده‌ی مینی‌اپ شماره مجازی، ولی
+   یکی کافی نبود، چندتا زاویه‌ی مختلف (تحویل/امنیت/پشتیبانی) */
+.trustwrap{display:flex;flex-direction:column;gap:8px;margin:15px 2px 2px}
+.trust{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:14px;
   background:color-mix(in srgb,var(--c2) 9%,transparent);
   border:1px solid color-mix(in srgb,var(--c2) 22%,transparent)}
 .trust i{font-style:normal;font-size:17px;flex:0 0 auto}
@@ -1600,19 +1596,11 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
   animation:rise .4s cubic-bezier(.2,.9,.3,1)}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .grid:not(.first) .tile{animation:none}
-/* 📜 ورودِ نرم از راست وقتی اسکرول می‌کنی، محو وقتی از دیدت خارج می‌شه —
-   با همان instage ای که برای انیمیشنِ orb ساخته بودیم، پس چیزِ تازه‌ای
-   observe نمی‌شود. عمدا هیچ‌وقت opacity کاملا صفر نمی‌شود (۰٫۵ کف است)،
-   وگرنه اگر observer یک فریم دیر برسد دقیقا همان باگِ «محصولِ ناپدید»ی
-   برمی‌گردد که قبلا فیکسش کردیم — این‌بار فقط محوتر می‌شود، نه نامرئی. */
-#grid:not(.first) .tile{opacity:.5;transform:translateX(18px);
-  transition:opacity .32s cubic-bezier(.2,.9,.3,1),transform .32s cubic-bezier(.2,.9,.3,1)}
-#grid:not(.first) .tile.instage{opacity:1;transform:translateX(0)}
-#grid:not(.first) .tile.instage:active{transform:scale(.975)}
-@media (prefers-reduced-motion:reduce){
-  .tile{animation:none}
-  #grid:not(.first) .tile{opacity:1!important;transform:none!important;transition:none!important}
-}
+/* 📜 نسخه‌ی جلوه‌ی ورود/خروجِ اسکرولی که این‌جا بود برداشته شد — روی
+   گوشیِ کاربر دقیقا همون اسکرولِ رو-به-بالا رو شدیدا کند می‌کرد.
+   انیمیشنِ orb (پایین‌تر) به‌تنهایی برای رفعِ هنگِ اصلی کافی بود؛ ترانزیشنِ
+   opacity/transform روی خودِ کارت‌ها هزینه‌ی اضافه‌ای بود که نمی‌ارزید. */
+@media (prefers-reduced-motion:reduce){ .tile{animation:none} }
 .tile:active{transform:scale(.975)}
 .tile:before{content:"";position:absolute;inset:0;opacity:0;transition:opacity .25s;pointer-events:none;
   background:linear-gradient(150deg,color-mix(in srgb,var(--c1) 10%,transparent),transparent 62%)}
