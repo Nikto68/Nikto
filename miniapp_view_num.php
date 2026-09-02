@@ -378,7 +378,7 @@ body::before{
   position:fixed;z-index:40;inset:auto 12px calc(10px + var(--safe)) 12px;
   max-width:616px;margin:0 auto;display:flex;justify-content:space-around;
   padding:7px 6px;border-radius:24px;isolation:isolate;
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   background:rgba(255,255,255,.86);
   border:1px solid var(--hair);
   box-shadow:0 18px 44px -12px rgba(20,25,45,.28)

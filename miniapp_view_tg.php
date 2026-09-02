@@ -662,11 +662,29 @@ function tileHtml(i, n){
          '</div>';
 }
 
+/* 👁 انیمیشنِ orb فقط برای کارتِ رویِ صفحه روشن می‌شود (کلاسِ instage) —
+   بدونِ این، شصت-هفتاد کارتی که هیچ‌وقت مجازی‌سازی نمی‌شوند همه با هم
+   بی‌پایان انیمیت می‌شدند، دقیقا همان چیزی که گوشیِ ضعیف را می‌خواباند.
+   یک observer برای هر سه ظرف (گرید/پیشنهاد ویژه/نرخ زنده) مشترک است،
+   پس هیچ‌جا disconnect نمی‌شود — فقط گره‌های جایگزین‌شده unobserve
+   می‌شوند تا هم نشتی نداشته باشیم و هم ظرف‌های دیگر دست‌نخورده بمانند. */
+var tileObserver = (typeof IntersectionObserver !== 'undefined') ? new IntersectionObserver(function(entries){
+  for (var i = 0; i < entries.length; i++) entries[i].target.classList.toggle('instage', entries[i].isIntersecting);
+}, { rootMargin: '120px 0px', threshold: 0.01 }) : null;
+function observeTiles(box, oldEls){
+  if (!tileObserver) { for (var i=0;i<box.children.length;i++) box.children[i].classList.add('instage'); return; }
+  if (oldEls) for (var k=0;k<oldEls.length;k++) tileObserver.unobserve(oldEls[k]);
+  var els = box.querySelectorAll('.tile');
+  for (var j = 0; j < els.length; j++) tileObserver.observe(els[j]);
+}
+
 function buildGrid(){
   var box = $('grid');
+  var oldEls = [].slice.call(box.children);
   if (!B.items.length){
     box.style.display = 'block';
     box.innerHTML = '<div class="void"><div>🌙</div>' + esc(U.empty) + '</div>';
+    observeTiles(box, oldEls);
     return;
   }
   var h = '';
@@ -674,6 +692,7 @@ function buildGrid(){
   box.classList.add('first');
   box.innerHTML = h;
   S.nodes = [].slice.call(box.children);
+  observeTiles(box, oldEls);
   setTimeout(function(){ box.classList.remove('first'); }, 640);
 }
 
@@ -683,9 +702,11 @@ function buildHot(){
   for (var i=0;i<B.items.length && pick.length<6;i++) if (B.items[i].badge) pick.push(B.items[i]);
   if (pick.length < 2) pick = B.items.slice(0, 4);
   if (!pick.length) return;
+  var box = $('hotGrid'), oldEls = [].slice.call(box.children);
   var h = '';
   for (var k=0;k<pick.length;k++) h += tileHtml(pick[k], k);
-  $('hotGrid').innerHTML = h;
+  box.innerHTML = h;
+  observeTiles(box, oldEls);
   $('hotBox').style.display = '';
 }
 
@@ -693,9 +714,11 @@ function buildRates(){
   var live = B.items.filter(function(i){ return i.live; }).slice(0, 5);
   if (!live.length) return;
   // مثل بخش «پیشنهاد ویژه» — همان کارتِ محصولِ باکسی، نه لیستِ ردیفی
+  var box = $('rateList'), oldEls = [].slice.call(box.children);
   var h = '';
   for (var k=0;k<live.length;k++) h += tileHtml(live[k], k);
-  $('rateList').innerHTML = h;
+  box.innerHTML = h;
+  observeTiles(box, oldEls);
   $('rateBox').style.display = '';
 }
 
@@ -1564,16 +1587,25 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
 .tile.hot:before{opacity:1}
 .tile.hot{border-color:color-mix(in srgb,var(--c1) 38%,transparent);box-shadow:0 14px 30px -20px color-mix(in srgb,var(--c1) 45%,transparent)}
 .tile.hide{display:none}
+/* 🐢 عمدی، ساکن است — orb قبلا روی هر کارت، همیشه (حتی بیرونِ دید و
+   حتی وقتی چیزی رو صفحه ثابت نبود) دو انیمیشنِ بی‌پایان اجرا می‌کرد؛
+   یکی‌شان (تغییرِ background-position) هم مجبور به رنگ‌آمیزیِ دوباره
+   بود، نه فقط ترکیب لایه‌ها. با شصت-هفتاد کارت روی صفحه (بدونِ
+   مجازی‌سازیِ لیست) این یعنی صد-صدوچهل انیمیشنِ همزمانِ رنگ‌آمیزی/
+   تبدیل، برای همیشه — روی گوشیِ ضعیف دقیقا همان هنگِ شدید. حالا
+   ساکن است، و فقط وقتی کارت واقعا روی صفحه است (کلاسِ instage از
+   IntersectionObserver) یک تبدیلِ سبک (فقط transform، ترکیبِ لایه،
+   نه رنگ‌آمیزیِ دوباره) روشن می‌شود. */
 .orb{position:relative;width:52px;height:52px;border-radius:18px;display:grid;place-items:center;font-size:25px;
-  margin-bottom:11px;background-size:220% 220%;color:#fff;
+  margin-bottom:11px;color:#fff;
   background-image:linear-gradient(140deg,var(--c1),var(--c3));
-  border:1px solid rgba(255,255,255,.22);
-  animation:orbShine 3.2s ease-in-out infinite,orbFloat 2.4s ease-in-out infinite}
-@keyframes orbShine{0%,100%{background-position:10% 30%}50%{background-position:90% 70%}}
+  border:1px solid rgba(255,255,255,.22)}
 @keyframes orbFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.04)}}
-body.glow-on .orb{animation:orbShine 3.2s ease-in-out infinite,orbFloat 2.4s ease-in-out infinite,orbPulse 2.4s ease-in-out infinite}
+.tile.instage .orb{animation:orbFloat 2.4s ease-in-out infinite}
+body.glow-on .tile.instage .orb{animation:orbFloat 2.4s ease-in-out infinite,orbPulse 2.4s ease-in-out infinite}
 @keyframes orbPulse{0%,100%{box-shadow:0 10px 24px -13px color-mix(in srgb,var(--c1) 60%,transparent)}50%{box-shadow:0 15px 30px -10px color-mix(in srgb,var(--c1) 60%,transparent)}}
-@media (prefers-reduced-motion:reduce){ .orb{animation:none!important} }
+body.fx0 .tile.instage .orb{animation:none}
+@media (prefers-reduced-motion:reduce){ .orb,.tile.instage .orb{animation:none!important} }
 .tile h3{position:relative;margin:0;font-size:13px;font-weight:800;line-height:1.55;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .tile p{position:relative;margin:4px 0 0;font-size:10.5px;color:var(--dim);line-height:1.65;
@@ -1691,10 +1723,14 @@ body.is-admin .pg.adm:not(.on){display:none}
 .aswitch.on i:after{right:22px}
 
 /* ═══ جزیره‌ی پایین ═══ شیشه‌ی روشن روی سفید */
+/* ⚡️ blur(20px) روی این جزیره‌ی ثابت بود — یعنی هر فریمِ اسکرولِ محتوای
+   زیرش، دوباره‌محاسبه‌ی یک بلورِ سنگین را اجبار می‌کرد. روی گوشیِ ضعیف
+   دقیقا جایی است که جانک حس می‌شود. ۱۰ پیکسل همان حسِ شیشه‌ای را می‌دهد،
+   چند برابر ارزان‌تر. */
 .dock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(11px + var(--safe));z-index:30;
   width:min(94vw,420px);display:flex;gap:3px;padding:7px;border-radius:26px;
   border:1px solid var(--line);background:rgba(255,255,255,.86);
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   box-shadow:0 18px 44px -12px rgba(20,25,45,.28)}
 body.fx0 .dock{backdrop-filter:none;-webkit-backdrop-filter:none;background:#FFFFFF}
 .dock b{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;
@@ -1770,12 +1806,20 @@ body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition
 .plans i.on .chk{border-color:transparent;color:#fff;
   background:linear-gradient(135deg,var(--c1),var(--c3))}
 
-.step{display:flex;align-items:center;gap:10px}
-.step button{width:46px;height:46px;flex:0 0 auto;border-radius:15px;border:1px solid var(--line);
-  background:var(--pane2);color:var(--ink);font-size:21px;font-weight:700;cursor:pointer;transition:.16s}
-.step button:active{transform:scale(.92);background:color-mix(in srgb,var(--c1) 20%,transparent)}
-.step button[disabled]{opacity:.35;pointer-events:none}
-.step input{text-align:center;font-weight:900;font-size:17px}
+/* یک قابِ نرمِ واحد دورِ هر سه‌تا — قبلا دکمه‌ها خودشان کادر داشتند و
+   کادرِ وسط (اینپوت) هیچ استایلی نداشت (چون بیرونِ .field بود، از
+   استایلِ .field input بی‌نصیب می‌ماند)، پس روی صفحه سه تکه‌ی جدا از
+   هم به‌نظر می‌رسید و دکمه‌ی + انگار از قاب زده بود بیرون. */
+.step{display:flex;align-items:center;gap:6px;padding:7px;border-radius:22px;
+  border:1px solid var(--line);background:var(--pane2)}
+.step button{width:44px;height:44px;flex:0 0 auto;border-radius:16px;border:none;
+  background:linear-gradient(135deg,var(--c1),var(--c3));color:#fff;
+  font-size:21px;font-weight:800;line-height:1;cursor:pointer;transition:.16s;
+  box-shadow:0 6px 14px -9px color-mix(in srgb,var(--c1) 65%,transparent)}
+.step button:active{transform:scale(.9)}
+.step button[disabled]{opacity:.35;pointer-events:none;box-shadow:none}
+.step input{flex:1 1 auto;min-width:0;width:auto;border:none;background:transparent;
+  color:var(--ink);outline:none;text-align:center;font-weight:900;font-size:18px}
 
 .total{display:flex;justify-content:space-between;align-items:center;margin:16px 0;padding:15px 16px;
   border-radius:18px;border:1px solid var(--line);

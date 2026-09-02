@@ -270,16 +270,20 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
 .tile.hot:before{opacity:1}
 .tile.hot{border-color:color-mix(in srgb,var(--c1) 38%,transparent);box-shadow:0 14px 30px -20px color-mix(in srgb,var(--c1) 45%,transparent)}
 .tile.hide{display:none}
+/* 🐢 عمدی، ساکن است — همان فیکسِ عملکردیِ tg.php: قبلا هر کارت،
+   همیشه (حتی بیرونِ دید) دو انیمیشنِ بی‌پایان داشت که با شصت-هفتاد
+   کارت روی گوشیِ ضعیف هنگ می‌کرد. حالا فقط کارتِ روی صفحه (کلاسِ
+   instage) یک تبدیلِ سبک دارد. */
 .orb{position:relative;width:52px;height:52px;border-radius:18px;display:grid;place-items:center;font-size:25px;
-  margin-bottom:11px;background-size:220% 220%;color:#fff;
+  margin-bottom:11px;color:#fff;
   background-image:linear-gradient(140deg,var(--c1),var(--c3));
-  border:1px solid rgba(255,255,255,.22);
-  animation:orbShine 3.2s ease-in-out infinite,orbFloat 2.4s ease-in-out infinite}
-@keyframes orbShine{0%,100%{background-position:10% 30%}50%{background-position:90% 70%}}
+  border:1px solid rgba(255,255,255,.22)}
 @keyframes orbFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.04)}}
-body.glow-on .orb{animation:orbShine 3.2s ease-in-out infinite,orbFloat 2.4s ease-in-out infinite,orbPulse 2.4s ease-in-out infinite}
+.tile.instage .orb{animation:orbFloat 2.4s ease-in-out infinite}
+body.glow-on .tile.instage .orb{animation:orbFloat 2.4s ease-in-out infinite,orbPulse 2.4s ease-in-out infinite}
 @keyframes orbPulse{0%,100%{box-shadow:0 10px 24px -13px color-mix(in srgb,var(--c1) 60%,transparent)}50%{box-shadow:0 15px 30px -10px color-mix(in srgb,var(--c1) 60%,transparent)}}
-@media (prefers-reduced-motion:reduce){ .orb{animation:none!important} }
+body.fx0 .tile.instage .orb{animation:none}
+@media (prefers-reduced-motion:reduce){ .orb,.tile.instage .orb{animation:none!important} }
 /* هر دسته رنگِ آیکونِ خودش را دارد: ری‌اکشنِ پست=آبی، استوری=سبز، بقیه=بنفش */
 .tile[data-cat="c_storyr"] .orb{background-image:linear-gradient(140deg,var(--c2),var(--c1))}
 .tile[data-cat="c_postsv"] .orb{background-image:linear-gradient(140deg,var(--c3),var(--c4))}
@@ -401,7 +405,7 @@ body.is-admin .pg.adm:not(.on){display:none}
 .dock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(11px + var(--safe));z-index:30;
   width:min(94vw,420px);display:flex;gap:3px;padding:7px;border-radius:26px;
   border:1px solid var(--line);background:rgba(255,255,255,.86);
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   box-shadow:0 18px 44px -12px rgba(20,25,45,.28)}
 body.fx0 .dock{backdrop-filter:none;-webkit-backdrop-filter:none;background:#FFFFFF}
 .dock b{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;
@@ -471,12 +475,16 @@ body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition
 .plans i.on .chk{border-color:transparent;color:#fff;
   background:linear-gradient(135deg,var(--c1),var(--c3))}
 
-.step{display:flex;align-items:center;gap:10px}
-.step button{width:46px;height:46px;flex:0 0 auto;border-radius:15px;border:1px solid var(--line);
-  background:var(--pane2);color:var(--ink);font-size:21px;font-weight:700;cursor:pointer;transition:.16s}
-.step button:active{transform:scale(.92);background:color-mix(in srgb,var(--c1) 20%,transparent)}
-.step button[disabled]{opacity:.35;pointer-events:none}
-.step input{text-align:center;font-weight:900;font-size:17px}
+.step{display:flex;align-items:center;gap:6px;padding:7px;border-radius:22px;
+  border:1px solid var(--line);background:var(--pane2)}
+.step button{width:44px;height:44px;flex:0 0 auto;border-radius:16px;border:none;
+  background:linear-gradient(135deg,var(--c1),var(--c3));color:#fff;
+  font-size:21px;font-weight:800;line-height:1;cursor:pointer;transition:.16s;
+  box-shadow:0 6px 14px -9px color-mix(in srgb,var(--c1) 65%,transparent)}
+.step button:active{transform:scale(.9)}
+.step button[disabled]{opacity:.35;pointer-events:none;box-shadow:none}
+.step input{flex:1 1 auto;min-width:0;width:auto;border:none;background:transparent;
+  color:var(--ink);outline:none;text-align:center;font-weight:900;font-size:18px}
 
 .total{display:flex;justify-content:space-between;align-items:center;margin:16px 0;padding:15px 16px;
   border-radius:18px;border:1px solid var(--line);
