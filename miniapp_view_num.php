@@ -557,6 +557,7 @@ body.kb-open .mask{backdrop-filter:none;-webkit-backdrop-filter:none;transition:
       <p id="abTxt"></p>
       <div class="feats" id="feats"></div>
       <div class="trust"><i>✅</i><div><b id="trTtl"></b><span id="trTxt"></span></div></div>
+      <button class="btn ghost sm" id="reportsBtn" style="margin-top:10px;width:100%">چنل گزارشات</button>
     </div>
 
     <button class="btn" id="goShop">☎️ دیدن شماره‌ها</button>
@@ -1479,6 +1480,11 @@ function boot() {
   $('#balBtn').addEventListener('click', () => { buzz(); askTopup(0); });
   $('#topupBtn').addEventListener('click', () => { buzz(); askTopup(0); });
   $('#goShop').addEventListener('click', () => { buzz(); go('shop'); });
+  $('#reportsBtn').addEventListener('click', () => {
+    buzz();
+    try { TG && TG.openTelegramLink('https://t.me/ReportsNik'); }
+    catch (e) { window.open('https://t.me/ReportsNik', '_blank'); }
+  });
 
   paintShop(); paintAbout();
   loadMe(); loadLive(); loadOrders();

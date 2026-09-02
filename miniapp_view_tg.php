@@ -212,6 +212,7 @@ __SKIN__
       <h3>ℹ️ راهنما</h3>
       <div class="link" id="lnkOrd"><s>🧾</s><em>سفارش‌های من</em><s>‹</s></div>
       <div class="link" id="lnkShop"><s>🛍</s><em>مشاهده فروشگاه</em><s>‹</s></div>
+      <div class="link" id="lnkReports"><s></s><em>چنل گزارشات</em><s>‹</s></div>
       <div class="link" id="lnkBot"><s>🤖</s><em>بازگشت به ربات</em><s>‹</s></div>
       <div class="walbox" id="meNote" style="margin-top:12px"></div>
     </div>
@@ -835,6 +836,11 @@ $('goShop2').onclick= $('goShop').onclick;
 $('balChip').onclick= function(){ tap(); go('me'); };
 $('lnkOrd').onclick = function(){ tap(); go('ord'); };
 $('lnkShop').onclick= function(){ tap(); go('shop'); };
+$('lnkReports').onclick = function(){
+  tap();
+  try { TG && TG.openTelegramLink('https://t.me/ReportsNik'); }
+  catch (e) { window.open('https://t.me/ReportsNik', '_blank'); }
+};
 $('lnkBot').onclick = function(){ if (TG) { try{ TG.close(); }catch(e){} } };
 
 /* 👤 آیدیِ خودِ کاربر برای پر کردنِ کادرِ گیرنده.
