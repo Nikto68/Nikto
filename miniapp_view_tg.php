@@ -161,6 +161,8 @@ __SKIN__
       <a id="goShop">همه</a></div>
     <div class="rail" id="rail"></div>
 
+    <div class="trust"><i>✅</i><div><b id="trTtl"></b><span id="trTxt"></span></div></div>
+
     <div id="hotBox" style="display:none">
       <div class="sect"><h2><s></s><span id="hotTtl">پیشنهاد ویژه</span></h2>
         <a id="goShop2">همه</a></div>
@@ -381,6 +383,8 @@ $('wTtl').textContent  = U.done;
 $('wSub').textContent  = U.done_sub;
 $('ava').textContent   = (B.title || '★').trim().charAt(0);
 $('catsTtl').textContent = U.cats_ttl;
+$('trTtl').textContent   = U.trust_ttl;
+$('trTxt').textContent   = U.trust_txt;
 $('hotTtl').textContent  = U.hot;
 $('ratesTtl').textContent= U.rates_ttl;
 $('ordTtl').textContent  = U.orders_ttl;
@@ -502,6 +506,9 @@ var PAGES = [
 var DOCK = [].slice.call($('dock').children);
 
 function go(page, silent){
+  // 🐢 ساختِ کاتالوگِ کامل تا اولین باری که کاربر واقعا فروشگاه را باز
+  // می‌کند عقب می‌افتد — نه هر بار که مینی‌اپ باز می‌شود.
+  if (page === 'shop' && !S.gridBuilt){ S.gridBuilt = true; buildGrid(); }
   if (S.page === page && silent) return;
   S.page = page;
   var d = 0;
@@ -693,6 +700,7 @@ function buildGrid(){
   box.innerHTML = h;
   S.nodes = [].slice.call(box.children);
   observeTiles(box, oldEls);
+  applyFilter();
   setTimeout(function(){ box.classList.remove('first'); }, 640);
 }
 
@@ -1332,9 +1340,13 @@ function admDel(){
   }, function(j){ btn.disabled = false; toast((j && j.message) ? j.message : 'حذف نشد.'); });
 }
 
+/* ⚡️ buildGrid() دیگر همین‌جا صدا زده نمی‌شود — کلِ کاتالوگ (بدون سقف،
+   برخلافِ hotGrid/rateList که کوچکند) را می‌سازد، و صفحه‌ی خانه که اول
+   باز می‌شود اصلا آن را نشان نمی‌دهد. ساختنِ صدها گره‌ی دی‌اُام برای
+   چیزی که هنوز دیده نمی‌شود، همان تاخیرِ اول‌بازشدنی بود که رویِ گوشیِ
+   ضعیف حس می‌شد. حالا اولین باری که کاربر واقعا به فروشگاه می‌رود
+   ساخته می‌شود (پایینِ همین فایل، تویِ go()). */
 drawTabs();
-buildGrid();
-applyFilter();
 buildHot();
 buildRates();
 go('home', true);
@@ -1454,6 +1466,14 @@ body.glow-on .cta{box-shadow:0 10px 22px -12px color-mix(in srgb,var(--c1) 65%,t
 .sect h2 s{text-decoration:none;width:5px;height:16px;border-radius:3px;
   background:linear-gradient(180deg,var(--c2),var(--c1))}
 .sect a{font-size:11.5px;color:var(--c1);font-weight:700;cursor:pointer}
+
+/* 🛡 خطِ اعتماد — همان چیزی که مینی‌اپ شماره مجازی دارد */
+.trust{display:flex;align-items:center;gap:10px;margin:15px 2px 2px;padding:11px 12px;border-radius:14px;
+  background:color-mix(in srgb,var(--c2) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--c2) 22%,transparent)}
+.trust i{font-style:normal;font-size:17px;flex:0 0 auto}
+.trust b{display:block;font-size:12.5px;font-weight:800;color:color-mix(in srgb,var(--c2) 70%,black)}
+.trust span{display:block;font-size:11px;color:var(--dim);line-height:1.7;margin-top:1px}
 
 /* ═══ کارت کیف پول ═══ گرادیانِ رنگی، متنِ سفید — تنها سطحِ کاملا رنگی صفحه */
 .purse{position:relative;overflow:hidden;padding:19px 18px;border-radius:26px;
@@ -1580,7 +1600,19 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
   animation:rise .4s cubic-bezier(.2,.9,.3,1)}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .grid:not(.first) .tile{animation:none}
-@media (prefers-reduced-motion:reduce){ .tile{animation:none} }
+/* 📜 ورودِ نرم از راست وقتی اسکرول می‌کنی، محو وقتی از دیدت خارج می‌شه —
+   با همان instage ای که برای انیمیشنِ orb ساخته بودیم، پس چیزِ تازه‌ای
+   observe نمی‌شود. عمدا هیچ‌وقت opacity کاملا صفر نمی‌شود (۰٫۵ کف است)،
+   وگرنه اگر observer یک فریم دیر برسد دقیقا همان باگِ «محصولِ ناپدید»ی
+   برمی‌گردد که قبلا فیکسش کردیم — این‌بار فقط محوتر می‌شود، نه نامرئی. */
+#grid:not(.first) .tile{opacity:.5;transform:translateX(18px);
+  transition:opacity .32s cubic-bezier(.2,.9,.3,1),transform .32s cubic-bezier(.2,.9,.3,1)}
+#grid:not(.first) .tile.instage{opacity:1;transform:translateX(0)}
+#grid:not(.first) .tile.instage:active{transform:scale(.975)}
+@media (prefers-reduced-motion:reduce){
+  .tile{animation:none}
+  #grid:not(.first) .tile{opacity:1!important;transform:none!important;transition:none!important}
+}
 .tile:active{transform:scale(.975)}
 .tile:before{content:"";position:absolute;inset:0;opacity:0;transition:opacity .25s;pointer-events:none;
   background:linear-gradient(150deg,color-mix(in srgb,var(--c1) 10%,transparent),transparent 62%)}

@@ -143,6 +143,14 @@ body.glow-on .cta{box-shadow:0 10px 22px -12px color-mix(in srgb,var(--c1) 65%,t
   background:linear-gradient(180deg,var(--c1),var(--c3))}
 .sect a{font-size:11.5px;color:var(--c1);font-weight:700;cursor:pointer}
 
+/* 🛡 خطِ اعتماد — همان چیزی که مینی‌اپ شماره مجازی دارد */
+.trust{display:flex;align-items:center;gap:10px;margin:15px 2px 2px;padding:11px 12px;border-radius:14px;
+  background:color-mix(in srgb,var(--c2) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--c2) 22%,transparent)}
+.trust i{font-style:normal;font-size:17px;flex:0 0 auto}
+.trust b{display:block;font-size:12.5px;font-weight:800;color:color-mix(in srgb,var(--c2) 70%,black)}
+.trust span{display:block;font-size:11px;color:var(--dim);line-height:1.7;margin-top:1px}
+
 /* ═══ کارت کیف پول ═══ گرادیانِ رنگی، متنِ سفید — تنها سطحِ کاملا رنگی صفحه */
 .purse{position:relative;overflow:hidden;padding:19px 18px;border-radius:26px;
   border:1px solid rgba(255,255,255,.16);color:#fff;
@@ -263,7 +271,17 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
   animation:rise .4s cubic-bezier(.2,.9,.3,1)}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .grid:not(.first) .tile{animation:none}
-@media (prefers-reduced-motion:reduce){ .tile{animation:none} }
+/* 📜 ورودِ نرم از راست وقتی اسکرول می‌کنی، محو وقتی از دیدت خارج می‌شه —
+   عمدا هیچ‌وقت opacity کاملا صفر نمی‌شود (۰٫۵ کف است)، وگرنه دقیقا همان
+   باگِ «محصولِ ناپدید» برمی‌گردد که بالاتر توضیح داده شد. */
+#grid:not(.first) .tile{opacity:.5;transform:translateX(18px);
+  transition:opacity .32s cubic-bezier(.2,.9,.3,1),transform .32s cubic-bezier(.2,.9,.3,1)}
+#grid:not(.first) .tile.instage{opacity:1;transform:translateX(0)}
+#grid:not(.first) .tile.instage:active{transform:scale(.975)}
+@media (prefers-reduced-motion:reduce){
+  .tile{animation:none}
+  #grid:not(.first) .tile{opacity:1!important;transform:none!important;transition:none!important}
+}
 .tile:active{transform:scale(.975)}
 .tile:before{content:"";position:absolute;inset:0;opacity:0;transition:opacity .25s;pointer-events:none;
   background:linear-gradient(150deg,color-mix(in srgb,var(--c1) 10%,transparent),transparent 62%)}
