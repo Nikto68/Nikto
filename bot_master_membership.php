@@ -11747,6 +11747,11 @@ function runBackgroundQueues() {
         if (function_exists('pxDropOldDemo'))  pxDropOldDemo();
         if (function_exists('maDropOldTexts')) maDropOldTexts();
     });
+    // 💎 تون/ترونِ نصب‌های قدیمی به استپرِ کم/زیاد ارتقا پیدا کنند —
+    // مقدارِ «ask» ذخیره‌شده از قبل، مانعِ اثرگذاریِ پیش‌فرضِ تازه بود.
+    migrateOnce('v17_coin_stepper', function () {
+        if (function_exists('maFixCoinAsk')) maFixCoinAsk();
+    });
     migrateOnce('v3', fn() => dropOldOrderText());
     // 🚀 «حساب من» دیگر هر بار کلِ کاربران/سفارش‌ها را نمی‌خواند — این دو
     // عدد از قبل روی ردیفِ خودِ هر کاربر شمرده و کش می‌شوند.
