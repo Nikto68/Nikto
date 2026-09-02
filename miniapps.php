@@ -2818,6 +2818,7 @@ function maCatsPublic($a, $key = '') {
         $n = $from = [];
         foreach ((array)($a['items'] ?? []) as $i) {
             if (empty($i['on'])) continue;
+            if (trim((string)($i['name'] ?? '')) === '') continue; // بی‌اسم، به حساب نمی‌آید
             $c = (string)($i['cat'] ?? '');
             if ($c === '') continue;
             $n[$c] = ($n[$c] ?? 0) + 1;
@@ -2894,6 +2895,10 @@ function maItemsPublic($a, $limit = 0, $cat = '') {
     $keys = [];
     foreach ($a['items'] ?? [] as $k => $i) {
         if (empty($i['on'])) continue;
+        // 🐛 محصولی که هنوز اسم ندارد (مثلا یک ردیفِ ناقص از همگام‌سازیِ
+        //    خودکار، پیش از این‌که ادمین اسم/ایموجی‌اش را بگذارد) نباید
+        //    مشتری ببیندش — یک کارتِ خالیِ قابلِ‌کلیک، بدتر از نبودنش است.
+        if (trim((string)($i['name'] ?? '')) === '') continue;
         if ($cat !== '' && (string)($i['cat'] ?? '') !== $cat) continue;
         $keys[] = [$catPos[(string)($i['cat'] ?? '')] ?? 999, (int)($i['order'] ?? 99), $k];
     }
@@ -2947,6 +2952,7 @@ function maSearchItems($a, $q, $limit = 60) {
     $hits = [];
     foreach ($a['items'] ?? [] as $i) {
         if (empty($i['on'])) continue;
+        if (trim((string)($i['name'] ?? '')) === '') continue; // بی‌اسم، قابلِ‌نمایش نیست
         $cid  = (string)($i['cat'] ?? '');
         $cn   = mb_strtolower($catName[$cid] ?? '');
         $name = mb_strtolower((string)($i['name'] ?? ''));

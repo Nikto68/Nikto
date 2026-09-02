@@ -2355,6 +2355,27 @@ function axWalletSend($msgs, $note = '') {
         });
     };
 
+    // 🛡 پیش از هر تلاشِ شبکه‌ای، موجودیِ واقعیِ روی‌زنجیره چک شود.
+    //
+    //    بدونش، وقتی ولت کم می‌آورد، شبکه با یک خطای فنیِ مبهم رد
+    //    می‌کرد («external import fees exceed account balance») —
+    //    یک تلاش از سه‌تای مجاز هدر می‌رفت، بدونِ این‌که واقعا بگوید
+    //    مشکل همین «کم‌بودنِ موجودی» است. یک ذخیره‌ی کوچک هم برای
+    //    کارمزدِ شبکه لازم است، چون خودِ مبلغِ پیام کافی نیست.
+    $bal = axWalletBalance();
+    if ($bal === null) {
+        $refund();
+        return [false, 'موجودیِ ولت از شبکه نیامد — دوباره امتحان کنید'];
+    }
+    $balNano    = tonToNano($bal);
+    $feeReserve = tonToNano('0.05'); // ذخیره‌ی کارمزدِ شبکه — سخاوتمندانه، نه دقیقِ محاسبه‌شده
+    $need       = axNanoAdd($sum, $feeReserve);
+    if (axNanoGt($need, $balNano) && empty($w['dry'])) {
+        $refund();
+        return [false, 'موجودیِ ولتِ خودکار کافی نیست — نیاز حدودِ ' . nanoToTon($need) .
+                        ' TON، موجودیِ فعلی ' . $bal . ' TON. لطفا ولت را شارژ کنید.'];
+    }
+
     try {
         $keys = axWalletKeys();
 

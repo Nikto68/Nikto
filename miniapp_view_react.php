@@ -257,7 +257,10 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
   box-shadow:0 10px 26px -22px rgba(20,25,45,.5);
   display:flex;flex-direction:column;min-height:172px;
   transition:border-color .18s,transform .14s,box-shadow .18s;
-  animation:rise .4s cubic-bezier(.2,.9,.3,1) backwards}
+  /* 🐛 بدونِ حذفِ backwards، هر کارتی که نوبتِ delay-اش نرسیده باشه
+     (تا ۳۰۰ms) واقعاً opacity:0 و نامرئیه — با اسکرولِ سریع دقیقاً
+     همون لحظه که کاربر بهش می‌رسه، «محصولِ ناپدید» به‌نظر می‌رسه. */
+  animation:rise .4s cubic-bezier(.2,.9,.3,1)}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .grid:not(.first) .tile{animation:none}
 @media (prefers-reduced-motion:reduce){ .tile{animation:none} }

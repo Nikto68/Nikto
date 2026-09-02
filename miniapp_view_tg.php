@@ -1540,7 +1540,15 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
   box-shadow:0 10px 26px -22px rgba(20,25,45,.5);
   display:flex;flex-direction:column;min-height:172px;
   transition:border-color .18s,transform .14s,box-shadow .18s;
-  animation:rise .4s cubic-bezier(.2,.9,.3,1) backwards}
+  /* 🐛 «backwards» یعنی تا رسیدنِ نوبتِ هر کارت (delay-اش که می‌تونه
+     تا ۳۰۰ms طول بکشه)، همون حالتِ «from» یعنی opacity:0 نگه داشته
+     می‌شه — یعنی کارت واقعاً نامرئیه، نه فقط کند. با اسکرولِ سریع
+     دقیقاً همون لحظه‌ای که کاربر می‌رسه بهش، هنوز نوبتش نرسیده و
+     خالی/ناپدید به‌نظر می‌رسه. بدونِ backwards، پیش از رسیدنِ نوبتش
+     حالتِ عادیِ کارت (کاملاً دیده‌شونده) نمایش داده می‌شه؛ فقط جلوه‌ی
+     محوشدنِ ورودی رو برای کارت‌هایی که همون لحظه‌ی اول دیده می‌شن نگه
+     می‌داره. */
+  animation:rise .4s cubic-bezier(.2,.9,.3,1)}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .grid:not(.first) .tile{animation:none}
 @media (prefers-reduced-motion:reduce){ .tile{animation:none} }
