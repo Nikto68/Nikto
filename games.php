@@ -418,11 +418,48 @@ function gamesDb() {
     $db->busyTimeout(5000);
     $db->exec('PRAGMA journal_mode = WAL');
     $db->exec('PRAGMA synchronous = NORMAL');
-    $db->exec('CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, data TEXT NOT NULL, created INTEGER NOT NULL DEFAULT 0)');
+    $db->exec('CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, data TEXT NOT NULL, created INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT \'\')');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_games_created ON games(created)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_games_status ON games(status)');
 
-    if ($fresh) gamesImportFromJson($db);
+    if ($fresh) {
+        gamesImportFromJson($db);
+    } else {
+        gamesEnsureStatusColumn($db);
+    }
     return $db;
+}
+
+/**
+ * روزی که این کد نوشته شد، جدولِ games ستونِ status نداشت — status فقط
+ * داخلِ JSON بود. یعنی gmTick/سقفِ بازیِ باز/پاک‌سازیِ پیام‌ها هرکدام
+ * باید کلِ جدول (حتی بازی‌های سال‌ها پیشِ done/cancelled) را می‌خواندند
+ * تا بفهمند کدام «باز» است. حالا status هم ستونِ ایندکس‌شده‌ی خودش را
+ * دارد؛ رویِ نصبِ قدیمی که از قبل games.sqlite دارد، یک‌بار همین‌جا
+ * ستون اضافه و از رویِ JSONِ هر ردیف پر می‌شود.
+ */
+function gamesEnsureStatusColumn($db) {
+    $has = false;
+    $res = $db->query('PRAGMA table_info(games)');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        if (($row['name'] ?? '') === 'status') { $has = true; break; }
+    }
+    if ($has) return;
+
+    $db->exec('ALTER TABLE games ADD COLUMN status TEXT NOT NULL DEFAULT \'\'');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_games_status ON games(status)');
+
+    $db->exec('BEGIN');
+    $res = $db->query('SELECT id, data FROM games');
+    $up = $db->prepare('UPDATE games SET status = :status WHERE id = :id');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $d = json_decode($row['data'], true);
+        $up->bindValue(':status', is_array($d) ? (string)($d['status'] ?? '') : '', SQLITE3_TEXT);
+        $up->bindValue(':id', $row['id'], SQLITE3_TEXT);
+        $up->execute();
+        $up->reset();
+    }
+    $db->exec('COMMIT');
 }
 
 /** یک‌بار، فقط وقتی games.sqlite تازه ساخته می‌شود: بازی‌های بازِ نصبِ قدیمی گم نشوند */
@@ -434,12 +471,13 @@ function gamesImportFromJson($db) {
 
     if (is_array($arr) && $arr) {
         $db->exec('BEGIN');
-        $stmt = $db->prepare('INSERT OR REPLACE INTO games (id, data, created) VALUES (:id, :data, :created)');
+        $stmt = $db->prepare('INSERT OR REPLACE INTO games (id, data, created, status) VALUES (:id, :data, :created, :status)');
         foreach ($arr as $k => $v) {
             if ($k === '' || !is_array($v)) continue;
             $stmt->bindValue(':id', (string)$k, SQLITE3_TEXT);
             $stmt->bindValue(':data', json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
             $stmt->bindValue(':created', (int)($v['created'] ?? 0), SQLITE3_INTEGER);
+            $stmt->bindValue(':status', (string)($v['status'] ?? ''), SQLITE3_TEXT);
             $stmt->execute();
             $stmt->reset();
         }
@@ -454,6 +492,26 @@ function gmAll() {
     if (!$db) return [];
     $out = [];
     $res = $db->query('SELECT id, data FROM games');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $d = json_decode($row['data'], true);
+        if (is_array($d)) $out[$row['id']] = $d;
+    }
+    return $out;
+}
+
+/**
+ * فقط بازی‌های زنده (open/playing) — با ستونِ ایندکس‌شده‌ی status، نه
+ * پیمایشِ کلِ جدول. این همان چیزی‌ست که gmTick/سقفِ بازیِ باز/پاک‌سازیِ
+ * پیام‌ها باید استفاده کنند: تعدادِ بازی‌های واقعا در جریان (چون هر بازی
+ * چند دقیقه‌ای منقضی می‌شود) همیشه خیلی کمتر از کلِ تاریخچه‌ی بازی‌هاست.
+ */
+function gmOpenOrPlaying($limit = 1000) {
+    $db = gamesDb();
+    if (!$db) return [];
+    $out = [];
+    $stmt = $db->prepare("SELECT id, data FROM games WHERE status IN ('open','playing') LIMIT :limit");
+    $stmt->bindValue(':limit', max(1, (int)$limit), SQLITE3_INTEGER);
+    $res = $stmt->execute();
     while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
         $d = json_decode($row['data'], true);
         if (is_array($d)) $out[$row['id']] = $d;
@@ -488,10 +546,11 @@ function gmSetGame($id, callable $fn) {
 
         $result = $fn($g);
 
-        $up = $db->prepare('INSERT OR REPLACE INTO games (id, data, created) VALUES (:id, :data, :created)');
+        $up = $db->prepare('INSERT OR REPLACE INTO games (id, data, created, status) VALUES (:id, :data, :created, :status)');
         $up->bindValue(':id', $id, SQLITE3_TEXT);
         $up->bindValue(':data', json_encode($g, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
         $up->bindValue(':created', (int)($g['created'] ?? 0), SQLITE3_INTEGER);
+        $up->bindValue(':status', (string)($g['status'] ?? ''), SQLITE3_TEXT);
         $up->execute();
         $db->exec('COMMIT');
         return $result;
@@ -505,10 +564,11 @@ function gmSetGame($id, callable $fn) {
 function gmPut($g) {
     $db = gamesDb();
     if (!$db) return;
-    $stmt = $db->prepare('INSERT OR REPLACE INTO games (id, data, created) VALUES (:id, :data, :created)');
+    $stmt = $db->prepare('INSERT OR REPLACE INTO games (id, data, created, status) VALUES (:id, :data, :created, :status)');
     $stmt->bindValue(':id', (string)$g['id'], SQLITE3_TEXT);
     $stmt->bindValue(':data', json_encode($g, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
     $stmt->bindValue(':created', (int)($g['created'] ?? 0), SQLITE3_INTEGER);
+    $stmt->bindValue(':status', (string)($g['status'] ?? ''), SQLITE3_TEXT);
     $stmt->execute();
     gmGcMaybe($db);
 }
@@ -827,7 +887,7 @@ function gmTick($limit = 20) {
     $done = 0;
     $exp  = max(30, (int)gmVal('expire', 180));
 
-    foreach (gmAll() as $g) {
+    foreach (gmOpenOrPlaying() as $g) {
         if ($done >= $limit) break;
         // 🪑 دوزی که وسطش رها شده. حالا که صفحه‌ی دوز روشن است، یک نفر
         //    می‌تواند بپیوندد و برود؛ بدون این، بازی تا ابد «در حال بازی»
@@ -979,9 +1039,9 @@ function gmHandleText($text, $uid, $chatId, $name, $uname = '', $replyTo = null,
     //    این سقف فقط جلوی شلوغی را می‌گیرد نه جلوی خرج کردن را.
     $max = max(1, (int)gmVal('open_max', 2));
     $mine = 0;
-    foreach (gmAll() as $og) {
+    foreach (gmOpenOrPlaying() as $og) {
         if ((int)($og['host'] ?? 0) !== (int)$uid) continue;
-        if (in_array($og['status'] ?? '', ['open', 'playing'], true)) $mine++;
+        $mine++;
     }
     if ($mine >= $max) {
         sendMsg(BOT_TOKEN, $chatId, gmT('open_max', ['n' => gmNum($mine)]), null, $extra);
@@ -1173,8 +1233,14 @@ function gmCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
 
         $joined = false;
         gmSetGame($gid, function (&$x) use ($uid, $name, $uname, &$joined) {
+            // 🔒 وضعیت را همین‌جا، زیرِ قفل، دوباره چک کن — نه فقط بیرونِ
+            // قفل (که بالاتر خوانده شده بود). بدونِ این، یک join می‌توانست
+            // درست وسطِ قرعه‌کشیِ هم‌زمان (open→drawing) قبول شود: پولش
+            // کم می‌شد ولی هیچ شانسی برای بردن نداشت.
+            if (($x['status'] ?? '') !== 'open') return false;
             if (isset($x['players'][(string)$uid])) return false;
             if ($x['kind'] === 'duel' && count($x['players']) >= 2) return false;
+            if ($x['kind'] === 'rand' && count($x['players']) >= max(2, (int)gmVal('join_max', 50))) return false;
             $taken = [];
             foreach ($x['players'] as $pp) if (!empty($pp['color'])) $taken[] = (string)$pp['color'];
             $x['players'][(string)$uid] = ['id' => (int)$uid, 'name' => $name, 'uname' => $uname,
@@ -1272,8 +1338,7 @@ function gmCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
 
 function gmAdminHome($chatId, $msgId = null) {
     $c = gmCfg();
-    $open = 0;
-    foreach (gmAll() as $g) if (in_array($g['status'], ['open', 'playing'], true)) $open++;
+    $open = count(gmOpenOrPlaying());
 
     $t  = "🎮 <b>بازی‌ها</b>\n\n";
     $t .= 'وضعیت: ' . (gmOn() ? '✅ روشن' : '❌ خاموش') . "\n";
@@ -1426,8 +1491,7 @@ function gmAdminCallback($data, $chatId, $msgId, $cbId) {
     }
     if ($data === 'gmaclose') {
         $n = 0;
-        foreach (gmAll() as $g)
-            if (in_array($g['status'], ['open', 'playing'], true)) { gmRefund($g, gmT('cancelled')); $n++; }
+        foreach (gmOpenOrPlaying() as $g) { gmRefund($g, gmT('cancelled')); $n++; }
         answerCb(BOT_TOKEN, $cbId, "🧹 {$n} بازی بسته شد", true);
         gmAdminHome($chatId, $msgId);
         return true;
