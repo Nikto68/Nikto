@@ -680,7 +680,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c['group_only']    = !empty($post['bk_group_only']);
             $c['word_bank']     = trim((string)($post['word_bank'] ?? '')) ?: 'بانک';
             $c['word_hack']     = trim((string)($post['word_hack'] ?? '')) ?: 'هک,حمله';
-            $c['min_withdraw']  = max(0, $num('min_withdraw', 50000));
             $c['manual_protect']= max(60, (int)$num('manual_protect', 900));
             $c['shield_after']  = max(0, (int)$num('shield_after', 300));
             $c['hack_cooldown'] = max(60, (int)$num('hack_cooldown', 1200));
@@ -720,7 +719,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (!is_array($c['icons'] ?? null)) $c['icons'] = [];
             if (!is_array($c['btns']  ?? null)) $c['btns']  = [];
-            foreach (['btn_protect', 'btn_deposit', 'btn_withdraw'] as $k) {
+            foreach (['btn_protect', 'btn_send', 'btn_send_confirm', 'btn_back'] as $k) {
                 if (isset($post['icon_' . $k])) $c['icons'][$k] = trim((string)$post['icon_' . $k]);
                 if (!is_array($c['btns'][$k] ?? null)) $c['btns'][$k] = [];
                 $c['btns'][$k]['color'] = isStyle($post['color_' . $k] ?? '') ? $post['color_' . $k] : 'none';
@@ -4470,9 +4469,9 @@ def join_gate(user_id):
         <div class="note">کلمه باید تنها و دقیق نوشته شود (مثلا فقط «بانک»)، نه وسطِ یک جمله — درست مثلِ کلمه‌ی «موجودی»/«انتقال» تو بخشِ بازی‌ها.</div>
       </details>
 
-      <details class="subcard"><summary><h3>🏦 بانک و برداشت</h3></summary>
+      <details class="subcard"><summary><h3>🏦 بانک</h3></summary>
+        <div class="note">«بانک» صندوقِ جدایی نیست — دقیقا همان کیف‌پولِ الماسِ کاربر است؛ هرچه کاربر داشته باشد خودکار قابلِ هک‌شدن است.</div>
         <div class="grid2">
-          <div><label>حداقلِ موجودیِ بانک برایِ باز شدنِ برداشت</label><input name="min_withdraw" value="<?= h($BK['min_withdraw'] ?? 50000) ?>" style="direction:ltr"></div>
           <div><label>⭐️ هر چند الماسِ دزدیده‌شده، یک سطحِ بانک</label><input name="level_step" type="number" min="1" value="<?= (int)($BK['level_step'] ?? 500000) ?>"></div>
           <div><label>🏆 تعدادِ نفراتِ لیستِ برترین‌ها</label><input name="top_n" type="number" min="1" value="<?= (int)($BK['top_n'] ?? 10) ?>"></div>
         </div>
@@ -4531,7 +4530,7 @@ def join_gate(user_id):
           داخلِ متن بچسبانید. برایِ خودِ سه‌تا دکمه، شناسه‌ی همان ایموجیِ پریمیوم را (بدونِ تگ، فقط عدد) در
           کادرِ «ایموجیِ دکمه» زیرِ همان دکمه بگذارید.
         </div>
-        <?php foreach (bkDefaults()['texts'] as $k => $def): $isBtn = in_array($k, ['btn_protect','btn_deposit','btn_withdraw'], true); ?>
+        <?php foreach (bkDefaults()['texts'] as $k => $def): $isBtn = in_array($k, ['btn_protect','btn_send','btn_send_confirm','btn_back'], true); ?>
           <div style="margin-bottom:12px">
             <label><?= h($k) ?><?= $isBtn ? ' (متنِ دکمه)' : '' ?></label>
             <?php if ($isBtn): ?>

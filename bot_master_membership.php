@@ -9107,7 +9107,7 @@ function masterHandle($update) {
         if (gmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false)) return;
         if (function_exists('bkHandleText') && bkHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
-        if (function_exists('mnHandleText') && mnHandleText($text, $uid, $chatId, $fname, $uname, false)) return;
+        if (function_exists('mnHandleText') && mnHandleText($text, $uid, $chatId, $fname, $uname, false, $msg)) return;
         return;
     }
 

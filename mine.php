@@ -36,7 +36,8 @@ function mnDefaults() {
         'reward_growth' => 1.5, // اگر (که با ۹ خانه پیش نمی‌آید) از آرایه فراتر رفت
 
         'max_active_games' => 200,
-        'game_timeout'     => 1800,  // ثانیه — ۳۰ دقیقه بی‌کاری
+        'waiting_timeout'  => 60,    // ثانیه — تا وقتی کسی Join نکرده، بعدِ این مدت خودش بسته می‌شود
+        'game_timeout'     => 1800,  // ثانیه — بازیِ Joinشده ولی بی‌کار، ۳۰ دقیقه
         'expire_refund'    => 0,     // ۰=بدونِ برگشتِ ورودی، ۱=ورودی برگردد
         'game_cooldown'    => 0,     // ثانیه — فاصله‌ی دو بازیِ همان کاربر (۰=خاموش)
 
@@ -354,7 +355,7 @@ function mnRender($g, $chatId, $msgId = null) {
 // 💬 شروعِ بازی
 // ============================================================
 
-function mnHandleText($text, $uid, $chatId, $name, $uname, $isPrivate) {
+function mnHandleText($text, $uid, $chatId, $name, $uname, $isPrivate, $msg = null) {
     if (!mnOn()) return false;
     if (!empty(mnVal('group_only', 1)) && $isPrivate) return false;
 
@@ -384,7 +385,11 @@ function mnHandleText($text, $uid, $chatId, $name, $uname, $isPrivate) {
 
     $g = mnCreate($uid, $chatId, $name, $uname, $amount);
     if (!$g) return true;
-    $res = sendMsg(BOT_TOKEN, $chatId, mnPreviewText($g), mnPreviewKb($g));
+    // 🧵 ریپلای‌شده رویِ پیامِ خودِ کاربر — تا توی گروهِ شلوغ معلوم باشد
+    // این پیش‌نمایش جوابِ کدوم «مین ۵۰۰» است
+    $replyMsgId = (int)($msg['message_id'] ?? 0);
+    $extra = $replyMsgId ? ['reply_to_message_id' => $replyMsgId] : [];
+    $res = sendMsg(BOT_TOKEN, $chatId, mnPreviewText($g), mnPreviewKb($g), $extra);
     $mid = (int)($res['result']['message_id'] ?? 0);
     if ($mid > 0) mnSetGame($g['id'], function (&$g) use ($mid) { $g['msg_id'] = $mid; });
     return true;
@@ -396,7 +401,9 @@ function mnHandleText($text, $uid, $chatId, $name, $uname, $isPrivate) {
 
 function mnExpireIfNeeded(&$g) {
     if (!in_array($g['status'], ['waiting', 'active'], true)) return false;
-    $timeout = max(60, (int)mnVal('game_timeout', 1800));
+    $timeout = $g['status'] === 'waiting'
+        ? max(10, (int)mnVal('waiting_timeout', 60))
+        : max(60, (int)mnVal('game_timeout', 1800));
     if (time() - (int)$g['started_at'] < $timeout) return false;
 
     if ($g['status'] === 'active' && !empty(mnVal('expire_refund', 0))) {
@@ -567,9 +574,15 @@ function mnTick($limit = 50) {
     if (!$db) return 0;
     $done = 0;
     $now = time();
-    $timeout = max(60, (int)mnVal('game_timeout', 1800));
+    $waitTimeout = max(10, (int)mnVal('waiting_timeout', 60));
+    $gameTimeout = max(60, (int)mnVal('game_timeout', 1800));
 
-    $res = $db->query("SELECT id FROM mine_games WHERE status IN ('waiting','active') AND started <= " . ($now - $timeout) . " LIMIT " . (int)$limit);
+    $res = $db->query(
+        "SELECT id FROM mine_games WHERE " .
+        "(status = 'waiting' AND started <= " . ($now - $waitTimeout) . ") OR " .
+        "(status = 'active'  AND started <= " . ($now - $gameTimeout) . ") " .
+        "LIMIT " . (int)$limit
+    );
     while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
         $gid = $row['id'];
         $out = mnSetGame($gid, function (&$g) {
@@ -614,7 +627,8 @@ function mnAdminHome($chatId, $msgId = null) {
     $t .= 'کلمه‌ی شروع: <code>' . h($c['word']) . " ۵۰۰</code>\n\n";
     $t .= '💎 بازه‌ی ورودی: <b>' . mnNum($c['entry_min']) . '</b> تا <b>' . mnNum($c['entry_max']) . "</b>\n";
     $t .= '🛡 حداقلِ خانه‌ی امن برایِ حفاظت: <b>' . (int)$c['min_safe_for_protection'] . "</b>\n";
-    $t .= '⏰ مهلتِ بی‌کاری: <b>' . (int)round($c['game_timeout'] / 60) . "</b> دقیقه\n";
+    $t .= '⏰ مهلتِ بی‌کاری (بعدِ Join): <b>' . (int)round($c['game_timeout'] / 60) . "</b> دقیقه\n";
+    $t .= '⏰ مهلتِ Joinنشدن: <b>' . (int)($c['waiting_timeout'] ?? 60) . "</b> ثانیه\n";
 
     $rows = [
         [btnCb(mnOn() ? '✅ روشن' : '❌ خاموش', 'mnax', 'info')],
@@ -622,7 +636,7 @@ function mnAdminHome($chatId, $msgId = null) {
         [btnCb('🎨 رنگِ دکمه‌ها', 'mnacolors', 'admin')],
         [btnCb('💎 بازه‌ی ورودی', 'mnarange', 'admin'), btnCb('🛡 حدِ حفاظت', 'mnasafe', 'admin')],
         [btnCb('🏆 جایزه‌ی هر خانه', 'mnarewards', 'admin')],
-        [btnCb('⏰ مهلتِ بی‌کاری (دقیقه)', 'mnatimeout', 'admin')],
+        [btnCb('⏰ مهلتِ بی‌کاری (دقیقه)', 'mnatimeout', 'admin'), btnCb('⏰ مهلتِ Joinنشدن (ثانیه)', 'mnawaiting', 'admin')],
         [btnCb(UT('back'), 'adm_home', 'nav')],
     ];
     if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
@@ -723,7 +737,8 @@ function mnAdminCallback($data, $chatId, $msgId, $cbId) {
 
     $asks = [
         'mnasafe'    => ['mn_safe',    "🛡 چند خانه‌ی امنِ پیاپی، از جریمه‌ی برخورد با مین محافظت کند؟ (۰ تا ۸)"],
-        'mnatimeout' => ['mn_timeout', "⏰ بازیِ بی‌کار، بعدِ چند دقیقه منقضی شود؟"],
+        'mnatimeout' => ['mn_timeout', "⏰ بازیِ Joinشده ولی بی‌کار، بعدِ چند دقیقه منقضی شود؟"],
+        'mnawaiting' => ['mn_waiting', "⏰ اگر کسی Join نکرد، بعدِ چند ثانیه بازی خودش بسته شود؟"],
     ];
     if (isset($asks[$data])) {
         [$act, $ask] = $asks[$data];
@@ -800,6 +815,12 @@ function mnStateHandle($action, $msg, $uid, $chatId) {
         if ($v < 1 || $v > 1440) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۱ تا ۱۴۴۰ دقیقه."); return true; }
         mnSet(function (&$c) use ($v) { $c['game_timeout'] = $v * 60; });
         return $done('✅ مهلتِ بی‌کاری: ' . $v . ' دقیقه');
+    }
+    if ($action === 'mn_waiting') {
+        $v = (int)norm_fa_digits($text);
+        if ($v < 10 || $v > 3600) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۱۰ تا ۳۶۰۰ ثانیه."); return true; }
+        mnSet(function (&$c) use ($v) { $c['waiting_timeout'] = $v; });
+        return $done('✅ مهلتِ Joinنشدن: ' . $v . ' ثانیه');
     }
     if ($action === 'mn_range') {
         if (!preg_match('/^\s*([\d,٬]+)\s*[-–ـ]\s*([\d,٬]+)\s*$/u', norm_fa_digits($text), $m)) {
