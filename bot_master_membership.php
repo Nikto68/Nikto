@@ -7781,7 +7781,7 @@ function masterHandle($update) {
         // نه خطایی، نه پیامی. پس با هر بخش تازه این فهرست هم باید کامل شود.
         $adminPrefixes = ['aok_', 'ano_', 'adm_', 'ag_', 'eb', 'et', 'eg', 'eu', 'eref', 'sb', 'ep', 'esp',
                           'esup', 'esm', 'rp', 'tf', 'jn', 'gw', 'pay', 'px', 'dm', 'ch', 'gma', 'gm_', 'ol',
-                          'pf_', 'pft', 'num', 'reply_', 'setup', 'ecar', 'bc'];
+                          'pf_', 'pft', 'num', 'reply_', 'setup', 'ecar', 'bc', 'bk', 'mn'];
         $isAdminCb = false;
         foreach ($adminPrefixes as $pref) {
             if (str_starts_with($data, $pref)) { $isAdminCb = true; break; }
