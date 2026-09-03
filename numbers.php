@@ -640,29 +640,204 @@ function numBalance() { return numBalanceDo(); }
 // ============================================================
 // 🗂 انبار فعال‌سازی‌ها
 // ============================================================
+//
+// این بخش هرچند ثانیه یک‌بار برای هر خریدِ فعال پرسیده می‌شود (پیگیریِ
+// پیامک) — رویِ یک فایلِ JSONِ مشترک با یک قفلِ سراسری، ۵۰۰ خریدارِ
+// هم‌زمان یعنی ۵۰۰ نفر پشتِ سرِ هم صف، فقط برایِ خواندنِ یک ردیف. مثلِ
+// diamond_users/bank_users/games، اینجا هم هر ردیف مالِ خودش قفل می‌شود
+// (BEGIN IMMEDIATE رویِ SQLite) — کاربرهایِ مختلف اصلا کارِ هم را کند
+// نمی‌کنند، و numGet/numActiveFor/numHistory با ایندکس می‌خوانند، نه
+// اسکنِ کامل.
 
-function numAll() { return load('num_acts'); }
-function numGet($orderId) { $a = numAll(); return $a[(string)$orderId] ?? null; }
+function numActsDbPath() { return DATA_DIR . '/num_acts.sqlite'; }
 
+function numActsDb() {
+    static $db = null;
+    if ($db) return $db;
+    if (!class_exists('SQLite3')) return null;
+
+    $path = numActsDbPath();
+    $dir  = dirname($path);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $fresh = !is_file($path);
+
+    try {
+        $db = new SQLite3($path);
+    } catch (Throwable $e) {
+        error_log('[numbers] num_acts.sqlite باز نشد: ' . $e->getMessage());
+        return null;
+    }
+    $db->busyTimeout(5000);
+    $db->exec('PRAGMA journal_mode = WAL');
+    $db->exec('PRAGMA synchronous = NORMAL');
+    $db->exec('CREATE TABLE IF NOT EXISTS num_acts (
+        id TEXT PRIMARY KEY, uid INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT \'\', created INTEGER NOT NULL DEFAULT 0,
+        data TEXT NOT NULL
+    )');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_num_acts_uid ON num_acts(uid)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_num_acts_status ON num_acts(status)');
+
+    if ($fresh) numActsImportFromJson($db);
+    return $db;
+}
+
+/** یک‌بار، فقط وقتی num_acts.sqlite تازه ساخته می‌شود: کوچِ فایلِ JSONِ قدیمی */
+function numActsImportFromJson($db) {
+    $old = dataPath('num_acts');
+    if (!is_file($old)) return;
+    $raw = @file_get_contents($old);
+    $arr = $raw ? json_decode($raw, true) : null;
+
+    if (is_array($arr) && $arr) {
+        $db->exec('BEGIN');
+        $stmt = $db->prepare('INSERT OR REPLACE INTO num_acts (id, uid, status, created, data) VALUES (:id, :uid, :status, :created, :data)');
+        foreach ($arr as $k => $v) {
+            $id = (string)$k;
+            if ($id === '' || !is_array($v)) continue;
+            $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+            $stmt->bindValue(':uid', (int)($v['uid'] ?? 0), SQLITE3_INTEGER);
+            $stmt->bindValue(':status', (string)($v['status'] ?? ''), SQLITE3_TEXT);
+            $stmt->bindValue(':created', (int)($v['created'] ?? 0), SQLITE3_INTEGER);
+            $stmt->bindValue(':data', json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $stmt->execute();
+            $stmt->reset();
+        }
+        $db->exec('COMMIT');
+    }
+    // فایلِ قدیمی پاک نمی‌شود، فقط از سرِ راه می‌رود — برای اطمینان
+    @rename($old, $old . '.migrated');
+}
+
+/** همه‌ی فعال‌سازی‌ها — فقط برایِ کارهایِ پس‌زمینه/ادمین (کم‌تکرار)، نه مسیرهایِ داغ */
+function numAll() {
+    $db = numActsDb();
+    if (!$db) return [];
+    $out = [];
+    $res = $db->query('SELECT id, data FROM num_acts');
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $d = json_decode($row['data'], true);
+        if (is_array($d)) $out[(string)$row['id']] = $d;
+    }
+    return $out;
+}
+
+/** فعال‌سازی‌هایِ یک کاربرِ خاص — با ایندکس، بدونِ خواندنِ داده‌ی بقیه‌ی کاربرها */
+function numAllForUid($uid) {
+    $db = numActsDb();
+    if (!$db) return [];
+    $out = [];
+    $stmt = $db->prepare('SELECT data FROM num_acts WHERE uid = :uid');
+    $stmt->bindValue(':uid', (int)$uid, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $d = json_decode($row['data'], true);
+        if (is_array($d)) $out[] = $d;
+    }
+    return $out;
+}
+
+/** یک فعال‌سازی — با ایندکسِ اصلی، نه بارگذاریِ کلِ جدول */
+function numGet($orderId) {
+    $db = numActsDb();
+    if (!$db) return null;
+    $stmt = $db->prepare('SELECT data FROM num_acts WHERE id = :id');
+    $stmt->bindValue(':id', (string)$orderId, SQLITE3_TEXT);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    if (!$row) return null;
+    $d = json_decode($row['data'], true);
+    return is_array($d) ? $d : null;
+}
+
+/**
+ * تغییرِ اتمیکِ یک فعال‌سازی — قفل فقط رویِ همین یک ردیف (BEGIN IMMEDIATE)،
+ * دو کاربرِ مختلف که هم‌زمان پیگیریِ پیامک می‌کنند اصلا صفِ هم نمی‌شوند.
+ * قراردادِ قبلی حفظ شده: اگر ردیف نباشد، $fn اصلا صدا زده نمی‌شود و
+ * false برمی‌گردد؛ وگرنه هرچه $fn برگرداند همان برگشت داده می‌شود.
+ */
 function numSetAct($orderId, callable $fn) {
-    return mutate('num_acts', function (&$a) use ($orderId, $fn) {
-        $k = (string)$orderId;
-        if (!isset($a[$k])) return false;
-        return $fn($a[$k]);
-    });
+    $db = numActsDb();
+    if (!$db) return false;
+    $id = (string)$orderId;
+
+    $db->exec('BEGIN IMMEDIATE');
+    try {
+        $stmt = $db->prepare('SELECT data FROM num_acts WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $x = $row ? json_decode($row['data'], true) : null;
+        if (!is_array($x)) { $db->exec('ROLLBACK'); return false; }
+
+        $result = $fn($x);
+
+        $up = $db->prepare('UPDATE num_acts SET uid = :uid, status = :status, created = :created, data = :data WHERE id = :id');
+        $up->bindValue(':uid', (int)($x['uid'] ?? 0), SQLITE3_INTEGER);
+        $up->bindValue(':status', (string)($x['status'] ?? ''), SQLITE3_TEXT);
+        $up->bindValue(':created', (int)($x['created'] ?? 0), SQLITE3_INTEGER);
+        $up->bindValue(':data', json_encode($x, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+        $up->bindValue(':id', $id, SQLITE3_TEXT);
+        $up->execute();
+        $db->exec('COMMIT');
+        return $result;
+    } catch (Throwable $e) {
+        $db->exec('ROLLBACK');
+        error_log('[numbers] numSetAct خطا: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** فعال‌سازیِ بازِ یک کاربر را می‌سازد یا جایگزین می‌کند (ادعایِ اتمیِ خریدِ numBuy هم همین‌جاست) */
+function numActsClaim($orderId) {
+    $db = numActsDb();
+    if (!$db) return false;
+    $id = (string)$orderId;
+    try {
+        $stmt = $db->prepare('INSERT OR IGNORE INTO num_acts (id, uid, status, created, data) VALUES (:id, 0, \'buying\', :created, :data)');
+        $now = time();
+        $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+        $stmt->bindValue(':created', $now, SQLITE3_INTEGER);
+        $stmt->bindValue(':data', json_encode(['order' => $id, 'status' => 'buying', 'created' => $now],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+        $stmt->execute();
+        return $db->changes() > 0;   // false یعنی ردیف از قبل بود — کسی دیگر ادعا کرده
+    } catch (Throwable $e) {
+        error_log('[numbers] numActsClaim خطا: ' . $e->getMessage());
+        return false;
+    }
+}
+
+function numActsDelete($orderId) {
+    $db = numActsDb();
+    if (!$db) return;
+    $stmt = $db->prepare('DELETE FROM num_acts WHERE id = :id');
+    $stmt->bindValue(':id', (string)$orderId, SQLITE3_TEXT);
+    $stmt->execute();
 }
 
 function numPut(array $act) {
-    mutate('num_acts', function (&$a) use ($act) {
-        $a[(string)$act['order']] = $act;
-        // خانه‌تکانی — فعال‌سازی‌های تمام‌شده‌ی کهنه جا اشغال نکنند
-        if (count($a) > 500) {
-            $now = time();
-            foreach ($a as $k => $v)
-                if (($v['status'] ?? '') !== 'waiting' && ($now - (int)($v['created'] ?? 0)) > 172800)
-                    unset($a[$k]);
-        }
-    });
+    $db = numActsDb();
+    if (!$db) return;
+    try {
+        $stmt = $db->prepare('INSERT OR REPLACE INTO num_acts (id, uid, status, created, data) VALUES (:id, :uid, :status, :created, :data)');
+        $stmt->bindValue(':id', (string)$act['order'], SQLITE3_TEXT);
+        $stmt->bindValue(':uid', (int)($act['uid'] ?? 0), SQLITE3_INTEGER);
+        $stmt->bindValue(':status', (string)($act['status'] ?? ''), SQLITE3_TEXT);
+        $stmt->bindValue(':created', (int)($act['created'] ?? 0), SQLITE3_INTEGER);
+        $stmt->bindValue(':data', json_encode($act, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+        $stmt->execute();
+    } catch (Throwable $e) {
+        error_log('[numbers] numPut خطا: ' . $e->getMessage());
+        return;
+    }
+
+    // خانه‌تکانی — فعال‌سازی‌های تمام‌شده‌ی کهنه جا اشغال نکنند (کم‌تکرار،
+    // فقط وقتی جدول واقعا بزرگ شده باشد)
+    $n = (int)$db->querySingle('SELECT COUNT(*) FROM num_acts');
+    if ($n > 500) {
+        $stmt = $db->prepare("DELETE FROM num_acts WHERE status != 'waiting' AND created < :cut");
+        $stmt->bindValue(':cut', time() - 172800, SQLITE3_INTEGER);
+        $stmt->execute();
+    }
 }
 
 /**
@@ -674,8 +849,7 @@ function numPut(array $act) {
 function numActiveFor($uid) {
     $uid  = (int)$uid;
     $best = null;
-    foreach (numAll() as $act) {
-        if ((int)($act['uid'] ?? 0) !== $uid) continue;
+    foreach (numAllForUid($uid) as $act) {
         if (($act['status'] ?? '') !== 'waiting') continue;
         if (!$best || (int)$act['created'] > (int)$best['created']) $best = $act;
     }
@@ -687,8 +861,7 @@ function numHistory($uid, $limit = 10) {
     $uid = (int)$uid;
     $now = time();
     $out = [];
-    foreach (numAll() as $act) {
-        if ((int)($act['uid'] ?? 0) !== $uid) continue;
+    foreach (numAllForUid($uid) as $act) {
         $st   = (string)($act['status'] ?? '');
         $wait = numWaitFor($act);
         $left = max(0, $wait - ($now - (int)($act['created'] ?? 0)));
@@ -807,17 +980,13 @@ function numBuy($order) {
     }
 
     // 🔒 ادعای اتمی: فقط یک اجرا شماره می‌خرد، حتی اگر دو درخواست هم‌زمان بیاید
-    $claimed = false;
-    mutate('num_acts', function (&$a) use ($oid, &$claimed) {
-        if (isset($a[$oid])) return;
-        $a[$oid] = ['order' => $oid, 'status' => 'buying', 'created' => time()];
-        $claimed = true;
-    });
-    if (!$claimed) return [true, ''];
+    //    (INSERT OR IGNORE رویِ کلیدِ اصلی — همان تضمینِ قفلِ فایلِ قبلی،
+    //    ولی بدونِ اینکه بقیه‌ی کاربرها پشتِ همین یک قفلِ سراسری صف بکشند)
+    if (!numActsClaim($oid)) return [true, ''];
 
     $r = numBuyDo($meta);
     if (($r['err'] ?? '') !== '') {
-        mutate('num_acts', function (&$a) use ($oid) { unset($a[$oid]); });   // تا بشود دوباره تلاش کرد
+        numActsDelete($oid);   // تا بشود دوباره تلاش کرد
         return [false, $r['err']];
     }
 
