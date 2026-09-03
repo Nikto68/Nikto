@@ -26,7 +26,7 @@ function bkDefaults() {
         'word_bank'  => 'بانک,حساب بانکی',   // کلمه‌های باز کردنِ کارتِ بانک
         'word_hack'  => 'هک,حمله',           // کلمه‌های شروعِ هک (به‌جز خودِ /hack)
 
-        'min_withdraw'   => 50000,   // زیرِ این موجودی، برداشت اصلا باز نمی‌شود
+        'min_withdraw'   => 5000,    // زیرِ این موجودی، برداشت اصلا باز نمی‌شود
         'manual_protect' => 900,     // ثانیه — حفاظتِ دستی (۱۵ دقیقه)
         'shield_after'   => 300,     // ثانیه — حفاظتِ خودکارِ کوتاه بعدِ هر هک (موفق یا ناموفق)
         'hack_cooldown'  => 1200,    // ثانیه — فاصله‌ی دو هکِ همان مهاجم (۲۰ دقیقه)
@@ -54,17 +54,21 @@ function bkDefaults() {
 
         // 🔘 دکمه‌ها — آیکون (ایموجیِ پریمیوم) با شناسه‌اش از
         // /panel ← 🔘 ایموجیِ پریمیوم گرفته می‌شود، بعد همین‌جا (پنلِ وب) جا می‌گیرد
-        'icons' => ['btn_protect' => '', 'btn_deposit' => '', 'btn_withdraw' => ''],
+        'icons' => ['btn_protect' => '', 'btn_deposit' => '', 'btn_withdraw' => '', 'btn_send' => '', 'btn_send_confirm' => ''],
         'btns'  => [
-            'btn_protect'  => ['color' => 'primary'],
-            'btn_deposit'  => ['color' => 'success'],
-            'btn_withdraw' => ['color' => 'danger'],
+            'btn_protect'      => ['color' => 'primary'],
+            'btn_deposit'      => ['color' => 'success'],
+            'btn_withdraw'     => ['color' => 'danger'],
+            'btn_send'         => ['color' => 'none'],
+            'btn_send_confirm' => ['color' => 'success'],
         ],
 
         'texts' => [
             'btn_protect'  => '🛡 حفاظت از بانک',
             'btn_deposit'  => '💎 انتقال الماس',
             'btn_withdraw' => '💰 برداشت الماس',
+            'btn_send'         => '🎁 ارسال به کاربر',
+            'btn_send_confirm' => '✅ انتقال',
 
             'card' => "🏦 <b>BANK</b>\n\n" .
                       "👤 User: {name}\n\n" .
@@ -94,6 +98,16 @@ function bkDefaults() {
             'wd_locked' => "🏦 Bank Balance:\n\n💎 {bank}\n\n❌ Withdrawal unavailable\n\nحداقل موجودی موردنیاز:\n\n💎 {min}",
             'wd_low_bank' => "❌ موجودیِ بانک کمتر از مقدارِ درخواستی است.\n🏦 Bank: <b>{bank}</b>",
             'wd_ok' => "💰 <b>WITHDRAW SUCCESSFUL</b>\n\n💎 Withdrawn: {amount}\n\n━━━━━━━━━━━━━━\n\n🏦 Bank: <b>{bank}</b>\n💎 Wallet: <b>{wallet}</b>",
+
+            // 🎁 ارسالِ الماس به کاربرِ دیگر — مستقیم از کیف‌پول به کیف‌پول
+            'ask_send_amt'   => "🎁 <b>SEND DIAMONDS</b>\n\nچند تا الماس می‌خوای بفرستی؟",
+            'ask_send_id'    => "👤 آیدیِ عددیِ گیرنده را بفرست.\n\n<i>راهنما: کاربرِ موردنظر باید قبلا با ربات پیام داده باشد.</i>",
+            'ask_send_badid' => "❌ آیدیِ عددیِ معتبر نبود — یک عددِ تنها بفرست.",
+            'send_self'      => "😄 نمی‌تونی برایِ خودت بفرستی.",
+            'send_no_target' => "❌ این آیدی برایِ ربات شناخته‌شده نیست — گیرنده باید قبلا با ربات پیام داده باشد.",
+            'send_low_wallet'=> "❌ موجودیِ کیف‌پول کافی نیست.\n💎 Wallet: <b>{wallet}</b>",
+            'send_confirm'   => "🎁 <b>تاییدِ ارسال</b>\n\n💎 مقدار: <b>{amount}</b>\n👤 گیرنده: <code>{to}</code>\n\nبرایِ تاییدِ نهایی بزن:",
+            'send_ok'        => "✅ <b>SEND SUCCESS</b>\n\n💎 Sent: {amount}\n👤 To: <code>{to}</code>\n\n━━━━━━━━━━━━━━\n\n💎 Wallet: <b>{wallet}</b>",
 
             'hack_how'      => "🔫 برای هک، روی پیامِ همون کاربر ریپلای کن و بنویس «{word}» یا /hack",
             'hack_self'     => "😄 نمی‌تونی خودتو هک کنی.",
@@ -230,9 +244,9 @@ function bkTop($n = 10) {
 
 function bkPendKey($uid, $chat) { return $uid . '_' . $chat; }
 
-function bkPendSet($uid, $chat, $kind, $msgId) {
-    mutate('bank_states', function (&$s) use ($uid, $chat, $kind, $msgId) {
-        $s[bkPendKey($uid, $chat)] = ['kind' => $kind, 'msg' => (int)$msgId, 'at' => time()];
+function bkPendSet($uid, $chat, $kind, $msgId, $data = []) {
+    mutate('bank_states', function (&$s) use ($uid, $chat, $kind, $msgId, $data) {
+        $s[bkPendKey($uid, $chat)] = ['kind' => $kind, 'msg' => (int)$msgId, 'at' => time(), 'data' => $data];
     });
 }
 
@@ -354,6 +368,7 @@ function bkKb($uid) {
     return inlineKb([
         [bkBtn('btn_protect', [], 'bk_protect')],
         [bkBtn('btn_deposit', [], 'bk_dep'), bkBtn('btn_withdraw', [], 'bk_wd')],
+        [bkBtn('btn_send', [], 'bk_send')],
     ]);
 }
 
@@ -421,6 +436,37 @@ function bkWithdraw($uid, $name, $uname, $amount) {
     $u2 = bkUser($uid);
     return [true, bkT('wd_ok', [
         'amount' => bkNum($amount), 'bank' => bkNum($u2['bank_balance'] ?? 0), 'wallet' => bkNum(gmPoints($uid)),
+    ])];
+}
+
+/**
+ * 🎁 ارسالِ الماس از کیف‌پول به کیف‌پولِ یک کاربرِ دیگر — مستقیم، نه از
+ * راهِ بانک. عمدا از همان gmAdd() دوباره استفاده می‌شود (نه یک نوشتنِ
+ * دستیِ تازه رویِ diamond_users): gmAdd هرباری که صدا زده شود، شمارنده‌ی
+ * جمعِ کلِ الماس (diamond_sum) را هم خودش به‌روز نگه می‌دارد — دور زدنِ
+ * آن یعنی آن شمارنده کم‌کم غلط می‌شود. اگر نوشتنِ سمتِ گیرنده به هر
+ * دلیلی نگرفت، همان الماس به فرستنده برمی‌گردد — دقیقا مثلِ bkDeposit.
+ */
+function bkSendDiamond($fromUid, $toUid, $fromName, $fromUname, $amount) {
+    $amount = (float)$amount;
+    if ($amount <= 0 || floor($amount) != $amount) return [false, bkT('ask_bad_num')];
+    if ((int)$toUid === (int)$fromUid) return [false, bkT('send_self')];
+
+    $wallet = gmPoints($fromUid);
+    if ($amount > $wallet + 1e-9) return [false, bkT('send_low_wallet', ['wallet' => bkNum($wallet)])];
+
+    if (!gmAdd($fromUid, -$amount, $fromName, $fromUname)) {
+        return [false, bkT('send_low_wallet', ['wallet' => bkNum(gmPoints($fromUid))])];
+    }
+    if (!gmAdd($toUid, $amount)) {
+        // عملا نمی‌افتد (gmAdd فقط برایِ کم‌کردنِ منفی رد می‌کند)، ولی
+        // برایِ اطمینان — الماس هیچ‌وقت نباید بی‌صاحب بماند
+        gmAdd($fromUid, $amount, $fromName, $fromUname);
+        return [false, bkT('ask_bad_num')];
+    }
+
+    return [true, bkT('send_ok', [
+        'amount' => bkNum($amount), 'to' => $toUid, 'wallet' => bkNum(gmPoints($fromUid)),
     ])];
 }
 
@@ -587,12 +633,42 @@ function bkTopText($n = null) {
 // 💬 دیسپچِ متنِ گروه
 // ============================================================
 
-function bkHandleAmount($raw, $uid, $chatId, $name, $uname, $pend) {
+function bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend) {
+    $kind = $pend['kind'] ?? '';
+
+    // 🎁 گامِ دومِ ارسال به کاربر: حالا آیدیِ عددی می‌خواهیم، نه عدد
+    if ($kind === 'send_id') {
+        $toId = (int)preg_replace('/\D/', '', norm_fa_digits(trim($raw)));
+        if ($toId <= 0) { sendMsg(BOT_TOKEN, $chatId, bkT('ask_send_badid')); return true; }
+        if ($toId === (int)$uid) { sendMsg(BOT_TOKEN, $chatId, bkT('send_self')); return true; }
+        if (!function_exists('getUser') || !getUser($toId)) {
+            sendMsg(BOT_TOKEN, $chatId, bkT('send_no_target')); return true;
+        }
+        $amount = (float)($pend['data']['amount'] ?? 0);
+        bkPendSet($uid, $chatId, 'send_confirm', $pend['msg'] ?? 0, ['amount' => $amount, 'to' => $toId]);
+        sendMsg(BOT_TOKEN, $chatId, bkT('send_confirm', ['amount' => bkNum($amount), 'to' => $toId]),
+            inlineKb([[bkBtn('btn_send_confirm', [], 'bk_sendok')]]));
+        return true;
+    }
+
+    // بقیه‌ی حالت‌ها (واریز/برداشت/گامِ اولِ ارسال) همه یک عددِ صحیح می‌خواهند
     $n = (float)str_replace([',', '٬', ' '], '', norm_fa_digits($raw));
     if ($n <= 0 || floor($n) != $n) { sendMsg(BOT_TOKEN, $chatId, bkT('ask_bad_num')); return true; }
 
+    if ($kind === 'send_amt') {
+        $wallet = gmPoints($uid);
+        if ($n > $wallet + 1e-9) {
+            bkPendClear($uid, $chatId);
+            sendMsg(BOT_TOKEN, $chatId, bkT('send_low_wallet', ['wallet' => bkNum($wallet)]));
+            return true;
+        }
+        bkPendSet($uid, $chatId, 'send_id', $pend['msg'] ?? 0, ['amount' => $n]);
+        sendMsg(BOT_TOKEN, $chatId, bkT('ask_send_id'));
+        return true;
+    }
+
     bkPendClear($uid, $chatId);
-    [$ok, $msgText] = $pend['kind'] === 'withdraw'
+    [$ok, $msgText] = $kind === 'withdraw'
         ? bkWithdraw($uid, $name, $uname, $n)
         : bkDeposit($uid, $name, $uname, $n);
 
@@ -609,7 +685,7 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
     if ($raw === '') return false;
 
     $pend = bkPendGet($uid, $chatId);
-    if ($pend) return bkHandleAmount($raw, $uid, $chatId, $name, $uname, $pend);
+    if ($pend) return bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend);
 
     if (preg_match('/^\/bankleader(?:@\w+)?(?:\s|$)/i', $raw)) { sendMsg(BOT_TOKEN, $chatId, bkTopText()); return true; }
 
@@ -639,7 +715,8 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
 // ============================================================
 
 function bkCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
-    if (!in_array($data, ['bk_protect', 'bk_dep', 'bk_wd'], true)) return false;
+    if ($data === 'bk_nop') { answerCb(BOT_TOKEN, $cbId); return true; }
+    if (!in_array($data, ['bk_protect', 'bk_dep', 'bk_wd', 'bk_send', 'bk_sendok'], true)) return false;
     if (!bkOn()) { answerCb(BOT_TOKEN, $cbId); return true; }
 
     $name  = (string)($from['first_name'] ?? '');
@@ -671,5 +748,287 @@ function bkCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
         sendMsg(BOT_TOKEN, $chatId, bkT('ask_withdraw'));
         return true;
     }
+    if ($data === 'bk_send') {
+        answerCb(BOT_TOKEN, $cbId);
+        bkPendSet($uid, $chatId, 'send_amt', $msgId);
+        sendMsg(BOT_TOKEN, $chatId, bkT('ask_send_amt'));
+        return true;
+    }
+    if ($data === 'bk_sendok') {
+        $pend = bkPendGet($uid, $chatId);
+        if (!$pend || $pend['kind'] !== 'send_confirm') {
+            answerCb(BOT_TOKEN, $cbId, bkT('ask_expired'), true);
+            return true;
+        }
+        bkPendClear($uid, $chatId);
+        $amount = (float)($pend['data']['amount'] ?? 0);
+        $toId   = (int)($pend['data']['to'] ?? 0);
+        [$ok, $t] = bkSendDiamond($uid, $toId, $name, $uname, $amount);
+        answerCb(BOT_TOKEN, $cbId, $ok ? '🎁' : '', !$ok);
+        sendMsg(BOT_TOKEN, $chatId, $t);
+        if (!empty($pend['msg'])) bkShow($uid, $chatId, $name, (int)$pend['msg']);
+        return true;
+    }
     return false;
+}
+
+// ============================================================
+// ✏️ ویرایشگرِ داخلِ ربات — /panel ← 🏦 بانک
+// ============================================================
+//
+// همان الگویِ دقیقِ games.php (gmAdminHome/gmAdminTexts/gmStateHandle):
+// متن‌ها با msgHtml() ذخیره می‌شوند (کوتیشن/بولد/ایموجیِ پریمیومِ
+// داخلِ متن، هرچه تلگرام خودش فهمید، سالم می‌ماند)؛ برچسبِ خودِ دکمه
+// (که تلگرام HTML رویش قبول نمی‌کند) متنِ ساده + شناسه‌ی ایموجیِ
+// پریمیومِ جدا ذخیره می‌شود. تنظیماتِ عددیِ ریزِ موتورِ رند عمدا این‌جا
+// نیست — آن یکی برایِ یک‌بار تنظیم‌کردنِ دقیق، فرمِ وب مناسب‌تر است؛
+// چیزی که هرروز دست خورد (متن‌ها، دکمه‌ها، رنگ‌ها، کلمه‌ها، آستانه‌ها)
+// همین‌جاست.
+
+function bkLabels() {
+    return [
+        'card' => 'کارتِ بانک', 'protected' => 'حفاظتِ دستی — موفق', 'protect_still' => 'حفاظتِ دستی — از قبل فعال',
+        'ask_deposit' => 'واریز — سوال', 'ask_withdraw' => 'برداشت — سوال', 'ask_bad_num' => 'عددِ نامعتبر',
+        'ask_expired' => 'درخواستِ منقضی',
+        'dep_low_wallet' => 'واریز — کیف‌پول کم', 'dep_ok' => 'واریز — موفق',
+        'wd_locked' => 'برداشت — زیرِ حداقل', 'wd_low_bank' => 'برداشت — بانک کم', 'wd_ok' => 'برداشت — موفق',
+        'hack_how' => 'هک — راهنما', 'hack_self' => 'هک — خودت', 'hack_no_target' => 'هک — هدف نیست',
+        'hack_protected' => 'هک — هدف محافظت‌شده', 'hack_empty' => 'هک — بانکِ خالی', 'hack_cooldown' => 'هک — کول‌داون',
+        'hack_jackpot' => 'هک — JACKPOT', 'hack_perfect' => 'هک — PERFECT', 'hack_success' => 'هک — SUCCESS',
+        'hack_partial' => 'هک — PARTIAL', 'hack_critfail' => 'هک — CRITICAL FAIL', 'hack_failed' => 'هک — FAILED',
+        'top_head' => 'برترین‌ها — سر', 'top_row' => 'برترین‌ها — ردیف', 'top_none' => 'برترین‌ها — خالی',
+        'ask_send_amt' => 'ارسال — مقدار', 'ask_send_id' => 'ارسال — آیدی', 'ask_send_badid' => 'ارسال — آیدیِ بد',
+        'send_self' => 'ارسال — به خودت', 'send_no_target' => 'ارسال — گیرنده ناشناس',
+        'send_low_wallet' => 'ارسال — کیف‌پول کم', 'send_confirm' => 'ارسال — تاییدیه', 'send_ok' => 'ارسال — موفق',
+        'btn_protect' => 'دکمه: حفاظت', 'btn_deposit' => 'دکمه: واریز', 'btn_withdraw' => 'دکمه: برداشت',
+        'btn_send' => 'دکمه: ارسال به کاربر', 'btn_send_confirm' => 'دکمه: تاییدِ ارسال',
+    ];
+}
+function bkLabel($k) { return bkLabels()[$k] ?? $k; }
+function bkBtnKeys() { return ['btn_protect', 'btn_deposit', 'btn_withdraw', 'btn_send', 'btn_send_confirm']; }
+
+function bkAdminHome($chatId, $msgId = null) {
+    $c = bkCfg();
+    $t  = "🏦 <b>بانک</b>\n\n";
+    $t .= 'وضعیت: ' . (bkOn() ? '✅ روشن' : '❌ خاموش') . "\n\n";
+    $t .= 'کلمه‌ی باز کردنِ بانک: <code>' . h($c['word_bank']) . "</code>\n";
+    $t .= 'کلمه‌های هک: <code>' . h($c['word_hack']) . "</code>\n\n";
+    $t .= '💎 حداقلِ موجودیِ بانک برایِ برداشت: <b>' . bkNum($c['min_withdraw']) . "</b>\n";
+    $t .= '🛡 حفاظتِ دستی: <b>' . (int)round($c['manual_protect'] / 60) . "</b> دقیقه\n";
+    $t .= '⏳ کول‌داونِ هک: <b>' . (int)round($c['hack_cooldown'] / 60) . "</b> دقیقه\n";
+    $t .= '🛡 شیلدِ خودکار بعدِ هک: <b>' . (int)$c['shield_after'] . "</b> ثانیه\n";
+
+    $rows = [
+        [btnCb(bkOn() ? '✅ روشن' : '❌ خاموش', 'bkax', 'info')],
+        [btnCb('🗣 کلمه‌ها', 'bkaw_home', 'admin'), btnCb('✏️ متن‌ها و دکمه‌ها', 'bkat_home', 'admin')],
+        [btnCb('🎨 رنگِ دکمه‌ها', 'bkacolors', 'admin')],
+        [btnCb('💎 حداقلِ برداشت: ' . bkNum($c['min_withdraw']), 'bkamin', 'admin')],
+        [btnCb('🛡 حفاظتِ دستی (دقیقه)', 'bkaprot', 'admin'), btnCb('🛡 شیلدِ خودکار (ثانیه)', 'bkashield', 'admin')],
+        [btnCb('⏳ کول‌داونِ هک (دقیقه)', 'bkacool', 'admin')],
+        [btnCb(UT('back'), 'adm_home', 'nav')],
+    ];
+    if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+    else sendMsg(BOT_TOKEN, $chatId, $t, inlineKb($rows));
+}
+
+function bkAdminTexts($chatId, $msgId, $page = 0) {
+    $keys = array_keys((array)bkVal('texts', []));
+    $per  = 12;
+    $tot  = max(1, (int)ceil(count($keys) / $per));
+    $page = max(0, min($tot - 1, (int)$page));
+    $slice = array_slice($keys, $page * $per, $per);
+
+    $t  = "✏️ <b>متن‌ها و دکمه‌های بانک</b> — صفحه " . ($page + 1) . " از {$tot}\n\n";
+    $t .= "هرچه بنویسید عینا همان می‌رود: ایموجیِ پریمیوم و quote سالم می‌مانند.\n\n";
+    $rows = [];
+    foreach ($slice as $k) {
+        $v = (string)bkVal('texts.' . $k, '');
+        $t .= '• <b>' . h(bkLabel($k)) . '</b>: <code>' .
+              h(mb_substr(str_replace("\n", ' ', strip_tags($v)), 0, 34)) . "</code>\n";
+        $rows[] = [btnCb(bkLabel($k), 'bkats_' . $k, 'admin')];
+    }
+    $nav = [];
+    if ($page > 0)        $nav[] = btnCb('◀️', 'bkat_' . ($page - 1), 'nav');
+    if ($page < $tot - 1) $nav[] = btnCb('▶️', 'bkat_' . ($page + 1), 'nav');
+    if ($nav) $rows[] = $nav;
+    $rows[] = [btnCb(UT('back'), 'bk_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, mb_substr($t, 0, 3800), inlineKb($rows));
+}
+
+function bkAdminColors($chatId, $msgId) {
+    $t = "🎨 <b>رنگِ دکمه‌های بانک</b>\n\nروی هرکدام بزن تا رنگش را عوض کنی.\n\n";
+    $rows = [];
+    foreach (bkBtnKeys() as $k) {
+        $color = (string)bkVal('btns.' . $k . '.color', 'none');
+        $t .= '• ' . h(bkLabel($k)) . ': <b>' . h(styleMap()[$color] ?? $color) . "</b>\n";
+        $rows[] = [btnCb(bkT($k, []) ?: bkLabel($k), 'bkacolk_' . $k, 'info')];
+    }
+    $rows[] = [btnCb(UT('back'), 'bk_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function bkAdminColorPick($chatId, $msgId, $k) {
+    $cur = (string)bkVal('btns.' . $k . '.color', 'none');
+    $t = "🎨 رنگِ <b>" . h(bkLabel($k)) . "</b> را انتخاب کن:\n\nالان: <b>" . h(styleMap()[$cur] ?? $cur) . "</b>";
+    $rows = [];
+    foreach (styleMap() as $sk => $sl) $rows[] = [btnCb(($sk === $cur ? '✅ ' : '') . $sl, 'bkacolv_' . $k . '_' . $sk, 'info')];
+    $rows[] = [btnCb(UT('back'), 'bkacolors', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function bkAdminWords($chatId, $msgId) {
+    $c = bkCfg();
+    $t = "🗣 <b>کلمه‌های بانک</b>\n\nهر کلمه را با ویرگول جدا کنید.\n\n";
+    $map = ['word_bank' => 'باز کردنِ بانک', 'word_hack' => 'شروعِ هک'];
+    $rows = [];
+    foreach ($map as $k => $lbl) {
+        $t .= '• <b>' . h($lbl) . '</b>: <code>' . h((string)$c[$k]) . "</code>\n";
+        $rows[] = [btnCb($lbl, 'bkaws_' . $k, 'admin')];
+    }
+    $rows[] = [btnCb(UT('back'), 'bk_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function bkAdminCallback($data, $chatId, $msgId, $cbId) {
+    if (!str_starts_with((string)$data, 'bk')) return false;
+
+    if ($data === 'bk_home') { answerCb(BOT_TOKEN, $cbId); bkAdminHome($chatId, $msgId); return true; }
+    if ($data === 'bkax') {
+        bkSet(function (&$c) { $c['on'] = empty($c['on']); });
+        answerCb(BOT_TOKEN, $cbId, '✅'); bkAdminHome($chatId, $msgId); return true;
+    }
+
+    if ($data === 'bkaw_home') { answerCb(BOT_TOKEN, $cbId); bkAdminWords($chatId, $msgId); return true; }
+    if ($data === 'bkat_home') { answerCb(BOT_TOKEN, $cbId); bkAdminTexts($chatId, $msgId, 0); return true; }
+    if (preg_match('/^bkat_(\d+)$/', $data, $m)) { answerCb(BOT_TOKEN, $cbId); bkAdminTexts($chatId, $msgId, (int)$m[1]); return true; }
+
+    if ($data === 'bkacolors') { answerCb(BOT_TOKEN, $cbId); bkAdminColors($chatId, $msgId); return true; }
+    if (preg_match('/^bkacolk_(\w+)$/', $data, $m) && in_array($m[1], bkBtnKeys(), true)) {
+        answerCb(BOT_TOKEN, $cbId); bkAdminColorPick($chatId, $msgId, $m[1]); return true;
+    }
+    if (preg_match('/^bkacolv_(\w+)_(\w+)$/', $data, $m) && in_array($m[1], bkBtnKeys(), true) && isset(styleMap()[$m[2]])) {
+        bkSet(function (&$c) use ($m) {
+            if (!is_array($c['btns'][$m[1]] ?? null)) $c['btns'][$m[1]] = [];
+            $c['btns'][$m[1]]['color'] = $m[2];
+        });
+        answerCb(BOT_TOKEN, $cbId, '✅'); bkAdminColorPick($chatId, $msgId, $m[1]); return true;
+    }
+
+    $asks = [
+        'bkamin'    => ['bk_min',    "💎 حداقلِ موجودیِ بانک برایِ باز شدنِ برداشت را بفرست (عدد):"],
+        'bkaprot'   => ['bk_prot',   "🛡 مدتِ حفاظتِ دستی چند دقیقه باشد؟"],
+        'bkashield' => ['bk_shield', "🛡 مدتِ شیلدِ خودکار (بعدِ هر هک) چند ثانیه باشد؟"],
+        'bkacool'   => ['bk_cool',   "⏳ فاصله‌ی دو هکِ همان مهاجم چند دقیقه باشد؟"],
+    ];
+    if (isset($asks[$data])) {
+        [$act, $ask] = $asks[$data];
+        answerCb(BOT_TOKEN, $cbId);
+        setState(ADMIN_ID, $act, []);
+        sendMsg(BOT_TOKEN, $chatId, $ask, inlineKb([[btnCb('انصراف', 'bk_home', 'cancel')]]));
+        return true;
+    }
+
+    foreach (['bkats_' => ['bk_text', 'texts.'], 'bkaws_' => ['bk_word', '']] as $pre => [$act, $path]) {
+        if (!str_starts_with($data, $pre)) continue;
+        $k = substr($data, strlen($pre));
+        answerCb(BOT_TOKEN, $cbId);
+        setState(ADMIN_ID, $act, ['k' => $k]);
+        $cur = (string)bkVal($path . $k, '');
+        $back = inlineKb([[btnCb(UT('back'), $act === 'bk_text' ? 'bkat_home' : 'bkaw_home', 'cancel')]]);
+        if ($act === 'bk_text' && bkIsButtonKey($k)) {
+            sendMsg(BOT_TOKEN, $chatId,
+                "✏️ متنِ دکمه‌ی <b>" . h(bkLabel($k)) . "</b> را بفرست.\n\n" .
+                "اگر می‌خواهی ایموجیِ پریمیوم هم رویِ دکمه بنشیند، همان ایموجی را داخلِ همین پیام بفرست.\n\n" .
+                "الان: <code>" . h($cur) . "</code>", $back);
+        } else {
+            sendMsg(BOT_TOKEN, $chatId,
+                "✏️ متنِ <b>" . h(bkLabel($k) ?: $k) . "</b> را بفرست.\n\n" .
+                "جای‌گذاری‌های داخلِ آکولاد ({name}، {amount}، ...) را دست‌نخورده نگه دار.\n\n" .
+                "الان:\n" . ($act === 'bk_text' ? $cur : '<code>' . h($cur) . '</code>'), $back);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+function bkStateHandle($action, $msg, $uid, $chatId) {
+    if (!str_starts_with((string)$action, 'bk_')) return false;
+    if (!isAdmin($uid)) return false;
+
+    $st   = getState($uid);
+    $sd   = $st['data'] ?? [];
+    $text = trim((string)($msg['text'] ?? ''));
+    $back = inlineKb([[btnCb('🏦 بانک', 'bk_home', 'admin')]]);
+    $done = function ($m = "✅ ذخیره شد.") use ($uid, $chatId, $back) {
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, $m, $back);
+        return true;
+    };
+
+    if ($action === 'bk_min') {
+        $v = (float)str_replace([',', '،'], '', norm_fa_digits($text));
+        if ($v < 0) { sendMsg(BOT_TOKEN, $chatId, "⚠️ باید ۰ یا بیشتر باشد."); return true; }
+        bkSet(function (&$c) use ($v) { $c['min_withdraw'] = $v; });
+        return $done('✅ حداقلِ برداشت: ' . bkNum($v));
+    }
+    if ($action === 'bk_prot') {
+        $v = (int)norm_fa_digits($text);
+        if ($v < 1 || $v > 1440) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۱ تا ۱۴۴۰ دقیقه."); return true; }
+        bkSet(function (&$c) use ($v) { $c['manual_protect'] = $v * 60; });
+        return $done('✅ حفاظتِ دستی: ' . $v . ' دقیقه');
+    }
+    if ($action === 'bk_shield') {
+        $v = (int)norm_fa_digits($text);
+        if ($v < 0 || $v > 3600) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۰ تا ۳۶۰۰ ثانیه."); return true; }
+        bkSet(function (&$c) use ($v) { $c['shield_after'] = $v; });
+        return $done('✅ شیلدِ خودکار: ' . $v . ' ثانیه');
+    }
+    if ($action === 'bk_cool') {
+        $v = (int)norm_fa_digits($text);
+        if ($v < 1 || $v > 1440) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۱ تا ۱۴۴۰ دقیقه."); return true; }
+        bkSet(function (&$c) use ($v) { $c['hack_cooldown'] = $v * 60; });
+        return $done('✅ کول‌داونِ هک: ' . $v . ' دقیقه');
+    }
+    if ($action === 'bk_word') {
+        $k = (string)($sd['k'] ?? '');
+        if ($k === '' || $text === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ خالی نمی‌شود."); return true; }
+        bkSet(function (&$c) use ($k, $text) { $c[$k] = $text; });
+        return $done();
+    }
+    if ($action === 'bk_text') {
+        $k = (string)($sd['k'] ?? '');
+        if ($k === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ چیزی برای ذخیره نیست."); return true; }
+
+        if (bkIsButtonKey($k)) {
+            if ($text === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی نمی‌شود."); return true; }
+            $ids  = function_exists('customEmojiIds') ? customEmojiIds($msg) : [];
+            $icon = $ids ? (string)$ids[0] : '';
+            if ($icon !== '' && function_exists('textWithoutCustomEmoji')) {
+                $clean = textWithoutCustomEmoji($msg);
+                if ($clean !== '') $text = $clean;
+            }
+            if ($text === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی نمی‌شود."); return true; }
+            bkSet(function (&$c) use ($k, $text, $icon) {
+                $c['texts'][$k] = $text;
+                if (!isset($c['icons']) || !is_array($c['icons'])) $c['icons'] = [];
+                $c['icons'][$k] = $icon;
+            });
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId,
+                "✅ ذخیره شد" . ($icon !== '' ? " — ایموجیِ پریمیوم هم رویِ دکمه نشست." : '.') . "\n\nاین‌طور دیده می‌شود:",
+                inlineKb([[bkBtn($k, [], 'bk_nop')]]));
+            sendMsg(BOT_TOKEN, $chatId, '👆', $back);
+            return true;
+        }
+
+        $html = msgHtml($msg);
+        if (trim($html) === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی نمی‌شود."); return true; }
+        bkSet(function (&$c) use ($k, $html) { $c['texts'][$k] = $html; });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, "✅ ذخیره شد.", $back);
+        return true;
+    }
+    clearState($uid);
+    return true;
 }

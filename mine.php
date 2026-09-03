@@ -26,7 +26,7 @@ function mnDefaults() {
         'group_only' => 1,
         'word'       => 'مین',
 
-        'entry_min' => 100,
+        'entry_min' => 10,
         'entry_max' => 1000000,
 
         'min_safe_for_protection' => 3,
@@ -40,8 +40,9 @@ function mnDefaults() {
         'expire_refund'    => 0,     // ۰=بدونِ برگشتِ ورودی، ۱=ورودی برگردد
         'game_cooldown'    => 0,     // ثانیه — فاصله‌ی دو بازیِ همان کاربر (۰=خاموش)
 
-        'icons' => ['btn_join' => '', 'btn_cancel' => '', 'btn_cash' => ''],
+        'icons' => ['btn_field' => '', 'btn_join' => '', 'btn_cancel' => '', 'btn_cash' => ''],
         'btns'  => [
+            'btn_field'  => ['color' => 'none'],
             'btn_join'   => ['color' => 'success'],
             'btn_cancel' => ['color' => 'danger'],
             'btn_cash'   => ['color' => 'primary'],
@@ -582,4 +583,283 @@ function mnTick($limit = 50) {
         }
     }
     return $done;
+}
+
+// ============================================================
+// ✏️ ویرایشگرِ داخلِ ربات — /panel ← 💣 مین‌یاب
+// ============================================================
+// همان الگویِ دقیقِ bank.php/games.php.
+
+function mnLabels() {
+    return [
+        'preview' => 'پیش‌نمایشِ بازی', 'need_join' => 'یادآوریِ پیوستن',
+        'low_wallet' => 'کیف‌پول کم', 'bad_amount' => 'مبلغِ نامعتبر',
+        'busy' => 'یک بازیِ فعالِ دیگر هست', 'cooldown' => 'کول‌داونِ بازی',
+        'full' => 'ظرفیتِ بازی‌ها پره', 'not_yours' => 'مالِ تو نیست', 'gone' => 'بازی تمام شده',
+        'already' => 'این خانه قبلا انتخاب شده', 'active' => 'کارتِ بازیِ فعال',
+        'cancelled' => 'بازی لغو شد', 'lost' => 'باخت (روی مین)',
+        'protected' => 'برخورد با مین، ولی محافظت‌شده', 'cashout' => 'برداشتِ جایزه — موفق',
+        'expired' => 'بازی منقضی شد', 'gameover_head' => 'سرِ پیامِ پایانِ بازی',
+        'btn_field' => 'دکمه: سرِ میدان', 'btn_join' => 'دکمه: پیوستن',
+        'btn_cancel' => 'دکمه: لغو', 'btn_cash' => 'دکمه: برداشتِ جایزه',
+    ];
+}
+function mnLabel($k) { return mnLabels()[$k] ?? $k; }
+function mnBtnKeys() { return ['btn_field', 'btn_join', 'btn_cancel', 'btn_cash']; }
+
+function mnAdminHome($chatId, $msgId = null) {
+    $c = mnCfg();
+    $t  = "💣 <b>مین‌یاب</b>\n\n";
+    $t .= 'وضعیت: ' . (mnOn() ? '✅ روشن' : '❌ خاموش') . "\n\n";
+    $t .= 'کلمه‌ی شروع: <code>' . h($c['word']) . " ۵۰۰</code>\n\n";
+    $t .= '💎 بازه‌ی ورودی: <b>' . mnNum($c['entry_min']) . '</b> تا <b>' . mnNum($c['entry_max']) . "</b>\n";
+    $t .= '🛡 حداقلِ خانه‌ی امن برایِ حفاظت: <b>' . (int)$c['min_safe_for_protection'] . "</b>\n";
+    $t .= '⏰ مهلتِ بی‌کاری: <b>' . (int)round($c['game_timeout'] / 60) . "</b> دقیقه\n";
+
+    $rows = [
+        [btnCb(mnOn() ? '✅ روشن' : '❌ خاموش', 'mnax', 'info')],
+        [btnCb('🗣 کلمه‌ی شروع', 'mnaw_home', 'admin'), btnCb('✏️ متن‌ها و دکمه‌ها', 'mnat_home', 'admin')],
+        [btnCb('🎨 رنگِ دکمه‌ها', 'mnacolors', 'admin')],
+        [btnCb('💎 بازه‌ی ورودی', 'mnarange', 'admin'), btnCb('🛡 حدِ حفاظت', 'mnasafe', 'admin')],
+        [btnCb('🏆 جایزه‌ی هر خانه', 'mnarewards', 'admin')],
+        [btnCb('⏰ مهلتِ بی‌کاری (دقیقه)', 'mnatimeout', 'admin')],
+        [btnCb(UT('back'), 'adm_home', 'nav')],
+    ];
+    if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+    else sendMsg(BOT_TOKEN, $chatId, $t, inlineKb($rows));
+}
+
+function mnAdminTexts($chatId, $msgId, $page = 0) {
+    $keys = array_keys((array)mnVal('texts', []));
+    $per  = 12;
+    $tot  = max(1, (int)ceil(count($keys) / $per));
+    $page = max(0, min($tot - 1, (int)$page));
+    $slice = array_slice($keys, $page * $per, $per);
+
+    $t  = "✏️ <b>متن‌ها و دکمه‌های مین‌یاب</b> — صفحه " . ($page + 1) . " از {$tot}\n\n";
+    $t .= "هرچه بنویسید عینا همان می‌رود: ایموجیِ پریمیوم و quote سالم می‌مانند.\n\n";
+    $rows = [];
+    foreach ($slice as $k) {
+        $v = (string)mnVal('texts.' . $k, '');
+        $t .= '• <b>' . h(mnLabel($k)) . '</b>: <code>' .
+              h(mb_substr(str_replace("\n", ' ', strip_tags($v)), 0, 34)) . "</code>\n";
+        $rows[] = [btnCb(mnLabel($k), 'mnats_' . $k, 'admin')];
+    }
+    $nav = [];
+    if ($page > 0)        $nav[] = btnCb('◀️', 'mnat_' . ($page - 1), 'nav');
+    if ($page < $tot - 1) $nav[] = btnCb('▶️', 'mnat_' . ($page + 1), 'nav');
+    if ($nav) $rows[] = $nav;
+    $rows[] = [btnCb(UT('back'), 'mn_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, mb_substr($t, 0, 3800), inlineKb($rows));
+}
+
+function mnAdminColors($chatId, $msgId) {
+    $t = "🎨 <b>رنگِ دکمه‌های مین‌یاب</b>\n\nروی هرکدام بزن تا رنگش را عوض کنی.\n\n";
+    $rows = [];
+    foreach (mnBtnKeys() as $k) {
+        $color = (string)mnVal('btns.' . $k . '.color', 'none');
+        $t .= '• ' . h(mnLabel($k)) . ': <b>' . h(styleMap()[$color] ?? $color) . "</b>\n";
+        $rows[] = [btnCb(mnT($k, []) ?: mnLabel($k), 'mnacolk_' . $k, 'info')];
+    }
+    $rows[] = [btnCb(UT('back'), 'mn_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function mnAdminColorPick($chatId, $msgId, $k) {
+    $cur = (string)mnVal('btns.' . $k . '.color', 'none');
+    $t = "🎨 رنگِ <b>" . h(mnLabel($k)) . "</b> را انتخاب کن:\n\nالان: <b>" . h(styleMap()[$cur] ?? $cur) . "</b>";
+    $rows = [];
+    foreach (styleMap() as $sk => $sl) $rows[] = [btnCb(($sk === $cur ? '✅ ' : '') . $sl, 'mnacolv_' . $k . '_' . $sk, 'info')];
+    $rows[] = [btnCb(UT('back'), 'mnacolors', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function mnAdminRewards($chatId, $msgId) {
+    $r = mnVal('rewards', mnDefaults()['rewards']);
+    $t = "🏆 <b>جایزه‌ی هر خانه‌ی امن</b>\n\nهرکدام، جایزه‌ی همان شماره‌خانه است (نه تجمعی).\n\n";
+    $rows = [];
+    for ($i = 1; $i <= 8; $i++) {
+        $t .= '• خانه‌ی #' . $i . ': <b>' . mnNum($r[$i - 1] ?? 0) . "</b>\n";
+        $rows[] = [btnCb('#' . $i . ' — ' . mnNum($r[$i - 1] ?? 0), 'mnarw_' . $i, 'admin')];
+    }
+    $rows[] = [btnCb(UT('back'), 'mn_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function mnAdminCallback($data, $chatId, $msgId, $cbId) {
+    if (!str_starts_with((string)$data, 'mn')) return false;
+
+    if ($data === 'mn_home') { answerCb(BOT_TOKEN, $cbId); mnAdminHome($chatId, $msgId); return true; }
+    if ($data === 'mnax') {
+        mnSet(function (&$c) { $c['on'] = empty($c['on']); });
+        answerCb(BOT_TOKEN, $cbId, '✅'); mnAdminHome($chatId, $msgId); return true;
+    }
+
+    if ($data === 'mnaw_home') { answerCb(BOT_TOKEN, $cbId); mnAdminWord($chatId, $msgId); return true; }
+    if ($data === 'mnat_home') { answerCb(BOT_TOKEN, $cbId); mnAdminTexts($chatId, $msgId, 0); return true; }
+    if (preg_match('/^mnat_(\d+)$/', $data, $m)) { answerCb(BOT_TOKEN, $cbId); mnAdminTexts($chatId, $msgId, (int)$m[1]); return true; }
+    if ($data === 'mnarewards') { answerCb(BOT_TOKEN, $cbId); mnAdminRewards($chatId, $msgId); return true; }
+
+    if ($data === 'mnacolors') { answerCb(BOT_TOKEN, $cbId); mnAdminColors($chatId, $msgId); return true; }
+    if (preg_match('/^mnacolk_(\w+)$/', $data, $m) && in_array($m[1], mnBtnKeys(), true)) {
+        answerCb(BOT_TOKEN, $cbId); mnAdminColorPick($chatId, $msgId, $m[1]); return true;
+    }
+    if (preg_match('/^mnacolv_(\w+)_(\w+)$/', $data, $m) && in_array($m[1], mnBtnKeys(), true) && isset(styleMap()[$m[2]])) {
+        mnSet(function (&$c) use ($m) {
+            if (!is_array($c['btns'][$m[1]] ?? null)) $c['btns'][$m[1]] = [];
+            $c['btns'][$m[1]]['color'] = $m[2];
+        });
+        answerCb(BOT_TOKEN, $cbId, '✅'); mnAdminColorPick($chatId, $msgId, $m[1]); return true;
+    }
+
+    if (preg_match('/^mnarw_(\d)$/', $data, $m)) {
+        $i = (int)$m[1];
+        answerCb(BOT_TOKEN, $cbId);
+        setState(ADMIN_ID, 'mn_reward', ['i' => $i]);
+        sendMsg(BOT_TOKEN, $chatId, "🏆 جایزه‌ی خانه‌ی امنِ #{$i} چند الماس باشد؟",
+            inlineKb([[btnCb('انصراف', 'mnarewards', 'cancel')]]));
+        return true;
+    }
+
+    $asks = [
+        'mnasafe'    => ['mn_safe',    "🛡 چند خانه‌ی امنِ پیاپی، از جریمه‌ی برخورد با مین محافظت کند؟ (۰ تا ۸)"],
+        'mnatimeout' => ['mn_timeout', "⏰ بازیِ بی‌کار، بعدِ چند دقیقه منقضی شود؟"],
+    ];
+    if (isset($asks[$data])) {
+        [$act, $ask] = $asks[$data];
+        answerCb(BOT_TOKEN, $cbId);
+        setState(ADMIN_ID, $act, []);
+        sendMsg(BOT_TOKEN, $chatId, $ask, inlineKb([[btnCb('انصراف', 'mn_home', 'cancel')]]));
+        return true;
+    }
+    if ($data === 'mnarange') {
+        answerCb(BOT_TOKEN, $cbId);
+        setState(ADMIN_ID, 'mn_range', []);
+        sendMsg(BOT_TOKEN, $chatId, "💎 کف و سقفِ ورودی را با خط تیره بفرست.\nمثال: <code>10-1000000</code>",
+            inlineKb([[btnCb('انصراف', 'mn_home', 'cancel')]]));
+        return true;
+    }
+
+    if (str_starts_with($data, 'mnats_')) {
+        $k = substr($data, 6);
+        answerCb(BOT_TOKEN, $cbId);
+        setState(ADMIN_ID, 'mn_text', ['k' => $k]);
+        $cur  = (string)mnVal('texts.' . $k, '');
+        $back = inlineKb([[btnCb(UT('back'), 'mnat_home', 'cancel')]]);
+        if (mnIsButtonKey($k)) {
+            sendMsg(BOT_TOKEN, $chatId,
+                "✏️ متنِ دکمه‌ی <b>" . h(mnLabel($k)) . "</b> را بفرست.\n\n" .
+                "اگر می‌خواهی ایموجیِ پریمیوم هم رویِ دکمه بنشیند، همان ایموجی را داخلِ همین پیام بفرست.\n\n" .
+                "الان: <code>" . h($cur) . "</code>", $back);
+        } else {
+            sendMsg(BOT_TOKEN, $chatId,
+                "✏️ متنِ <b>" . h(mnLabel($k)) . "</b> را بفرست.\n\n" .
+                "جای‌گذاری‌های داخلِ آکولاد ({name}، {entry}، ...) را دست‌نخورده نگه دار.\n\nالان:\n" . $cur, $back);
+        }
+        return true;
+    }
+    if ($data === 'mnaws_word') {
+        answerCb(BOT_TOKEN, $cbId);
+        setState(ADMIN_ID, 'mn_word', []);
+        sendMsg(BOT_TOKEN, $chatId, "🗣 کلمه‌ی شروعِ بازی را بفرست (مثلا «مین»):",
+            inlineKb([[btnCb('انصراف', 'mnaw_home', 'cancel')]]));
+        return true;
+    }
+
+    return false;
+}
+
+function mnAdminWord($chatId, $msgId) {
+    $t = "🗣 <b>کلمه‌ی شروع</b>\n\nهمین کلمه + یک عدد، بازی می‌سازد — مثلا <code>" . h(mnVal('word', 'مین')) . " ۵۰۰</code>.\n\n";
+    $rows = [[btnCb('✏️ عوض کردنِ کلمه', 'mnaws_word', 'admin')], [btnCb(UT('back'), 'mn_home', 'nav')]];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function mnStateHandle($action, $msg, $uid, $chatId) {
+    if (!str_starts_with((string)$action, 'mn_')) return false;
+    if (!isAdmin($uid)) return false;
+
+    $st   = getState($uid);
+    $sd   = $st['data'] ?? [];
+    $text = trim((string)($msg['text'] ?? ''));
+    $back = inlineKb([[btnCb('💣 مین‌یاب', 'mn_home', 'admin')]]);
+    $done = function ($m = "✅ ذخیره شد.") use ($uid, $chatId, $back) {
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, $m, $back);
+        return true;
+    };
+
+    if ($action === 'mn_safe') {
+        $v = (int)norm_fa_digits($text);
+        if ($v < 0 || $v > 8) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۰ تا ۸."); return true; }
+        mnSet(function (&$c) use ($v) { $c['min_safe_for_protection'] = $v; });
+        return $done('✅ حدِ حفاظت: ' . $v . ' خانه‌ی امن');
+    }
+    if ($action === 'mn_timeout') {
+        $v = (int)norm_fa_digits($text);
+        if ($v < 1 || $v > 1440) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۱ تا ۱۴۴۰ دقیقه."); return true; }
+        mnSet(function (&$c) use ($v) { $c['game_timeout'] = $v * 60; });
+        return $done('✅ مهلتِ بی‌کاری: ' . $v . ' دقیقه');
+    }
+    if ($action === 'mn_range') {
+        if (!preg_match('/^\s*([\d,٬]+)\s*[-–ـ]\s*([\d,٬]+)\s*$/u', norm_fa_digits($text), $m)) {
+            sendMsg(BOT_TOKEN, $chatId, "⚠️ مثل <code>10-1000000</code> بفرست."); return true;
+        }
+        $lo = (float)str_replace([',', '٬'], '', $m[1]);
+        $hi = (float)str_replace([',', '٬'], '', $m[2]);
+        if ($lo < 1 || $hi <= $lo) { sendMsg(BOT_TOKEN, $chatId, "⚠️ سقف باید از کف بزرگ‌تر باشد."); return true; }
+        mnSet(function (&$c) use ($lo, $hi) { $c['entry_min'] = $lo; $c['entry_max'] = $hi; });
+        return $done();
+    }
+    if ($action === 'mn_reward') {
+        $i = (int)($sd['i'] ?? 0);
+        $v = (float)str_replace([',', '،'], '', norm_fa_digits($text));
+        if ($i < 1 || $i > 8 || $v < 0) { sendMsg(BOT_TOKEN, $chatId, "⚠️ عددِ معتبر بفرست."); return true; }
+        mnSet(function (&$c) use ($i, $v) {
+            $r = $c['rewards'] ?? mnDefaults()['rewards'];
+            $r[$i - 1] = $v;
+            $c['rewards'] = $r;
+        });
+        return $done('✅ جایزه‌ی خانه‌ی #' . $i . ': ' . mnNum($v));
+    }
+    if ($action === 'mn_word') {
+        if ($text === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ خالی نمی‌شود."); return true; }
+        mnSet(function (&$c) use ($text) { $c['word'] = $text; });
+        return $done();
+    }
+    if ($action === 'mn_text') {
+        $k = (string)($sd['k'] ?? '');
+        if ($k === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ چیزی برای ذخیره نیست."); return true; }
+
+        if (mnIsButtonKey($k)) {
+            if ($text === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی نمی‌شود."); return true; }
+            $ids  = function_exists('customEmojiIds') ? customEmojiIds($msg) : [];
+            $icon = $ids ? (string)$ids[0] : '';
+            if ($icon !== '' && function_exists('textWithoutCustomEmoji')) {
+                $clean = textWithoutCustomEmoji($msg);
+                if ($clean !== '') $text = $clean;
+            }
+            if ($text === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی نمی‌شود."); return true; }
+            mnSet(function (&$c) use ($k, $text, $icon) {
+                $c['texts'][$k] = $text;
+                if (!isset($c['icons']) || !is_array($c['icons'])) $c['icons'] = [];
+                $c['icons'][$k] = $icon;
+            });
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId,
+                "✅ ذخیره شد" . ($icon !== '' ? " — ایموجیِ پریمیوم هم رویِ دکمه نشست." : '.') . "\n\nاین‌طور دیده می‌شود:",
+                inlineKb([[mnBtn($k, [], 'mn_nop')]]));
+            sendMsg(BOT_TOKEN, $chatId, '👆', $back);
+            return true;
+        }
+
+        $html = msgHtml($msg);
+        if (trim($html) === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ متن خالی نمی‌شود."); return true; }
+        mnSet(function (&$c) use ($k, $html) { $c['texts'][$k] = $html; });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, "✅ ذخیره شد.", $back);
+        return true;
+    }
+    clearState($uid);
+    return true;
 }

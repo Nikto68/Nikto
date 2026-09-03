@@ -5570,6 +5570,7 @@ function admHome($chatId, $msgId = null) {
         [btnCb('🤖 ربات‌های اپلودر', 'ag_up', 'admin'), btnCb('🎯 ممبر و قفل‌ها', 'ag_lock', 'admin')],
         [btnCb('💹 قیمت لحظه‌ای', 'px_home', 'admin'),  btnCb('💎 الماس', 'dm_home', 'admin')],
         [btnCb('☎️ شماره مجازی', 'num_home', 'admin'), btnCb('🎮 بازی‌ها', 'gm_home', 'admin')],
+        [btnCb('🏦 بانک', 'bk_home', 'admin'),          btnCb('💣 مین‌یاب', 'mn_home', 'admin')],
         [btnCb('📈 سود روی محصولات', 'pf_home', 'admin')],
         [btnCb('💳 پرداخت', 'ag_pay', 'admin'),        btnCb('🎨 ظاهر و متن‌ها', 'ag_look', 'admin')],
         [btnCb('📡 کانال‌های متصل', 'ch_home', 'admin'),
@@ -7967,6 +7968,8 @@ function masterHandle($update) {
         if (dmAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if (chAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if (gmAdminCallback($data, $chatId, $msgId, $cbId)) return;
+        if (function_exists('bkAdminCallback') && bkAdminCallback($data, $chatId, $msgId, $cbId)) return;
+        if (function_exists('mnAdminCallback') && mnAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if ($data === 'adm_gw')      { answerCb(BOT_TOKEN, $cbId); admGateway($chatId, $msgId); return; }
         if ($data === 'adm_pay')     { answerCb(BOT_TOKEN, $cbId); admPay($chatId, $msgId); return; }
         foreach ([['payc', 'pay_card', "💳 شماره کارت را بفرستید (۱۶ رقم).\n\nخط تیره = پاک کردن"],
@@ -9218,6 +9221,8 @@ function masterHandle($update) {
     if (dmStateHandle($action, $msg, $uid, $chatId)) return;
     if (chStateHandle($action, $msg, $uid, $chatId)) return;
     if (gmStateHandle($action, $msg, $uid, $chatId)) return;
+    if (function_exists('bkStateHandle') && bkStateHandle($action, $msg, $uid, $chatId)) return;
+    if (function_exists('mnStateHandle') && mnStateHandle($action, $msg, $uid, $chatId)) return;
 
     if (str_starts_with($action, 'pay_')) {
         $plain = trim($msg['text'] ?? '');
