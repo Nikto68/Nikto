@@ -88,6 +88,7 @@ function bkDefaults() {
 
             'ask_bad_num' => "❌ یک عددِ صحیح و بزرگ‌تر از صفر بفرستید.",
             'ask_expired' => "⌛️ این درخواست منقضی شده. دوباره از روی /bank شروع کنید.",
+            'not_your_card' => "🔒 این کارتِ بانکِ شما نیست — با /bank کارتِ خودتان را باز کنید.",
 
             // 🎁 ارسالِ الماس به کاربرِ دیگر — مستقیم از کیف‌پول به کیف‌پول
             'ask_send_amt'   => "🎁 <b>SEND DIAMONDS</b>\n\nچند تا الماس می‌خوای بفرستی؟",
@@ -512,9 +513,12 @@ function bkCardText($uid, $name) {
 }
 
 function bkKb($uid) {
+    // 🔒 صاحبِ کارت تویِ خودِ callback_data — چون تویِ گروه هرکسی می‌تونه
+    // زیرِ کارتِ بانکِ یکیِ دیگه دکمه بزنه، و بدونِ این، کلیک‌کننده رویِ
+    // اکانتِ خودش عمل می‌کرد ولی کارتِ صاحبِ پیام overwrite می‌شد.
     return inlineKb([
-        [bkBtn('btn_protect', [], 'bk_protect')],
-        [bkBtn('btn_send', [], 'bk_send')],
+        [bkBtn('btn_protect', [], 'bk_protect_' . (int)$uid)],
+        [bkBtn('btn_send', [], 'bk_send_' . (int)$uid)],
     ]);
 }
 
@@ -533,9 +537,9 @@ function bkShow($uid, $chatId, $name, $editMsgId = null, $replyToMsgId = null) {
  * نشود — و همیشه یک دکمه‌ی «برگشت» زیرش هست که هر لحظه به همان کارتِ
  * اصلی برمی‌گردد.
  */
-function bkAskEdit($chatId, $pendMsgId, $text, array $extraRows = []) {
+function bkAskEdit($chatId, $pendMsgId, $text, array $extraRows = [], $uid = 0) {
     $rows = $extraRows;
-    $rows[] = [bkBtn('btn_back', [], 'bk_cancelflow')];
+    $rows[] = [bkBtn('btn_back', [], 'bk_cancelflow_' . (int)$uid)];
     $kb = inlineKb($rows);
     if ($pendMsgId) { editMsg(BOT_TOKEN, $chatId, (int)$pendMsgId, $text, $kb); return; }
     sendMsg(BOT_TOKEN, $chatId, $text, $kb);
@@ -793,15 +797,15 @@ function bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend) {
     if ($kind === 'send_id') {
         $toId = bkResolveTarget($raw);
         if ($toId === null) {
-            bkAskEdit($chatId, $pendMsg, bkT('ask_send_badid') . "\n\n" . bkT('ask_send_id'));
+            bkAskEdit($chatId, $pendMsg, bkT('ask_send_badid') . "\n\n" . bkT('ask_send_id'), [], $uid);
             return true;
         }
         if ($toId === (int)$uid) {
-            bkAskEdit($chatId, $pendMsg, bkT('send_self') . "\n\n" . bkT('ask_send_id'));
+            bkAskEdit($chatId, $pendMsg, bkT('send_self') . "\n\n" . bkT('ask_send_id'), [], $uid);
             return true;
         }
         if (!function_exists('getUser') || !getUser($toId)) {
-            bkAskEdit($chatId, $pendMsg, bkT('send_no_target') . "\n\n" . bkT('ask_send_id'));
+            bkAskEdit($chatId, $pendMsg, bkT('send_no_target') . "\n\n" . bkT('ask_send_id'), [], $uid);
             return true;
         }
         $amount = (float)($pend['data']['amount'] ?? 0);
@@ -809,14 +813,14 @@ function bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend) {
         $toUser = function_exists('getUser') ? getUser($toId) : null;
         $toTag  = bkUserTag($toId, $toUser['first_name'] ?? '', $toUser['username'] ?? '');
         bkAskEdit($chatId, $pendMsg, bkT('send_confirm', ['amount' => bkNum($amount), 'to' => $toId, 'to_tag' => $toTag]),
-            [[bkBtn('btn_send_confirm', [], 'bk_sendok')]]);
+            [[bkBtn('btn_send_confirm', [], 'bk_sendok_' . (int)$uid)]], $uid);
         return true;
     }
 
     // گامِ اولِ ارسال (send_amt) یک عددِ صحیح می‌خواهد
     if ($kind === 'send_amt') {
         $n = (float)str_replace([',', '٬', ' '], '', norm_fa_digits($raw));
-        if ($n <= 0 || floor($n) != $n) { bkAskEdit($chatId, $pendMsg, bkT('ask_bad_num')); return true; }
+        if ($n <= 0 || floor($n) != $n) { bkAskEdit($chatId, $pendMsg, bkT('ask_bad_num'), [], $uid); return true; }
         $wallet = gmPoints($uid);
         if ($n > $wallet + 1e-9) {
             bkPendClear($uid, $chatId);
@@ -825,7 +829,7 @@ function bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend) {
             return true;
         }
         bkPendSet($uid, $chatId, 'send_id', $pendMsg, ['amount' => $n]);
-        bkAskEdit($chatId, $pendMsg, bkT('ask_send_id'));
+        bkAskEdit($chatId, $pendMsg, bkT('ask_send_id'), [], $uid);
         return true;
     }
 
@@ -890,36 +894,55 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
 
 function bkCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
     if ($data === 'bk_nop') { answerCb(BOT_TOKEN, $cbId); return true; }
-    if (!in_array($data, ['bk_protect', 'bk_send', 'bk_sendok', 'bk_cancelflow'], true)) return false;
+
+    // 🔒 صاحبِ کارت تویِ خودِ callback_data: bk_<action>_<ownerUid>.
+    //
+    // تویِ گروه، پیامِ کارتِ بانکِ هرکس برایِ همه قابلِ‌دیدن است و دکمه‌هایش
+    // هم برایِ همه قابلِ‌کلیک — قبلا هیچ‌جا چک نمی‌شد که کلیک‌کننده همان
+    // صاحبِ کارت است یا نه؛ نتیجه این‌که کلیک‌کننده رویِ اکانتِ خودش عمل
+    // می‌کرد ولی پیامِ کارتِ صاحبِ اصلی با کارتِ کلیک‌کننده overwrite
+    // می‌شد (پولی جابه‌جا نمی‌شد، ولی UX/کارتِ آن کاربر به‌هم می‌ریخت).
+    if (!preg_match('/^bk_(protect|send|sendok|cancelflow)_(\d+)$/', (string)$data, $m)) {
+        // فرمِ قدیمیِ بدونِ صاحب (نسخه‌ی قبل از این رفعِ باگ) — دیگر تولید
+        // نمی‌شود، ولی اگر پیامِ خیلی قدیمی‌ای هنوز رویِ صفحه باشد بی‌صدا رد شود
+        if (in_array($data, ['bk_protect', 'bk_send', 'bk_sendok', 'bk_cancelflow'], true)) {
+            answerCb(BOT_TOKEN, $cbId, bkT('ask_expired'), true);
+            return true;
+        }
+        return false;
+    }
+    $action  = $m[1];
+    $ownerId = (int)$m[2];
     if (!bkOn()) { answerCb(BOT_TOKEN, $cbId); return true; }
+
+    if ($ownerId !== (int)$uid) {
+        answerCb(BOT_TOKEN, $cbId, bkT('not_your_card'), true);
+        return true;
+    }
 
     $name  = (string)($from['first_name'] ?? '');
     $uname = (string)($from['username'] ?? '');
 
-    // (پیامِ /bank همیشه برای همان کسی فرستاده می‌شود که آن را باز کرده،
-    //  پس شناساییِ صاحب از رویِ خودِ uid کافی است — کارتِ شخصیِ هرکس فقط زیرِ
-    //  پیامِ خودش می‌آید.)
-
-    if ($data === 'bk_protect') {
+    if ($action === 'protect') {
         [$ok, $t] = bkProtect($uid);
         answerCb(BOT_TOKEN, $cbId, $ok ? '🛡' : '', !$ok);
         sendMsg(BOT_TOKEN, $chatId, $t);
         bkShow($uid, $chatId, $name, (int)$msgId);
         return true;
     }
-    if ($data === 'bk_send') {
+    if ($action === 'send') {
         answerCb(BOT_TOKEN, $cbId);
         bkPendSet($uid, $chatId, 'send_amt', $msgId);
-        bkAskEdit($chatId, $msgId, bkT('ask_send_amt'));
+        bkAskEdit($chatId, $msgId, bkT('ask_send_amt'), [], $uid);
         return true;
     }
-    if ($data === 'bk_cancelflow') {
+    if ($action === 'cancelflow') {
         answerCb(BOT_TOKEN, $cbId);
         bkPendClear($uid, $chatId);
         bkShow($uid, $chatId, $name, (int)$msgId);
         return true;
     }
-    if ($data === 'bk_sendok') {
+    if ($action === 'sendok') {
         $pend = bkPendGet($uid, $chatId);
         if (!$pend || $pend['kind'] !== 'send_confirm') {
             answerCb(BOT_TOKEN, $cbId, bkT('ask_expired'), true);
@@ -953,7 +976,7 @@ function bkCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
 function bkLabels() {
     return [
         'card' => 'کارتِ بانک', 'protected' => 'حفاظتِ دستی — موفق', 'protect_still' => 'حفاظتِ دستی — از قبل فعال',
-        'ask_bad_num' => 'عددِ نامعتبر', 'ask_expired' => 'درخواستِ منقضی',
+        'ask_bad_num' => 'عددِ نامعتبر', 'ask_expired' => 'درخواستِ منقضی', 'not_your_card' => 'کارتِ کسِ دیگری — رد شد',
         'hack_how' => 'هک — راهنما', 'hack_self' => 'هک — خودت', 'hack_no_target' => 'هک — هدف نیست',
         'hack_protected' => 'هک — هدف محافظت‌شده', 'hack_empty' => 'هک — بانکِ خالی', 'hack_cooldown' => 'هک — کول‌داون',
         'hack_jackpot' => 'هک — JACKPOT', 'hack_perfect' => 'هک — PERFECT', 'hack_success' => 'هک — SUCCESS',
