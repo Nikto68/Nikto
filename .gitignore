@@ -1,3 +1,4 @@
 config.local.php
 data_master/
 *.log
+preview_*.php
