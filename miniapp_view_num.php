@@ -23,7 +23,6 @@ function maViewNum($a, $boot) {
         '__C2__'    => $th['c2'] ?? '#17C978',
         '__C3__'    => $th['c3'] ?? '#8B5CF6',
         '__C4__'    => $th['c4'] ?? '#F23557',
-        '__BG__'    => '#FFFFFF', // 🔒 مثل مینی‌اپ ری‌اکشن، پس‌زمینه همیشه سفید است — قابل تغییر از پنل نیست
         '__GLOW__'  => !empty($th['glow']) ? '1' : '0',
         '__FX__'    => (string)maFxLevel($th),
         '__TITLE__' => htmlspecialchars((string)$a['title'], ENT_QUOTES, 'UTF-8'),
@@ -39,27 +38,31 @@ function maTplNum() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="dark">
 <title>__TITLE__</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{
   /* 🎨 همان چهار رنگِ تاکیدِ مینی‌اپ ری‌اکشن — آبی/سبز/بنفش/قرمز —
      تا هر سه مینی‌اپ یک هویتِ رنگیِ واحد داشته باشند. */
-  --c1:__C1__; --c2:__C2__; --c3:__C3__; --c4:__C4__; --bg:__BG__;
+  --c1:__C1__; --c2:__C2__; --c3:__C3__; --c4:__C4__;
+  /* 🌊 اقیانوسِ شب — تیره و آبی‌تر از دو مینی‌اپِ دیگر، تا سه‌تایی
+     هم‌خانواده باشند ولی هرکدام هویتِ رنگیِ خودشان را داشته باشند. */
+  --bg:#050B14;
   /* رنگِ عمل: از تمِ پنل می‌آید ولی کم‌جان‌تر، تا صفحه آرام بماند */
   --act:color-mix(in srgb, var(--c1) 70%, var(--dim));
 
-  /* سطح‌ها: پس‌زمینه‌ی سفیدِ منشور — همان سطح‌بندیِ روشنِ ری‌اکشن */
-  --s1:#FFFFFF;      /* کارت */
-  --s2:#F6F8FC;      /* کارت برجسته */
-  --s3:#EEF1F7;      /* فشرده / فعال */
-  --hair:rgba(15,23,42,.09);
+  /* سطح‌ها: شیشه‌ی تیره — کارت‌ها فقط کمی از سیاهیِ پس‌زمینه روشن‌ترند */
+  --s1:rgba(255,255,255,.055);      /* کارت */
+  --s2:rgba(255,255,255,.04);       /* کارت برجسته */
+  --s3:rgba(255,255,255,.09);       /* فشرده / فعال */
+  --hair:rgba(255,255,255,.12);
+  --blur:20px;
 
-  /* متن: مشکیِ نرم روی سفید — دقیقا همان جفت‌رنگِ ری‌اکشن */
-  --ink:#161A2B;
-  --dim:#6B7280;
-  --dim2:#8B93A4;
+  /* متن: سفیدِ کمی‌آبی روی تیره */
+  --ink:#EAF3FF;
+  --dim:#93A9C2;
+  --dim2:#6B7F94;
 
   /* پریده = آبیِ کم‌جان روی سفید؛ بقیه مستقیم از همان چهار رنگِ تاکید */
   --pale:color-mix(in srgb, var(--c1) 68%, var(--dim));
@@ -288,7 +291,7 @@ body::before{
 @keyframes pulse{70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
 .big{
   display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:var(--r-md);
-  background:rgba(15,23,42,.045);border:1px solid var(--hair);margin-bottom:9px
+  background:rgba(255,255,255,.06);border:1px solid var(--hair);margin-bottom:9px
 }
 .big .v{flex:1;min-width:0;font-family:var(--mono);font-size:20px;font-weight:800;
   direction:ltr;text-align:left;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -301,7 +304,7 @@ body::before{
 .cp.done{background:color-mix(in srgb,var(--ok) 24%,var(--s3));border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
 .code .v{color:var(--ok-ink);font-size:26px;letter-spacing:4px}
 .timer{display:flex;align-items:center;gap:9px;margin:12px 0 4px}
-.bar{flex:1;height:6px;border-radius:6px;background:rgba(15,23,42,.08);overflow:hidden}
+.bar{flex:1;height:6px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden}
 .bar i{display:block;height:100%;border-radius:6px;transition:width 1s linear;
   background:linear-gradient(90deg,var(--c2),var(--c1))}
 .timer b{font-family:var(--mono);font-size:13px;font-weight:800;direction:ltr;color:var(--dim)}
@@ -378,10 +381,10 @@ body::before{
   position:fixed;z-index:40;inset:auto 12px calc(10px + var(--safe)) 12px;
   max-width:616px;margin:0 auto;display:flex;justify-content:space-around;
   padding:7px 6px;border-radius:24px;isolation:isolate;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  background:rgba(255,255,255,.86);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+  background:rgba(255,255,255,.09);
   border:1px solid var(--hair);
-  box-shadow:0 18px 44px -12px rgba(20,25,45,.28)
+  box-shadow:0 18px 44px -12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)
 }
 /* ✨ نوارِ نوریِ بالای شیشه — همان برقی که روی لبه‌ی شیشه می‌افتد */
 .nav::before{
@@ -458,7 +461,7 @@ body::before{
 .ocard .timer{margin:10px 0 12px}
 
 /* ── شیت و توست ──────────────────────────── */
-.mask{position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.32);backdrop-filter:blur(6px);
+.mask{position:fixed;inset:0;z-index:60;background:rgba(2,4,10,.55);backdrop-filter:blur(6px);
   opacity:0;pointer-events:none;transition:.25s var(--ease)}
 .mask.on{opacity:1;pointer-events:auto}
 /* ⌨️ کیبورد باز = بلور خاموش (توضیح بالای «kb-open» را در JS ببینید).
@@ -467,7 +470,9 @@ body::before{
 body.kb-open .mask{backdrop-filter:none;-webkit-backdrop-filter:none;transition:opacity .25s var(--ease)}
 .sheet{
   position:fixed;inset:auto 0 0 0;z-index:61;max-width:640px;margin:0 auto;
-  background:var(--s1);border:1px solid var(--hair);border-bottom:0;
+  background:color-mix(in srgb,var(--bg) 88%,#0B1B2E);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid var(--hair);border-bottom:0;
   border-radius:26px 26px 0 0;padding:8px 16px calc(20px + var(--safe));
   transform:translateY(105%);transition:.32s var(--ease);max-height:88vh;overflow-y:auto
 }
@@ -502,39 +507,68 @@ body.kb-open .mask{backdrop-filter:none;-webkit-backdrop-filter:none;transition:
 /* ═══ اسپلش/خوش‌آمدگویی ═══ — تا جوابِ api('me') برسه، به‌جای صفحه‌ی
    خام همین رو نشون می‌دیم. رنگ‌ها از رویِ متغیرهای همین صفحه‌ن، پس با
    تمِ رنگیِ خودش هماهنگه. */
-#splash{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;
-  background:var(--bg);transition:opacity .35s ease,visibility .35s ease}
+#splash{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;
+  background:#04080F;transition:opacity .5s ease,visibility .5s ease;overflow:hidden;padding:0 24px}
 #splash.hide{opacity:0;visibility:hidden;pointer-events:none}
-.splash-card{display:flex;flex-direction:column;align-items:center;gap:14px;
-  padding:34px 30px;border-radius:32px;text-align:center;background:var(--s1);
-  border:1px solid var(--hair);
-  box-shadow:0 22px 60px -20px color-mix(in srgb,var(--c1) 30%,transparent);
-  animation:splashPop .55s cubic-bezier(.2,1.4,.4,1) both}
-.splash-badge{width:66px;height:66px;border-radius:22px;display:flex;align-items:center;justify-content:center;
-  font-size:28px;background:linear-gradient(135deg,var(--c1),var(--c3));
-  box-shadow:0 10px 26px -8px color-mix(in srgb,var(--c1) 45%,transparent);
-  animation:splashFloat 2.4s ease-in-out infinite}
-.splash-hi{font-size:19px;font-weight:800;
-  background:linear-gradient(90deg,var(--c1),var(--c3));-webkit-background-clip:text;background-clip:text;color:transparent}
-.splash-sub{font-size:12.5px;color:var(--dim)}
-.splash-dots{display:flex;gap:6px;margin-top:2px}
-.splash-dots i{width:6px;height:6px;border-radius:50%;background:var(--c2);
-  animation:splashDot 1.1s ease-in-out infinite}
-.splash-dots i:nth-child(2){animation-delay:.15s}
-.splash-dots i:nth-child(3){animation-delay:.3s}
-@keyframes splashPop{from{opacity:0;transform:scale(.82) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
-@keyframes splashFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-@keyframes splashDot{0%,80%,100%{opacity:.25;transform:scale(.85)}40%{opacity:1;transform:scale(1)}}
-@media (prefers-reduced-motion:reduce){.splash-card,.splash-badge,.splash-dots i{animation:none!important}}
+.splash-sky{position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(65vw 65vw at -8% -8%,color-mix(in srgb,__C1__ 34%,transparent),transparent 66%),
+    radial-gradient(60vw 60vw at 108% 18%,color-mix(in srgb,__C3__ 26%,transparent),transparent 64%),
+    radial-gradient(55vw 55vw at 50% 112%,color-mix(in srgb,__C2__ 24%,transparent),transparent 62%)}
+.splash-ring{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.08);pointer-events:none}
+.splash-ring.r1{width:80vw;height:80vw;top:-20vw;inset-inline-end:-25vw}
+.splash-ring.r2{width:55vw;height:55vw;bottom:-15vw;inset-inline-start:-18vw}
+.splash-mid{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;text-align:center;width:100%;max-width:320px}
+.splash-icon{position:relative;width:104px;height:104px;border-radius:50%;display:grid;place-items:center;
+  background:linear-gradient(150deg,color-mix(in srgb,__C1__ 55%,#04080F),color-mix(in srgb,__C2__ 40%,#04080F));
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:inset 1px 1px 0 rgba(255,255,255,.28),inset -2px -2px 10px rgba(0,0,0,.4),
+             0 24px 50px -18px color-mix(in srgb,__C1__ 60%,transparent);
+  animation:splashFloat 3s ease-in-out infinite}
+.splash-icon:before,.splash-icon:after{content:"";position:absolute;border-radius:50%;
+  border:1.5px solid color-mix(in srgb,__C2__ 55%,transparent);opacity:0;
+  animation:splashPing 2.6s ease-out infinite}
+.splash-icon:after{animation-delay:.9s}
+.splash-icon i{position:relative;font-style:normal;font-size:44px;line-height:1;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
+.splash-name{position:relative;margin:2px 0 0;font-size:22px;font-weight:900;color:#fff;letter-spacing:-.2px}
+.splash-sub{position:relative;margin:0;font-size:12.5px;color:#8FA9C2;line-height:1.8}
+.splash-tags{position:relative;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:2px}
+.splash-tags span{padding:6px 13px;border-radius:99px;font-size:11px;font-weight:800;color:#DCEEFF;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.splash-foot{position:relative;width:100%;max-width:280px;padding-bottom:calc(30px + var(--safe));
+  display:flex;flex-direction:column;align-items:center;gap:10px}
+.splash-bar{position:relative;width:100%;height:5px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.1)}
+.splash-bar b{position:absolute;inset:0;display:block;border-radius:inherit;transform:scaleX(0);transform-origin:left;
+  background:linear-gradient(90deg,__C1__,__C2__);transition:transform linear}
+.splash-bar b:after{content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);
+  transform:translateX(-100%);animation:splashShine 1.4s ease-in-out infinite}
+.splash-pwr{position:relative;font-size:10.5px;font-weight:700;letter-spacing:.4px;color:#5A7590}
+@keyframes splashFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes splashPing{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.55);opacity:0}}
+@keyframes splashShine{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+@media (prefers-reduced-motion:reduce){
+  .splash-icon,.splash-icon:before,.splash-icon:after,.splash-bar b:after{animation:none!important}
+}
 </style>
 </head>
 <body>
 <div class="splash" id="splash">
-  <div class="splash-card">
-    <div class="splash-badge">☎️</div>
-    <div class="splash-hi">خوش آمدید</div>
-    <div class="splash-sub">__TITLE__</div>
-    <div class="splash-dots"><i></i><i></i><i></i></div>
+  <div class="splash-sky"></div>
+  <div class="splash-ring r1"></div>
+  <div class="splash-ring r2"></div>
+  <div class="splash-mid">
+    <div class="splash-icon"><i>☎️</i></div>
+    <h1 class="splash-name">__TITLE__</h1>
+    <p class="splash-sub">تحویل آنی · کد لحظه‌ای · بازگشت وجه</p>
+    <div class="splash-tags"><span>🌍 +۴۰ کشور</span><span>⚡ آنی</span><span>🔒 امن</span></div>
+  </div>
+  <div class="splash-foot">
+    <div class="splash-bar"><b id="splashFill"></b></div>
+    <div class="splash-pwr">در حال اتصال به شبکه…</div>
   </div>
 </div>
 <div class="wrap">
@@ -620,22 +654,34 @@ const B = __BOOT__;
 const TG = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 if (TG) { try { TG.ready(); TG.expand(); TG.setHeaderColor && TG.setHeaderColor(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()); } catch (e) {} }
 
-/* خوش‌آمدگویی تا جوابِ api('me') برسه پنهان می‌مونه */
+/* خوش‌آمدگویی تا جوابِ api('me') برسه پنهان می‌مونه.
+   حداقلِ نمایش عمدا ۵ ثانیه‌ست (درخواستِ صریحِ کارفرما) — نوارِ پیشرفت
+   هم دقیقا همین ۵ ثانیه را پر می‌کند. */
 const splashStart = Date.now();
 let splashGone = false;
-// کف و سقف جدا شدن — قبلاً یک عددِ ۴-ثانیه‌ای هر دو نقش را داشت، یعنی
-// حتی اتصالِ خیلی سریع هم ۴ ثانیه معطل می‌ماند. SPLASH_MIN فقط جلوی
-// پلک‌زدنِ چندصدمیلی‌ثانیه‌ای را می‌گیرد؛ SPLASH_MAX همان سقفِ قبلی برای
-// شبکه‌ی کند است.
-const SPLASH_MIN = 350;
-const SPLASH_MAX = 4000;
+const SPLASH_MIN = 5000;
+const SPLASH_MAX = 8000; // سقفِ شبکه‌ی کند — بیشتر از این معطل نکن
+(() => {
+  const fill = document.getElementById('splashFill');
+  if (!fill) return;
+  // ⚠️ یک rAF کافی نیست — اگر فریمِ اولِ scaleX(0) واقعا paint نشده
+  // باشد، تغییرِ بعدی به‌جایِ ترنزیشن مستقیم می‌پرد. دو rAF تضمین
+  // می‌کند حالتِ اول رندر شده باشد.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    fill.style.transitionDuration = SPLASH_MIN + 'ms';
+    fill.style.transform = 'scaleX(1)';
+  }));
+})();
 function hideSplash() {
   if (splashGone) return; splashGone = true;
   const wait = Math.max(0, SPLASH_MIN - (Date.now() - splashStart));
   setTimeout(() => {
     const s = document.getElementById('splash'); if (!s) return;
-    s.classList.add('hide');
-    setTimeout(() => s.remove(), 400);
+    const f = document.getElementById('splashFill'); if (f) f.style.transform = 'scaleX(1)';
+    setTimeout(() => {
+      s.classList.add('hide');
+      setTimeout(() => s.remove(), 500);
+    }, 120);
   }, wait);
 }
 setTimeout(hideSplash, SPLASH_MAX);
