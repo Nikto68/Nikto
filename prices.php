@@ -542,8 +542,45 @@ function pxFetch($fresh = false) {
         //    درست برعکسِ چیزی که می‌خواستیم.
         if ((int)(maCacheGet('px_cool', (int)$c['cooldown']) ?: 0) > 0)
             return $mem = (array)(maCacheGet($ck, 0) ?: []);
+
+        // 🚦 ضدِ ازدحام: این‌جا دقیقا همان لحظه‌ای‌ست که کش تازه منقضی
+        // شده — بدونِ این قفل، ده‌ها/صدها درخواستِ هم‌زمانِ وابسته به
+        // قیمت (خریدِ شماره، مینی‌اپ، /panel — نه فقط پاسخِ قیمتِ چت که
+        // قفلِ خودش را داشت) هرکدام خودشان یک تماسِ شبکه‌ی جدا می‌زدند.
+        // فقط اولی که این قفل را می‌گیرد واقعا شبکه می‌رود؛ بقیه پشتِ
+        // همین قفلِ خیلی‌زودآزادشونده منتظر می‌مانند و همینکه نوبتشان شد
+        // کشِ همین‌الان‌تازه‌شده را می‌خوانند — دقیقا همان الگویی که
+        // pxCardCached برای تصویرها استفاده می‌کند.
+        $lockFp = @fopen(DATA_DIR . '/.px_fetch.lock', 'c');
+        if ($lockFp && flock($lockFp, LOCK_EX)) {
+            try {
+                // ⚠️ حتما با $fresh=true — این پردازه احتمالا خودش هم چند
+                // خط بالاتر (قبل از رسیدن به قفل) یک‌بار maCacheGet زده
+                // بود؛ بدونِ $fresh=true همان عکسِ کهنه‌ی قبل از قفل را
+                // دوباره می‌دید، نه نوشته‌ی تازه‌ای که پردازه‌ی قبلی همین
+                // الان (زیرِ همین قفل) روی دیسک گذاشت.
+                $hit2 = maCacheGet($ck, (int)$c['ttl'], true);
+                if (is_array($hit2)) return $mem = $hit2;
+                if ((int)(maCacheGet('px_cool', (int)$c['cooldown'], true) ?: 0) > 0)
+                    return $mem = (array)(maCacheGet($ck, 0, true) ?: []);
+                return $mem = pxFetchNetwork($c, $ck);
+            } finally {
+                flock($lockFp, LOCK_UN);
+                fclose($lockFp);
+            }
+        }
+        if ($lockFp) fclose($lockFp);
+        // قفل نگرفت (پوشه فقط‌خواندنی؟) — به‌جای معطلیِ بی‌فایده، خودش می‌رود شبکه
     }
 
+    return $mem = pxFetchNetwork($c, $ck);
+}
+
+/**
+ * تماسِ واقعیِ شبکه — از pxFetch() جدا شده تا هم مسیرِ عادی هم مسیرِ
+ * پشتِ قفلِ ضدِ ازدحام، همین یک‌جا را صدا بزنند.
+ */
+function pxFetchNetwork($c, $ck) {
     // 🌐 هر دو منبع، هم‌زمان — نه پشت‌سرهم.
     //
     // قبلا فقط یک منبع بود و اگر کند می‌شد، کلِ قیمت‌گیری پشتش می‌ماند.
@@ -559,7 +596,7 @@ function pxFetch($fresh = false) {
     $secondJob = pxSecondJob((string)$c['api'], (string)$c['key'], $to);
     if ($secondJob) $jobs['api'] = $secondJob;
 
-    if (!$jobs) return $mem = [];
+    if (!$jobs) return [];
     $res = pxGetMany($jobs, $to);
 
     // 1️⃣ والکس پایه است — USDT/IRT و جفت‌های دلاری از همین یک تماس
@@ -585,7 +622,7 @@ function pxFetch($fresh = false) {
     if (!$out) {
         maCachePut('px_err', implode(' · ', $wxErr) ?: 'پاسخی نیامد');
         maCachePut('px_cool', time());
-        return $mem = (array)(maCacheGet($ck, 0) ?: []);
+        return (array)(maCacheGet($ck, 0) ?: []);
     }
 
     // یکی‌شان نشد ولی آن یکی جواب داد: کار می‌کند، فقط خطا را نگه دار
@@ -593,7 +630,7 @@ function pxFetch($fresh = false) {
     maCachePut('px_cool', 0);
     maCachePut($ck, $out);
     pxHistNote($out);
-    return $mem = $out;
+    return $out;
 }
 
 /**
