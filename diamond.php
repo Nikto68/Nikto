@@ -180,35 +180,130 @@ function dmReward($level) {
 }
 
 // ============================================================
-// 🗃 داده
+// 🗃 داده — SQLite، هر کاربر یک ردیف (نه یک فایلِ JSONِ تخت با یک قفلِ سراسری)
 // ============================================================
+//
+// قبلا diamond_users.json بود: هر خواندن/نوشتن یعنی decode/encode کردنِ
+// کلِ فایل زیرِ یک flock. با ۲۰ هزار کاربرِ فعال و صدها عملیاتِ هم‌زمانِ
+// امتیازگیری (که همه از همین‌جا رد می‌شوند: بازی‌های الماس، بانک،
+// مین‌یاب، هدیه)، این یعنی همه پشتِ سرِ هم صف می‌شوند و می‌تواند
+// پردازه‌های PHP را پشتِ قفل نگه دارد — دقیقا همان مشکلی که users.sqlite/
+// games.sqlite/mine_games.sqlite برایش ساخته شدند. حالا این‌جا هم همان
+// الگو: هر کاربر ردیفِ خودش، قفلِ SQLite رویِ همان یک نوشتن (BEGIN
+// IMMEDIATE)، پس دو کاربرِ مختلف اصلا پشتِ سرِ هم قفل نمی‌شوند.
+// «points» علاوه بر داخلِ JSON، ستونِ ایندکس‌شده‌ی جداگانه هم هست —
+// برایِ برترین‌ها (dmTop) که قبلا باید کلِ فایل را می‌خواند.
 
-function dmUser($uid) {
-    $a = load('diamond_users');
-    return $a[(string)$uid] ?? null;
+function diamondDbPath() { return DATA_DIR . '/diamond_users.sqlite'; }
+
+function diamondDb() {
+    static $db = null;
+    if ($db) return $db;
+    if (!class_exists('SQLite3')) return null;
+
+    $path = diamondDbPath();
+    $dir  = dirname($path);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $fresh = !is_file($path);
+
+    try {
+        $db = new SQLite3($path);
+    } catch (Throwable $e) {
+        error_log('[diamond] diamond_users.sqlite باز نشد: ' . $e->getMessage());
+        return null;
+    }
+    $db->busyTimeout(5000);
+    $db->exec('PRAGMA journal_mode = WAL');
+    $db->exec('PRAGMA synchronous = NORMAL');
+    $db->exec('CREATE TABLE IF NOT EXISTS diamond_users (
+        id INTEGER PRIMARY KEY, points REAL NOT NULL DEFAULT 0, data TEXT NOT NULL
+    )');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_diamond_points ON diamond_users(points DESC)');
+
+    if ($fresh) diamondImportFromJson($db);
+    return $db;
 }
 
+/** یک‌بار، فقط وقتی diamond_users.sqlite تازه ساخته می‌شود: هرچه در diamond_users.json قدیمی بود کوچ می‌کند. */
+function diamondImportFromJson($db) {
+    $old = dataPath('diamond_users');
+    if (!is_file($old)) return;
+    $raw = @file_get_contents($old);
+    $arr = $raw ? json_decode($raw, true) : null;
+
+    if (is_array($arr) && $arr) {
+        $db->exec('BEGIN');
+        $stmt = $db->prepare('INSERT OR REPLACE INTO diamond_users (id, points, data) VALUES (:id, :pts, :data)');
+        foreach ($arr as $k => $v) {
+            $id = (int)$k;
+            if ($id <= 0 || !is_array($v)) continue;
+            $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+            $stmt->bindValue(':pts', (float)($v['points'] ?? 0), SQLITE3_FLOAT);
+            $stmt->bindValue(':data', json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $stmt->execute();
+            $stmt->reset();
+        }
+        $db->exec('COMMIT');
+    }
+    // فایلِ قدیمی پاک نمی‌شود، فقط از سرِ راه می‌رود — برای اطمینان
+    @rename($old, $old . '.migrated');
+}
+
+function dmUser($uid) {
+    $db = diamondDb();
+    if (!$db) return null;
+    $stmt = $db->prepare('SELECT data FROM diamond_users WHERE id = :id');
+    $stmt->bindValue(':id', (int)$uid, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    if (!$row) return null;
+    $d = json_decode($row['data'], true);
+    return is_array($d) ? $d : null;
+}
+
+/**
+ * تغییرِ اتمیکِ یک کاربر — قفل فقط رویِ همین یک ردیف (BEGIN IMMEDIATE)،
+ * نه کلِ جدول؛ دو کاربرِ مختلف هم‌زمان اصلا پشتِ سرِ هم صف نمی‌شوند.
+ * $fn همان قراردادِ قبلی را دارد: مقدارِ برگشتی‌اش هرچه باشد (حتی
+ * false — یعنی رد شد)، رکورد با آخرین حالتش دوباره ذخیره می‌شود.
+ */
 function dmUserSet($uid, callable $fn) {
+    $db = diamondDb();
+    if (!$db) return null;
+    $id = (int)$uid;
     $dPts = 0.0; $dHops = 0; $dUsers = 0;
 
-    $out = mutate('diamond_users', function (&$a) use ($uid, $fn, &$dPts, &$dHops, &$dUsers) {
-        $k = (string)$uid;
-        if (!isset($a[$k])) {
-            $a[$k] = ['id' => (int)$uid, 'name' => '', 'username' => '',
-                      'points' => 0, 'total' => 0, 'level' => 1, 'last' => 0,
-                      'joined_at' => nowStr()];
+    $db->exec('BEGIN IMMEDIATE');
+    try {
+        $stmt = $db->prepare('SELECT data FROM diamond_users WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $u = $row ? json_decode($row['data'], true) : null;
+        if (!is_array($u)) {
+            $u = ['id' => $id, 'name' => '', 'username' => '',
+                  'points' => 0, 'total' => 0, 'level' => 1, 'last' => 0,
+                  'joined_at' => nowStr()];
             $dUsers = 1;
         }
-        $wasP = (float)($a[$k]['points'] ?? 0);
-        $wasH = (int)  ($a[$k]['total']  ?? 0);
-        $r = $fn($a[$k]);
-        $dPts  = (float)($a[$k]['points'] ?? 0) - $wasP;
-        $dHops = (int)  ($a[$k]['total']  ?? 0) - $wasH;
-        return $r;
-    });
+        $wasP = (float)($u['points'] ?? 0);
+        $wasH = (int)  ($u['total']  ?? 0);
+        $result = $fn($u);
+        $dPts  = (float)($u['points'] ?? 0) - $wasP;
+        $dHops = (int)  ($u['total']  ?? 0) - $wasH;
+
+        $up = $db->prepare('INSERT OR REPLACE INTO diamond_users (id, points, data) VALUES (:id, :pts, :data)');
+        $up->bindValue(':id', $id, SQLITE3_INTEGER);
+        $up->bindValue(':pts', (float)($u['points'] ?? 0), SQLITE3_FLOAT);
+        $up->bindValue(':data', json_encode($u, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+        $up->execute();
+        $db->exec('COMMIT');
+    } catch (Throwable $e) {
+        $db->exec('ROLLBACK');
+        error_log('[diamond] dmUserSet خطا: ' . $e->getMessage());
+        return null;
+    }
 
     dmSumBump($dPts, $dHops, $dUsers);
-    return $out;
+    return $result;
 }
 
 // ============================================================
@@ -244,12 +339,19 @@ function dmSumBump($dPts, $dHops, $dUsers = 0) {
     });
 }
 
-/** پیمایشِ کامل — فقط وقتی شمارنده نیست یا ادمین گفت «دوباره بشمار» */
+/** پیمایشِ کامل — فقط وقتی شمارنده نیست یا ادمین گفت «دوباره بشمار»؛ ادمین‌محور و کم‌تکرار، پیمایشِ کاملِ SQLite این‌جا مشکلی نیست */
 function dmSumWalk() {
-    $a = load('diamond_users');
-    $sum = 0.0; $hops = 0;
-    foreach ($a as $u) { $sum += (float)($u['points'] ?? 0); $hops += (int)($u['total'] ?? 0); }
-    return ['users' => count($a), 'points' => $sum, 'total' => $hops, 'at' => time()];
+    $db = diamondDb();
+    $sum = 0.0; $hops = 0; $count = 0;
+    if ($db) {
+        $res = $db->query('SELECT data FROM diamond_users');
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $u = json_decode($row['data'], true);
+            if (!is_array($u)) continue;
+            $sum += (float)($u['points'] ?? 0); $hops += (int)($u['total'] ?? 0); $count++;
+        }
+    }
+    return ['users' => $count, 'points' => $sum, 'total' => $hops, 'at' => time()];
 }
 
 function dmSumRebuild() {
@@ -259,27 +361,21 @@ function dmSumRebuild() {
 }
 
 /**
- * برترین‌ها.
- *
- * ⚡️ قبلا کلِ بازیکن‌ها کپی و مرتب می‌شدند تا ده‌تای اول برداشته شود —
- *    با پنج هزار بازیکن یعنی چهار میلی‌ثانیه برای ده ردیف. حالا یک بار
- *    از رویشان رد می‌شویم و فقط همان ده‌تا را نگه می‌داریم.
+ * برترین‌ها — با ستونِ ایندکس‌شده‌ی points، یک ORDER BY ... LIMIT
+ * ساده است، نه پیمایشِ کلِ کاربرها (که قبلا با فایلِ JSON لازم بود).
  */
 function dmTop($n = 10) {
-    $n   = max(1, (int)$n);
-    $top = [];      // مرتب، از زیاد به کم
-    $min = -INF;
-
-    foreach (load('diamond_users') as $u) {
-        $p = (float)($u['points'] ?? 0);
-        if (count($top) >= $n && $p <= $min) continue;
-
-        // جای خودش را پیدا کن
-        $i = count($top);
-        while ($i > 0 && (float)($top[$i - 1]['points'] ?? 0) < $p) $i--;
-        array_splice($top, $i, 0, [$u]);
-        if (count($top) > $n) array_pop($top);
-        $min = (float)($top[count($top) - 1]['points'] ?? 0);
+    $n = max(1, (int)$n);
+    $db = diamondDb();
+    $top = [];
+    if ($db) {
+        $stmt = $db->prepare('SELECT data FROM diamond_users ORDER BY points DESC LIMIT :n');
+        $stmt->bindValue(':n', $n, SQLITE3_INTEGER);
+        $res = $stmt->execute();
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $u = json_decode($row['data'], true);
+            if (is_array($u)) $top[] = $u;
+        }
     }
     return $top;
 }

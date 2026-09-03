@@ -183,7 +183,8 @@ function bkLeftStr($untilTs) {
 }
 
 // ============================================================
-// 🗃 داده‌ی هر کاربر
+// 🗃 داده‌ی هر کاربر — SQLite، هر کاربر یک ردیف (نه فایلِ JSONِ تخت
+// با یک قفلِ سراسری که هر هک/حفاظت باید پشتش صف می‌شد)
 // ============================================================
 
 function bkUserDefault($uid) {
@@ -198,20 +199,96 @@ function bkUserDefault($uid) {
     ];
 }
 
-function bkUser($uid) {
-    $a = load('bank_users');
-    return $a[(string)$uid] ?? null;
+function bankDbPath() { return DATA_DIR . '/bank_users.sqlite'; }
+
+function bankDb() {
+    static $db = null;
+    if ($db) return $db;
+    if (!class_exists('SQLite3')) return null;
+
+    $path = bankDbPath();
+    $dir  = dirname($path);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $fresh = !is_file($path);
+
+    try {
+        $db = new SQLite3($path);
+    } catch (Throwable $e) {
+        error_log('[bank] bank_users.sqlite باز نشد: ' . $e->getMessage());
+        return null;
+    }
+    $db->busyTimeout(5000);
+    $db->exec('PRAGMA journal_mode = WAL');
+    $db->exec('PRAGMA synchronous = NORMAL');
+    $db->exec('CREATE TABLE IF NOT EXISTS bank_users (id INTEGER PRIMARY KEY, data TEXT NOT NULL)');
+
+    if ($fresh) bankImportFromJson($db);
+    return $db;
 }
 
-/** تغییرِ اتمیکِ یک کاربر — رکورد نبود، با پیش‌فرض ساخته می‌شود */
+/** یک‌بار، فقط وقتی bank_users.sqlite تازه ساخته می‌شود: هرچه در bank_users.json قدیمی بود کوچ می‌کند. */
+function bankImportFromJson($db) {
+    $old = dataPath('bank_users');
+    if (!is_file($old)) return;
+    $raw = @file_get_contents($old);
+    $arr = $raw ? json_decode($raw, true) : null;
+
+    if (is_array($arr) && $arr) {
+        $db->exec('BEGIN');
+        $stmt = $db->prepare('INSERT OR REPLACE INTO bank_users (id, data) VALUES (:id, :data)');
+        foreach ($arr as $k => $v) {
+            $id = (int)$k;
+            if ($id <= 0 || !is_array($v)) continue;
+            $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+            $stmt->bindValue(':data', json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+            $stmt->execute();
+            $stmt->reset();
+        }
+        $db->exec('COMMIT');
+    }
+    // فایلِ قدیمی پاک نمی‌شود، فقط از سرِ راه می‌رود — برای اطمینان
+    @rename($old, $old . '.migrated');
+}
+
+function bkUser($uid) {
+    $db = bankDb();
+    if (!$db) return null;
+    $stmt = $db->prepare('SELECT data FROM bank_users WHERE id = :id');
+    $stmt->bindValue(':id', (int)$uid, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    if (!$row) return null;
+    $d = json_decode($row['data'], true);
+    return is_array($d) ? $d : null;
+}
+
+/** تغییرِ اتمیکِ یک کاربر — قفل فقط رویِ همین یک ردیف؛ رکورد نبود، با پیش‌فرض ساخته می‌شود */
 function bkUserSet($uid, callable $fn) {
-    return mutate('bank_users', function (&$a) use ($uid, $fn) {
-        $k = (string)$uid;
-        if (!isset($a[$k])) $a[$k] = bkUserDefault($uid);
-        $r = $fn($a[$k]);
-        $a[$k]['updated_at'] = time();
-        return $r;
-    });
+    $db = bankDb();
+    if (!$db) return null;
+    $id = (int)$uid;
+
+    $db->exec('BEGIN IMMEDIATE');
+    try {
+        $stmt = $db->prepare('SELECT data FROM bank_users WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $u = $row ? json_decode($row['data'], true) : null;
+        if (!is_array($u)) $u = bkUserDefault($id);
+
+        $result = $fn($u);
+        $u['updated_at'] = time();
+
+        $up = $db->prepare('INSERT OR REPLACE INTO bank_users (id, data) VALUES (:id, :data)');
+        $up->bindValue(':id', $id, SQLITE3_INTEGER);
+        $up->bindValue(':data', json_encode($u, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+        $up->execute();
+        $db->exec('COMMIT');
+        return $result;
+    } catch (Throwable $e) {
+        $db->exec('ROLLBACK');
+        error_log('[bank] bkUserSet خطا: ' . $e->getMessage());
+        return null;
+    }
 }
 
 function bkLevelFromStolen($stolen) {
@@ -223,7 +300,16 @@ function bkLevelFromStolen($stolen) {
 function bkTop($n = 10) {
     $n = max(1, (int)$n);
     $top = []; $min = -INF;
-    foreach (load('bank_users') as $u) {
+    $db = bankDb();
+    $rows = [];
+    if ($db) {
+        $res = $db->query('SELECT data FROM bank_users');
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $u = json_decode($row['data'], true);
+            if (is_array($u)) $rows[] = $u;
+        }
+    }
+    foreach ($rows as $u) {
         $b = gmPoints((int)($u['id'] ?? 0));
         if (count($top) >= $n && $b <= $min) continue;
         $u['bank_balance'] = $b;
@@ -513,74 +599,106 @@ function bkProtect($uid) {
 // ============================================================
 
 /**
- * یک قفلِ اتمیکِ واحد رویِ bank_users — هم چک‌های امنیتی (خودحفاظتی،
- * کول‌داون، شیلد) و هم تصمیمِ نتیجه، همه داخلِ همان یک نوشتن؛ بدونِ این،
- * دو کلیکِ هم‌زمان می‌توانستند هر دو از چکِ کول‌داون/شیلد رد شوند و هدف
- * را دوبار خالی کنند. جابه‌جاییِ واقعیِ الماس هم — چون «بانک» دیگر صندوقِ
- * جدایی نیست، همان کیف‌پولِ zنده‌ی diamond_users است — از همین‌جا، هنوز
- * زیرِ همین قفل، با gmAdd() انجام می‌شود؛ gmAdd خودش رویِ فایلِ دیگری
- * (diamond_users) قفلِ جداگانه می‌گیرد، پس تداخل/بن‌بستی پیش نمی‌آید،
- * و اگر همان لحظه هدف جای دیگری (مثلا خریدِ فروشگاه) کم‌تر از مقدارِ
- * محاسبه‌شده داشت، gmAdd خودش رد می‌کند — نتیجه وقتی به fail برمی‌گردد.
+ * یک قفلِ اتمیکِ واحد رویِ همین دو ردیف (هکر+هدف) — هم چک‌های امنیتی
+ * (خودحفاظتی، کول‌داون، شیلد) و هم تصمیمِ نتیجه، همه داخلِ همان یک
+ * تراکنش؛ بدونِ این، دو کلیکِ هم‌زمان می‌توانستند هر دو از چکِ
+ * کول‌داون/شیلد رد شوند و هدف را دوبار خالی کنند. جابه‌جاییِ واقعیِ
+ * الماس هم — چون «بانک» دیگر صندوقِ جدایی نیست، همان کیف‌پولِ زنده‌ی
+ * diamond_users است — از همین‌جا، هنوز زیرِ همین قفل، با gmAdd() انجام
+ * می‌شود؛ gmAdd خودش رویِ فایلِ دیگری (diamond_users.sqlite) قفلِ
+ * جداگانه می‌گیرد، پس تداخل/بن‌بستی پیش نمی‌آید، و اگر همان لحظه هدف
+ * جای دیگری (مثلا خریدِ فروشگاه) کم‌تر از مقدارِ محاسبه‌شده داشت،
+ * gmAdd خودش رد می‌کند — نتیجه وقتی به fail برمی‌گردد.
  */
 function bkHack($hackerId, $hackerName, $hackerUname, $targetId) {
     $now = time();
     $out = ['err' => null];
+    $db = bankDb();
+    if (!$db) { $out['err'] = 'empty'; return $out; }
 
-    mutate('bank_users', function (&$a) use ($hackerId, $hackerName, $hackerUname, $targetId, $now, &$out) {
-        $hk = (string)$hackerId; $tg = (string)$targetId;
-        if (!isset($a[$hk])) $a[$hk] = bkUserDefault($hackerId);
-        if (!isset($a[$tg])) $a[$tg] = bkUserDefault($targetId);
+    $hk = (int)$hackerId; $tg = (int)$targetId;
 
-        $hacker = &$a[$hk]; $target = &$a[$tg];
+    $fetch = function ($id) use ($db) {
+        $stmt = $db->prepare('SELECT data FROM bank_users WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $u = $row ? json_decode($row['data'], true) : null;
+        return is_array($u) ? $u : bkUserDefault($id);
+    };
+    $save = function ($id, $u) use ($db) {
+        $stmt = $db->prepare('INSERT OR REPLACE INTO bank_users (id, data) VALUES (:id, :data)');
+        $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+        $stmt->bindValue(':data', json_encode($u, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+        $stmt->execute();
+    };
+
+    $db->exec('BEGIN IMMEDIATE');
+    try {
+        $hacker = $fetch($hk);
+        $target = $hk === $tg ? $hacker : $fetch($tg); // خودحفاظتی جای دیگر رد می‌شود، این فقط برای اطمینان
+
         if ($hackerName !== '')  $hacker['name'] = $hackerName;
         if ($hackerUname !== '') $hacker['username'] = $hackerUname;
 
         if ((float)($hacker['hack_cooldown_until'] ?? 0) > $now) {
-            $out['err'] = 'cooldown'; $out['left'] = (int)$hacker['hack_cooldown_until'] - $now; return;
-        }
-        $shield = max((int)($target['protection_until'] ?? 0), (int)($target['shield_until'] ?? 0));
-        if ($shield > $now) { $out['err'] = 'protected'; $out['left'] = $shield - $now; return; }
+            $out['err'] = 'cooldown'; $out['left'] = (int)$hacker['hack_cooldown_until'] - $now;
+        } elseif (max((int)($target['protection_until'] ?? 0), (int)($target['shield_until'] ?? 0)) > $now) {
+            $shield = max((int)($target['protection_until'] ?? 0), (int)($target['shield_until'] ?? 0));
+            $out['err'] = 'protected'; $out['left'] = $shield - $now;
+        } elseif (gmPoints($tg) <= 0) {
+            $out['err'] = 'empty';
+        } else {
+            $bal = gmPoints($tg);
+            $roll = bkHackRoll($hacker, $target);
+            $cooldown = max(60, (int)bkVal('hack_cooldown', 1200));
+            $shieldSecs = max(0, (int)bkVal('shield_after', 300));
+            $hacker['hack_cooldown_until'] = $now + $cooldown;
+            $target['shield_until'] = $now + $shieldSecs;
 
-        $bal = gmPoints($targetId);
-        if ($bal <= 0) { $out['err'] = 'empty'; return; }
+            $out['tier'] = $roll['tier'];
 
-        $roll = bkHackRoll($hacker, $target);
-        $cooldown = max(60, (int)bkVal('hack_cooldown', 1200));
-        $shieldSecs = max(0, (int)bkVal('shield_after', 300));
-        $hacker['hack_cooldown_until'] = $now + $cooldown;
-        $target['shield_until'] = $now + $shieldSecs;
-
-        $out['tier'] = $roll['tier'];
-
-        if (in_array($roll['tier'], ['jackpot', 'perfect', 'success', 'partial'], true)) {
-            $amt = min($bal, floor($bal * $roll['pct'] / 100));
-            $amt = max(0.0, $amt);
-            $moved = $amt <= 0 || gmAdd($targetId, -$amt);
-            if ($moved) {
-                if ($amt > 0) gmAdd($hackerId, $amt, $hackerName, $hackerUname);
-                $hacker['successful_hacks'] = (int)($hacker['successful_hacks'] ?? 0) + 1;
-                $hacker['total_stolen']     = (float)($hacker['total_stolen'] ?? 0) + $amt;
-                $target['total_lost']       = (float)($target['total_lost'] ?? 0) + $amt;
-                $hacker['bank_level']       = bkLevelFromStolen($hacker['total_stolen']);
-                $out['amount'] = $amt; $out['pct'] = $roll['pct'];
-                $out['hackerBank'] = gmPoints($hackerId);
+            if (in_array($roll['tier'], ['jackpot', 'perfect', 'success', 'partial'], true)) {
+                $amt = min($bal, floor($bal * $roll['pct'] / 100));
+                $amt = max(0.0, $amt);
+                if ($amt <= 0) {
+                    // موجودیِ هدف اونقدر کمه که سهم گردِ صفر می‌شه — «موفقیتِ
+                    // بدونِ غنیمت» نشون ندیم و کول‌داونِ هکر رو الکی مصرف نکنیم
+                    $out['tier'] = 'fail';
+                    $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
+                } elseif (gmAdd($tg, -$amt)) {
+                    gmAdd($hk, $amt, $hackerName, $hackerUname);
+                    $hacker['successful_hacks'] = (int)($hacker['successful_hacks'] ?? 0) + 1;
+                    $hacker['total_stolen']     = (float)($hacker['total_stolen'] ?? 0) + $amt;
+                    $target['total_lost']       = (float)($target['total_lost'] ?? 0) + $amt;
+                    $hacker['bank_level']       = bkLevelFromStolen($hacker['total_stolen']);
+                    $out['amount'] = $amt; $out['pct'] = $roll['pct'];
+                    $out['hackerBank'] = gmPoints($hk);
+                } else {
+                    // همون لحظه هدف جایِ دیگری خرج کرده بود — به‌جایِ الماسِ
+                    // بی‌پشتوانه، شکست حساب می‌شود
+                    $out['tier'] = 'fail';
+                    $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
+                }
+            } elseif ($roll['tier'] === 'critfail') {
+                $ownBal = gmPoints($hk);
+                $fine = min($ownBal, floor($ownBal * $roll['fine_pct'] / 100));
+                $deducted = $fine > 0 && gmAdd($hk, -$fine);
+                $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
+                $out['fine'] = $deducted ? $fine : 0; $out['hackerBank'] = gmPoints($hk);
             } else {
-                // همون لحظه هدف جایِ دیگری خرج کرده بود — به‌جایِ الماسِ
-                // بی‌پشتوانه، شکست حساب می‌شود
-                $out['tier'] = 'fail';
                 $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
             }
-        } elseif ($roll['tier'] === 'critfail') {
-            $ownBal = gmPoints($hackerId);
-            $fine = min($ownBal, floor($ownBal * $roll['fine_pct'] / 100));
-            if ($fine > 0) gmAdd($hackerId, -$fine);
-            $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
-            $out['fine'] = $fine; $out['hackerBank'] = gmPoints($hackerId);
-        } else {
-            $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
         }
-    });
+
+        $hacker['updated_at'] = time();
+        $save($hk, $hacker);
+        if ($hk !== $tg) { $target['updated_at'] = time(); $save($tg, $target); }
+        $db->exec('COMMIT');
+    } catch (Throwable $e) {
+        $db->exec('ROLLBACK');
+        error_log('[bank] bkHack خطا: ' . $e->getMessage());
+        return ['err' => 'empty'];
+    }
 
     return $out;
 }
