@@ -11414,6 +11414,7 @@ if (isset($_GET['cron'])) {
          ' · numbers: ' . (function_exists('numTick') ? numTick(50) : 0) .
          ' · archive: ' . (ordersArchive() + maOrdersArchive()) .
          ' · mine: ' . (function_exists('mnTick') ? mnTick(50) : 0) .
+         ' · bank: ' . (function_exists('bkPendSweep') ? bkPendSweep(200) : 0) .
          ' · broadcast: ' . bcTick(120);
     exit;
 }

@@ -54,13 +54,14 @@ function bkDefaults() {
 
         // 🔘 دکمه‌ها — آیکون (ایموجیِ پریمیوم) با شناسه‌اش از
         // /panel ← 🔘 ایموجیِ پریمیوم گرفته می‌شود، بعد همین‌جا (پنلِ وب) جا می‌گیرد
-        'icons' => ['btn_protect' => '', 'btn_deposit' => '', 'btn_withdraw' => '', 'btn_send' => '', 'btn_send_confirm' => ''],
+        'icons' => ['btn_protect' => '', 'btn_deposit' => '', 'btn_withdraw' => '', 'btn_send' => '', 'btn_send_confirm' => '', 'btn_back' => ''],
         'btns'  => [
             'btn_protect'      => ['color' => 'primary'],
             'btn_deposit'      => ['color' => 'success'],
             'btn_withdraw'     => ['color' => 'danger'],
             'btn_send'         => ['color' => 'none'],
             'btn_send_confirm' => ['color' => 'success'],
+            'btn_back'         => ['color' => 'none'],
         ],
 
         'texts' => [
@@ -69,6 +70,7 @@ function bkDefaults() {
             'btn_withdraw' => '💰 برداشت الماس',
             'btn_send'         => '🎁 ارسال به کاربر',
             'btn_send_confirm' => '✅ انتقال',
+            'btn_back'         => '🔙 برگشت',
 
             'card' => "🏦 <b>BANK</b>\n\n" .
                       "👤 User: {name}\n\n" .
@@ -101,8 +103,8 @@ function bkDefaults() {
 
             // 🎁 ارسالِ الماس به کاربرِ دیگر — مستقیم از کیف‌پول به کیف‌پول
             'ask_send_amt'   => "🎁 <b>SEND DIAMONDS</b>\n\nچند تا الماس می‌خوای بفرستی؟",
-            'ask_send_id'    => "👤 آیدیِ عددیِ گیرنده را بفرست.\n\n<i>راهنما: کاربرِ موردنظر باید قبلا با ربات پیام داده باشد.</i>",
-            'ask_send_badid' => "❌ آیدیِ عددیِ معتبر نبود — یک عددِ تنها بفرست.",
+            'ask_send_id'    => "👤 آیدیِ عددی یا یوزرنیمِ گیرنده (@username) را بفرست.\n\n<i>راهنما: کاربرِ موردنظر باید قبلا با ربات پیام داده باشد.</i>",
+            'ask_send_badid' => "❌ این آیدی/یوزرنیم معتبر نبود.",
             'send_self'      => "😄 نمی‌تونی برایِ خودت بفرستی.",
             'send_no_target' => "❌ این آیدی برایِ ربات شناخته‌شده نیست — گیرنده باید قبلا با ربات پیام داده باشد.",
             'send_low_wallet'=> "❌ موجودیِ کیف‌پول کافی نیست.\n💎 Wallet: <b>{wallet}</b>",
@@ -155,7 +157,7 @@ function bkOn() { return !empty(bkVal('on')); }
 
 /** کلیدهایی که متن‌شان مستقیم روی یک دکمه‌ی شیشه‌ای می‌نشیند — تگ قبول نمی‌کنند */
 function bkIsButtonKey($slug) {
-    return in_array($slug, ['btn_protect', 'btn_deposit', 'btn_withdraw'], true);
+    return in_array($slug, ['btn_protect', 'btn_deposit', 'btn_withdraw', 'btn_send', 'btn_send_confirm', 'btn_back'], true);
 }
 
 function bkT($slug, $vars = []) {
@@ -259,6 +261,62 @@ function bkPendGet($uid, $chat) {
 
 function bkPendClear($uid, $chat) {
     mutate('bank_states', function (&$s) use ($uid, $chat) { unset($s[bkPendKey($uid, $chat)]); });
+}
+
+/**
+ * پاک‌سازیِ دوره‌ای — وگرنه هر واریز/برداشت/ارسالِ رهاشده (کسی که دکمه را
+ * زد ولی هیچ‌وقت عدد نفرستاد) برای همیشه توی bank_states.json می‌ماند؛
+ * زیرِ بارِ زیاد و در درازمدت همین فایل را بزرگ و بزرگ‌تر می‌کند. از
+ * ?cron= صدا زده می‌شود، درست مثلِ gmTick/mnTick.
+ */
+function bkPendSweep($limit = 200) {
+    $now = time();
+    $removed = 0;
+    mutate('bank_states', function (&$s) use ($now, $limit, &$removed) {
+        foreach (array_keys($s) as $k) {
+            if ($removed >= $limit) break;
+            if ($now - (int)($s[$k]['at'] ?? 0) > 300) { unset($s[$k]); $removed++; }
+        }
+    });
+    return $removed;
+}
+
+/** آیا این متن اصلا شبیهِ یک عددِ معتبر است — نه یک دستور/کلمه‌ی دیگر */
+function bkLooksLikeAmount($raw) {
+    $n = trim(str_replace([',', '٬', ' '], '', norm_fa_digits(trim((string)$raw))));
+    return $n !== '' && preg_match('/^\d+(\.\d+)?$/', $n) === 1;
+}
+
+/** آیا این متن شبیهِ یک آیدیِ عددی یا یک یوزرنیم است */
+function bkLooksLikeTarget($raw) {
+    $raw = trim((string)$raw);
+    if ($raw === '') return false;
+    if ($raw[0] === '@') $raw = substr($raw, 1);
+    if (preg_match('/^[A-Za-z][A-Za-z0-9_]{2,31}$/', $raw) === 1) return true;
+    $digits = trim(norm_fa_digits($raw));
+    return $digits !== '' && preg_match('/^\d+$/', $digits) === 1;
+}
+
+/**
+ * آیدیِ عددی یا یوزرنیمِ گیرنده را به یک آیدیِ عددی تبدیل می‌کند.
+ * برایِ یوزرنیم، چون جدولِ users فقط با id ایندکس شده (یوزرنیم داخلِ
+ * ستونِ JSON است، نه یک ستونِ جدا)، با allUsers() یک اسکنِ کامل می‌زنیم —
+ * این تابع فقط با کلیکِ «ارسال به کاربر» صدا زده می‌شود، نه توی مسیرِ داغ.
+ */
+function bkResolveTarget($raw) {
+    $raw = trim((string)$raw);
+    if ($raw === '') return null;
+    if ($raw[0] === '@') $raw = substr($raw, 1);
+
+    $digits = trim(norm_fa_digits($raw));
+    if ($digits !== '' && preg_match('/^\d+$/', $digits) === 1) return (int)$digits;
+
+    if (!preg_match('/^[A-Za-z][A-Za-z0-9_]{2,31}$/', $raw) || !function_exists('allUsers')) return null;
+    $needle = mb_strtolower($raw);
+    foreach (allUsers() as $id => $u) {
+        if (mb_strtolower((string)($u['username'] ?? '')) === $needle) return (int)$id;
+    }
+    return null;
 }
 
 // ============================================================
@@ -376,6 +434,20 @@ function bkShow($uid, $chatId, $name, $editMsgId = null) {
     $text = bkCardText($uid, $name);
     if ($editMsgId) { editMsg(BOT_TOKEN, $chatId, $editMsgId, $text, bkKb($uid)); return; }
     sendMsg(BOT_TOKEN, $chatId, $text, bkKb($uid));
+}
+
+/**
+ * سوال/تاییدِ هر گامِ واریز-برداشت-ارسال، همیشه رویِ همان پیامِ کارتِ
+ * بانک ویرایش می‌شود (نه پیامِ تازه) — تا گروه با چند پیامِ پیاپی شلوغ
+ * نشود — و همیشه یک دکمه‌ی «برگشت» زیرش هست که هر لحظه به همان کارتِ
+ * اصلی برمی‌گردد.
+ */
+function bkAskEdit($chatId, $pendMsgId, $text, array $extraRows = []) {
+    $rows = $extraRows;
+    $rows[] = [bkBtn('btn_back', [], 'bk_cancelflow')];
+    $kb = inlineKb($rows);
+    if ($pendMsgId) { editMsg(BOT_TOKEN, $chatId, (int)$pendMsgId, $text, $kb); return; }
+    sendMsg(BOT_TOKEN, $chatId, $text, $kb);
 }
 
 // ============================================================
@@ -635,35 +707,44 @@ function bkTopText($n = null) {
 
 function bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend) {
     $kind = $pend['kind'] ?? '';
+    $pendMsg = (int)($pend['msg'] ?? 0);
 
-    // 🎁 گامِ دومِ ارسال به کاربر: حالا آیدیِ عددی می‌خواهیم، نه عدد
+    // 🎁 گامِ دومِ ارسال به کاربر: حالا آیدیِ عددی یا یوزرنیم می‌خواهیم
     if ($kind === 'send_id') {
-        $toId = (int)preg_replace('/\D/', '', norm_fa_digits(trim($raw)));
-        if ($toId <= 0) { sendMsg(BOT_TOKEN, $chatId, bkT('ask_send_badid')); return true; }
-        if ($toId === (int)$uid) { sendMsg(BOT_TOKEN, $chatId, bkT('send_self')); return true; }
+        $toId = bkResolveTarget($raw);
+        if ($toId === null) {
+            bkAskEdit($chatId, $pendMsg, bkT('ask_send_badid') . "\n\n" . bkT('ask_send_id'));
+            return true;
+        }
+        if ($toId === (int)$uid) {
+            bkAskEdit($chatId, $pendMsg, bkT('send_self') . "\n\n" . bkT('ask_send_id'));
+            return true;
+        }
         if (!function_exists('getUser') || !getUser($toId)) {
-            sendMsg(BOT_TOKEN, $chatId, bkT('send_no_target')); return true;
+            bkAskEdit($chatId, $pendMsg, bkT('send_no_target') . "\n\n" . bkT('ask_send_id'));
+            return true;
         }
         $amount = (float)($pend['data']['amount'] ?? 0);
-        bkPendSet($uid, $chatId, 'send_confirm', $pend['msg'] ?? 0, ['amount' => $amount, 'to' => $toId]);
-        sendMsg(BOT_TOKEN, $chatId, bkT('send_confirm', ['amount' => bkNum($amount), 'to' => $toId]),
-            inlineKb([[bkBtn('btn_send_confirm', [], 'bk_sendok')]]));
+        bkPendSet($uid, $chatId, 'send_confirm', $pendMsg, ['amount' => $amount, 'to' => $toId]);
+        bkAskEdit($chatId, $pendMsg, bkT('send_confirm', ['amount' => bkNum($amount), 'to' => $toId]),
+            [[bkBtn('btn_send_confirm', [], 'bk_sendok')]]);
         return true;
     }
 
     // بقیه‌ی حالت‌ها (واریز/برداشت/گامِ اولِ ارسال) همه یک عددِ صحیح می‌خواهند
     $n = (float)str_replace([',', '٬', ' '], '', norm_fa_digits($raw));
-    if ($n <= 0 || floor($n) != $n) { sendMsg(BOT_TOKEN, $chatId, bkT('ask_bad_num')); return true; }
+    if ($n <= 0 || floor($n) != $n) { bkAskEdit($chatId, $pendMsg, bkT('ask_bad_num')); return true; }
 
     if ($kind === 'send_amt') {
         $wallet = gmPoints($uid);
         if ($n > $wallet + 1e-9) {
             bkPendClear($uid, $chatId);
             sendMsg(BOT_TOKEN, $chatId, bkT('send_low_wallet', ['wallet' => bkNum($wallet)]));
+            if ($pendMsg) bkShow($uid, $chatId, $name, $pendMsg);
             return true;
         }
-        bkPendSet($uid, $chatId, 'send_id', $pend['msg'] ?? 0, ['amount' => $n]);
-        sendMsg(BOT_TOKEN, $chatId, bkT('ask_send_id'));
+        bkPendSet($uid, $chatId, 'send_id', $pendMsg, ['amount' => $n]);
+        bkAskEdit($chatId, $pendMsg, bkT('ask_send_id'));
         return true;
     }
 
@@ -673,7 +754,7 @@ function bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend) {
         : bkDeposit($uid, $name, $uname, $n);
 
     sendMsg(BOT_TOKEN, $chatId, $msgText);
-    if (!empty($pend['msg'])) bkShow($uid, $chatId, $name, (int)$pend['msg']);
+    if ($pendMsg) bkShow($uid, $chatId, $name, $pendMsg);
     return true;
 }
 
@@ -685,7 +766,23 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
     if ($raw === '') return false;
 
     $pend = bkPendGet($uid, $chatId);
-    if ($pend) return bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend);
+    if ($pend) {
+        $kind = $pend['kind'] ?? '';
+        // فقط وقتی متن واقعا شبیهِ جوابِ همین سوال است مصرفش کن — وگرنه
+        // مثلا «مین ۵۰۰» (که برایِ بازیِ دیگری‌ست) به‌جایِ رسیدن به آن
+        // بازی، اینجا به‌عنوانِ آیدیِ نامعتبر رد می‌شد. اگر جواب نبود،
+        // دست‌نخورده رهایش کن تا بازی‌های دیگر بتوانند خودشان جوابش را بدهند.
+        // «send_confirm» اصلا متن نمی‌خواهد (فقط دکمه‌ی تایید) — وگرنه یک
+        // عددِ اتفاقی این‌جا به‌عنوانِ واریز/برداشت مصرف می‌شد.
+        if ($kind === 'send_id') {
+            $looksLikeAnswer = bkLooksLikeTarget($raw);
+        } elseif ($kind === 'deposit' || $kind === 'withdraw' || $kind === 'send_amt') {
+            $looksLikeAnswer = bkLooksLikeAmount($raw);
+        } else {
+            $looksLikeAnswer = false;
+        }
+        if ($looksLikeAnswer) return bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend);
+    }
 
     if (preg_match('/^\/bankleader(?:@\w+)?(?:\s|$)/i', $raw)) { sendMsg(BOT_TOKEN, $chatId, bkTopText()); return true; }
 
@@ -716,7 +813,7 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
 
 function bkCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
     if ($data === 'bk_nop') { answerCb(BOT_TOKEN, $cbId); return true; }
-    if (!in_array($data, ['bk_protect', 'bk_dep', 'bk_wd', 'bk_send', 'bk_sendok'], true)) return false;
+    if (!in_array($data, ['bk_protect', 'bk_dep', 'bk_wd', 'bk_send', 'bk_sendok', 'bk_cancelflow'], true)) return false;
     if (!bkOn()) { answerCb(BOT_TOKEN, $cbId); return true; }
 
     $name  = (string)($from['first_name'] ?? '');
@@ -739,19 +836,25 @@ function bkCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
     if ($data === 'bk_dep') {
         answerCb(BOT_TOKEN, $cbId);
         bkPendSet($uid, $chatId, 'deposit', $msgId);
-        sendMsg(BOT_TOKEN, $chatId, bkT('ask_deposit'));
+        bkAskEdit($chatId, $msgId, bkT('ask_deposit'));
         return true;
     }
     if ($data === 'bk_wd') {
         answerCb(BOT_TOKEN, $cbId);
         bkPendSet($uid, $chatId, 'withdraw', $msgId);
-        sendMsg(BOT_TOKEN, $chatId, bkT('ask_withdraw'));
+        bkAskEdit($chatId, $msgId, bkT('ask_withdraw'));
         return true;
     }
     if ($data === 'bk_send') {
         answerCb(BOT_TOKEN, $cbId);
         bkPendSet($uid, $chatId, 'send_amt', $msgId);
-        sendMsg(BOT_TOKEN, $chatId, bkT('ask_send_amt'));
+        bkAskEdit($chatId, $msgId, bkT('ask_send_amt'));
+        return true;
+    }
+    if ($data === 'bk_cancelflow') {
+        answerCb(BOT_TOKEN, $cbId);
+        bkPendClear($uid, $chatId);
+        bkShow($uid, $chatId, $name, (int)$msgId);
         return true;
     }
     if ($data === 'bk_sendok') {
@@ -801,11 +904,11 @@ function bkLabels() {
         'send_self' => 'ارسال — به خودت', 'send_no_target' => 'ارسال — گیرنده ناشناس',
         'send_low_wallet' => 'ارسال — کیف‌پول کم', 'send_confirm' => 'ارسال — تاییدیه', 'send_ok' => 'ارسال — موفق',
         'btn_protect' => 'دکمه: حفاظت', 'btn_deposit' => 'دکمه: واریز', 'btn_withdraw' => 'دکمه: برداشت',
-        'btn_send' => 'دکمه: ارسال به کاربر', 'btn_send_confirm' => 'دکمه: تاییدِ ارسال',
+        'btn_send' => 'دکمه: ارسال به کاربر', 'btn_send_confirm' => 'دکمه: تاییدِ ارسال', 'btn_back' => 'دکمه: برگشت',
     ];
 }
 function bkLabel($k) { return bkLabels()[$k] ?? $k; }
-function bkBtnKeys() { return ['btn_protect', 'btn_deposit', 'btn_withdraw', 'btn_send', 'btn_send_confirm']; }
+function bkBtnKeys() { return ['btn_protect', 'btn_deposit', 'btn_withdraw', 'btn_send', 'btn_send_confirm', 'btn_back']; }
 
 function bkAdminHome($chatId, $msgId = null) {
     $c = bkCfg();
