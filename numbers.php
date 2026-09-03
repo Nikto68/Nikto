@@ -764,6 +764,12 @@ function numItemMeta($itemId) {
 // 🛒 گرفتن شماره
 // ============================================================
 
+// ⏳ اگر خودِ تماسِ خرید (یک درخواستِ HTTPِ همزمان) این‌قدر طول بکشد که
+// هنوز روی 'buying' مانده، یعنی پردازش وسطِ کار مرده (کرش/تایم‌اوت/ری‌استارت) —
+// نه اینکه واقعا در حالِ خرید باشد. عمدا خیلی بزرگ‌تر از تایم‌اوتِ curl
+// (حداکثر چند ده ثانیه) است تا هیچ خریدِ واقعا در‌حال‌انجامی زودهنگام قطع نشود.
+if (!defined('NUM_BUY_TTL')) define('NUM_BUY_TTL', 120);
+
 /**
  * بعد از پرداخت صدا زده می‌شود. یک شماره می‌گیرد و فعال‌سازی می‌سازد.
  * برگشت: [موفق؟, پیام]
@@ -772,7 +778,18 @@ function numBuy($order) {
     if (!is_array($order)) return [false, 'سفارش پیدا نشد'];
     $oid = (string)$order['id'];
 
-    if (numGet($oid)) return [true, ''];            // قبلا گرفته شده
+    $existing = numGet($oid);
+    if ($existing) {
+        // 🔒 اگر رویِ 'buying' گیر کرده و مهلتش هم گذشته، یعنی پردازشِ قبلی
+        // وسطِ خرید مرده — دیگر «قبلا گرفته شده» نیست. نباید موفقیتِ دروغین
+        // برگردانیم (کاربر پول داده، شماره‌ای نگرفته)؛ numTick به‌زودی
+        // می‌بندد و پول را برمی‌گرداند، همین الان هم شکست را گزارش کن.
+        if (($existing['status'] ?? '') === 'buying' &&
+            time() - (int)($existing['created'] ?? 0) >= NUM_BUY_TTL) {
+            return [false, 'خریدِ قبلیِ این سفارش کامل نشد — به‌زودی هزینه برمی‌گردد'];
+        }
+        return [true, ''];            // قبلا گرفته شده
+    }
     if (!numReady())  return [false, 'اتصال به ' . numProvName() . ' تنظیم نشده است'];
 
     $meta = numItemMeta((string)($order['item_id'] ?? ''));
@@ -1071,16 +1088,25 @@ function numFinish($orderId, $why = 'cancel', $tellPanel = true) {
     if ($tellPanel) numTellPanelCancel($orderId);
 
     // 💰 پول برگردد
+    //
+    // ⚠️ اگر پردازش قبل از numPut() مرده باشد (وسطِ خودِ خرید کرش کرده)،
+    // رکورد هنوز 'price'/'uid' ندارد — این‌ها را numPut می‌نویسد که هیچ‌وقت
+    // اجرا نشد. بدونشان اینجا ساکت هیچ پولی برنمی‌گشت. پس در آن حالت از
+    // رویِ خودِ سفارش برمی‌داریم.
+    $o = class_exists('MaOrder') ? MaOrder::get($orderId) : null;
     $amount = (float)($act['price'] ?? 0);
-    if ($amount > 0 && class_exists('MaOrder')) {
-        $o = MaOrder::get($orderId);
-        if ($o && empty($o['refunded'])) {
+    $uid    = (int)($act['uid'] ?? 0);
+    if ($amount <= 0 && $o) $amount = (float)($o['total'] ?? 0);
+    if ($uid <= 0 && $o)    $uid    = (int)($o['user_id'] ?? 0);
+
+    if ($amount > 0 && $uid > 0 && $o) {
+        if (empty($o['refunded'])) {
             MaOrder::set($orderId, function (&$x) {
                 $x['refunded'] = true;
                 $x['status']   = MaOrder::REJECT;
             });
             if (function_exists('maRefund'))
-                maRefund((int)$act['uid'], $amount,
+                maRefund($uid, $amount,
                          $why === 'expired' ? 'کد شماره نرسید' : 'لغو شماره',
                          (string)($o['app'] ?? 'num'));
         }
@@ -1305,6 +1331,23 @@ function numTick($limit = 10) {
             if (!$over) continue;
             numFinish((string)$act['order'], 'expired');
             $n++;
+            continue;
+        }
+        // 🔒 خرید وسطِ کار مرده (کرش/تایم‌اوت) و رویِ 'buying' گیر کرده —
+        // برای همیشه اینجا نمی‌ماند: می‌بندیمش و پولِ کاربر برمی‌گردد
+        // (numFinish خودش هم 'waiting' هم 'buying' را قبول می‌کند)،
+        // و چون این حالت غیرعادی‌ست ادمین هم یک بار خبردار می‌شود.
+        if ($st === 'buying' && time() - (int)($act['created'] ?? 0) >= NUM_BUY_TTL) {
+            $oid = (string)$act['order'];
+            numFinish($oid, 'expired', false);   // aid ندارد؛ چیزی برای لغوکردن روی پنل نیست
+            $n++;
+            if (function_exists('chTechAlert')) {
+                chTechAlert(
+                    "⏳ <b>خریدِ شماره کامل نشد</b>\n\n" .
+                    '🧾 <code>' . h($oid) . "</code>\n\n" .
+                    'درخواستِ خرید روی ' . h(numProvName()) . ' جواب نداد یا پردازش وسطِ کار متوقف شد. ' .
+                    "هزینه به کیف پولِ کاربر برگشت. اگر این تکرار شد، اتصال به فروشنده را بررسی کنید.");
+            }
             continue;
         }
         // کد گرفته، مهلت هم تمام شده — دیگر «کد مجدد» معنی ندارد، ببندش
