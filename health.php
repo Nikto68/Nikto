@@ -32,12 +32,47 @@ if (!is_string($H_KEY) || strlen($H_KEY) < 16) {
 
 // مقایسه‌ی زمان‌ثابت تا با آزمون‌وخطای زمانی حدس زده نشود
 // (فرمِ POSTِ «ست‌کردنِ وبهوک» هم همین کلید را در بدنه می‌فرستد)
-$given = (string)($_POST['key'] ?? $_GET['key'] ?? '');
-if (!hash_equals($H_KEY, $given)) {
+$given  = (string)($_POST['key'] ?? $_GET['key'] ?? '');
+$viaKey = hash_equals($H_KEY, $given);
+
+// 🍪 کوکیِ کوتاه‌مدتِ جایگزینِ کلید — چون آدرسِ ?key=... با هر بازِ
+// دوباره‌ی همین صفحه (که برایِ رفعِ یک مشکل معمولا چندبار پیش می‌آید)
+// دوباره لاگِ سرور/پراکسی و تاریخچه‌ی مرورگر را با کلیدِ خام پر می‌کند.
+// اولین ورود هنوز با ?key= است (این صفحه عمدا بدونِ لاگین از یک لینکِ
+// ساده باز می‌شود)، ولی بلافاصله به یک آدرسِ بدونِ کلید redirect می‌شود؛
+// از آن به بعد همین کوکی احرازِ هویت می‌کند.
+$viaCookie = false;
+$cookieRaw = (string)($_COOKIE['h_auth'] ?? '');
+if ($cookieRaw !== '' && strpos($cookieRaw, '.') !== false) {
+    [$cExp, $cSig] = explode('.', $cookieRaw, 2);
+    $cExp = (int)$cExp;
+    if ($cExp > time() && hash_equals(hash_hmac('sha256', (string)$cExp, $H_KEY), $cSig)) {
+        $viaCookie = true;
+    }
+}
+
+if (!$viaKey && !$viaCookie) {
     // تاخیر کوچک تا حدس‌زدن پشت‌سرهم بی‌صرفه شود
     usleep(300000);
     http_response_code(404);
     exit('Not Found');
+}
+
+if ($viaKey) {
+    $exp = time() + 1800; // نیم‌ساعت — همین یک نشستِ عیب‌یابی کافی است
+    setcookie('h_auth', $exp . '.' . hash_hmac('sha256', (string)$exp, $H_KEY), [
+        'expires'  => $exp,
+        'path'     => rtrim(dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/')), '/') ?: '/',
+        'httponly' => true,
+        'samesite' => 'Strict',
+        'secure'   => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+    ]);
+    // اگر کلید تویِ خودِ آدرس بود (GET)، همین الان به آدرسِ تمیز برو —
+    // از این به بعد کوکی کار را انجام می‌دهد، نه querystring
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['key'])) {
+        header('Location: ' . strtok((string)($_SERVER['REQUEST_URI'] ?? ''), '?'));
+        exit;
+    }
 }
 
 /** توکن هیچ‌وقت کامل چاپ نمی‌شود — فقط چند رقم اول برای شناسایی */
