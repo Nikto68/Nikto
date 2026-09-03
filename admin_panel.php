@@ -431,8 +431,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c['gateway']['on']       = !empty($post['gw_on']);
             $c['gateway']['provider'] = in_array($post['gw_prov'] ?? '', ['oxapay','nowpayments','custom'], true)
                                         ? $post['gw_prov'] : 'oxapay';
-            $c['gateway']['api_key']   = trim($post['gw_key'] ?? '');
-            $c['gateway']['ipn_secret']= trim($post['gw_ipn'] ?? '');
+            // 🔒 خالی یعنی «دست‌نخورده بماند» — وگرنه چون صفحه دیگر خودِ
+            // کلید را نمایش نمی‌دهد، ذخیره‌ی هر تغییرِ دیگری (مثلا سقفِ
+            // مبلغ) با خالی‌بودنِ این دو فیلد، کلیدِ قبلی را پاک می‌کرد.
+            $gwKey = trim($post['gw_key'] ?? '');
+            $gwIpn = trim($post['gw_ipn'] ?? '');
+            if ($gwKey !== '') $c['gateway']['api_key']    = $gwKey;
+            if ($gwIpn !== '') $c['gateway']['ipn_secret'] = $gwIpn;
             $c['gateway']['base_url']  = $u;
             $c['gateway']['coin']      = strtoupper(trim($post['gw_coin'] ?? 'USDT'));
             $c['gateway']['network']   = strtoupper(trim($post['gw_net'] ?? ''));
@@ -842,7 +847,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         cfgSet(function (&$c) use ($base, $key) {
             if (!is_array($c['smm'] ?? null)) $c['smm'] = [];
             $c['smm']['base']    = $base;
-            $c['smm']['key']     = $key;
+            if ($key !== '') $c['smm']['key'] = $key; // خالی یعنی دست‌نخورده بماند
             $c['smm']['timeout'] = max(5, (int)($_POST['smm_timeout'] ?? 15));
             $c['smm']['on']      = !empty($_POST['smm_on']);
         });
@@ -2184,8 +2189,10 @@ $tabFolders = [
       <div class="grid2">
         <div><label>آدرس API پنل</label>
           <input name="smm_base" value="<?= h($SM['base'] ?? '') ?>" placeholder="https://panel.com/api/v2" style="direction:ltr"></div>
-        <div><label>کلید API</label>
-          <div class="secret"><input type="password" name="smm_key" autocomplete="off" value="<?= h($SM['key'] ?? '') ?>" placeholder="کلیدِ حساب شما در آن پنل" style="direction:ltr">
+        <div><label>کلید API
+          <?= trim((string)($SM['key'] ?? '')) !== '' ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></label>
+          <div class="secret"><input type="password" name="smm_key" autocomplete="off" value=""
+            placeholder="<?= trim((string)($SM['key'] ?? '')) !== '' ? 'ثبت شده — برای تعویض، کلیدِ تازه بگذارید' : 'کلیدِ حساب شما در آن پنل' ?>" style="direction:ltr">
             <button type="button" onclick="toggleSecret(this)">👁</button></div></div>
         <div><label>تایم‌اوت (ثانیه)</label>
           <input name="smm_timeout" type="number" min="5" value="<?= (int)($SM['timeout'] ?? 15) ?>" style="direction:ltr"></div>
@@ -4140,9 +4147,11 @@ def join_gate(user_id):
                 <option value="<?= h($pk) ?>" <?= $NP === $pk ? 'selected' : '' ?>><?= h($pv['label']) ?></option>
               <?php endforeach; ?>
             </select></div>
-          <div><label><?= h($NPI['key']) ?> <?= h($NPI['name']) ?> (خالی = بدونِ تغییر)</label>
-            <div class="secret"><input type="password" name="api_key" autocomplete="off"
-              value="<?= h($NP === 'numberland' ? ($NAPI['nl_key'] ?? '') : ($NAPI['token'] ?? '')) ?>" style="direction:ltr">
+          <?php $curNumKey = $NP === 'numberland' ? ($NAPI['nl_key'] ?? '') : ($NAPI['token'] ?? ''); ?>
+          <div><label><?= h($NPI['key']) ?> <?= h($NPI['name']) ?>
+            <?= trim((string)$curNumKey) !== '' ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></label>
+            <div class="secret"><input type="password" name="api_key" autocomplete="off" value=""
+              placeholder="<?= trim((string)$curNumKey) !== '' ? 'ثبت شده — برای تعویض، کلیدِ تازه بگذارید (خالی = بدونِ تغییر)' : 'کلیدِ API' ?>" style="direction:ltr">
               <button type="button" onclick="toggleSecret(this)">👁</button></div></div>
           <?php if ($NP === 'numberland'): ?>
           <div><label>🎯 کد سرویسِ تلگرام نزدِ نامبرلند</label>
@@ -4767,11 +4776,15 @@ def join_gate(user_id):
           <?php foreach (['oxapay'=>'OxaPay','nowpayments'=>'NOWPayments','custom'=>'دلخواه'] as $k2=>$v2): ?>
             <option value="<?= h($k2) ?>" <?= ($G['provider'] ?? 'oxapay') === $k2 ? 'selected' : '' ?>><?= h($v2) ?></option>
           <?php endforeach; ?></select></div>
-        <div><label>کلید API (Merchant Key)</label>
-          <div class="secret"><input type="password" name="gw_key" autocomplete="off" value="<?= h($G['api_key'] ?? '') ?>" style="direction:ltr">
+        <div><label>کلید API (Merchant Key)
+          <?= trim((string)($G['api_key'] ?? '')) !== '' ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></label>
+          <div class="secret"><input type="password" name="gw_key" autocomplete="off" value=""
+            placeholder="<?= trim((string)($G['api_key'] ?? '')) !== '' ? 'ثبت شده — برای تعویض، کلیدِ تازه بگذارید' : 'کلیدِ Merchant' ?>" style="direction:ltr">
             <button type="button" onclick="toggleSecret(this)">👁</button></div></div>
-        <div><label>کلید IPN Secret (فقط NOWPayments)</label>
-          <div class="secret"><input type="password" name="gw_ipn" autocomplete="off" value="<?= h($G['ipn_secret'] ?? '') ?>" style="direction:ltr">
+        <div><label>کلید IPN Secret (فقط NOWPayments)
+          <?= trim((string)($G['ipn_secret'] ?? '')) !== '' ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></label>
+          <div class="secret"><input type="password" name="gw_ipn" autocomplete="off" value=""
+            placeholder="<?= trim((string)($G['ipn_secret'] ?? '')) !== '' ? 'ثبت شده — برای تعویض، مقدارِ تازه بگذارید' : 'IPN Secret' ?>" style="direction:ltr">
             <button type="button" onclick="toggleSecret(this)">👁</button></div></div>
         <div><label>آدرس عمومی فایل ربات</label>
           <input name="gw_base" value="<?= h($G['base_url'] ?? '') ?>" placeholder="https://site.com/bot.php" style="direction:ltr"></div>
