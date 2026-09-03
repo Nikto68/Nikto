@@ -1679,6 +1679,28 @@ function setState($uid, $action, $data = []) {
 }
 function clearState($uid) { mutate('states', function (&$s) use ($uid) { unset($s[(string)$uid]); }); }
 
+/**
+ * 🧹 استیت‌هایی که کسی هیچ‌وقت تمامشان نکرد — رهاشده تویِ states.json
+ * می‌مانند برای همیشه (برخلافِ bank_states/num_acts/ma_cache که هرکدام
+ * جاروبِ خودشان را دارند). یک ادمین که مکالمه را نیمه‌کاره رها کرده یا
+ * کاربری که فلویِ رسید/فیلد را تمام نکرده، اثرش تا ابد می‌ماند و فایل
+ * فقط بزرگ‌تر می‌شود. مهلتِ پیش‌فرض عمدا سخاوتمندانه است (نه مثلِ
+ * bank_states که چند ثانیه‌ای‌ست) چون بعضی فلوهایِ ادمین ممکن است
+ * ساعت‌ها طول بکشد.
+ */
+function stateSweep($ttl = 86400, $limit = 500) {
+    $now = time();
+    $removed = 0;
+    mutate('states', function (&$s) use ($now, $ttl, $limit, &$removed) {
+        foreach (array_keys($s) as $k) {
+            if ($removed >= $limit) break;
+            $at = strtotime((string)($s[$k]['at'] ?? '')) ?: 0;
+            if ($at <= 0 || $now - $at > $ttl) { unset($s[$k]); $removed++; }
+        }
+    });
+    return $removed;
+}
+
 // ============================================================
 // 🛒 محصولات
 // ============================================================
@@ -11415,6 +11437,7 @@ if (isset($_GET['cron'])) {
          ' · archive: ' . (ordersArchive() + maOrdersArchive()) .
          ' · mine: ' . (function_exists('mnTick') ? mnTick(50) : 0) .
          ' · bank: ' . (function_exists('bkPendSweep') ? bkPendSweep(200) : 0) .
+         ' · states: ' . (function_exists('stateSweep') ? stateSweep() : 0) .
          ' · broadcast: ' . bcTick(120);
     exit;
 }
@@ -11743,6 +11766,14 @@ function runBackgroundQueues() {
     if (function_exists('maCachePrune') && time() - (@filemtime($cMark) ?: 0) >= 21600) {
         @touch($cMark);
         maCachePrune();
+    }
+
+    // 🧹 استیت‌هایِ رهاشده (فلویِ نیمه‌کاره‌ای که هیچ‌وقت تمام یا کنسل نشد) —
+    //    هر ۶ ساعت کافی است، این‌ها معمولا خیلی زودتر از این تمام می‌شوند.
+    $stMark = DATA_DIR . '/.states_prune_at';
+    if (function_exists('stateSweep') && time() - (@filemtime($stMark) ?: 0) >= 21600) {
+        @touch($stMark);
+        stateSweep();
     }
 
     // 🩺 خودبررسیِ سلامت — یک بار در روز، بدون اینکه ادمین خودش پنل
