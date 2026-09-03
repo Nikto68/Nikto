@@ -34,6 +34,11 @@ function maViewTg($a, $boot) {
         '__GRAIN__' => $grain,
         '__FX__'    => $fx,
         '__TITLE__' => htmlspecialchars((string)$a['title'], ENT_QUOTES, 'UTF-8'),
+        '__SPLASH_SHAPE__' => '',
+        '__SPLASH_ICON__'  => '★',
+        '__SPLASH_SUB__'   => 'تحویل آنی · بهترین قیمت · پشتیبانی ۲۴ ساعته',
+        '__SPLASH_TAGS__'  => '<span>⭐ استارز</span><span>💎 پریمیوم</span><span>🎁 گیفت</span>',
+        '__SPLASH_PWR__'   => 'در حال اتصال امن…',
         '__BOOT__'  => json_encode($boot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
     ]);
 }
@@ -91,6 +96,9 @@ __SKIN__
   animation:splashFloat 3s ease-in-out infinite}
 .splash-icon i{font-style:normal;font-size:46px;line-height:1;
   filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
+/* 🔷 شکل‌های جایگزین — تا هر مینی‌اپ سیلوئتِ خودش را داشته باشد، نه
+   فقط رنگِ خودش (خواستِ صریحِ کارفرما: هرکدام واقعا متفاوت باشد) */
+.splash-icon.blob{border-radius:46% 54% 38% 62%/56% 40% 60% 44%}
 .splash-name{position:relative;margin:2px 0 0;font-size:22px;font-weight:900;color:#fff;letter-spacing:-.2px}
 .splash-sub{position:relative;margin:0;font-size:12.5px;color:#A79FC6;line-height:1.8}
 .splash-tags{position:relative;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:2px}
@@ -117,14 +125,14 @@ __SKIN__
 <div class="splash" id="splash">
   <div class="splash-sky"></div>
   <div class="splash-mid">
-    <div class="splash-icon"><i>★</i></div>
+    <div class="splash-icon __SPLASH_SHAPE__"><i>__SPLASH_ICON__</i></div>
     <h1 class="splash-name">__TITLE__</h1>
-    <p class="splash-sub">تحویل آنی · بهترین قیمت · پشتیبانی ۲۴ ساعته</p>
-    <div class="splash-tags"><span>⭐ استارز</span><span>💎 پریمیوم</span><span>🎁 گیفت</span></div>
+    <p class="splash-sub">__SPLASH_SUB__</p>
+    <div class="splash-tags">__SPLASH_TAGS__</div>
   </div>
   <div class="splash-foot">
     <div class="splash-bar"><b id="splashFill"></b></div>
-    <div class="splash-pwr">در حال اتصال امن…</div>
+    <div class="splash-pwr">__SPLASH_PWR__</div>
   </div>
 </div>
 <div class="sky"></div>

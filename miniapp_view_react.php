@@ -1,17 +1,19 @@
 <?php
 /**
- * 💫 نمای مینی‌اپ «ری‌اکشن و استوری» — تم «منشور» (Prism), روشن/سفید
+ * 💫 نمای مینی‌اپ «ری‌اکشن و استوری» — تم «منشور» (Prism), شبِ بنفش‌ارغوانی
  *
- * کاملا جدا از دو مینی‌اپ دیگر: نه رنگش یکی است، نه حسش — پس‌زمینه‌ی
- * این یکی همیشه سفید است (نه گرادیانِ تیره‌ی اورورا، نه مشکیِ زمرد).
- * چهار رنگِ تاکید دارد: آبی، سبز، بنفش، قرمز — تا هم دسته‌های مختلف
+ * کاملا جدا از دو مینی‌اپ دیگر: نه رنگش یکی است، نه حسش — بنفش‌ارغوانیِ
+ * تیره، جدا از آبیِ اورورا (تلگرام) و سرمه‌ای اقیانوس (شماره). چهار
+ * رنگِ تاکید دارد: آبی، سبز، بنفش، قرمز — تا هم دسته‌های مختلف
  * (ری‌اکشنِ پست/استوری/بقیه) از هم جدا باشند، هم رنگِ خطا/موفقیت
  * روشن و خوانا بماند.
  *
  * اسکلت (ساختار HTML+JS) کاملا با مینی‌اپ «خدمات تلگرام» مشترک است —
  * maTplApp()/maTplBody() در miniapp_view_tg.php — همان موتورِ امن و
- * آزموده (initData، هدرهای امنیتی، صفحه‌ی لودینگ، سبد خرید). فقط
- * پوسته‌ی CSS اینجا عوض می‌شود.
+ * آزموده (initData، هدرهای امنیتی، صفحه‌ی لودینگ، سبد خرید). صفحه‌ی
+ * لودینگ هم مشترک است، ولی محتوایش (آیکون/شکل/متن/تگ‌ها) از رویِ
+ * placeholderهایِ __SPLASH_*__ همین‌جا پر می‌شود — پس با اینکه کد
+ * یکی است، ظاهرش با تلگرام قاطی نمی‌شود. فقط پوسته‌ی CSS اینجا عوض می‌شود.
  */
 
 function maViewReact($a, $boot) {
@@ -20,7 +22,6 @@ function maViewReact($a, $boot) {
     $c2   = $th['c2'] ?? '#17C978';
     $c3   = $th['c3'] ?? '#8B5CF6';
     $c4   = $th['c4'] ?? '#F23557';
-    $bg   = '#FFFFFF'; // 🔒 پس‌زمینه‌ی این مینی‌اپ همیشه سفید است — قابل تغییر از پنل نیست
     $glow = !empty($th['glow']) ? '1' : '0';
     $grain= !empty($th['grain']) ? '1' : '0';
     $fx   = (string)maFxLevel($th);
@@ -30,29 +31,40 @@ function maViewReact($a, $boot) {
         '__C2__'    => $c2,
         '__C3__'    => $c3,
         '__C4__'    => $c4,
-        '__BG__'    => $bg,
         '__GLOW__'  => $glow,
         '__GRAIN__' => $grain,
         '__FX__'    => $fx,
         '__TITLE__' => htmlspecialchars((string)$a['title'], ENT_QUOTES, 'UTF-8'),
+        // 💫 سیلوئت و متنِ خودِ این اپ — جدا از خدماتِ تلگرام، حتی
+        // با این‌که پوسته‌ی مشترک استفاده می‌کند (خواستِ کارفرما: هرکدام واقعا متفاوت باشد)
+        '__SPLASH_SHAPE__' => 'blob',
+        '__SPLASH_ICON__'  => '💫',
+        '__SPLASH_SUB__'   => 'ری‌اکشن پست · استوری · بازدید و اشتراک‌گذاری',
+        '__SPLASH_TAGS__'  => '<span>❤️ ری‌اکشن</span><span>📖 استوری</span><span>👁 بازدید</span>',
+        '__SPLASH_PWR__'   => 'در حال آماده‌سازی…',
         '__BOOT__'  => json_encode($boot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
     ]);
 }
 
 /**
  * 🌤 پوسته‌ی «منشور» — مینی‌اپ ری‌اکشن و استوری
- * پس‌زمینه‌ی کاملا سفید، کارت‌های شیشه‌ایِ روشن، چهار رنگِ تاکیدِ
- * زنده (آبی/سبز/بنفش/قرمز)، انیمیشن‌های نرم روی همان کلاس‌هایی که
- * موتورِ مشترک می‌سازد.
+ * پس‌زمینه‌ی تیره‌ی بنفش‌ارغوانی، کارت‌های شیشه‌ایِ روی آن، چهار رنگِ
+ * تاکیدِ زنده (آبی/سبز/بنفش/قرمز)، انیمیشن‌های نرم روی همان کلاس‌هایی
+ * که موتورِ مشترک می‌سازد.
  */
 function maSkinPrism() {
     return <<<'CSS'
 <style>
 :root{
-  --c1:__C1__; --c2:__C2__; --c3:__C3__; --c4:__C4__; --bg:__BG__;
-  --ink:#161A2B; --dim:#6B7280; --line:rgba(15,23,42,.09);
-  --pane:#FFFFFF; --pane2:#F6F8FC;
+  --c1:__C1__; --c2:__C2__; --c3:__C3__; --c4:__C4__;
+  /* 💫 شبِ بنفش‌مایل‌به‌ارغوانی — سومین هویتِ تیره، جدا از آبیِ اورورا
+     و سرمه‌ای اقیانوس، تا هر سه مینی‌اپ واقعا حسِ جدا داشته باشند. */
+  --bg:#0D0714;
+  --ink:#F6EFFF; --dim:#A899C2; --line:rgba(255,255,255,.12);
+  --pane:rgba(255,255,255,.055); --pane2:rgba(255,255,255,.035);
+  --blur:18px;
   --r:24px; --safe:env(safe-area-inset-bottom,0px);
+  color-scheme:dark;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;min-height:100%}
@@ -63,19 +75,20 @@ body{
 }
 img{max-width:100%}
 
-/* ═══ آسمانِ روشن ═══ لکه‌های رنگیِ خیلی کم‌رنگ روی سفید، بدون filter */
+/* ═══ آسمانِ شب ═══ لکه‌های رنگیِ درخشان روی زمینه‌ی تیره، بدون filter */
 .sky{position:fixed;inset:0;z-index:0;pointer-events:none;
   background:
-    radial-gradient(60vw 60vw at 88% -8%,color-mix(in srgb,var(--c1) 16%,transparent),transparent 68%),
-    radial-gradient(54vw 54vw at 4% 30%,color-mix(in srgb,var(--c2) 13%,transparent),transparent 66%),
-    radial-gradient(48vw 48vw at 80% 106%,color-mix(in srgb,var(--c3) 12%,transparent),transparent 64%)}
+    radial-gradient(60vw 60vw at 88% -8%,color-mix(in srgb,var(--c4) 34%,transparent),transparent 68%),
+    radial-gradient(54vw 54vw at 4% 30%,color-mix(in srgb,var(--c3) 30%,transparent),transparent 66%),
+    radial-gradient(48vw 48vw at 80% 106%,color-mix(in srgb,var(--c1) 26%,transparent),transparent 64%),
+    var(--bg)}
 .sky:after{content:"";position:absolute;inset:0;opacity:0;
-  background:radial-gradient(50vw 50vw at 22% 10%,color-mix(in srgb,var(--c2) 10%,transparent),transparent 62%)}
+  background:radial-gradient(50vw 50vw at 22% 10%,color-mix(in srgb,var(--c2) 22%,transparent),transparent 62%)}
 body.fx2 .sky:after{animation:breathe 9s ease-in-out infinite}
 @keyframes breathe{0%,100%{opacity:0}50%{opacity:.9}}
 #stars{display:none}
 .veil{position:fixed;inset:0;z-index:2;pointer-events:none;
-  background:radial-gradient(122% 78% at 50% 0%,transparent 30%,var(--bg) 92%)}
+  background:radial-gradient(122% 78% at 50% 0%,transparent 42%,var(--bg) 96%)}
 .grain{display:none}
 @media (prefers-reduced-motion:reduce){ .sky:after{animation:none!important} }
 
@@ -84,7 +97,9 @@ body.fx2 .sky:after{animation:breathe 9s ease-in-out infinite}
 /* ═══ سربرگ ═══ */
 .top{display:flex;align-items:center;gap:11px;margin:14px 0 4px;padding:11px 12px;border-radius:22px;
   border:1px solid var(--line);background:var(--pane);
-  box-shadow:0 10px 28px -20px rgba(20,25,45,.35)}
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+  box-shadow:0 10px 28px -20px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06)}
+body.fx0 .top{backdrop-filter:none;-webkit-backdrop-filter:none}
 .ava{width:46px;height:46px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;overflow:hidden;
   font-weight:900;font-size:18px;color:#fff;
   background:linear-gradient(135deg,var(--c1),var(--c3));
@@ -93,7 +108,7 @@ body.fx2 .sky:after{animation:breathe 9s ease-in-out infinite}
 .who{flex:1;min-width:0}
 .who h1{margin:0;font-size:14.5px;font-weight:800;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chipbal{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:5px 6px 5px 10px;border-radius:12px;
-  border:1px solid var(--line);background:rgba(15,23,42,.035);font-size:12.5px;font-weight:900;cursor:pointer}
+  border:1px solid var(--line);background:rgba(255,255,255,.06);font-size:12.5px;font-weight:900;cursor:pointer}
 .chipbal em{font-style:normal;font-size:9.5px;color:var(--dim);font-weight:600}
 .chipbal b{width:20px;height:20px;border-radius:7px;display:grid;place-items:center;font-size:14px;line-height:1;
   color:#fff;background:linear-gradient(135deg,var(--c2),var(--c1))}
@@ -105,7 +120,7 @@ body.glow-on .cta{box-shadow:0 10px 22px -12px color-mix(in srgb,var(--c1) 65%,t
 
 /* 🔔 زنگ */
 .bell{position:relative;flex:0 0 auto;width:38px;height:38px;border-radius:13px;cursor:pointer;
-  border:1px solid var(--line);background:rgba(15,23,42,.035);
+  border:1px solid var(--line);background:rgba(255,255,255,.06);
   color:inherit;display:grid;place-items:center;font-size:16px;font-family:inherit}
 .bell:active{transform:scale(.94)}
 .bell .bdot{position:absolute;top:6px;inset-inline-end:6px;width:8px;height:8px;border-radius:99px;
@@ -125,7 +140,7 @@ body.glow-on .cta{box-shadow:0 10px 22px -12px color-mix(in srgb,var(--c1) 65%,t
 .note .nh time{font-size:10px;color:var(--dim);white-space:nowrap}
 .note p{font-size:12px;color:var(--dim);line-height:1.8;white-space:pre-line;margin:0}
 .note .ncp{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
-.note .ncp button{border:1px solid var(--line);background:rgba(15,23,42,.04);
+.note .ncp button{border:1px solid var(--line);background:rgba(255,255,255,.06);
   color:inherit;border-radius:10px;padding:5px 10px;font-size:11px;font-family:inherit;cursor:pointer}
 .note .ncp button:active{transform:scale(.95)}
 .wsub{margin:0 0 10px;font-size:11.5px;color:var(--dim);text-align:center}
@@ -176,9 +191,11 @@ body.fx2 .purse .spark{animation:spark 5s ease-in-out infinite}
 
 /* ═══ کارت خوش‌آمد ═══ */
 .welcome{margin-top:16px;padding:22px 18px;border-radius:26px;text-align:center;position:relative;overflow:hidden;
-  border:1px solid var(--line);background:var(--pane2)}
+  border:1px solid var(--line);background:var(--pane2);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
+body.fx0 .welcome{backdrop-filter:none;-webkit-backdrop-filter:none}
 .welcome:before{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(118deg,color-mix(in srgb,var(--c1) 8%,transparent) 0%,transparent 45%)}
+  background:linear-gradient(118deg,color-mix(in srgb,var(--c1) 16%,transparent) 0%,transparent 45%)}
 .logo{width:82px;height:82px;margin:0 auto 13px;position:relative}
 .logo svg{width:100%;height:100%;display:block;position:relative;z-index:2}
 .logo i{position:absolute;inset:-6px;border-radius:50%;border:1.5px dashed color-mix(in srgb,var(--c1) 45%,transparent)}
@@ -201,8 +218,8 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
 .rail{display:flex;gap:9px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:none}
 .rail::-webkit-scrollbar{display:none}
 .rail .rc{flex:0 0 auto;width:82px;padding:13px 6px;border-radius:20px;text-align:center;cursor:pointer;
-  border:1px solid var(--line);background:var(--pane);transition:border-color .18s,transform .18s;
-  box-shadow:0 6px 18px -16px rgba(20,25,45,.4)}
+  border:1px solid var(--line);background:var(--pane);transition:border-color .18s,transform .18s,background .18s;
+  box-shadow:0 6px 18px -14px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06)}
 .rail .rc:active{transform:scale(.95)}
 .rail .rc .ico{margin:0 auto 7px}
 .rail .rc span{display:block;font-size:10.5px;font-weight:800;color:var(--dim);
@@ -330,9 +347,11 @@ body.fx0 .tile.instage .orb{animation:none}
 
 /* ═══ حساب کاربری ═══ */
 .prof{display:flex;align-items:center;gap:14px;padding:19px 17px;border-radius:26px;position:relative;overflow:hidden;
-  border:1px solid var(--line);background:var(--pane2)}
+  border:1px solid var(--line);background:var(--pane2);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
+body.fx0 .prof{backdrop-filter:none;-webkit-backdrop-filter:none}
 .prof:before{content:"";position:absolute;inset:0;opacity:.5;pointer-events:none;
-  background:radial-gradient(70% 120% at 100% 0%,color-mix(in srgb,var(--c1) 14%,transparent),transparent 62%)}
+  background:radial-gradient(70% 120% at 100% 0%,color-mix(in srgb,var(--c1) 22%,transparent),transparent 62%)}
 .prof .big{position:relative;width:64px;height:64px;border-radius:22px;flex:0 0 auto;overflow:hidden;
   display:grid;place-items:center;font-size:26px;font-weight:900;color:#fff;
   background:linear-gradient(135deg,var(--c1),var(--c3))}
@@ -343,7 +362,9 @@ body.fx0 .tile.instage .orb{animation:none}
 .prof .d code{display:inline-block;margin-top:7px;font-size:10.5px;padding:3px 9px;border-radius:8px;
   background:var(--pane);border:1px solid var(--line);direction:ltr;font-family:ui-monospace,monospace}
 
-.pane{margin-top:13px;padding:16px;border-radius:22px;border:1px solid var(--line);background:var(--pane)}
+.pane{margin-top:13px;padding:16px;border-radius:22px;border:1px solid var(--line);background:var(--pane);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
+body.fx0 .pane{backdrop-filter:none;-webkit-backdrop-filter:none}
 .pane h3{margin:0 0 12px;font-size:13px;font-weight:900;display:flex;align-items:center;gap:7px}
 .card-no{padding:14px;border-radius:16px;
   border:1px dashed color-mix(in srgb,var(--c1) 40%,transparent);background:var(--pane2)}
@@ -406,7 +427,7 @@ body.is-admin .pg.adm:not(.on){display:none}
 .a2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .aswitch{display:flex;align-items:center;justify-content:space-between;padding:12px 13px;border-radius:14px;
   border:1px solid var(--line);background:var(--pane2);font-size:12.5px;font-weight:700;cursor:pointer}
-.aswitch i{width:44px;height:25px;border-radius:13px;background:rgba(15,23,42,.14);position:relative;transition:.2s}
+.aswitch i{width:44px;height:25px;border-radius:13px;background:rgba(255,255,255,.14);position:relative;transition:.2s}
 .aswitch i:after{content:"";position:absolute;top:3px;right:3px;width:19px;height:19px;border-radius:50%;
   background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(20,25,45,.3)}
 .aswitch.on i{background:linear-gradient(135deg,var(--c1),var(--c3))}
@@ -415,10 +436,10 @@ body.is-admin .pg.adm:not(.on){display:none}
 /* ═══ جزیره‌ی پایین ═══ شیشه‌ی روشن روی سفید */
 .dock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(11px + var(--safe));z-index:30;
   width:min(94vw,420px);display:flex;gap:3px;padding:7px;border-radius:26px;
-  border:1px solid var(--line);background:rgba(255,255,255,.86);
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  box-shadow:0 18px 44px -12px rgba(20,25,45,.28)}
-body.fx0 .dock{backdrop-filter:none;-webkit-backdrop-filter:none;background:#FFFFFF}
+  border:1px solid var(--line);background:rgba(255,255,255,.09);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 18px 44px -12px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.08)}
+body.fx0 .dock{backdrop-filter:none;-webkit-backdrop-filter:none;background:#150A1E}
 .dock b{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;
   padding:8px 2px;border-radius:19px;cursor:pointer;color:var(--dim);
   font-size:9.5px;font-weight:800;transition:color .16s,background .16s}
@@ -428,7 +449,7 @@ body.fx0 .dock{backdrop-filter:none;-webkit-backdrop-filter:none;background:#FFF
 body.is-admin .dock b[data-p="adm"]{display:flex}
 
 /* ═══ شیت خرید ═══ */
-.scrim{position:fixed;inset:0;z-index:40;background:rgba(15,23,42,.32);backdrop-filter:blur(6px);
+.scrim{position:fixed;inset:0;z-index:40;background:rgba(6,2,10,.55);backdrop-filter:blur(6px);
   opacity:0;pointer-events:none;transition:.28s}
 .scrim.on{opacity:1;pointer-events:auto}
 /* ⌨️ کیبورد باز = بلور خاموش — همان قاعده‌ای که در tg.php هست، اینجا
@@ -436,12 +457,13 @@ body.is-admin .dock b[data-p="adm"]{display:flex}
 body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition:opacity .28s}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;transform:translateY(102%);
   transition:transform .38s cubic-bezier(.2,.9,.25,1);
-  background:#FFFFFF;
+  background:color-mix(in srgb,var(--bg) 88%,#1F1030);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
   border-radius:30px 30px 0 0;border-top:1px solid var(--line);
   padding:10px 17px calc(22px + var(--safe));max-height:92vh;overflow-y:auto;
   box-shadow:0 -24px 60px -20px rgba(20,25,45,.35)}
 .sheet.on{transform:none}
-.grip{width:42px;height:4px;border-radius:4px;background:rgba(15,23,42,.15);margin:4px auto 16px}
+.grip{width:42px;height:4px;border-radius:4px;background:rgba(255,255,255,.22);margin:4px auto 16px}
 .sheet .head{display:flex;align-items:center;gap:13px;margin-bottom:16px}
 .sheet .head .orb{width:56px;height:56px;font-size:27px;margin:0}
 .sheet .head h2{margin:0;font-size:16.5px;font-weight:900}
