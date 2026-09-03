@@ -23,6 +23,8 @@ function bkDefaults() {
     return [
         'on'         => false,
         'group_only' => 1,
+        'word_bank'  => 'بانک,حساب بانکی',   // کلمه‌های باز کردنِ کارتِ بانک
+        'word_hack'  => 'هک,حمله',           // کلمه‌های شروعِ هک (به‌جز خودِ /hack)
 
         'min_withdraw'   => 50000,   // زیرِ این موجودی، برداشت اصلا باز نمی‌شود
         'manual_protect' => 900,     // ثانیه — حفاظتِ دستی (۱۵ دقیقه)
@@ -609,12 +611,20 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
     $pend = bkPendGet($uid, $chatId);
     if ($pend) return bkHandleAmount($raw, $uid, $chatId, $name, $uname, $pend);
 
-    if (preg_match('/^\/bank(?:@\w+)?(?:\s|$)/i', $raw)) { bkShow($uid, $chatId, $name); return true; }
     if (preg_match('/^\/bankleader(?:@\w+)?(?:\s|$)/i', $raw)) { sendMsg(BOT_TOKEN, $chatId, bkTopText()); return true; }
+
+    $isBank = (bool)preg_match('/^\/bank(?:@\w+)?(?:\s|$)/i', $raw);
+    if (!$isBank) {
+        foreach (explode(',', (string)bkVal('word_bank', 'بانک')) as $w) {
+            $w = trim($w);
+            if ($w !== '' && mb_strtolower($raw) === mb_strtolower($w)) { $isBank = true; break; }
+        }
+    }
+    if ($isBank) { bkShow($uid, $chatId, $name); return true; }
 
     $isHack = (bool)preg_match('/^\/hack(?:@\w+)?(?:\s|$)/i', $raw);
     if (!$isHack) {
-        foreach (explode(',', (string)bkVal('word_hack', 'هک')) as $w) {
+        foreach (explode(',', (string)bkVal('word_hack', 'هک,حمله')) as $w) {
             $w = trim($w);
             if ($w !== '' && mb_strtolower($raw) === mb_strtolower($w)) { $isHack = true; break; }
         }

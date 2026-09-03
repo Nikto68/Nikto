@@ -678,7 +678,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         bkSet(function (&$c) use ($post, $num) {
             $c['on']            = !empty($post['bk_on']);
             $c['group_only']    = !empty($post['bk_group_only']);
-            $c['word_hack']     = trim((string)($post['word_hack'] ?? '')) ?: 'هک';
+            $c['word_bank']     = trim((string)($post['word_bank'] ?? '')) ?: 'بانک';
+            $c['word_hack']     = trim((string)($post['word_hack'] ?? '')) ?: 'هک,حمله';
             $c['min_withdraw']  = max(0, $num('min_withdraw', 50000));
             $c['manual_protect']= max(60, (int)$num('manual_protect', 900));
             $c['shield_after']  = max(0, (int)$num('shield_after', 300));
@@ -4463,8 +4464,10 @@ def join_gate(user_id):
           <label style="font-weight:500"><input type="checkbox" name="bk_group_only" style="width:auto" <?= !empty($BK['group_only']) ? 'checked' : '' ?>> فقط داخلِ گروه کار کند</label>
         </div>
         <div class="grid2">
-          <div><label>💬 کلمه‌ی هک (جایگزینِ /hack)</label><input name="word_hack" value="<?= h($BK['word_hack'] ?? 'هک') ?>"></div>
+          <div><label>💬 کلمه‌ی باز کردنِ کارتِ بانک (جایگزینِ /bank)</label><input name="word_bank" value="<?= h($BK['word_bank'] ?? 'بانک') ?>"></div>
+          <div><label>💬 کلمه‌های هک، با ویرگول (جایگزینِ /hack)</label><input name="word_hack" value="<?= h($BK['word_hack'] ?? 'هک,حمله') ?>"></div>
         </div>
+        <div class="note">کلمه باید تنها و دقیق نوشته شود (مثلا فقط «بانک»)، نه وسطِ یک جمله — درست مثلِ کلمه‌ی «موجودی»/«انتقال» تو بخشِ بازی‌ها.</div>
       </details>
 
       <details class="subcard"><summary><h3>🏦 بانک و برداشت</h3></summary>
