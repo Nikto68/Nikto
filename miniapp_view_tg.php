@@ -30,7 +30,6 @@ function maViewTg($a, $boot) {
         '__C2__'    => $c2,
         '__C3__'    => $c3,
         '__C4__'    => $c4,
-        '__BG__'    => '#FFFFFF', // 🔒 مثل مینی‌اپ ری‌اکشن، پس‌زمینه همیشه سفید است — قابل تغییر از پنل نیست
         '__GLOW__'  => $glow,
         '__GRAIN__' => $grain,
         '__FX__'    => $fx,
@@ -73,42 +72,59 @@ __SKIN__
    یه صفحه‌ی خام، همین رو نشون می‌دیم. رنگ‌هاش از رویِ متغیرهای همون
    اسکینه (--c1/--c2/--bg) — پس با هر اپ و هر تمِ رنگی خودش رو تطبیق می‌ده.
    فقط transform/opacity انیمیت می‌شه، طبقِ قاعده‌ی بالای فایل. */
-#splash{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;
-  background:var(--bg);transition:opacity .35s ease,visibility .35s ease}
+#splash{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;
+  background:#07050F;transition:opacity .5s ease,visibility .5s ease;overflow:hidden;padding:0 24px}
 #splash.hide{opacity:0;visibility:hidden;pointer-events:none}
-.splash-card{display:flex;flex-direction:column;align-items:center;gap:14px;
-  padding:34px 30px;border-radius:36px;text-align:center;
-  background:color-mix(in srgb,var(--pane, #150F2E) 88%,transparent);
-  box-shadow:0 22px 60px -20px color-mix(in srgb,var(--c1) 55%,transparent),
-             inset 0 1px 0 rgba(255,255,255,.06);
-  animation:splashPop .55s cubic-bezier(.2,1.4,.4,1) both}
-.splash-badge{width:66px;height:66px;border-radius:24px;display:flex;align-items:center;justify-content:center;
-  font-size:30px;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2));
-  box-shadow:0 10px 26px -8px color-mix(in srgb,var(--c2) 60%,transparent);
-  animation:splashFloat 2.4s ease-in-out infinite}
-.splash-hi{font-size:19px;font-weight:800;color:var(--ink,#fff);
-  background:linear-gradient(90deg,var(--c1),var(--c2));-webkit-background-clip:text;background-clip:text;color:transparent}
-.splash-sub{font-size:12.5px;color:var(--dim,#a79fc6)}
-.splash-dots{display:flex;gap:6px;margin-top:2px}
-.splash-dots i{width:6px;height:6px;border-radius:50%;background:var(--c2);
-  animation:splashDot 1.1s ease-in-out infinite}
-.splash-dots i:nth-child(2){animation-delay:.15s}
-.splash-dots i:nth-child(3){animation-delay:.3s}
-@keyframes splashPop{from{opacity:0;transform:scale(.82) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
-@keyframes splashFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-@keyframes splashDot{0%,80%,100%{opacity:.25;transform:scale(.85)}40%{opacity:1;transform:scale(1)}}
+.splash-sky{position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(60vw 60vw at 85% -6%,color-mix(in srgb,__C1__ 30%,transparent),transparent 66%),
+    radial-gradient(55vw 55vw at -6% 22%,color-mix(in srgb,__C3__ 26%,transparent),transparent 64%),
+    radial-gradient(50vw 50vw at 90% 96%,color-mix(in srgb,__C2__ 20%,transparent),transparent 62%),
+    radial-gradient(rgba(255,255,255,.09) 1px,transparent 1px) 0 0/26px 26px}
+.splash-mid{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;text-align:center;width:100%;max-width:320px}
+.splash-icon{position:relative;width:104px;height:104px;border-radius:30px;display:grid;place-items:center;
+  background:linear-gradient(150deg,color-mix(in srgb,__C1__ 55%,#0A0716),color-mix(in srgb,__C3__ 45%,#0A0716));
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:inset 1px 1px 0 rgba(255,255,255,.28),inset -2px -2px 10px rgba(0,0,0,.4),
+             0 24px 50px -18px color-mix(in srgb,__C1__ 60%,transparent);
+  animation:splashFloat 3s ease-in-out infinite}
+.splash-icon i{font-style:normal;font-size:46px;line-height:1;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
+.splash-name{position:relative;margin:2px 0 0;font-size:22px;font-weight:900;color:#fff;letter-spacing:-.2px}
+.splash-sub{position:relative;margin:0;font-size:12.5px;color:#A79FC6;line-height:1.8}
+.splash-tags{position:relative;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:2px}
+.splash-tags span{padding:6px 13px;border-radius:99px;font-size:11px;font-weight:800;color:#E7E1FF;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.splash-foot{position:relative;width:100%;max-width:280px;padding-bottom:calc(30px + var(--safe));
+  display:flex;flex-direction:column;align-items:center;gap:10px}
+.splash-bar{position:relative;width:100%;height:5px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.1)}
+.splash-bar b{position:absolute;inset:0;display:block;border-radius:inherit;transform:scaleX(0);transform-origin:left;
+  background:linear-gradient(90deg,__C1__,__C2__,__C3__);transition:transform linear}
+.splash-bar b:after{content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);
+  transform:translateX(-100%);animation:splashShine 1.4s ease-in-out infinite}
+.splash-pwr{position:relative;font-size:10.5px;font-weight:700;letter-spacing:.4px;color:#6E6690}
+@keyframes splashFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes splashShine{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 @media (prefers-reduced-motion:reduce){
-  .splash-card,.splash-badge,.splash-dots i{animation:none!important}
+  .splash-icon,.splash-bar b:after{animation:none!important}
 }
 </style>
 </head>
 <body>
 <div class="splash" id="splash">
-  <div class="splash-card">
-    <div class="splash-badge">★</div>
-    <div class="splash-hi">خوش آمدید</div>
-    <div class="splash-sub">__TITLE__</div>
-    <div class="splash-dots"><i></i><i></i><i></i></div>
+  <div class="splash-sky"></div>
+  <div class="splash-mid">
+    <div class="splash-icon"><i>★</i></div>
+    <h1 class="splash-name">__TITLE__</h1>
+    <p class="splash-sub">تحویل آنی · بهترین قیمت · پشتیبانی ۲۴ ساعته</p>
+    <div class="splash-tags"><span>⭐ استارز</span><span>💎 پریمیوم</span><span>🎁 گیفت</span></div>
+  </div>
+  <div class="splash-foot">
+    <div class="splash-bar"><b id="splashFill"></b></div>
+    <div class="splash-pwr">در حال اتصال امن…</div>
   </div>
 </div>
 <div class="sky"></div>
@@ -275,23 +291,38 @@ if (__GLOW__)  document.body.classList.add('glow-on');
 if (__GRAIN__) document.body.classList.add('grain-on');
 
 /* خوش‌آمدگویی تا جوابِ api('me') برسه پنهان می‌مونه — یه‌بار که مخفی
-   شد، دیگه برنمی‌گرده، چون فقط لحظه‌ی اولِ ورود معنی داره. */
+   شد، دیگه برنمی‌گرده، چون فقط لحظه‌ی اولِ ورود معنی داره.
+   حداقلِ نمایش عمدا ۵ ثانیه‌ست (درخواستِ صریحِ کارفرما) — حتی اتصالِ
+   خیلی‌سریع هم این حسِ اولِ ورود را کامل می‌بیند؛ خطِ پیشرفت هم دقیقا
+   همین ۵ ثانیه را پر می‌کند تا با زمانِ واقعیِ صبرکردن هماهنگ باشد. */
 var splashStart = Date.now();
 var splashGone = false;
-// کف و سقف حالا از هم جدا شدن — قبلاً یک عدد (۴ ثانیه) هر دو نقش را
-// داشت، یعنی حتی یک اتصالِ خیلی سریع هم مجبور بود تا ۴ ثانیه صبر کند.
-// SPLASH_MIN فقط جلوی «پلک‌زدنِ» چندصدمیلی‌ثانیه‌ای را می‌گیرد؛
-// SPLASH_MAX همان سقفِ قبلی برای شبکه‌ی کند است — بدونش api('me')ی که
-// جواب نمی‌دهد، اسپلش را برای همیشه نگه می‌داشت.
-var SPLASH_MIN = 350;
-var SPLASH_MAX = 4000;
+var SPLASH_MIN = 5000;
+var SPLASH_MAX = 8000; // سقفِ شبکه‌ی کند — اگر api('me') این‌قدر طول کشید، دیگر بیشتر معطل نکن
+(function(){
+  var fill = $('splashFill');
+  if (!fill) return;
+  // ⚠️ یک rAF کافی نیست: اگر همان فریمِ اولی که scaleX(0) رنگ‌آمیزی
+  // می‌شود را مرورگر واقعا paint نکرده باشد، تغییرِ بعدی (scaleX(1))
+  // به‌جای ترنزیشن، مستقیم می‌پرد — یعنی نوار به‌جایِ پرشدنِ ۵ثانیه‌ای،
+  // آنی پر نشان می‌دهد. دو rAF تضمین می‌کند حالتِ اول واقعا رندر شده.
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      fill.style.transitionDuration = SPLASH_MIN + 'ms';
+      fill.style.transform = 'scaleX(1)';
+    });
+  });
+})();
 function hideSplash(){
   if (splashGone) return; splashGone = true;
   var wait = Math.max(0, SPLASH_MIN - (Date.now() - splashStart));
   setTimeout(function(){
     var s = $('splash'); if (!s) return;
-    s.classList.add('hide');
-    setTimeout(function(){ s.remove(); }, 400);
+    var f = $('splashFill'); if (f) f.style.transform = 'scaleX(1)';
+    setTimeout(function(){
+      s.classList.add('hide');
+      setTimeout(function(){ s.remove(); }, 500);
+    }, 120);
   }, wait);
 }
 setTimeout(hideSplash, SPLASH_MAX);
@@ -1364,10 +1395,14 @@ function maSkinAurora() {
 :root{
   /* 🎨 همان چهار رنگِ تاکیدِ مینی‌اپ ری‌اکشن — آبی/سبز/بنفش/قرمز —
      تا هر سه مینی‌اپ یک هویتِ رنگیِ واحد داشته باشند. */
-  --c1:__C1__; --c2:__C2__; --c3:__C3__; --c4:__C4__; --bg:__BG__;
-  --ink:#161A2B; --dim:#6B7280; --line:rgba(15,23,42,.09);
-  --pane:#FFFFFF; --pane2:#F6F8FC;
+  --c1:__C1__; --c2:__C2__; --c3:__C3__; --c4:__C4__;
+  /* 🌌 شبِ عمیقِ بنفش‌آبی — همان رنگِ خانواده‌ی کارتِ اسپلشِ قبلی
+     (#150F2E)، حالا رویِ کلِ اپ، نه فقط لحظه‌ی ورود. */
+  --bg:#0A0716; --ink:#F4F1FF; --dim:#A79FC6; --line:rgba(255,255,255,.12);
+  --pane:rgba(255,255,255,.055); --pane2:rgba(255,255,255,.035);
+  --blur:18px;
   --r:24px; --safe:env(safe-area-inset-bottom,0px);
+  color-scheme:dark;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;min-height:100%}
@@ -1378,22 +1413,24 @@ body{
 }
 img{max-width:100%}
 
-/* ═══ آسمانِ روشن ═══ لکه‌های رنگیِ خیلی کم‌رنگ روی سفید، بدون filter */
+/* ═══ آسمانِ شب ═══ لکه‌های رنگیِ درخشان روی زمینه‌ی تیره — بدونِ هیچ
+   filter‌ی روی خودِ لایه (فقط گرادیانِ ساکن، رایگان برایِ GPU) */
 .sky{position:fixed;inset:0;z-index:0;pointer-events:none;
   background:
-    radial-gradient(60vw 60vw at 88% -8%,color-mix(in srgb,var(--c1) 16%,transparent),transparent 68%),
-    radial-gradient(54vw 54vw at 4% 30%,color-mix(in srgb,var(--c2) 13%,transparent),transparent 66%),
-    radial-gradient(48vw 48vw at 80% 106%,color-mix(in srgb,var(--c3) 12%,transparent),transparent 64%)}
+    radial-gradient(62vw 62vw at 88% -10%,color-mix(in srgb,var(--c1) 38%,transparent),transparent 68%),
+    radial-gradient(56vw 56vw at 2% 22%,color-mix(in srgb,var(--c3) 34%,transparent),transparent 66%),
+    radial-gradient(50vw 50vw at 84% 104%,color-mix(in srgb,var(--c2) 28%,transparent),transparent 64%),
+    var(--bg)}
 .sky:after{content:"";position:absolute;inset:0;opacity:0;
-  background:radial-gradient(50vw 50vw at 22% 10%,color-mix(in srgb,var(--c2) 10%,transparent),transparent 62%)}
+  background:radial-gradient(50vw 50vw at 22% 10%,color-mix(in srgb,var(--c2) 24%,transparent),transparent 62%)}
 body.fx2 .sky:after{animation:breathe 9s ease-in-out infinite}
 @keyframes breathe{0%,100%{opacity:0}50%{opacity:.9}}
-/* ⭐ ستاره‌ها فقط روی زمینه‌ی تیره معنی داشتند؛ روی سفیدِ منشور مثل
-   ری‌اکشن خاموش‌اند — هم هم‌رنگ می‌ماند هم یک انیمیشنِ کنواس-به-کنواس
-   کمتر روی گوشی‌های ضعیف. */
+/* ⭐ کنواسِ ستاره عمدا خاموش می‌ماند — یک rAF بی‌پایان برای اثری که
+   گرادیانِ ساکنِ بالا بدونِ هیچ هزینه‌ی فریم‌به‌فریمی تامین می‌کند،
+   ارزشِ آن هزینه‌ی مدام را ندارد (قاعده‌ی سرعتِ بالایِ همین فایل). */
 #stars{display:none}
 .veil{position:fixed;inset:0;z-index:2;pointer-events:none;
-  background:radial-gradient(122% 78% at 50% 0%,transparent 30%,var(--bg) 92%)}
+  background:radial-gradient(122% 78% at 50% 0%,transparent 42%,var(--bg) 96%)}
 .grain{display:none}
 @media (prefers-reduced-motion:reduce){ .sky:after{animation:none!important} }
 
@@ -1402,16 +1439,18 @@ body.fx2 .sky:after{animation:breathe 9s ease-in-out infinite}
 /* ═══ سربرگ ═══ نوار بالا مثل اپ‌های گیفت: چهره، سلام، موجودی، و یک دکمه‌ی کار */
 .top{display:flex;align-items:center;gap:11px;margin:14px 0 4px;padding:11px 12px;border-radius:22px;
   border:1px solid var(--line);background:var(--pane);
-  box-shadow:0 10px 28px -20px rgba(20,25,45,.35)}
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+  box-shadow:0 10px 28px -20px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06)}
+body.fx0 .top{backdrop-filter:none;-webkit-backdrop-filter:none}
 .ava{width:46px;height:46px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;overflow:hidden;
   font-weight:900;font-size:18px;color:#fff;
   background:linear-gradient(135deg,var(--c1),var(--c3));
-  box-shadow:0 0 0 2px var(--pane),0 0 0 4px color-mix(in srgb,var(--c1) 30%,transparent)}
+  box-shadow:0 0 0 2px var(--bg),0 0 0 4px color-mix(in srgb,var(--c1) 45%,transparent)}
 .ava img{width:100%;height:100%;object-fit:cover}
 .who{flex:1;min-width:0}
 .who h1{margin:0;font-size:14.5px;font-weight:800;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chipbal{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:5px 6px 5px 10px;border-radius:12px;
-  border:1px solid var(--line);background:rgba(15,23,42,.035);font-size:12.5px;font-weight:900;cursor:pointer}
+  border:1px solid var(--line);background:rgba(255,255,255,.06);font-size:12.5px;font-weight:900;cursor:pointer}
 .chipbal em{font-style:normal;font-size:9.5px;color:var(--dim);font-weight:600}
 .chipbal b{width:20px;height:20px;border-radius:7px;display:grid;place-items:center;font-size:14px;line-height:1;
   color:#fff;background:linear-gradient(135deg,var(--c2),var(--c1))}
@@ -1423,7 +1462,7 @@ body.glow-on .cta{box-shadow:0 10px 22px -12px color-mix(in srgb,var(--c1) 65%,t
 
 /* 🔔 زنگ — با همان نقطه‌ای که هر برنامه‌ای دارد */
 .bell{position:relative;flex:0 0 auto;width:38px;height:38px;border-radius:13px;cursor:pointer;
-  border:1px solid var(--line);background:rgba(15,23,42,.035);
+  border:1px solid var(--line);background:rgba(255,255,255,.06);
   color:inherit;display:grid;place-items:center;font-size:16px;font-family:inherit}
 .bell:active{transform:scale(.94)}
 .bell .bdot{position:absolute;top:6px;inset-inline-end:6px;width:8px;height:8px;border-radius:99px;
@@ -1443,7 +1482,7 @@ body.glow-on .cta{box-shadow:0 10px 22px -12px color-mix(in srgb,var(--c1) 65%,t
 .note .nh time{font-size:10px;color:var(--dim);white-space:nowrap}
 .note p{font-size:12px;color:var(--dim);line-height:1.8;white-space:pre-line;margin:0}
 .note .ncp{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
-.note .ncp button{border:1px solid var(--line);background:rgba(15,23,42,.04);
+.note .ncp button{border:1px solid var(--line);background:rgba(255,255,255,.06);
   color:inherit;border-radius:10px;padding:5px 10px;font-size:11px;font-family:inherit;cursor:pointer}
 .note .ncp button:active{transform:scale(.95)}
 .wsub{margin:0 0 10px;font-size:11.5px;color:var(--dim);text-align:center}
@@ -1495,9 +1534,11 @@ body.fx2 .purse .spark{animation:spark 5s ease-in-out infinite}
 
 /* ═══ کارت خوش‌آمد ═══ */
 .welcome{margin-top:16px;padding:22px 18px;border-radius:26px;text-align:center;position:relative;overflow:hidden;
-  border:1px solid var(--line);background:var(--pane2)}
+  border:1px solid var(--line);background:var(--pane2);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
+body.fx0 .welcome{backdrop-filter:none;-webkit-backdrop-filter:none}
 .welcome:before{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(118deg,color-mix(in srgb,var(--c1) 8%,transparent) 0%,transparent 45%)}
+  background:linear-gradient(118deg,color-mix(in srgb,var(--c1) 16%,transparent) 0%,transparent 45%)}
 .logo{width:82px;height:82px;margin:0 auto 13px;position:relative}
 .logo svg{width:100%;height:100%;display:block;position:relative;z-index:2}
 .logo i{position:absolute;inset:-6px;border-radius:50%;border:1.5px dashed color-mix(in srgb,var(--c1) 45%,transparent)}
@@ -1520,8 +1561,8 @@ body.fx2 .logo .halo{animation:glow 3.6s ease-in-out infinite}
 .rail{display:flex;gap:9px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:none}
 .rail::-webkit-scrollbar{display:none}
 .rail .rc{flex:0 0 auto;width:82px;padding:13px 6px;border-radius:20px;text-align:center;cursor:pointer;
-  border:1px solid var(--line);background:var(--pane);transition:border-color .18s,transform .18s;
-  box-shadow:0 6px 18px -16px rgba(20,25,45,.4)}
+  border:1px solid var(--line);background:var(--pane);transition:border-color .18s,transform .18s,background .18s;
+  box-shadow:0 6px 18px -14px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06)}
 .rail .rc:active{transform:scale(.95)}
 .rail .rc .ico{margin:0 auto 7px}
 .rail .rc span{display:block;font-size:10.5px;font-weight:800;color:var(--dim);
@@ -1658,9 +1699,11 @@ body.fx0 .tile.instage .orb{animation:none}
 
 /* ═══ حساب کاربری ═══ */
 .prof{display:flex;align-items:center;gap:14px;padding:19px 17px;border-radius:26px;position:relative;overflow:hidden;
-  border:1px solid var(--line);background:var(--pane2)}
+  border:1px solid var(--line);background:var(--pane2);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
+body.fx0 .prof{backdrop-filter:none;-webkit-backdrop-filter:none}
 .prof:before{content:"";position:absolute;inset:0;opacity:.5;pointer-events:none;
-  background:radial-gradient(70% 120% at 100% 0%,color-mix(in srgb,var(--c1) 14%,transparent),transparent 62%)}
+  background:radial-gradient(70% 120% at 100% 0%,color-mix(in srgb,var(--c1) 22%,transparent),transparent 62%)}
 .prof .big{position:relative;width:64px;height:64px;border-radius:22px;flex:0 0 auto;overflow:hidden;
   display:grid;place-items:center;font-size:26px;font-weight:900;color:#fff;
   background:linear-gradient(135deg,var(--c1),var(--c3))}
@@ -1671,7 +1714,9 @@ body.fx0 .tile.instage .orb{animation:none}
 .prof .d code{display:inline-block;margin-top:7px;font-size:10.5px;padding:3px 9px;border-radius:8px;
   background:var(--pane);border:1px solid var(--line);direction:ltr;font-family:ui-monospace,monospace}
 
-.pane{margin-top:13px;padding:16px;border-radius:22px;border:1px solid var(--line);background:var(--pane)}
+.pane{margin-top:13px;padding:16px;border-radius:22px;border:1px solid var(--line);background:var(--pane);
+  backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
+body.fx0 .pane{backdrop-filter:none;-webkit-backdrop-filter:none}
 .pane h3{margin:0 0 12px;font-size:13px;font-weight:900;display:flex;align-items:center;gap:7px}
 /* شماره کارت روی خط خودش می‌نشیند و دکمه زیرش — چون ۱۶ رقم با فاصله
    کنار یک دکمه، روی گوشی‌های باریک دو خط می‌شد و بد جا می‌افتاد. */
@@ -1736,7 +1781,7 @@ body.is-admin .pg.adm:not(.on){display:none}
 .a2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .aswitch{display:flex;align-items:center;justify-content:space-between;padding:12px 13px;border-radius:14px;
   border:1px solid var(--line);background:var(--pane2);font-size:12.5px;font-weight:700;cursor:pointer}
-.aswitch i{width:44px;height:25px;border-radius:13px;background:rgba(15,23,42,.14);position:relative;transition:.2s}
+.aswitch i{width:44px;height:25px;border-radius:13px;background:rgba(255,255,255,.14);position:relative;transition:.2s}
 .aswitch i:after{content:"";position:absolute;top:3px;right:3px;width:19px;height:19px;border-radius:50%;
   background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(20,25,45,.3)}
 .aswitch.on i{background:linear-gradient(135deg,var(--c1),var(--c3))}
@@ -1749,10 +1794,10 @@ body.is-admin .pg.adm:not(.on){display:none}
    چند برابر ارزان‌تر. */
 .dock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(11px + var(--safe));z-index:30;
   width:min(94vw,420px);display:flex;gap:3px;padding:7px;border-radius:26px;
-  border:1px solid var(--line);background:rgba(255,255,255,.86);
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  box-shadow:0 18px 44px -12px rgba(20,25,45,.28)}
-body.fx0 .dock{backdrop-filter:none;-webkit-backdrop-filter:none;background:#FFFFFF}
+  border:1px solid var(--line);background:rgba(255,255,255,.09);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 18px 44px -12px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.08)}
+body.fx0 .dock{backdrop-filter:none;-webkit-backdrop-filter:none;background:#150F2E}
 .dock b{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;
   padding:8px 2px;border-radius:19px;cursor:pointer;color:var(--dim);
   font-size:9.5px;font-weight:800;transition:color .16s,background .16s}
@@ -1762,7 +1807,7 @@ body.fx0 .dock{backdrop-filter:none;-webkit-backdrop-filter:none;background:#FFF
 body.is-admin .dock b[data-p="adm"]{display:flex}
 
 /* ═══ شیت خرید ═══ */
-.scrim{position:fixed;inset:0;z-index:40;background:rgba(15,23,42,.32);backdrop-filter:blur(6px);
+.scrim{position:fixed;inset:0;z-index:40;background:rgba(3,2,10,.55);backdrop-filter:blur(6px);
   opacity:0;pointer-events:none;transition:.28s}
 .scrim.on{opacity:1;pointer-events:auto}
 /* ⌨️ کیبورد باز = بلور خاموش (توضیح بالای «kb-open» را در JS ببینید).
@@ -1772,12 +1817,13 @@ body.is-admin .dock b[data-p="adm"]{display:flex}
 body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition:opacity .28s}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;transform:translateY(102%);
   transition:transform .38s cubic-bezier(.2,.9,.25,1);
-  background:#FFFFFF;
+  background:color-mix(in srgb,var(--bg) 88%,#1A1332);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
   border-radius:30px 30px 0 0;border-top:1px solid var(--line);
   padding:10px 17px calc(22px + var(--safe));max-height:92vh;overflow-y:auto;
-  box-shadow:0 -24px 60px -20px rgba(20,25,45,.35)}
+  box-shadow:0 -24px 60px -20px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.08)}
 .sheet.on{transform:none}
-.grip{width:42px;height:4px;border-radius:4px;background:rgba(15,23,42,.15);margin:4px auto 16px}
+.grip{width:42px;height:4px;border-radius:4px;background:rgba(255,255,255,.22);margin:4px auto 16px}
 .sheet .head{display:flex;align-items:center;gap:13px;margin-bottom:16px}
 .sheet .head .orb{width:56px;height:56px;font-size:27px;margin:0}
 .sheet .head h2{margin:0;font-size:16.5px;font-weight:900}
