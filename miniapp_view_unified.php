@@ -182,13 +182,7 @@ __SKIN__
       <div id="leaderList"><div class="void"><div>🏆</div>در حال خواندن…</div></div>
     </div>
 
-    <nav class="adock" id="adock">
-      <b data-p="leader"><i>🏆</i><span>لیدربورد</span></b>
-      <b data-p="ref"><i>👥</i><span>رفرال</span></b>
-      <b data-p="rewards"><i>🎁</i><span>پاداش‌ها</span></b>
-      <b data-p="missions"><i>🎯</i><span>ماموریت‌ها</span></b>
-      <b data-p="mine" class="on"><i>💎</i><span>معدن</span></b>
-    </nav>
+    <nav class="adock" id="adock"></nav>
   </section>
 
   <!-- ══ حساب من ══ -->
@@ -232,13 +226,7 @@ __SKIN__
   </section>
 </div>
 
-<nav class="dock" id="dock">
-  <b data-p="home" class="on"><i class="ico">🏠</i><span>خانه</span></b>
-  <b data-p="shop"><i class="ico">🛍</i><span>فروشگاه</span></b>
-  <b data-p="air" class="airbtn"><i class="ico">💎</i><span>ایردراپ</span></b>
-  <b data-p="me"><i class="ico">👤</i><span>حساب من</span></b>
-  <b data-p="more"><i class="ico">☰</i><span>بیشتر</span></b>
-</nav>
+<nav class="dock" id="dock"></nav>
 
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet">
@@ -344,6 +332,52 @@ function api(appKey, action, extra, ok, bad){
     .catch(function(){ if (timer) clearTimeout(timer); bad({ message:'ارتباط با سرور برقرار نشد.' }); });
 }
 
+/* ── آیکون‌های شیشه‌ای — همان زبانِ بصریِ سه مینی‌اپِ دیگر، نه اموجیِ خام:
+   خطِ نازک + پرشدنِ ظریف، با یک سایه‌ی نوری که فقط رویِ آیتمِ فعال روشن
+   می‌شود. تاکیدِ صریحِ کارفرما همین بود: «بیشتر روی آیکون‌ها کار کن». */
+var ICONS = {
+  home:  '<svg viewBox="0 0 24 24"><path class="i-float" d="M3.4 10.6L12 3.4l8.6 7.2v9.4H3.4z"/><path d="M9.4 20v-6h5.2v6"/></svg>',
+  bag:   '<svg viewBox="0 0 24 24"><path class="i-float" d="M4.4 8h15.2l-1.2 12.4H5.6z"/><path class="i-lid" d="M8.6 8V6.2a3.4 3.4 0 016.8 0V8"/></svg>',
+  user:  '<svg viewBox="0 0 24 24"><circle class="i-float" cx="12" cy="8" r="4.2"/><path d="M3.8 21c.6-4.6 4-7 8.2-7s7.6 2.4 8.2 7"/></svg>',
+  people:'<svg viewBox="0 0 24 24"><circle class="i-float" cx="9" cy="8.2" r="3.4"/><circle cx="16.6" cy="9.4" r="2.7"/><path d="M2.6 20.6c.5-3.9 3.2-6 6.4-6s5.9 2.1 6.4 6"/><path d="M15.6 15c2.4.3 4.1 2 4.6 5.1"/></svg>',
+  crown: '<svg viewBox="0 0 24 24"><path class="fl i-float" d="M3 8.4l4.2 3.2L12 4.6l4.8 7 4.2-3.2-1.7 9.6H4.7z"/><rect class="fl" x="4.4" y="19" width="15.2" height="2.1" rx="1"/></svg>',
+  gift:  '<svg viewBox="0 0 24 24"><rect x="3.4" y="9.8" width="17.2" height="10.8" rx="2"/><path class="i-lid" d="M2.4 6.4h19.2v3.6H2.4z"/><path d="M12 6.4v14.2"/><path class="i-lid" d="M12 6.4C10.6 3 6.6 3.4 7.2 6.4M12 6.4c1.4-3.4 5.4-3 4.8 0"/></svg>',
+  target:'<svg viewBox="0 0 24 24"><circle class="i-float" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.1"/><circle class="fl i-pulse" cx="12" cy="12" r="1.7"/></svg>',
+  gem:   '<svg viewBox="0 0 24 24"><g class="i-spin"><path d="M4 9.2L12 21l8-11.8L16.6 3H7.4z"/><path d="M4 9.2h16M9.2 9.2L12 21l2.8-11.8M7.4 3l1.8 6.2M16.6 3l-1.8 6.2"/></g></svg>',
+  star:  '<svg viewBox="0 0 24 24"><path class="fl i-pulse" d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5 6.1 20.6l1.2-6.5L2.5 9.5l6.6-.9z"/></svg>',
+  heart: '<svg viewBox="0 0 24 24"><path class="fl i-pulse" d="M12 20.4c-4-2.6-9-6.4-9-11A5 5 0 0112 6.2 5 5 0 0121 9.4c0 4.6-5 8.4-9 11z"/></svg>',
+  globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse class="i-pulse" cx="12" cy="12" rx="4" ry="9"/></svg>',
+  grid:  '<svg viewBox="0 0 24 24"><rect class="i-float" x="3.2" y="3.2" width="7.4" height="7.4" rx="2"/><rect x="13.4" y="3.2" width="7.4" height="7.4" rx="2"/><rect x="3.2" y="13.4" width="7.4" height="7.4" rx="2"/><rect class="i-pulse" x="13.4" y="13.4" width="7.4" height="7.4" rx="2"/></svg>',
+  box:   '<svg viewBox="0 0 24 24"><path class="i-float" d="M12 2.8l8.4 4.4v9.6L12 21.2 3.6 16.8V7.2z"/><path class="i-float" d="M3.6 7.2L12 11.6l8.4-4.4M12 11.6v9.6"/></svg>',
+  clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.8"/><path class="i-tick" d="M12 12V6.6"/><path d="M12 12l3.6 2.2"/></svg>',
+  inf:   '<svg viewBox="0 0 24 24"><path class="i-draw" d="M8.4 8.2a3.8 3.8 0 100 7.6c3 0 4.2-7.6 7.2-7.6a3.8 3.8 0 110 7.6c-3 0-4.2-7.6-7.2-7.6z"/></svg>',
+  wallet:'<svg viewBox="0 0 24 24"><rect x="3" y="6.2" width="18" height="13" rx="2.6"/><path d="M3 10.4h18"/><circle class="fl i-pulse" cx="17" cy="14.6" r="1.5"/></svg>',
+  bolt:  '<svg viewBox="0 0 24 24"><path class="fl i-pulse" d="M13.4 2.2L4.6 13.6h5.4l-.8 8.2 9-11.6h-5.4z"/></svg>',
+  shield:'<svg viewBox="0 0 24 24"><path class="i-draw" d="M12 2.6l8 3v6.2c0 5-3.4 8.7-8 9.8-4.6-1.1-8-4.8-8-9.8V5.6z"/><path class="i-draw" d="M8.6 12.2l2.4 2.4 4.6-4.8"/></svg>',
+  tag:   '<svg viewBox="0 0 24 24"><path class="i-float" d="M11.4 2.8h9.8v9.8L11.6 22.2 1.8 12.4z"/><circle class="fl i-pulse" cx="17" cy="7" r="1.7"/></svg>',
+  menu:  '<svg viewBox="0 0 24 24"><path d="M3.5 6.6h17M3.5 12h17M3.5 17.4h17"/></svg>'
+};
+var ICO_MAP = [
+  [/star|استار|ستار/i,                'star'],
+  [/gift|گیفت|هدیه|teddy|تدی/i,       'gift'],
+  [/\bton\b|تون|tonco|الماس|کریستال/i,'gem'],
+  [/react|ری‌اکشن|لایک|قلب|heart/i,   'heart'],
+  [/vol|حجم|گیگ|گیگا|مگ|giga|\bgb\b/i,'box'],
+  [/time|زمان|روز|ماه|month|day/i,    'clock'],
+  [/unlim|نامحدود|بی.?نهایت/i,        'inf'],
+  [/loc|کشور|لوکیشن|country|سرور/i,   'globe'],
+  [/امن|secure|shield/i,              'shield'],
+  [/fast|سریع|توربو|turbo|speed/i,    'bolt'],
+  [/off|تخفیف|حراج|discount/i,        'tag'],
+  [/acc|اکانت|account|عضو|member/i,   'user'],
+  [/pack|بسته|فروش|shop|buy/i,        'bag']
+];
+function icoFor(c){
+  var key = String(c.id || '') + ' ' + String(c.name || '');
+  for (var i = 0; i < ICO_MAP.length; i++) if (ICO_MAP[i][0].test(key)) return ICONS[ICO_MAP[i][1]];
+  return ICONS.bag;
+}
+
 var toastT;
 function toast(m, good){
   var t = $('toast');
@@ -362,6 +396,22 @@ function setBal(v){
 }
 
 /* ── ناوبریِ اصلی ── */
+var DOCK_PAGES = [
+  { id:'home', ico:'home', name:'خانه' },
+  { id:'shop', ico:'bag',  name:'فروشگاه' },
+  { id:'air',  ico:'gem',  name:'ایردراپ', cls:'airbtn' },
+  { id:'me',   ico:'user', name:'حساب من' },
+  { id:'more', ico:'menu', name:'بیشتر' }
+];
+(function drawDock(){
+  var h = '';
+  DOCK_PAGES.forEach(function(p){
+    h += '<b data-p="' + p.id + '"' + (p.cls ? ' class="' + p.cls + (p.id==='home' ? ' on' : '') + '"' : (p.id==='home' ? ' class="on"' : '')) + '>' +
+         '<i class="navi">' + ICONS[p.ico] + '</i><span>' + esc(p.name) + '</span></b>';
+  });
+  $('dock').innerHTML = h;
+})();
+
 var PAGE_IDS = ['home','shop','air','me','more','note'];
 function go(page, silent){
   if (page === 'shop') ensureGridBuilt();
@@ -449,7 +499,7 @@ function catAppLabel(c){
   var h = '';
   (B.cats || []).forEach(function(c){
     h += '<div class="rc" data-c="' + esc(c.id) + '" data-app="' + esc(c.app) + '">' +
-         '<i class="ico2">' + esc(c.emoji || '💠') + '</i>' +
+         '<i class="ico">' + icoFor(c) + '</i>' +
          '<span>' + esc(c.name) + '</span></div>';
   });
   $('rail').innerHTML = h;
@@ -464,13 +514,13 @@ $('rail').addEventListener('click', function(ev){
 /* ── دسترسیِ سریع (خانه) ── */
 (function drawQGrid(){
   var apps = B.apps || {};
-  var order = ['tg','num','react'];
+  var order = [['tg','star'], ['num','globe'], ['react','heart']];
   var h = '';
-  order.forEach(function(k){
-    if (!apps[k]) return;
-    h += '<div class="qtile" data-app="' + k + '"><i>' + esc(apps[k].emoji || '💠') + '</i><span>' + esc(apps[k].title) + '</span></div>';
+  order.forEach(function(pair){
+    var k = pair[0]; if (!apps[k]) return;
+    h += '<div class="qtile" data-app="' + k + '"><i class="ico">' + ICONS[pair[1]] + '</i><span>' + esc(apps[k].title) + '</span></div>';
   });
-  h += '<div class="qtile air" data-air="1"><i>💎</i><span>ایردراپ</span></div>';
+  h += '<div class="qtile air" data-air="1"><i class="ico">' + ICONS.gem + '</i><span>ایردراپ</span></div>';
   $('qgrid').innerHTML = h;
 })();
 $('qgrid').addEventListener('click', function(ev){
@@ -902,6 +952,22 @@ function loadNotes(){
 
 /* ══════════════════ 💎 ایردراپ ══════════════════ */
 var AD = { loaded:false, page:'mine', state:null };
+// «معدن» وسطِ ردیف — تاکیدِ صریحِ کارفرما — نه لبه‌ی چپ/راست
+var ADOCK_PAGES = [
+  { id:'leader', ico:'crown',  name:'لیدربورد' },
+  { id:'ref',    ico:'people', name:'رفرال' },
+  { id:'mine',   ico:'gem',    name:'معدن' },
+  { id:'missions', ico:'target', name:'ماموریت‌ها' },
+  { id:'rewards',  ico:'gift',   name:'پاداش‌ها' }
+];
+(function drawAdock(){
+  var h = '';
+  ADOCK_PAGES.forEach(function(p){
+    h += '<b data-p="' + p.id + '"' + (p.id==='mine' ? ' class="on"' : '') + '>' +
+         '<i class="navi">' + ICONS[p.ico] + '</i><span>' + esc(p.name) + '</span></b>';
+  });
+  $('adock').innerHTML = h;
+})();
 $('airBack').onclick = function(){ tap(); go('home'); };
 $('adock').addEventListener('click', function(ev){
   var el = ev.target.closest ? ev.target.closest('b') : null;
@@ -1165,7 +1231,6 @@ img{max-width:100%}
 .qtile{padding:14px 6px;border-radius:18px;text-align:center;cursor:pointer;
   border:1px solid var(--line);background:var(--pane)}
 .qtile:active{transform:scale(.95)}
-.qtile i{display:block;font-size:22px;margin-bottom:6px}
 .qtile span{display:block;font-size:10px;font-weight:800;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .qtile.air{background:linear-gradient(140deg,color-mix(in srgb,var(--c3) 30%,var(--pane)),var(--pane))}
 
@@ -1176,8 +1241,41 @@ img{max-width:100%}
   border:1px solid var(--line);background:var(--pane)}
 .rail .rc:active{transform:scale(.95)}
 .rail .rc span{display:block;font-size:10.5px;font-weight:800;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ico2{display:grid;place-items:center;width:38px;height:38px;margin:0 auto 7px;border-radius:14px;font-size:19px;
-  background-image:linear-gradient(158deg,var(--c1),var(--c3));border:1px solid rgba(255,255,255,.24);font-style:normal}
+.rail .rc.on{border-color:color-mix(in srgb,var(--c1) 55%,transparent)}
+.rail .rc.on span{color:var(--ink)}
+
+/* ═══ آیکونِ شیشه‌ایِ جعبه‌ای — دسته‌ها + دسترسیِ سریع ═══ */
+.ico{position:relative;width:38px;height:38px;margin:0 auto 7px;border-radius:14px;display:grid;place-items:center;
+  color:#fff;background-image:linear-gradient(158deg,var(--c1),var(--c3));
+  border:1px solid rgba(255,255,255,.24);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 16px -8px color-mix(in srgb,var(--c1) 55%,transparent);
+  overflow:hidden}
+.ico:before{content:"";position:absolute;inset:-45%;pointer-events:none;
+  background:linear-gradient(115deg,transparent 41%,rgba(255,255,255,.6) 50%,transparent 59%);
+  transform:translateX(-130%);animation:icoSheen 3.2s cubic-bezier(.4,0,.2,1) infinite}
+.ico:after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(120% 70% at 50% -10%,rgba(255,255,255,.35),transparent 60%)}
+.ico svg{position:relative;width:20px;height:20px;display:block;overflow:visible;
+  fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ico svg .fl{fill:currentColor;stroke:none}
+@keyframes icoSheen{0%{transform:translateX(-130%)}55%,100%{transform:translateX(130%)}}
+.i-spin{transform-box:fill-box;transform-origin:50% 50%;animation:icoSpin 6s linear infinite}
+.i-float{animation:icoFloat 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 50%}
+.i-pulse{animation:icoPulse 1.9s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 50%}
+.i-lid{animation:icoLid 2.2s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes icoSpin{to{transform:rotate(360deg)}}
+@keyframes icoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes icoPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.16);opacity:.75}}
+@keyframes icoLid{0%,72%,100%{transform:translateY(0) rotate(0)}82%{transform:translateY(-2.5px) rotate(-8deg)}}
+@media (prefers-reduced-motion:reduce){
+  .ico:before,.i-spin,.i-float,.i-pulse,.i-lid{animation:none!important}
+}
+
+/* ═══ آیکونِ ناوبری — بدونِ جعبه، فقط رنگش با فعال‌شدن عوض می‌شود ═══ */
+.navi{display:block;margin:0 auto;width:19px;height:19px}
+.navi svg{width:100%;height:100%;display:block;fill:none;stroke:currentColor;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.navi svg .fl{fill:currentColor;stroke:none}
 
 /* ═══ پرفروش‌ها ═══ */
 .bestrow{display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:16px;margin-bottom:8px;
@@ -1301,7 +1399,7 @@ img{max-width:100%}
 .dock b{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;
   padding:8px 2px;border-radius:19px;cursor:pointer;color:var(--dim);font-size:9.5px;font-weight:800}
 .dock b span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dock b .ico{font-size:17px;font-style:normal}
+.dock b .navi{width:19px;height:19px}
 .dock b.on{color:#fff;background:linear-gradient(135deg,var(--c1),var(--c3))}
 .dock b.airbtn.on{background:linear-gradient(135deg,var(--c3),#8B5CF6)}
 .dock.hidden{display:none}
@@ -1336,7 +1434,7 @@ img{max-width:100%}
   box-shadow:0 18px 44px -12px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.08)}
 .adock b{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;
   padding:8px 2px;border-radius:19px;cursor:pointer;color:var(--dim);font-size:9.5px;font-weight:800}
-.adock b i{font-style:normal;font-size:16px}
+.adock b .navi{width:18px;height:18px}
 .adock b span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .adock b.on{color:#fff;background:linear-gradient(135deg,var(--c3),#8B5CF6)}
 
