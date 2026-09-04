@@ -222,6 +222,7 @@ require_once __DIR__ . '/airdrop.php';
 require_once __DIR__ . '/coupons.php';
 require_once __DIR__ . '/bank.php';
 require_once __DIR__ . '/mine.php';
+require_once __DIR__ . '/vault.php';
 require_once __DIR__ . '/profit.php';
 
 // ============================================================
@@ -5595,6 +5596,7 @@ function admHome($chatId, $msgId = null) {
         [btnCb('💹 قیمت لحظه‌ای', 'px_home', 'admin'),  btnCb('💎 الماس', 'dm_home', 'admin')],
         [btnCb('☎️ شماره مجازی', 'num_home', 'admin'), btnCb('🎮 بازی‌ها', 'gm_home', 'admin')],
         [btnCb('🏦 بانک', 'bk_home', 'admin'),          btnCb('💣 مین‌یاب', 'mn_home', 'admin')],
+        [btnCb('💰 بانکِ الماسی', 'vl_home', 'admin')],
         [btnCb('📈 سود روی محصولات', 'pf_home', 'admin')],
         [btnCb('💳 پرداخت', 'ag_pay', 'admin'),        btnCb('🎨 ظاهر و متن‌ها', 'ag_look', 'admin')],
         [btnCb('📡 کانال‌های متصل', 'ch_home', 'admin'),
@@ -7324,6 +7326,9 @@ function masterHandle($update) {
         // 💣 دکمه‌های مین‌یاب — همین‌طور، در گروه
         if (function_exists('mnCallback') && mnCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
 
+        // 🏦 دکمه‌های بانکِ الماسی (سپرده/سود) — همین‌طور، در گروه
+        if (function_exists('vlCallback') && vlCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
+
         // 🧾 تصمیمِ رسید (تایید/رد) عمدا تو گروه هم کار می‌کند — دقیقا
         // برای همین رسیدها به گروهِ گزارش می‌روند؛ وگرنه دروازه‌ی پایین
         // (که فقط چتِ خصوصی را رد نمی‌کند) دکمه‌اش را همیشه بی‌اثر می‌کرد
@@ -7994,6 +7999,7 @@ function masterHandle($update) {
         if (gmAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if (function_exists('bkAdminCallback') && bkAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if (function_exists('mnAdminCallback') && mnAdminCallback($data, $chatId, $msgId, $cbId)) return;
+        if (function_exists('vlAdminCallback') && vlAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if ($data === 'adm_gw')      { answerCb(BOT_TOKEN, $cbId); admGateway($chatId, $msgId); return; }
         if ($data === 'adm_pay')     { answerCb(BOT_TOKEN, $cbId); admPay($chatId, $msgId); return; }
         foreach ([['payc', 'pay_card', "💳 شماره کارت را بفرستید (۱۶ رقم).\n\nخط تیره = پاک کردن"],
@@ -9132,6 +9138,7 @@ function masterHandle($update) {
         if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false)) return;
         if (function_exists('bkHandleText') && bkHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         if (function_exists('mnHandleText') && mnHandleText($text, $uid, $chatId, $fname, $uname, false, $msg)) return;
+        if (function_exists('vlHandleText') && vlHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         return;
     }
 
@@ -9247,6 +9254,7 @@ function masterHandle($update) {
     if (gmStateHandle($action, $msg, $uid, $chatId)) return;
     if (function_exists('bkStateHandle') && bkStateHandle($action, $msg, $uid, $chatId)) return;
     if (function_exists('mnStateHandle') && mnStateHandle($action, $msg, $uid, $chatId)) return;
+    if (function_exists('vlStateHandle') && vlStateHandle($action, $msg, $uid, $chatId)) return;
 
     if (str_starts_with($action, 'pay_')) {
         $plain = trim($msg['text'] ?? '');
