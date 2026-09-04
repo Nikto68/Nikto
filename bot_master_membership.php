@@ -223,6 +223,7 @@ require_once __DIR__ . '/coupons.php';
 require_once __DIR__ . '/bank.php';
 require_once __DIR__ . '/mine.php';
 require_once __DIR__ . '/vault.php';
+require_once __DIR__ . '/arcade.php';
 require_once __DIR__ . '/profit.php';
 
 // ============================================================
@@ -7329,6 +7330,9 @@ function masterHandle($update) {
         // 🏦 دکمه‌های بانکِ الماسی (سپرده/سود) — همین‌طور، در گروه
         if (function_exists('vlCallback') && vlCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
 
+        // 🎮 دکمه‌های «بازی الماسی» (سنگ‌کاغذقیچی/بسکتبال) — همین‌طور، در گروه
+        if (function_exists('arCallback') && arCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
+
         // 🧾 تصمیمِ رسید (تایید/رد) عمدا تو گروه هم کار می‌کند — دقیقا
         // برای همین رسیدها به گروهِ گزارش می‌روند؛ وگرنه دروازه‌ی پایین
         // (که فقط چتِ خصوصی را رد نمی‌کند) دکمه‌اش را همیشه بی‌اثر می‌کرد
@@ -9139,6 +9143,7 @@ function masterHandle($update) {
         if (function_exists('bkHandleText') && bkHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         if (function_exists('mnHandleText') && mnHandleText($text, $uid, $chatId, $fname, $uname, false, $msg)) return;
         if (function_exists('vlHandleText') && vlHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
+        if (function_exists('arHandleText') && arHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         return;
     }
 

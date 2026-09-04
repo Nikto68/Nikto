@@ -24,7 +24,7 @@ function bkDefaults() {
         'on'         => false,
         'group_only' => 1,
         'word_bank'  => 'بانک,حساب بانکی',   // کلمه‌های باز کردنِ کارتِ بانک
-        'word_hack'  => 'هک,حمله',           // کلمه‌های شروعِ هک (به‌جز خودِ /hack)
+        'word_hack'  => 'سرقت الماس,هک,حمله', // کلمه‌های شروعِ هک (به‌جز خودِ /hack) — اولی نامِ اصلی/نمایشی است
 
         'manual_protect' => 900,     // ثانیه — حفاظتِ دستی (۱۵ دقیقه)
         'shield_after'   => 300,     // ثانیه — حفاظتِ خودکارِ کوتاه بعدِ هر هک (موفق یا ناموفق)
@@ -712,7 +712,8 @@ function bkHackCmd($uid, $chatId, $name, $uname, $replyTo, $msg) {
     $to = $msg['reply_to_message']['from'] ?? null;
 
     if (!$to || !empty($to['is_bot'])) {
-        sendMsg(BOT_TOKEN, $chatId, bkT('hack_how', ['word' => bkVal('word_hack', 'هک')]), null, $extra);
+        $firstWord = trim(explode(',', (string)bkVal('word_hack', 'هک'))[0]) ?: 'هک';
+        sendMsg(BOT_TOKEN, $chatId, bkT('hack_how', ['word' => $firstWord]), null, $extra);
         return;
     }
     $targetId = (int)$to['id'];
