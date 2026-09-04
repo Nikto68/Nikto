@@ -33,7 +33,7 @@ function vlDefaults() {
         'tx_log_max'    => 20,
 
         'icons' => ['btn_deposit' => '', 'btn_withdraw' => '', 'btn_send' => '', 'btn_history' => '',
-                    'btn_open_bank' => '', 'btn_back' => ''],
+                    'btn_open_bank' => '', 'btn_back' => '', 'btn_send_confirm' => ''],
         'btns'  => [
             'btn_deposit'    => ['color' => 'success'],
             'btn_withdraw'   => ['color' => 'primary'],
@@ -41,6 +41,7 @@ function vlDefaults() {
             'btn_history'    => ['color' => 'none'],
             'btn_open_bank'  => ['color' => 'primary'],
             'btn_back'       => ['color' => 'none'],
+            'btn_send_confirm' => ['color' => 'success'],
         ],
 
         'texts' => [
@@ -130,6 +131,18 @@ function vlIsButtonKey($slug) {
     return in_array($slug, ['btn_deposit', 'btn_withdraw', 'btn_send', 'btn_history', 'btn_open_bank',
                              'btn_back', 'btn_send_confirm'], true);
 }
+function vlBtnKeys() {
+    return ['btn_deposit', 'btn_withdraw', 'btn_send', 'btn_history', 'btn_open_bank', 'btn_back', 'btn_send_confirm'];
+}
+function vlBtnLabels() {
+    return [
+        'btn_deposit' => 'دکمه: واریز به بانک', 'btn_withdraw' => 'دکمه: برداشت از بانک',
+        'btn_send' => 'دکمه: کارت به کارت', 'btn_history' => 'دکمه: تراکنش‌ها',
+        'btn_open_bank' => 'دکمه: باز کردنِ بانک', 'btn_back' => 'دکمه: برگشت',
+        'btn_send_confirm' => 'دکمه: تاییدِ انتقال',
+    ];
+}
+function vlBtnLabel($k) { return vlBtnLabels()[$k] ?? $k; }
 
 function vlT($slug, $vars = []) {
     $t = (string)vlVal('texts.' . $slug, vlDefaults()['texts'][$slug] ?? $slug);
@@ -713,10 +726,7 @@ function vlCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
 
 // ============================================================
 // ✏️ ویرایشگرِ داخلِ ربات — /panel ← 💰 بانکِ الماسی
-//
-// عمدا کوچک: فقط روشن/خاموش + نرخِ سود + کلمه‌های باز کردن. رنگ/آیکون/
-// متن‌هایِ تک‌تکِ پیام‌ها (که bank.php/games.php دارند) این‌جا نیست —
-// همان الگو، هرکدام لازم بود بعدا همین‌طوری اضافه می‌شود.
+// همان الگویِ bkAdminHome/bkAdminColors/bkAdminTexts (bank.php)
 // ============================================================
 
 function vlAdminHome($chatId, $msgId = null) {
@@ -729,12 +739,71 @@ function vlAdminHome($chatId, $msgId = null) {
 
     $rows = [
         [btnCb(vlOn() ? '✅ روشن' : '❌ خاموش', 'vlax', 'admin')],
+        [btnCb('🗣 کلمه‌ها', 'vlaw_home', 'admin'), btnCb('✏️ متن‌ها و دکمه‌ها', 'vlat_home', 'admin')],
+        [btnCb('🎨 رنگِ دکمه‌ها', 'vlacolors', 'admin')],
         [btnCb('📈 سودِ روزانه (٪)', 'vlarate', 'admin')],
-        [btnCb('🗣 کلمه‌ی بانک', 'vlaw_bank', 'admin'), btnCb('🗣 کلمه‌ی حساب', 'vlaw_acct', 'admin')],
         [btnCb(UT('back'), 'adm_home', 'nav')],
     ];
     if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
     else sendMsg(BOT_TOKEN, $chatId, $t, inlineKb($rows));
+}
+
+function vlAdminWords($chatId, $msgId) {
+    $c = vlCfg();
+    $t = "🗣 <b>کلمه‌های بانکِ الماسی</b>\n\nهر کلمه را با ویرگول جدا کنید.\n\n";
+    $map = ['word_bank' => 'بازکردنِ بانک', 'word_account' => 'بازکردنِ حساب'];
+    $rows = [];
+    foreach ($map as $k => $lbl) {
+        $t .= '• <b>' . h($lbl) . '</b>: <code>' . h((string)$c[$k]) . "</code>\n";
+        $rows[] = [btnCb($lbl, 'vlaws_' . $k, 'admin')];
+    }
+    $rows[] = [btnCb(UT('back'), 'vl_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function vlAdminTexts($chatId, $msgId, $page = 0) {
+    $keys = array_keys((array)vlVal('texts', []));
+    $per  = 12;
+    $tot  = max(1, (int)ceil(count($keys) / $per));
+    $page = max(0, min($tot - 1, (int)$page));
+    $slice = array_slice($keys, $page * $per, $per);
+
+    $t  = "✏️ <b>متن‌ها و دکمه‌های بانکِ الماسی</b> — صفحه " . ($page + 1) . " از {$tot}\n\n";
+    $t .= "هرچه بنویسید عینا همان می‌رود: ایموجیِ پریمیوم و quote سالم می‌مانند.\n\n";
+    $rows = [];
+    foreach ($slice as $k) {
+        $v = (string)vlVal('texts.' . $k, '');
+        $t .= '• <b>' . h($k) . '</b>: <code>' .
+              h(mb_substr(str_replace("\n", ' ', strip_tags($v)), 0, 34)) . "</code>\n";
+        $rows[] = [btnCb(vlIsButtonKey($k) ? vlBtnLabel($k) : $k, 'vlats_' . $k, 'admin')];
+    }
+    $nav = [];
+    if ($page > 0)        $nav[] = btnCb('◀️', 'vlat_' . ($page - 1), 'nav');
+    if ($page < $tot - 1) $nav[] = btnCb('▶️', 'vlat_' . ($page + 1), 'nav');
+    if ($nav) $rows[] = $nav;
+    $rows[] = [btnCb(UT('back'), 'vl_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, mb_substr($t, 0, 3800), inlineKb($rows));
+}
+
+function vlAdminColors($chatId, $msgId) {
+    $t = "🎨 <b>رنگِ دکمه‌های بانکِ الماسی</b>\n\nروی هرکدام بزن تا رنگش را عوض کنی.\n\n";
+    $rows = [];
+    foreach (vlBtnKeys() as $k) {
+        $color = (string)vlVal('btns.' . $k . '.color', 'none');
+        $t .= '• ' . h(vlBtnLabel($k)) . ': <b>' . h(styleMap()[$color] ?? $color) . "</b>\n";
+        $rows[] = [btnCb(vlT($k, []) ?: vlBtnLabel($k), 'vlacolk_' . $k, 'info')];
+    }
+    $rows[] = [btnCb(UT('back'), 'vl_home', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function vlAdminColorPick($chatId, $msgId, $k) {
+    $cur = (string)vlVal('btns.' . $k . '.color', 'none');
+    $t = "🎨 رنگِ <b>" . h(vlBtnLabel($k)) . "</b> را انتخاب کن:\n\nالان: <b>" . h(styleMap()[$cur] ?? $cur) . "</b>";
+    $rows = [];
+    foreach (styleMap() as $sk => $sl) $rows[] = [btnCb(($sk === $cur ? '✅ ' : '') . $sl, 'vlacolv_' . $k . '_' . $sk, 'info')];
+    $rows[] = [btnCb(UT('back'), 'vlacolors', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
 }
 
 function vlAdminCallback($data, $chatId, $msgId, $cbId) {
@@ -752,16 +821,52 @@ function vlAdminCallback($data, $chatId, $msgId, $cbId) {
             inlineKb([[btnCb('انصراف', 'vl_home', 'cancel')]]));
         return true;
     }
-    $words = ['vlaw_bank' => ['vl_word_bank', 'word_bank', 'کلمه‌های بازکردنِ بانک'],
-              'vlaw_acct' => ['vl_word_acct', 'word_account', 'کلمه‌های بازکردنِ حساب']];
-    if (isset($words[$data])) {
-        [$act, $path, $label] = $words[$data];
+
+    if ($data === 'vlaw_home') { answerCb(BOT_TOKEN, $cbId); vlAdminWords($chatId, $msgId); return true; }
+    if ($data === 'vlat_home') { answerCb(BOT_TOKEN, $cbId); vlAdminTexts($chatId, $msgId, 0); return true; }
+    if (preg_match('/^vlat_(\d+)$/', $data, $m)) { answerCb(BOT_TOKEN, $cbId); vlAdminTexts($chatId, $msgId, (int)$m[1]); return true; }
+
+    if ($data === 'vlacolors') { answerCb(BOT_TOKEN, $cbId); vlAdminColors($chatId, $msgId); return true; }
+    if (preg_match('/^vlacolk_(\w+)$/', $data, $m) && in_array($m[1], vlBtnKeys(), true)) {
+        answerCb(BOT_TOKEN, $cbId); vlAdminColorPick($chatId, $msgId, $m[1]); return true;
+    }
+    if (preg_match('/^vlacolv_(\w+)_(\w+)$/', $data, $m) && in_array($m[1], vlBtnKeys(), true) && isset(styleMap()[$m[2]])) {
+        vlSet(function (&$c) use ($m) {
+            if (!is_array($c['btns'][$m[1]] ?? null)) $c['btns'][$m[1]] = [];
+            $c['btns'][$m[1]]['color'] = $m[2];
+        });
+        answerCb(BOT_TOKEN, $cbId, '✅'); vlAdminColorPick($chatId, $msgId, $m[1]); return true;
+    }
+
+    if (str_starts_with($data, 'vlaws_')) {
+        $k = substr($data, strlen('vlaws_'));
+        $labels = ['word_bank' => 'کلمه‌های بازکردنِ بانک', 'word_account' => 'کلمه‌های بازکردنِ حساب'];
+        if (!isset($labels[$k])) return false;
         answerCb(BOT_TOKEN, $cbId);
-        setState(ADMIN_ID, $act, []);
-        $cur = (string)vlVal($path, '');
+        setState(ADMIN_ID, 'vl_word', ['k' => $k]);
+        $cur = (string)vlVal($k, '');
         sendMsg(BOT_TOKEN, $chatId,
-            "🗣 <b>" . h($label) . "</b> را بفرست — چند کلمه را با ویرگول جدا کن.\n\nالان: <code>" . h($cur) . "</code>",
-            inlineKb([[btnCb('انصراف', 'vl_home', 'cancel')]]));
+            "🗣 <b>" . h($labels[$k]) . "</b> را بفرست — چند کلمه را با ویرگول جدا کن.\n\nالان: <code>" . h($cur) . "</code>",
+            inlineKb([[btnCb('انصراف', 'vlaw_home', 'cancel')]]));
+        return true;
+    }
+    if (str_starts_with($data, 'vlats_')) {
+        $k = substr($data, strlen('vlats_'));
+        answerCb(BOT_TOKEN, $cbId);
+        setState(ADMIN_ID, 'vl_text', ['k' => $k]);
+        $cur = (string)vlVal('texts.' . $k, '');
+        $back = inlineKb([[btnCb(UT('back'), 'vlat_home', 'cancel')]]);
+        if (vlIsButtonKey($k)) {
+            sendMsg(BOT_TOKEN, $chatId,
+                "✏️ متنِ دکمه‌ی <b>" . h(vlBtnLabel($k)) . "</b> را بفرست.\n\n" .
+                "اگر می‌خواهی ایموجیِ پریمیوم هم رویِ دکمه بنشیند، همان ایموجی را داخلِ همین پیام بفرست.\n\n" .
+                "الان: <code>" . h($cur) . "</code>", $back);
+        } else {
+            sendMsg(BOT_TOKEN, $chatId,
+                "✏️ متنِ <b>" . h($k) . "</b> را بفرست.\n\n" .
+                "جای‌گذاری‌های داخلِ آکولاد ({name}، {amount}، ...) را دست‌نخورده نگه دار.\n\n" .
+                "الان:\n" . $cur, $back);
+        }
         return true;
     }
     return false;
@@ -771,6 +876,8 @@ function vlStateHandle($action, $msg, $uid, $chatId) {
     if (!str_starts_with((string)$action, 'vl_')) return false;
     if (!isAdmin($uid)) return false;
 
+    $st   = getState($uid);
+    $sd   = $st['data'] ?? [];
     $text = trim((string)($msg['text'] ?? ''));
     $back = inlineKb([[btnCb('💰 بانکِ الماسی', 'vl_home', 'admin')]]);
     $done = function ($m = '✅ ذخیره شد.') use ($uid, $chatId, $back) {
@@ -785,11 +892,44 @@ function vlStateHandle($action, $msg, $uid, $chatId) {
         vlSet(function (&$c) use ($n) { $c['daily_rate'] = $n; });
         return $done();
     }
-    if ($action === 'vl_word_bank' || $action === 'vl_word_acct') {
-        if ($text === '') { sendMsg(BOT_TOKEN, $chatId, '❌ خالی نباشد.'); return true; }
-        $key = $action === 'vl_word_bank' ? 'word_bank' : 'word_account';
-        vlSet(function (&$c) use ($key, $text) { $c[$key] = $text; });
+    if ($action === 'vl_word') {
+        $k = (string)($sd['k'] ?? '');
+        if ($k === '' || $text === '') { sendMsg(BOT_TOKEN, $chatId, '❌ خالی نباشد.'); return true; }
+        vlSet(function (&$c) use ($k, $text) { $c[$k] = $text; });
         return $done();
+    }
+    if ($action === 'vl_text') {
+        $k = (string)($sd['k'] ?? '');
+        if ($k === '') { sendMsg(BOT_TOKEN, $chatId, '⚠️ چیزی برای ذخیره نیست.'); return true; }
+
+        if (vlIsButtonKey($k)) {
+            if ($text === '') { sendMsg(BOT_TOKEN, $chatId, '⚠️ متن خالی نمی‌شود.'); return true; }
+            $ids  = function_exists('customEmojiIds') ? customEmojiIds($msg) : [];
+            $icon = $ids ? (string)$ids[0] : '';
+            if ($icon !== '' && function_exists('textWithoutCustomEmoji')) {
+                $clean = textWithoutCustomEmoji($msg);
+                if ($clean !== '') $text = $clean;
+            }
+            if ($text === '') { sendMsg(BOT_TOKEN, $chatId, '⚠️ متن خالی نمی‌شود.'); return true; }
+            vlSet(function (&$c) use ($k, $text, $icon) {
+                $c['texts'][$k] = $text;
+                if (!isset($c['icons']) || !is_array($c['icons'])) $c['icons'] = [];
+                $c['icons'][$k] = $icon;
+            });
+            clearState($uid);
+            sendMsg(BOT_TOKEN, $chatId,
+                '✅ ذخیره شد' . ($icon !== '' ? ' — ایموجیِ پریمیوم هم رویِ دکمه نشست.' : '.') . "\n\nاین‌طور دیده می‌شود:",
+                inlineKb([[vlBtn($k, [], 'vl_nop')]]));
+            sendMsg(BOT_TOKEN, $chatId, '👆', $back);
+            return true;
+        }
+
+        $html = function_exists('msgHtml') ? msgHtml($msg) : $text;
+        if (trim($html) === '') { sendMsg(BOT_TOKEN, $chatId, '⚠️ متن خالی نمی‌شود.'); return true; }
+        vlSet(function (&$c) use ($k, $html) { $c['texts'][$k] = $html; });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, '✅ ذخیره شد.', $back);
+        return true;
     }
     return false;
 }
