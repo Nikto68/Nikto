@@ -2787,6 +2787,7 @@ function maTopupInfo() {
         'min'  => (float)(cfg()['topup_min'] ?? 10000),
         'gw'   => (function_exists('gwOn') && gwOn()) ? 1 : 0,
         'gwmin'=> (float)($g['min'] ?? 0),
+        'gwcoin' => strtoupper(trim((string)($g['coin'] ?? 'USDT'))),
     ];
 }
 
@@ -3282,6 +3283,18 @@ function maApi() {
         maApiOut(['ok' => true, 'toman' => $rres, 'balance' => (float)(getUser($uid)['balance'] ?? 0), 'state' => adState($uid)]);
     }
 
+    // ---- 🏷 پیش‌نمایشِ کد تخفیف — قبل از ثبتِ سفارش، در ویزاردِ پرداخت ----
+    if ($action === 'coupon_check') {
+        if (!maRateOk('cpchk', $uid, 20, 60))
+            maApiOut(['ok' => false, 'error' => 'rate_limited', 'message' => 'کمی صبر کن.'], 429);
+        $code = trim((string)($body['code'] ?? ''));
+        $subtotal = maNum($body['subtotal'] ?? 0);
+        if (!function_exists('cpValidate')) maApiOut(['ok' => false, 'error' => 'unavailable'], 503);
+        [$cok, $cdisc, $cmsg, $ccode] = cpValidate($code, $uid, $subtotal);
+        if (!$cok) maApiOut(['ok' => false, 'error' => 'bad_coupon', 'message' => $cmsg], 400);
+        maApiOut(['ok' => true, 'code' => $ccode, 'discount' => $cdisc]);
+    }
+
     // ---- 👑 بخش مدیر: سود و قیمت — فقط برای ادمین ----
     if ($action === 'adm_get' || $action === 'adm_set') {
         // سد سخت: هرکس جز ادمین، انگار این مسیر اصلا وجود ندارد
@@ -3573,6 +3586,17 @@ function maApi() {
                       'message' => 'قیمت این سرویس به‌روز شد. لطفا دوباره تلاش کنید.'], 409);
         }
 
+        // 🏷 کد تخفیف — اختیاری، ولی مبلغِ تخفیف همیشه اینجا از نو حساب می‌شود؛
+        //    هرچه کلاینت برایِ پیش‌نمایش حساب کرده بود فقط یک حدس بود، نه منبعِ حقیقت.
+        $couponCode = trim((string)($body['coupon'] ?? ''));
+        $discount = 0.0;
+        if ($couponCode !== '' && function_exists('cpValidate')) {
+            [$cok, $cdisc, $cmsg] = cpValidate($couponCode, $uid, $total);
+            if (!$cok) maApiOut(['ok' => false, 'error' => 'bad_coupon', 'message' => $cmsg], 400);
+            $discount = (float)$cdisc;
+            $total = maMoney(max(0, $total - $discount));
+        }
+
         // 🛡 همان سفارش دوبار پشت سر هم (دابل‌کلیک یا اسکریپت)
         if (maDuplicateOrder($uid, $key, $itemId, $qty, $field))
             maApiOut(['ok' => false, 'error' => 'duplicate',
@@ -3602,6 +3626,10 @@ function maApi() {
             ], 402);
         }
 
+        // 🏷 کد تخفیف فقط بعدِ موفقیتِ قطعیِ پرداخت مصرف می‌شود — یعنی
+        //    تلاشِ ناموفق (موجودیِ کم و امثالش) هیچ‌وقت سهمیه‌ی کاربر را نمی‌سوزاند.
+        if ($couponCode !== '' && $discount > 0 && function_exists('cpRedeem')) cpRedeem($couponCode, $uid, $oid, $discount);
+
         $o   = MaOrder::get($oid);
         $bal = (float)(getUser($uid)['balance'] ?? 0);
 
@@ -3610,7 +3638,7 @@ function maApi() {
         if ($key === 'num' && function_exists('numState')) $numSt = numState($oid);
 
         maApiOut([
-            'ok' => true, 'order' => $oid, 'total' => $total, 'paid' => true,
+            'ok' => true, 'order' => $oid, 'total' => $total, 'discount' => $discount, 'paid' => true,
             'balance' => $bal,
             'done' => ($o['status'] === MaOrder::DONE),
             'num'  => $numSt,
