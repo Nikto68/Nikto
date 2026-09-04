@@ -1375,7 +1375,7 @@ function gmAdminDigits($chatId, $msgId) {
     $ids = gmDigitIds();
     $t  = "🔢 <b>ایموجی عددها</b>\n\n";
     $t .= "عددِ بازی با این ایموجی‌ها درشت نوشته می‌شود.\n";
-    $t .= "کد هر ایموجی پریمیوم را با <code>دریافت ایموجی</code> در ربات می‌گیرید.\n\n";
+    $t .= "کد هر ایموجی پریمیوم را با <code>/emoji</code> در ربات می‌گیرید.\n\n";
     $t .= "نمونه: " . gmBigNum(1234567890) . "\n\n";
 
     $rows = [];
@@ -1527,7 +1527,7 @@ function gmAdminCallback($data, $chatId, $msgId, $cbId) {
         setState(ADMIN_ID, 'gm_digit', ['d' => $d]);
         sendMsg(BOT_TOKEN, $chatId,
             "🔢 کد ایموجی پریمیوم برای رقم <b>" . h($d) . "</b> را بفرستید.\n\n" .
-            "فقط عدد. با <code>دریافت ایموجی</code> در ربات می‌گیریدش.\n" .
+            "فقط عدد. با <code>/emoji</code> در ربات می‌گیریدش.\n" .
             "برای برداشتن، یک خط تیره <code>-</code> بفرستید.",
             inlineKb([[btnUI('cancel', 'gmadig', 'cancel')]]));
         return true;

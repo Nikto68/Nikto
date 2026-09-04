@@ -304,7 +304,7 @@ if (is_file($cfgFile)) {
 }
 row($rows, $base !== '', 'آدرس عمومی مینی‌اپ‌ها',
     $base !== '' ? $base : 'هنوز ثبت نشده',
-    'داخل ربات: پنل ← 🚀 مینی اپ‌ها ← 🔗 آدرس عمومی ← <code>' . htmlspecialchars($guess) . '</code>');
+    'داخل ربات: /panel ← 🚀 مینی اپ‌ها ← 🔗 آدرس عمومی ← <code>' . htmlspecialchars($guess) . '</code>');
 
 $bad  = array_values(array_filter($rows, function ($r) { return !$r['ok']; }));
 $good = count($rows) - count($bad);

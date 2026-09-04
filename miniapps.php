@@ -6157,7 +6157,7 @@ function maAdminCallback($data, $uid, $chatId, $msgId, $cbId) {
             answerCb(BOT_TOKEN, $cbId);
             maAskState($uid, $chatId, 'ma_item_remoji', ['k' => $key, 'i' => $arg],
                 '🌟 ایموجیِ پریمیومِ این محصول را بفرستید — فقط همین جلوی نامش در گزارش‌ها می‌نشیند.',
-                'یک پیام حاوی همان ایموجی بفرستید، یا کدِ عددی‌اش را (با <code>دریافت ایموجی</code> در ربات می‌گیریدش).\n' .
+                'یک پیام حاوی همان ایموجی بفرستید، یا کدِ عددی‌اش را (با <code>/emoji</code> در ربات می‌گیریدش).\n' .
                 'برای برداشتن، یک خط تیره <code>-</code> بفرستید.');
             return true;
         case 'ic':
