@@ -362,7 +362,7 @@ var ICO_MAP = [
   [/vol|حجم|گیگ|گیگا|مگ|giga|\bgb\b/i,'box'],
   [/time|زمان|روز|ماه|month|day/i,    'clock'],
   [/unlim|نامحدود|بی.?نهایت/i,        'inf'],
-  [/loc|کشور|لوکیشن|country|سرور/i,   'globe'],
+  [/loc|کشور|لوکیشن|country|سرور|شماره|مجازی|num|phone/i, 'globe'],
   [/امن|secure|shield/i,              'shield'],
   [/fast|سریع|توربو|turbo|speed/i,    'bolt'],
   [/off|تخفیف|حراج|discount/i,        'tag'],

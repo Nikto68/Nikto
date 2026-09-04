@@ -2825,8 +2825,24 @@ function maBootUnified() {
     foreach (maKeys() as $k) {
         if (!maReady($k)) continue;
         $a = maGet($k);
-        foreach (maItemsPublic($a, maTopN($k)) as $it) { $it['app'] = $k; $items[] = $it; }
-        foreach (maCatsPublic($a, $k) as $c) { $c['app'] = $k; $cats[] = $c; }
+        $appItems = maItemsPublic($a, maTopN($k));
+        if ($k === 'num') {
+            // 📁 شماره مجازی ده‌ها کشور دارد — هرکدام یک دسته‌ی جدا در ردیفِ
+            // بالای فروشگاهِ یکپارچه یعنی شلوغیِ کاملا غیرضروری کنارِ چندتا
+            // دسته‌ی tg/react. این‌جا (فقط در نمایِ یکپارچه، کاتالوگِ خودِ
+            // num دست‌نخورده می‌ماند) همه زیرِ یک دسته‌ی «شماره مجازی»
+            // جمع می‌شوند؛ اسمِ کشور همچنان توی اسمِ خودِ آیتم هست، پس چیزی
+            // گم نمی‌شود.
+            $numN = 0;
+            foreach ($appItems as &$it) { $it['cat'] = '__num_all'; $numN++; }
+            unset($it);
+            if ($numN > 0) {
+                $cats[] = ['id' => '__num_all', 'name' => 'شماره مجازی', 'emoji' => '☎️', 'n' => $numN, 'app' => $k];
+            }
+        } else {
+            foreach (maCatsPublic($a, $k) as $c) { $c['app'] = $k; $cats[] = $c; }
+        }
+        foreach ($appItems as $it) { $it['app'] = $k; $items[] = $it; }
         $apps[$k] = [
             'title' => (string)$a['title'],
             'emoji' => trim((string)($a['btn']['emoji'] ?? '')),
