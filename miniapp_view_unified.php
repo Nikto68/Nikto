@@ -1454,31 +1454,46 @@ img{max-width:100%}
 .rail .rc.on{border-color:color-mix(in srgb,var(--c1) 55%,transparent)}
 .rail .rc.on span{color:var(--ink)}
 
-/* ═══ آیکونِ شیشه‌ایِ جعبه‌ای — دسته‌ها + دسترسیِ سریع ═══ */
+/* ═══ آیکونِ شیشه‌ایِ جعبه‌ای — دسته‌ها + دسترسیِ سریع ═══
+   رنگ: سبز به آبیِ آسمانی (نه طلایی/کهربایی — به‌درخواستِ صریحِ کارفرما).
+   ⚠️ قاعده‌ی سرعتِ همیشگیِ همین پروژه: انیمیشن فقط برایِ آیتمِ واقعا
+   انتخاب‌شده (rc.on / paytile.on) روشن می‌شود، نه همه‌جا همیشه. نسخه‌ی
+   قبلی این قاعده را رعایت نکرده بود — icoSheen و i-float/i-pulse/i-spin/
+   i-lid بی‌قیدوشرط رویِ هر آیکونِ صفحه (دک، ادک، ردیفِ دسته‌ها، دسترسیِ
+   سریع — ده‌ها المان با هم) برایِ همیشه می‌چرخیدند، دقیقا همان الگویی
+   که کدهای قبلیِ این ریپو صریحا هشدار داده بودند رویِ گوشیِ ضعیف قفل
+   می‌کند؛ همان چیزی که کارفرما «هنگِ شدید» گزارش کرد. */
 .ico{position:relative;width:38px;height:38px;margin:0 auto 7px;border-radius:14px;display:grid;place-items:center;
-  color:#fff;background-image:linear-gradient(158deg,var(--c1),var(--c3));
+  color:#fff;background-image:linear-gradient(158deg,#22C55E,#38BDF8);
   border:1px solid rgba(255,255,255,.24);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 16px -8px color-mix(in srgb,var(--c1) 55%,transparent);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 16px -8px rgba(34,197,94,.35);
   overflow:hidden}
 .ico:before{content:"";position:absolute;inset:-45%;pointer-events:none;
   background:linear-gradient(115deg,transparent 41%,rgba(255,255,255,.6) 50%,transparent 59%);
-  transform:translateX(-130%);animation:icoSheen 3.2s cubic-bezier(.4,0,.2,1) infinite}
+  transform:translateX(-130%)}
 .ico:after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:radial-gradient(120% 70% at 50% -10%,rgba(255,255,255,.35),transparent 60%)}
 .ico svg{position:relative;width:20px;height:20px;display:block;overflow:visible;
   fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .ico svg .fl{fill:currentColor;stroke:none}
+.rc.on .ico:before,.paytile.on .ico:before{animation:icoSheen 2.8s cubic-bezier(.4,0,.2,1) infinite}
 @keyframes icoSheen{0%{transform:translateX(-130%)}55%,100%{transform:translateX(130%)}}
-.i-spin{transform-box:fill-box;transform-origin:50% 50%;animation:icoSpin 6s linear infinite}
-.i-float{animation:icoFloat 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 50%}
-.i-pulse{animation:icoPulse 1.9s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 50%}
-.i-lid{animation:icoLid 2.2s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+.i-spin{transform-box:fill-box;transform-origin:50% 50%}
+.i-float{transform-box:fill-box;transform-origin:50% 50%}
+.i-pulse{transform-box:fill-box;transform-origin:50% 50%}
+.i-lid{transform-box:fill-box;transform-origin:50% 100%}
+.rc.on .i-spin,.paytile.on .i-spin{animation:icoSpin 6s linear infinite}
+.rc.on .i-float,.paytile.on .i-float{animation:icoFloat 2.4s ease-in-out infinite}
+.rc.on .i-pulse,.paytile.on .i-pulse{animation:icoPulse 1.9s ease-in-out infinite}
+.rc.on .i-lid,.paytile.on .i-lid{animation:icoLid 2.2s ease-in-out infinite}
 @keyframes icoSpin{to{transform:rotate(360deg)}}
 @keyframes icoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
 @keyframes icoPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.16);opacity:.75}}
 @keyframes icoLid{0%,72%,100%{transform:translateY(0) rotate(0)}82%{transform:translateY(-2.5px) rotate(-8deg)}}
 @media (prefers-reduced-motion:reduce){
-  .ico:before,.i-spin,.i-float,.i-pulse,.i-lid{animation:none!important}
+  .rc.on .ico:before,.paytile.on .ico:before,.rc.on .i-spin,.paytile.on .i-spin,
+  .rc.on .i-float,.paytile.on .i-float,.rc.on .i-pulse,.paytile.on .i-pulse,
+  .rc.on .i-lid,.paytile.on .i-lid{animation:none!important}
 }
 
 /* ═══ آیکونِ ناوبری — بدونِ جعبه، فقط رنگش با فعال‌شدن عوض می‌شود ═══ */
