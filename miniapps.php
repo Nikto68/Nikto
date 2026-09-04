@@ -1492,7 +1492,11 @@ function maViewVer() {
     static $v = null;
     if ($v !== null) return $v;
     $t = 0;
-    foreach (['miniapp_view_tg.php', 'miniapp_view_num.php', 'miniapps.php'] as $f) {
+    // این لیست قبلا react/unified/airdrop/coupons را نداشت — تغییر در آن‌ها نسخه را عوض نمی‌کرد و وب‌ویو همان کپیِ کش‌شده را نشان می‌داد.
+    foreach ([
+        'miniapp_view_tg.php', 'miniapp_view_num.php', 'miniapp_view_react.php',
+        'miniapp_view_unified.php', 'miniapps.php', 'airdrop.php', 'coupons.php',
+    ] as $f) {
         $m = @filemtime(__DIR__ . '/' . $f);
         if ($m && $m > $t) $t = $m;
     }
@@ -3283,6 +3287,13 @@ function maApi() {
         [$rok, $rres] = adRedeem($uid, $ramt);
         if (!$rok) maApiOut(['ok' => false, 'error' => 'bad_amount', 'message' => (string)$rres], 400);
         maApiOut(['ok' => true, 'toman' => $rres, 'balance' => (float)(getUser($uid)['balance'] ?? 0), 'state' => adState($uid)]);
+    }
+    if ($action === 'airdrop_boost') {
+        if (!maRateOk('adbst', $uid, 10, 60))
+            maApiOut(['ok' => false, 'error' => 'rate_limited', 'message' => 'کمی صبر کن.'], 429);
+        [$bok, $bres] = adBuyBoost($uid);
+        if (!$bok) maApiOut(['ok' => false, 'error' => 'boost_failed', 'message' => (string)$bres], 400);
+        maApiOut(['ok' => true, 'boost_n' => $bres, 'balance' => (float)(getUser($uid)['balance'] ?? 0), 'state' => adState($uid)]);
     }
 
     // ---- 🏷 پیش‌نمایشِ کد تخفیف — قبل از ثبتِ سفارش، در ویزاردِ پرداخت ----

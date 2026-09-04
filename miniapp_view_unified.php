@@ -133,13 +133,21 @@ __SKIN__
           <span id="crystalOf">از … کریستال</span>
         </div>
       </div>
-      <div class="ratebox" id="rateBox">۱۲ کریستال در ساعت</div>
+      <div class="ratebox" id="rateBox">۳۰ کریستال در ساعت</div>
+      <div class="ticknext">
+        <i class="nextpop" id="nextPop">۱+ 💎</i>
+        <span>کریستالِ بعدی تا</span><b id="tickCountdown">۰۰:۰۰</b>
+      </div>
       <div class="endbox" id="endBox">پایان فصل: —</div>
       <div class="statrow">
         <div class="stat"><i>⭐️</i><b id="stLevel">۱</b><span>سطح</span></div>
         <div class="stat"><i>⚡️</i><b id="stRate">×۱</b><span>سرعت استخراج</span></div>
         <div class="stat"><i>💎</i><b id="stTotal">۰</b><span>کل کریستال</span></div>
       </div>
+      <button class="go boostbtn" id="boostGo">
+        <span>⚡️ افزایش سرعت</span><em id="boostPriceLbl">۱۰۰ تومان</em>
+      </button>
+      <div class="boosthint" id="boostHint">پله <b id="boostLevel">۰ از ۲۵</b> · هر پله ۲۰٪ سریع‌تر</div>
     </div>
 
     <!-- ماموریت‌ها -->
@@ -393,9 +401,11 @@ var ICONS = {
 };
 var ICO_MAP = [
   [/star|استار|ستار/i,                'star'],
+  [/premium|پرمیوم|پریمیوم/i,         'crown'],
   [/gift|گیفت|هدیه|teddy|تدی/i,       'gift'],
   [/\bton\b|تون|tonco|الماس|کریستال/i,'gem'],
-  [/react|ری‌اکشن|لایک|قلب|heart/i,   'heart'],
+  [/ارز|currency|تتر|usdt|دلار|تبدیل|exchange/i, 'wallet'],
+  [/react|ری‌اکشن|استوری|story|لایک|قلب|heart/i, 'heart'],
   [/vol|حجم|گیگ|گیگا|مگ|giga|\bgb\b/i,'box'],
   [/time|زمان|روز|ماه|month|day/i,    'clock'],
   [/unlim|نامحدود|بی.?نهایت/i,        'inf'],
@@ -561,7 +571,7 @@ $('rail').addEventListener('click', function(ev){
 /* ── ردیف‌های اعتمادسازی — بج‌های دایره‌ایِ بزرگ، طبقِ مرجعِ کارفرما ── */
 (function drawTrust(){
   var rows = [
-    { c:'--c1', ico:'bolt',    ttl:'تحویل آنی',        sub:'سفارش‌ها معمولا در چند دقیقه انجام می‌شود' },
+    { c:'--sky', ico:'bolt',   ttl:'تحویل آنی',        sub:'سفارش‌ها معمولا در چند دقیقه انجام می‌شود' },
     { c:'--c2', ico:'shield',  ttl:'پرداخت امن',        sub:'کیف‌پول داخلی یا ارز، هرکدام راحت‌ترید' },
     { c:'--c3', ico:'headset', ttl:'پشتیبانی ۲۴ ساعته', sub:'هر مشکلی بود، همیشه یک پیام فاصله دارید' }
   ];
@@ -607,7 +617,7 @@ function tileHtml(i, n){
            '" data-i="' + esc(i.id) + '" data-app="' + esc(i.app) + '" style="animation-delay:' + Math.min(n*35, 300) + 'ms">' +
            (i.badge ? '<span class="tag">' + esc(i.badge) + '</span>' : '') +
            (i.live  ? '<span class="livedot">زنده</span>' : '') +
-           '<div class="orb">' + esc(i.emoji || '💠') + '</div>' +
+           '<div class="orb">' + icoFor(i) + '</div>' +
            '<h3>' + esc(i.name) + '</h3>' +
            (i.desc ? '<p>' + esc(i.desc) + '</p>' : '') +
            '<div class="foot"><div class="cost"><b>' +
@@ -692,7 +702,7 @@ $('q').addEventListener('input', function(){
   list.forEach(function(i, idx){
     h += '<div class="bestrow" data-i="' + esc(i.id) + '" data-app="' + esc(i.app) + '">' +
            '<b class="rk">' + (idx+1) + '</b>' +
-           '<span class="e">' + esc(i.emoji || '💠') + '</span>' +
+           '<span class="e">' + icoFor(i) + '</span>' +
            '<span class="m"><b>' + esc(i.name) + '</b><span>' + fa(i.sold) + ' فروش این ماه</span></span>' +
            '<span class="p">' + fa(i.price) + ' ' + esc(B.currency) + '</span>' +
          '</div>';
@@ -716,7 +726,7 @@ function drawOrders(){
   var h = '';
   os.forEach(function(o){
     h += '<div class="ord">' +
-           '<span class="e">' + esc(o.emoji || '💠') + '</span>' +
+           '<span class="e">' + icoFor(o) + '</span>' +
            '<span class="m"><b>' + esc(o.name) + '</b><span>' + esc(o.date || '') + '</span></span>' +
            '<span class="s"><u>' + fa(o.total) + '</u><i>' + esc(o.status) + '</i></span>' +
          '</div>';
@@ -805,7 +815,7 @@ function open(id, appKey){
   $('discCode').value = ''; $('discForm').style.display = 'none';
   $('discToggleTxt').textContent = 'کد تخفیف داری؟'; $('discMsg').innerHTML = '';
 
-  $('sOrb').textContent  = it.emoji || '💠';
+  $('sOrb').innerHTML    = icoFor(it);
   $('sName').textContent = it.name;
   $('sDesc').textContent = it.desc || '';
 
@@ -821,7 +831,7 @@ function open(id, appKey){
     html += '<div class="lbl">بسته‌های پیشنهادی</div><div class="plans" id="fPlans">' +
               planRows(it).map(function(q){
                 return '<i data-q="' + q + '"' + (q === S.qty ? ' class="on"' : '') + '>' +
-                       '<s class="pg">' + esc(it.emoji || '💠') + '</s>' +
+                       '<s class="pg">' + icoFor(it) + '</s>' +
                        '<b>' + fa(q) + (it.unit ? ' ' + esc(it.unit) : '') + '</b>' +
                        '<u>' + fa(Math.round(it.price * q)) + ' ' + esc(B.currency) + '</u>' +
                        '<em class="chk">✓</em></i>';
@@ -1161,7 +1171,7 @@ function loadNotes(){
 }
 
 /* ══════════════════ 💎 ایردراپ ══════════════════ */
-var AD = { loaded:false, page:'mine', state:null };
+var AD = { loaded:false, page:'mine', state:null, tickSecs:0, tickLeft:0 };
 // «معدن» وسطِ ردیف — تاکیدِ صریحِ کارفرما — نه لبه‌ی چپ/راست
 var ADOCK_PAGES = [
   { id:'leader', ico:'crown',  name:'لیدربورد' },
@@ -1201,6 +1211,25 @@ function airLoad(){
   AD.loaded = true;
   airRefreshState();
   AD.timer = setInterval(airRefreshState, 15000);
+  AD.localTimer = setInterval(airLocalTick, 1000);
+}
+/* شمارش‌معکوسِ نمایشیِ «کریستالِ بعدی» — بین دو رفرشِ سرور (هر ۱۵ ثانیه)
+   محلی می‌شمارد تا معدن هرلحظه زنده به‌نظر برسد، نه فقط هر ۱۵ ثانیه یک جهش. */
+function airLocalTick(){
+  if (AD.page !== 'mine' || !AD.state || AD.tickSecs <= 0) return;
+  AD.tickLeft -= 1;
+  if (AD.tickLeft <= 0) { AD.tickLeft += AD.tickSecs; popCrystal(); }
+  drawTickCountdown();
+}
+function drawTickCountdown(){
+  var el = $('tickCountdown'); if (!el) return;
+  var sec = Math.max(0, Math.round(AD.tickLeft));
+  var m = Math.floor(sec / 60), r = sec % 60;
+  el.textContent = (m<10?'0':'')+m + ':' + (r<10?'0':'')+r;
+}
+function popCrystal(){
+  var el = $('nextPop'); if (!el) return;
+  el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
 }
 function airRefreshState(){
   api('unified', 'airdrop_state', {}, function(j){
@@ -1227,12 +1256,25 @@ function airDrawMine(){
   fg.style.strokeDashoffset = (C * (1 - pct)).toFixed(1);
   $('crystalNow').textContent = fa(Math.floor(s.xp));
   $('crystalOf').textContent  = 'از ' + fa(s.xp_need) + ' کریستال';
-  $('rateBox').textContent = fa(s.rate) + ' کریستال در ساعت';
+  $('rateBox').textContent = fa(s.rate) + ' کریستال در ساعت' + (s.boost_n > 0 ? ' (بوست ×' + fa(1 + s.boost_step * s.boost_n) + ')' : '');
   var left = (s.season_end || 0) - Math.floor(Date.now()/1000);
   $('endBox').textContent = 'پایان فصل ' + s.season + ': ' + fmtHMS(left);
   $('stLevel').textContent = fa(s.level);
   $('stRate').textContent  = '×' + fa(s.level);
   $('stTotal').textContent = fa(Math.floor(s.crystals));
+
+  // نمایشِ نمایشیِ استخراج: شمارش‌معکوس تا کریستالِ بعدی، از رویِ کسرِ اعشاریِ
+  // موجودیِ واقعی — هر بار state تازه می‌رسد خودش را با سرور همگام می‌کند.
+  AD.tickSecs = s.tick_secs > 0 ? s.tick_secs : 0;
+  var frac = s.crystals - Math.floor(s.crystals);
+  AD.tickLeft = AD.tickSecs > 0 ? AD.tickSecs * (1 - frac) : 0;
+  drawTickCountdown();
+
+  $('boostLevel').textContent = fa(s.boost_n) + ' از ' + fa(s.boost_max);
+  $('boostPriceLbl').textContent = fa(s.boost_price) + ' تومان';
+  var atCap = s.boost_n >= s.boost_max;
+  $('boostGo').disabled = atCap;
+  $('boostGo').querySelector('span').textContent = atCap ? '⚡️ به سقفِ سرعت رسیدی' : '⚡️ افزایش سرعت';
 }
 function airDrawMissions(){
   var s = AD.state;
@@ -1271,6 +1313,17 @@ function airDrawRewards(){
   if (!s) return;
   $('redeemHint').textContent = 'هر ' + fa(1) + ' کریستال = ' + fa(s.redeem_rate) + ' تومان · حداقل ' + fa(s.redeem_min) + ' کریستال · موجودی: ' + fa(Math.floor(s.crystals)) + ' 💎';
 }
+$('boostGo').onclick = function(){
+  var btn = this; btn.disabled = true; tap('medium');
+  api('unified', 'airdrop_boost', {}, function(j){
+    setBal(j.balance);
+    AD.state = j.state; airDrawMine();
+    toast('سرعتِ استخراج بالا رفت ⚡️', true);
+  }, function(j){
+    btn.disabled = (AD.state && AD.state.boost_n >= AD.state.boost_max) || false;
+    toast((j && j.message) ? j.message : 'انجام نشد.');
+  });
+};
 $('redeemGo').onclick = function(){
   var amt = intIn($('redeemAmt').value);
   if (!amt) { toast('مقدار کریستال را وارد کنید.'); return; }
@@ -1353,7 +1406,7 @@ function maSkinNova() {
     return <<<'CSS'
 <style>
 :root{
-  --c1:#F2B705; --c2:#22C55E; --c3:#6C5CE7; --c4:#F23557;
+  --c1:#F2B705; --c2:#22C55E; --c3:#6C5CE7; --c4:#F23557; --sky:#38BDF8;
   --bg:#0A0E1A; --ink:#F4F6FF; --dim:#9AA3C7; --line:rgba(255,255,255,.12);
   --pane:rgba(255,255,255,.055); --pane2:rgba(255,255,255,.035);
   --blur:18px; --r:24px; --safe:env(safe-area-inset-bottom,0px);
@@ -1463,7 +1516,7 @@ img{max-width:100%}
    سریع — ده‌ها المان با هم) برایِ همیشه می‌چرخیدند، دقیقا همان الگویی
    که کدهای قبلیِ این ریپو صریحا هشدار داده بودند رویِ گوشیِ ضعیف قفل
    می‌کند؛ همان چیزی که کارفرما «هنگِ شدید» گزارش کرد. */
-.ico{position:relative;width:38px;height:38px;margin:0 auto 7px;border-radius:14px;display:grid;place-items:center;
+.ico{position:relative;width:46px;height:46px;margin:0 auto 8px;border-radius:16px;display:grid;place-items:center;
   color:#fff;background-image:linear-gradient(158deg,#22C55E,#38BDF8);
   border:1px solid rgba(255,255,255,.24);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 16px -8px rgba(34,197,94,.35);
@@ -1473,7 +1526,7 @@ img{max-width:100%}
   transform:translateX(-130%)}
 .ico:after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:radial-gradient(120% 70% at 50% -10%,rgba(255,255,255,.35),transparent 60%)}
-.ico svg{position:relative;width:20px;height:20px;display:block;overflow:visible;
+.ico svg{position:relative;width:24px;height:24px;display:block;overflow:visible;
   fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .ico svg .fl{fill:currentColor;stroke:none}
 .rc.on .ico:before,.paytile.on .ico:before{animation:icoSheen 2.8s cubic-bezier(.4,0,.2,1) infinite}
@@ -1507,7 +1560,9 @@ img{max-width:100%}
   border:1px solid var(--line);background:var(--pane)}
 .bestrow .rk{width:22px;height:22px;flex:0 0 auto;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:900;
   color:#111;background:linear-gradient(135deg,var(--c1),#FFD866)}
-.bestrow .e{font-size:19px}
+.bestrow .e{width:19px;height:19px;flex:0 0 auto;color:#22C55E}
+.bestrow .e svg{width:100%;height:100%;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.bestrow .e svg .fl{fill:currentColor;stroke:none}
 .bestrow .m{flex:1;min-width:0}
 .bestrow .m b{display:block;font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bestrow .m span{display:block;font-size:10px;color:var(--dim);margin-top:2px}
@@ -1538,17 +1593,20 @@ img{max-width:100%}
 
 /* ═══ شبکه‌ی محصول ═══ */
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
-.tile{position:relative;overflow:hidden;padding:14px 12px 12px;border-radius:22px;cursor:pointer;contain:content;
+.tile{position:relative;overflow:hidden;padding:16px 13px 13px;border-radius:22px;cursor:pointer;contain:content;
   border:1px solid var(--line);background:var(--pane);box-shadow:0 10px 26px -22px rgba(20,25,45,.5);
-  display:flex;flex-direction:column;min-height:172px;animation:rise .4s cubic-bezier(.2,.9,.3,1)}
+  display:flex;flex-direction:column;min-height:184px;animation:rise .4s cubic-bezier(.2,.9,.3,1)}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .grid:not(.first) .tile{animation:none}
 @media (prefers-reduced-motion:reduce){ .tile{animation:none} }
 .tile:active{transform:scale(.975)}
 .tile.hot{border-color:color-mix(in srgb,var(--c1) 38%,transparent);box-shadow:0 14px 30px -20px color-mix(in srgb,var(--c1) 45%,transparent)}
 .tile.hide{display:none}
-.orb{position:relative;width:52px;height:52px;border-radius:18px;display:grid;place-items:center;font-size:25px;
-  margin-bottom:11px;color:#fff;background-image:linear-gradient(140deg,var(--c1),var(--c3));border:1px solid rgba(255,255,255,.22)}
+.orb{position:relative;width:58px;height:58px;border-radius:18px;display:grid;place-items:center;
+  margin-bottom:11px;color:#fff;background:#22C55E;border:1px solid rgba(255,255,255,.22)}
+.orb svg{position:relative;width:28px;height:28px;display:block;overflow:visible;
+  fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.orb svg .fl{fill:currentColor;stroke:none}
 .tile h3{position:relative;margin:0;font-size:13px;font-weight:800;line-height:1.55;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .tile p{position:relative;margin:4px 0 0;font-size:10.5px;color:var(--dim);line-height:1.65;
@@ -1569,8 +1627,10 @@ img{max-width:100%}
 /* ═══ فهرست سفارش ═══ */
 .ord{display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:18px;margin-bottom:9px;
   border:1px solid var(--line);background:var(--pane)}
-.ord .e{width:42px;height:42px;flex:0 0 auto;border-radius:14px;display:grid;place-items:center;font-size:21px;
-  background:var(--pane2);border:1px solid var(--line)}
+.ord .e{width:42px;height:42px;flex:0 0 auto;border-radius:14px;display:grid;place-items:center;
+  color:#fff;background:#22C55E;border:1px solid rgba(255,255,255,.22)}
+.ord .e svg{width:21px;height:21px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ord .e svg .fl{fill:currentColor;stroke:none}
 .ord .m{flex:1;min-width:0}
 .ord .m b{display:block;font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ord .m span{display:block;font-size:10px;color:var(--dim);margin-top:3px;direction:ltr;text-align:right}
@@ -1656,6 +1716,20 @@ img{max-width:100%}
 .stat i{display:block;font-style:normal;font-size:17px;margin-bottom:6px}
 .stat b{display:block;font-size:15px;font-weight:900}
 .stat span{display:block;font-size:9.5px;color:var(--dim);margin-top:3px}
+.ticknext{position:relative;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;
+  padding:10px 14px;border-radius:16px;border:1px solid var(--line);background:var(--pane2);
+  font-size:11.5px;color:var(--dim);font-weight:700}
+.ticknext b{font-size:14px;font-weight:900;color:var(--ink);font-variant-numeric:tabular-nums}
+.nextpop{position:absolute;top:-8px;left:50%;transform:translate(-50%,0);opacity:0;pointer-events:none;
+  font-style:normal;font-size:13px;font-weight:900;color:#22C55E}
+.nextpop.on{animation:nextPop 1.1s cubic-bezier(.2,.9,.3,1)}
+@keyframes nextPop{0%{opacity:0;transform:translate(-50%,4px) scale(.8)}20%{opacity:1;transform:translate(-50%,-14px) scale(1.05)}
+  75%{opacity:1;transform:translate(-50%,-22px) scale(1)}100%{opacity:0;transform:translate(-50%,-34px) scale(.95)}}
+@media (prefers-reduced-motion:reduce){ .nextpop.on{animation:none} }
+.boostbtn{margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px}
+.boostbtn em{font-style:normal;font-weight:800;opacity:.85;font-size:12.5px}
+.boosthint{text-align:center;margin-top:8px;font-size:10.5px;color:var(--dim)}
+.boosthint b{color:var(--ink);font-weight:800}
 .adock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(11px + var(--safe));z-index:30;
   width:min(94vw,420px);display:flex;gap:3px;padding:7px;border-radius:26px;
   border:1px solid var(--line);background:rgba(255,255,255,.09);
@@ -1701,7 +1775,8 @@ body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition
 .sheet.on{transform:none}
 .grip{width:42px;height:4px;border-radius:4px;background:rgba(255,255,255,.22);margin:4px auto 16px}
 .sheet .head{display:flex;align-items:center;gap:13px;margin-bottom:16px}
-.sheet .head .orb{width:56px;height:56px;font-size:27px;margin:0}
+.sheet .head .orb{width:60px;height:60px;margin:0}
+.sheet .head .orb svg{width:30px;height:30px}
 .sheet .head h2{margin:0;font-size:16.5px;font-weight:900}
 .sheet .head p{margin:4px 0 0;font-size:11.5px;color:var(--dim);line-height:1.7}
 .field{margin-bottom:14px}
@@ -1719,8 +1794,10 @@ body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition
 .plans{display:grid;gap:9px}
 .plans i{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:18px;cursor:pointer;
   font-style:normal;border:1px solid var(--line);background:var(--pane2)}
-.plans i .pg{width:38px;height:38px;flex:0 0 auto;border-radius:13px;display:grid;place-items:center;font-size:20px;
-  text-decoration:none;color:#fff;background:linear-gradient(140deg,var(--c1),var(--c3));border:1px solid rgba(255,255,255,.2)}
+.plans i .pg{width:38px;height:38px;flex:0 0 auto;border-radius:13px;display:grid;place-items:center;
+  text-decoration:none;color:#fff;background:#22C55E;border:1px solid rgba(255,255,255,.2)}
+.plans i .pg svg{width:19px;height:19px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.plans i .pg svg .fl{fill:currentColor;stroke:none}
 .plans i b{flex:1;min-width:0;font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .plans i u{flex:0 0 auto;text-decoration:none;font-size:12px;font-weight:800;color:var(--c1)}
 .plans i .chk{width:22px;height:22px;flex:0 0 auto;border-radius:7px;border:1.5px solid var(--line);

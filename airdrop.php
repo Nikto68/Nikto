@@ -22,13 +22,16 @@
  *    نشان می‌دهد.
  */
 
-define('AD_BASE_RATE', 12.0);        // کریستال در ساعت، در سطح ۱
+define('AD_BASE_RATE', 30.0);        // کریستال در ساعت، در سطح ۱ (بدونِ بوست) — یعنی هر ۲ دقیقه یک کریستال
 define('AD_XP_PER_LEVEL', 300.0);    // XP لازم برای رفتن هر سطح (ثابت، ساده)
 define('AD_MAX_LEVEL', 50);
 define('AD_MAX_BUFFER_HOURS', 24);   // سقفِ انباشتِ آفلاین
 define('AD_SEASON_DAYS', 120);
 define('AD_REDEEM_RATE', 50.0);      // هر ۱ کریستال = این‌قدر تومان
 define('AD_REDEEM_MIN', 100.0);      // حداقل کریستال برای تبدیل
+define('AD_BOOST_PRICE', 100.0);     // تومان — هزینه‌ی هر پله‌ی «افزایش سرعت»
+define('AD_BOOST_STEP', 0.20);       // هر پله ۲۰٪ به نرخِ استخراج اضافه می‌کند
+define('AD_BOOST_MAX', 25);          // سقفِ پله‌ها (نرخ حداکثر ۶ برابرِ پایه)
 
 function adDbPath() { return DATA_DIR . '/airdrop.sqlite'; }
 
@@ -84,7 +87,11 @@ function adSeasonMeta() {
 }
 
 function adXpForLevel($level) { return AD_XP_PER_LEVEL * max(1, (int)$level); }
-function adRate($level) { return AD_BASE_RATE * max(1, (int)$level); }
+/** تعدادِ پله‌های «افزایش سرعت»ِ خریداری‌شده — هر پله در data['boost_n'] نگه داشته می‌شود. */
+function adBoostN($u) { return max(0, min(AD_BOOST_MAX, (int)($u['data']['boost_n'] ?? 0))); }
+function adRate($level, $boostN = 0) {
+    return AD_BASE_RATE * max(1, (int)$level) * (1 + AD_BOOST_STEP * max(0, (int)$boostN));
+}
 
 function adUser($uid) {
     $db = adDb();
@@ -169,7 +176,7 @@ function adTick($uid, $name = '', $username = '') {
         $elapsed = max(0, $now - (int)$u['last_tick']);
         $elapsed = min($elapsed, AD_MAX_BUFFER_HOURS * 3600);
         if ($elapsed > 0) {
-            $earned = adRate($u['level']) * ($elapsed / 3600.0);
+            $earned = adRate($u['level'], adBoostN($u)) * ($elapsed / 3600.0);
             $u['crystals'] = round($u['crystals'] + $earned, 4);
             $u['xp'] = round($u['xp'] + $earned, 4);
             while ($u['level'] < AD_MAX_LEVEL && $u['xp'] >= adXpForLevel($u['level'])) {
@@ -189,7 +196,8 @@ function adState($uid, $name = '', $username = '') {
     $u = adTick($uid, $name, $username);
     if (!$u) $u = ['crystals' => 0.0, 'level' => 1, 'xp' => 0.0, 'last_tick' => time(), 'season' => 1, 'data' => []];
     $meta = adSeasonMeta();
-    $rate = adRate($u['level']);
+    $boostN = adBoostN($u);
+    $rate = adRate($u['level'], $boostN);
     $need = adXpForLevel($u['level']);
     return [
         'crystals'   => $u['crystals'],
@@ -197,6 +205,11 @@ function adState($uid, $name = '', $username = '') {
         'xp'         => $u['xp'],
         'xp_need'    => $need,
         'rate'       => $rate,
+        'tick_secs'  => $rate > 0 ? round(3600.0 / $rate) : 0,
+        'boost_n'    => $boostN,
+        'boost_max'  => AD_BOOST_MAX,
+        'boost_price'=> AD_BOOST_PRICE,
+        'boost_step' => AD_BOOST_STEP,
         'season'     => $meta['season'],
         'season_end' => $meta['end'],
         'missions'   => adMissions($uid, $u),
@@ -387,4 +400,37 @@ function adRedeem($uid, $amount) {
     if (!$ok) return [false, 'کریستال کافی نیست.'];
     if (function_exists('addBalance')) addBalance($uid, $toman);
     return [true, $toman];
+}
+
+// ============================================================
+// ⚡️ افزایش سرعت — با ۱۰۰ تومان، یک پله (۲۰٪) به نرخِ استخراج اضافه می‌شود
+// ============================================================
+
+/**
+ * خریدِ یک پله‌ی «افزایش سرعت». کسرِ کیف‌پول و افزایشِ boost_n دو سیستمِ
+ * جدا هستند (کیف‌پول در users.sqlite، این یکی در airdrop.sqlite)، پس
+ * یک تراکنشِ واحد ممکن نیست — دقیقا مثلِ maPayFromWallet. برای جلوگیری
+ * از هدر رفتنِ پول در رقابتِ نادرِ «دقیقا روی سقف»، اگر پله‌گیریِ اتمیک
+ * نشان داد که کاربر همان لحظه به سقف رسیده، پول برمی‌گردد.
+ */
+function adBuyBoost($uid) {
+    if (!function_exists('debitBalance') || !function_exists('addBalance'))
+        return [false, 'خرید در دسترس نیست.'];
+
+    $u = adUser($uid);
+    if ($u && adBoostN($u) >= AD_BOOST_MAX) return [false, 'به سقفِ افزایشِ سرعت رسیده‌ای.'];
+    if (!debitBalance($uid, AD_BOOST_PRICE)) return [false, 'موجودی کیف‌پول کافی نیست.'];
+
+    $n = 0; $atCap = false;
+    adUserSet($uid, function (&$u) use (&$n, &$atCap) {
+        $cur = adBoostN($u);
+        if ($cur >= AD_BOOST_MAX) { $atCap = true; $n = $cur; return; }
+        $n = $cur + 1;
+        $u['data']['boost_n'] = $n;
+    });
+    if ($atCap) {
+        addBalance($uid, AD_BOOST_PRICE);
+        return [false, 'به سقفِ افزایشِ سرعت رسیده‌ای.'];
+    }
+    return [true, $n];
 }
