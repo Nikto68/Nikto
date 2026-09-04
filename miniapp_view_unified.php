@@ -95,11 +95,7 @@ __SKIN__
     <div class="sect" id="bestSect" style="display:none"><h2><s></s><span>پرفروش‌های این ماه</span></h2></div>
     <div id="bestList"></div>
 
-    <div class="trustwrap">
-      <div class="trust"><i>✅</i><div><b>تحویل آنی</b><span>سفارش‌ها معمولا در چند دقیقه انجام می‌شود</span></div></div>
-      <div class="trust"><i>🔒</i><div><b>پرداخت امن</b><span>کیف‌پول داخلی یا ارز، هرکدام راحت‌ترید</span></div></div>
-      <div class="trust"><i>🛟</i><div><b>پشتیبانی ۲۴ ساعته</b><span>هر مشکلی بود، همیشه یک پیام فاصله دارید</span></div></div>
-    </div>
+    <div class="trustwrap" id="trustwrap"></div>
   </section>
 
   <!-- ══ فروشگاه ══ -->
@@ -355,7 +351,8 @@ var ICONS = {
   bolt:  '<svg viewBox="0 0 24 24"><path class="fl i-pulse" d="M13.4 2.2L4.6 13.6h5.4l-.8 8.2 9-11.6h-5.4z"/></svg>',
   shield:'<svg viewBox="0 0 24 24"><path class="i-draw" d="M12 2.6l8 3v6.2c0 5-3.4 8.7-8 9.8-4.6-1.1-8-4.8-8-9.8V5.6z"/><path class="i-draw" d="M8.6 12.2l2.4 2.4 4.6-4.8"/></svg>',
   tag:   '<svg viewBox="0 0 24 24"><path class="i-float" d="M11.4 2.8h9.8v9.8L11.6 22.2 1.8 12.4z"/><circle class="fl i-pulse" cx="17" cy="7" r="1.7"/></svg>',
-  menu:  '<svg viewBox="0 0 24 24"><path d="M3.5 6.6h17M3.5 12h17M3.5 17.4h17"/></svg>'
+  menu:  '<svg viewBox="0 0 24 24"><path d="M3.5 6.6h17M3.5 12h17M3.5 17.4h17"/></svg>',
+  headset:'<svg viewBox="0 0 24 24"><path class="i-draw" d="M4.4 13.2v-1.4a7.6 7.6 0 0115.2 0v1.4"/><rect x="3" y="13.2" width="4.6" height="6.6" rx="2.1"/><rect x="16.4" y="13.2" width="4.6" height="6.6" rx="2.1"/><path d="M19 19.8v.5a2.5 2.5 0 01-2.5 2.5h-2.7"/></svg>'
 };
 var ICO_MAP = [
   [/star|استار|ستار/i,                'star'],
@@ -522,6 +519,23 @@ $('rail').addEventListener('click', function(ev){
   });
   h += '<div class="qtile air" data-air="1"><i class="ico">' + ICONS.gem + '</i><span>ایردراپ</span></div>';
   $('qgrid').innerHTML = h;
+})();
+
+/* ── ردیف‌های اعتمادسازی — بج‌های دایره‌ایِ بزرگ، طبقِ مرجعِ کارفرما ── */
+(function drawTrust(){
+  var rows = [
+    { c:'--c1', ico:'bolt',    ttl:'تحویل آنی',        sub:'سفارش‌ها معمولا در چند دقیقه انجام می‌شود' },
+    { c:'--c2', ico:'shield',  ttl:'پرداخت امن',        sub:'کیف‌پول داخلی یا ارز، هرکدام راحت‌ترید' },
+    { c:'--c3', ico:'headset', ttl:'پشتیبانی ۲۴ ساعته', sub:'هر مشکلی بود، همیشه یک پیام فاصله دارید' }
+  ];
+  var h = '';
+  rows.forEach(function(r){
+    h += '<div class="trust" style="--tc:var(' + r.c + ')">' +
+           '<i class="trustico">' + ICONS[r.ico] + '</i>' +
+           '<div><b>' + esc(r.ttl) + '</b><span>' + esc(r.sub) + '</span></div>' +
+         '</div>';
+  });
+  $('trustwrap').innerHTML = h;
 })();
 $('qgrid').addEventListener('click', function(ev){
   var el = ev.target.closest ? ev.target.closest('.qtile') : null;
@@ -1288,12 +1302,16 @@ img{max-width:100%}
 .bestrow .m span{display:block;font-size:10px;color:var(--dim);margin-top:2px}
 .bestrow .p{flex:0 0 auto;font-size:11.5px;font-weight:800;color:var(--c1)}
 
-.trustwrap{display:flex;flex-direction:column;gap:8px;margin:15px 2px 2px}
-.trust{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:14px;
-  background:color-mix(in srgb,var(--c2) 9%,transparent);border:1px solid color-mix(in srgb,var(--c2) 22%,transparent)}
-.trust i{font-style:normal;font-size:17px;flex:0 0 auto}
-.trust b{display:block;font-size:12.5px;font-weight:800;color:color-mix(in srgb,var(--c2) 70%,black)}
-.trust span{display:block;font-size:11px;color:var(--dim);line-height:1.7;margin-top:1px}
+/* ═══ ردیف‌های اعتمادسازی — بج‌های دایره‌ایِ رنگیِ بزرگ، طبقِ مرجع ═══ */
+.trustwrap{display:flex;flex-direction:column;gap:16px;margin:22px 2px 4px}
+.trust{display:flex;align-items:center;gap:14px}
+.trustico{width:60px;height:60px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--tc,var(--c1)) 20%,transparent)}
+.trustico svg{width:26px;height:26px;fill:none;stroke:var(--tc,var(--c1));
+  stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.trustico svg .fl{fill:var(--tc,var(--c1));stroke:none}
+.trust b{display:block;font-size:13.5px;font-weight:900;color:var(--ink)}
+.trust span{display:block;font-size:11.5px;color:var(--dim);line-height:1.8;margin-top:4px}
 
 /* ═══ جستجو و چیپ دسته ═══ */
 .find{position:relative;margin:4px 0 12px}
