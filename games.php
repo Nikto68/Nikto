@@ -603,11 +603,17 @@ function gmGcMaybe($db) {
 // 🎯 ساختن بازی
 // ============================================================
 
-/** شرط را از متن درمی‌آورد: «چالش ۱۰۰» یا «۱۰۰ چالش» */
+/**
+ * شرط را از متن درمی‌آورد: «۱۰۰ بازی» یا «بازی ۱۰۰».
+ *
+ * «چالش»/«دوز» عمدا این‌جا نیست: آن بازی حالا فقط از داخلِ هابِ
+ * «بازی الماسی» (arcade.php) قابلِ ساختن است، نه با تایپِ مستقیم.
+ * gmCreate('duel', …) خودش دست‌نخورده مانده — arcade.php مستقیم
+ * صدایش می‌زند؛ فقط راهِ تایپیِ آن از این‌جا برداشته شده.
+ */
 function gmParse($raw) {
     $t = trim(norm_fa_digits((string)$raw));
     $words = [
-        'duel' => gmWords(gmVal('word_duel', 'چالش')),
         'rand' => gmWords(gmVal('word_rand', 'بازی')),
     ];
     foreach ($words as $kind => $list) {
@@ -633,7 +639,6 @@ function gmParse($raw) {
 function gmBareWord($raw) {
     $t = mb_strtolower(trim(norm_fa_digits((string)$raw)));
     $words = [
-        'duel' => gmWords(gmVal('word_duel', 'چالش')),
         'rand' => gmWords(gmVal('word_rand', 'بازی')),
     ];
     foreach ($words as $kind => $list)
@@ -1011,15 +1016,14 @@ function gmHandleText($text, $uid, $chatId, $name, $uname = '', $replyTo = null,
 
     $p = gmParse($raw);
     if (!$p) {
-        // 🎮 «چالش» خالی، بدون عدد. قبلا هیچ جوابی نمی‌گرفت و کاربر
+        // 🎮 «بازی» خالی، بدون عدد. قبلا هیچ جوابی نمی‌گرفت و کاربر
         //    فکر می‌کرد بازی خراب است. حالا می‌گوید عدد را هم بنویس.
         //    اگر ادمین متنش را خالی کند، دوباره ساکت می‌شود.
         $bare = gmBareWord($raw);
         if ($bare === null) return false;
         if ($isPrivate) { sendMsg(BOT_TOKEN, $chatId, gmT('group_only'), null, $extra); return true; }
-        $tip = gmT($bare === 'duel' ? 'duel_how' : 'rand_how', [
-            'word' => (string)gmWords(gmVal($bare === 'duel' ? 'word_duel' : 'word_rand',
-                                             $bare === 'duel' ? 'چالش' : 'بازی'))[0],
+        $tip = gmT('rand_how', [
+            'word' => (string)gmWords(gmVal('word_rand', 'بازی'))[0],
             'min'  => gmNum($min), 'max' => gmNum($max),
         ]);
         if (trim($tip) === '') return false;

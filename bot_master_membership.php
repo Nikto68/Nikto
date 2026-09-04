@@ -5595,9 +5595,7 @@ function admHome($chatId, $msgId = null) {
         [btnCb('🛍 فروشگاه', 'ag_shop', 'admin'),      btnCb('🚀 مینی‌اپ‌ها', 'ag_mini', 'admin')],
         [btnCb('🤖 ربات‌های اپلودر', 'ag_up', 'admin'), btnCb('🎯 ممبر و قفل‌ها', 'ag_lock', 'admin')],
         [btnCb('💹 قیمت لحظه‌ای', 'px_home', 'admin'),  btnCb('💎 الماس', 'dm_home', 'admin')],
-        [btnCb('☎️ شماره مجازی', 'num_home', 'admin'), btnCb('🎮 بازی‌ها', 'gm_home', 'admin')],
-        [btnCb('🏦 بانک', 'bk_home', 'admin'),          btnCb('💣 مین‌یاب', 'mn_home', 'admin')],
-        [btnCb('💰 بانکِ الماسی', 'vl_home', 'admin')],
+        [btnCb('☎️ شماره مجازی', 'num_home', 'admin'), btnCb('🎮 بازی‌ها', 'ag_games', 'admin')],
         [btnCb('📈 سود روی محصولات', 'pf_home', 'admin')],
         [btnCb('💳 پرداخت', 'ag_pay', 'admin'),        btnCb('🎨 ظاهر و متن‌ها', 'ag_look', 'admin')],
         [btnCb('📡 کانال‌های متصل', 'ch_home', 'admin'),
@@ -5776,6 +5774,14 @@ function admGroups() {
         'rep' => ['📢 <b>گزارش و پیام همگانی</b>', 'اعلام فروش و پیام به همه.', [
             [['📢 گزارش خرید در گروه', 'adm_reports']],
             [['📢 پیام همگانی', 'adm_bc']],
+        ]],
+        // 🎮 همه‌ی بازی‌های گروهی، یک‌جا — قبلا بازی‌ها/بانک/مین‌یاب/بانکِ
+        // الماسی/بازی الماسی هرکدام یک دکمه‌ی جداگانه بودند؛ دسترسیِ کامل به
+        // هرکدام همچنان همینجاست، فقط پشتِ یک در.
+        'games' => ['🎮 <b>بازی‌ها</b>', 'همه‌ی بازی‌های گروهی و تنظیماتشان.', [
+            [['💎 بازی الماسی (هاب)', 'ar_home']],
+            [['🎮 چالش/دوز و قرعه', 'gm_home'], ['💣 مین‌یاب', 'mn_home']],
+            [['🏦 بانک (سرقت الماس)', 'bk_home'], ['💰 بانکِ الماسی', 'vl_home']],
         ]],
     ];
 }
@@ -8004,6 +8010,7 @@ function masterHandle($update) {
         if (function_exists('bkAdminCallback') && bkAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if (function_exists('mnAdminCallback') && mnAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if (function_exists('vlAdminCallback') && vlAdminCallback($data, $chatId, $msgId, $cbId)) return;
+        if (function_exists('arAdminCallback') && arAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if ($data === 'adm_gw')      { answerCb(BOT_TOKEN, $cbId); admGateway($chatId, $msgId); return; }
         if ($data === 'adm_pay')     { answerCb(BOT_TOKEN, $cbId); admPay($chatId, $msgId); return; }
         foreach ([['payc', 'pay_card', "💳 شماره کارت را بفرستید (۱۶ رقم).\n\nخط تیره = پاک کردن"],
@@ -9134,6 +9141,9 @@ function masterHandle($update) {
     // می‌کنند: قیمت لحظه‌ای، و بازی الماس. بقیه‌ی ربات همچنان ساکت است.
     if (($msg['chat']['type'] ?? 'private') !== 'private') {
         $rt = $msg['message_id'] ?? null;
+        // 🏀 استیکرِ واقعیِ 🏀ِ ریپلای‌شده رویِ لابیِ بسکتبال — پیامِ dice
+        // متنی ندارد، پس باید قبل از همه‌ی دست‌کاری‌هایِ متنی بررسی شود.
+        if (isset($msg['dice']) && function_exists('arHandleDice') && arHandleDice($msg, $uid, $chatId, $fname, $uname)) return;
         // 💹 قیمت اول — قبل از هرکاری. «بیت کوین» نباید منتظرِ housekeeping
         // بازی (gmTick) یا پارس‌کردنِ بازی/الماس بماند؛ اول با کشِ موجود
         // جواب بده، بعد کش را تازه کن.
@@ -9141,7 +9151,8 @@ function masterHandle($update) {
         if (gmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false)) return;
         if (function_exists('bkHandleText') && bkHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
-        if (function_exists('mnHandleText') && mnHandleText($text, $uid, $chatId, $fname, $uname, false, $msg)) return;
+        // 💣 «مین» دیگر با تایپِ مستقیم ساخته نمی‌شود — فقط از هابِ
+        // «بازی الماسی» (arcade.php ← ar_mine)؛ mnCreate/mnCallback دست‌نخورده‌اند.
         if (function_exists('vlHandleText') && vlHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         if (function_exists('arHandleText') && arHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         return;
@@ -9260,6 +9271,7 @@ function masterHandle($update) {
     if (function_exists('bkStateHandle') && bkStateHandle($action, $msg, $uid, $chatId)) return;
     if (function_exists('mnStateHandle') && mnStateHandle($action, $msg, $uid, $chatId)) return;
     if (function_exists('vlStateHandle') && vlStateHandle($action, $msg, $uid, $chatId)) return;
+    if (function_exists('arStateHandle') && arStateHandle($action, $msg, $uid, $chatId)) return;
 
     if (str_starts_with($action, 'pay_')) {
         $plain = trim($msg['text'] ?? '');

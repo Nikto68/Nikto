@@ -355,49 +355,14 @@ function mnRender($g, $chatId, $msgId = null) {
 // 💬 شروعِ بازی
 // ============================================================
 
-function mnHandleText($text, $uid, $chatId, $name, $uname, $isPrivate, $msg = null) {
-    if (!mnOn()) return false;
-    if (!empty(mnVal('group_only', 1)) && $isPrivate) return false;
-
-    $raw = trim((string)$text);
-    if ($raw === '') return false;
-
-    $word = trim((string)mnVal('word', 'مین'));
-    $q = preg_quote($word, '/');
-    if (!preg_match('/^' . $q . '\s+([\d,٬]+)$/u', norm_fa_digits($raw), $m)) return false;
-
-    $amount = (float)str_replace([',', '٬'], '', $m[1]);
-    $min = max(0, (float)mnVal('entry_min', 100));
-    $max = max($min, (float)mnVal('entry_max', 1000000));
-    if ($amount < $min || $amount > $max) {
-        sendMsg(BOT_TOKEN, $chatId, mnT('bad_amount', ['min' => mnNum($min), 'max' => mnNum($max)]));
-        return true;
-    }
-
-    if (mnActiveCountForUser($uid) > 0) { sendMsg(BOT_TOKEN, $chatId, mnT('busy')); return true; }
-    $left = mnCooldownLeft($uid);
-    if ($left > 0) { sendMsg(BOT_TOKEN, $chatId, mnT('cooldown')); return true; }
-
-    if (gmPoints($uid) < $amount) {
-        sendMsg(BOT_TOKEN, $chatId, mnT('low_wallet', ['need' => mnNum($amount)]));
-        return true;
-    }
-
-    $g = mnCreate($uid, $chatId, $name, $uname, $amount);
-    if (!$g) return true;
-    // 🧵 ریپلای‌شده رویِ پیامِ خودِ کاربر — تا توی گروهِ شلوغ معلوم باشد
-    // این پیش‌نمایش جوابِ کدوم «مین ۵۰۰» است
-    $replyMsgId = (int)($msg['message_id'] ?? 0);
-    $extra = $replyMsgId ? ['reply_to_message_id' => $replyMsgId] : [];
-    $res = sendMsg(BOT_TOKEN, $chatId, mnPreviewText($g), mnPreviewKb($g), $extra);
-    $mid = (int)($res['result']['message_id'] ?? 0);
-    if ($mid > 0) mnSetGame($g['id'], function (&$g) use ($mid) { $g['msg_id'] = $mid; });
-    return true;
-}
-
 // ============================================================
 // 🔘 کال‌بک‌ها
 // ============================================================
+//
+// 💣 ساختن بازی با تایپِ مستقیمِ «مین ۵۰۰» دیگر وجود ندارد — این کار
+// حالا فقط از هابِ «بازی الماسی» (arcade.php ← ar_mine) انجام می‌شود،
+// که مستقیم mnCreate()+mnRender() را صدا می‌زند. بقیه‌ی این فایل
+// (پیوستن، انتخابِ خانه، نقدکردن، انقضا) دست‌نخورده مانده.
 
 function mnExpireIfNeeded(&$g) {
     if (!in_array($g['status'], ['waiting', 'active'], true)) return false;

@@ -474,10 +474,9 @@ function vlBankText($uid, $name) {
 function vlBankKb($uid) {
     $uid = (int)$uid;
     return inlineKb([
-        [vlBtn('btn_deposit', [], 'vl_dep_' . $uid), vlBtn('btn_withdraw', [], 'vl_wd_' . $uid)],
         [vlBtn('btn_send', [], 'vl_send_' . $uid)],
+        [vlBtn('btn_deposit', [], 'vl_dep_' . $uid), vlBtn('btn_withdraw', [], 'vl_wd_' . $uid)],
         [vlBtn('btn_history', [], 'vl_tx_' . $uid)],
-        [vlBtn('btn_back', [], 'vl_acct_' . $uid)],
     ]);
 }
 

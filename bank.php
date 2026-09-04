@@ -24,7 +24,7 @@ function bkDefaults() {
         'on'         => false,
         'group_only' => 1,
         'word_bank'  => 'بانک,حساب بانکی',   // کلمه‌های باز کردنِ کارتِ بانک
-        'word_hack'  => 'سرقت الماس,هک,حمله', // کلمه‌های شروعِ هک (به‌جز خودِ /hack) — اولی نامِ اصلی/نمایشی است
+        'word_hack'  => 'سرقت الماس', // فقط همین کلمه — «هک»/«حمله» دیگر کار نمی‌کنند
 
         'manual_protect' => 900,     // ثانیه — حفاظتِ دستی (۱۵ دقیقه)
         'shield_after'   => 300,     // ثانیه — حفاظتِ خودکارِ کوتاه بعدِ هر هک (موفق یا ناموفق)
@@ -712,7 +712,7 @@ function bkHackCmd($uid, $chatId, $name, $uname, $replyTo, $msg) {
     $to = $msg['reply_to_message']['from'] ?? null;
 
     if (!$to || !empty($to['is_bot'])) {
-        $firstWord = trim(explode(',', (string)bkVal('word_hack', 'هک'))[0]) ?: 'هک';
+        $firstWord = trim(explode(',', (string)bkVal('word_hack', 'سرقت الماس'))[0]) ?: 'سرقت الماس';
         sendMsg(BOT_TOKEN, $chatId, bkT('hack_how', ['word' => $firstWord]), null, $extra);
         return;
     }
@@ -866,23 +866,19 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
         if ($looksLikeAnswer) return bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend);
     }
 
-    if (preg_match('/^\/bankleader(?:@\w+)?(?:\s|$)/i', $raw)) { sendMsg(BOT_TOKEN, $chatId, bkTopText()); return true; }
+    if (mb_strtolower($raw) === mb_strtolower('برترین‌های بانک')) { sendMsg(BOT_TOKEN, $chatId, bkTopText()); return true; }
 
-    $isBank = (bool)preg_match('/^\/bank(?:@\w+)?(?:\s|$)/i', $raw);
-    if (!$isBank) {
-        foreach (explode(',', (string)bkVal('word_bank', 'بانک')) as $w) {
-            $w = trim($w);
-            if ($w !== '' && mb_strtolower($raw) === mb_strtolower($w)) { $isBank = true; break; }
-        }
+    $isBank = false;
+    foreach (explode(',', (string)bkVal('word_bank', 'بانک')) as $w) {
+        $w = trim($w);
+        if ($w !== '' && mb_strtolower($raw) === mb_strtolower($w)) { $isBank = true; break; }
     }
     if ($isBank) { bkShow($uid, $chatId, $name, null, $msg['message_id'] ?? null); return true; }
 
-    $isHack = (bool)preg_match('/^\/hack(?:@\w+)?(?:\s|$)/i', $raw);
-    if (!$isHack) {
-        foreach (explode(',', (string)bkVal('word_hack', 'هک,حمله')) as $w) {
-            $w = trim($w);
-            if ($w !== '' && mb_strtolower($raw) === mb_strtolower($w)) { $isHack = true; break; }
-        }
+    $isHack = false;
+    foreach (explode(',', (string)bkVal('word_hack', 'سرقت الماس')) as $w) {
+        $w = trim($w);
+        if ($w !== '' && mb_strtolower($raw) === mb_strtolower($w)) { $isHack = true; break; }
     }
     if ($isHack) { bkHackCmd($uid, $chatId, $name, $uname, $replyTo, $msg ?? []); return true; }
 
