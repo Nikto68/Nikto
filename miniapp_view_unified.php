@@ -463,6 +463,14 @@ function icoFor(c){
   for (var i = 0; i < ICO_MAP.length; i++) if (ICO_MAP[i][0].test(key)) return ICONS[ICO_MAP[i][1]];
   return ICONS.bag;
 }
+/* برایِ شماره‌مجازی، پرچمِ واقعیِ کشور (که سرور همیشه در i.emoji پر می‌کند)
+   مهم‌تر از رنگِ یک‌دستِ آیکون‌هاست — یک آیکونِ globeِ یکسان برایِ روسیه/
+   آمریکا/آلمان یعنی هیچ تفاوتی بینِ کشورها دیده نمی‌شود. برایِ همه‌ی
+   اپ‌های دیگر همان ست آیکونِ SVGِ رنگ‌پذیر (icoFor) به‌جای می‌ماند. */
+function iconOrFlag(i){
+  if (i && i.app === 'num') return '<span class="flagico">' + esc(i.emoji || '🌍') + '</span>';
+  return icoFor(i);
+}
 
 var toastT;
 function toast(m, good){
@@ -659,7 +667,7 @@ function tileHtml(i, n){
            '" data-i="' + esc(i.id) + '" data-app="' + esc(i.app) + '" style="animation-delay:' + Math.min(n*35, 300) + 'ms">' +
            (i.badge ? '<span class="tag">' + esc(i.badge) + '</span>' : '') +
            (i.live  ? '<span class="livedot">زنده</span>' : '') +
-           '<div class="orb">' + icoFor(i) + '</div>' +
+           '<div class="orb">' + iconOrFlag(i) + '</div>' +
            '<h3>' + esc(i.name) + '</h3>' +
            (i.desc ? '<p>' + esc(i.desc) + '</p>' : '') +
            '<div class="foot"><div class="cost"><b>' +
@@ -744,7 +752,7 @@ $('q').addEventListener('input', function(){
   list.forEach(function(i, idx){
     h += '<div class="bestrow" data-i="' + esc(i.id) + '" data-app="' + esc(i.app) + '">' +
            '<b class="rk">' + (idx+1) + '</b>' +
-           '<span class="e">' + icoFor(i) + '</span>' +
+           '<span class="e">' + iconOrFlag(i) + '</span>' +
            '<span class="m"><b>' + esc(i.name) + '</b><span>' + fa(i.sold) + ' فروش این ماه</span></span>' +
            '<span class="p">' + fa(i.price) + ' ' + esc(B.currency) + '</span>' +
          '</div>';
@@ -768,7 +776,7 @@ function drawOrders(){
   var h = '';
   os.forEach(function(o){
     h += '<div class="ord">' +
-           '<span class="e">' + icoFor(o) + '</span>' +
+           '<span class="e">' + iconOrFlag(o) + '</span>' +
            '<span class="m"><b>' + esc(o.name) + '</b><span>' + esc(o.date || '') + '</span></span>' +
            '<span class="s"><u>' + fa(o.total) + '</u><i>' + esc(o.status) + '</i></span>' +
          '</div>';
@@ -857,7 +865,7 @@ function open(id, appKey){
   $('discCode').value = ''; $('discForm').style.display = 'none';
   $('discToggleTxt').textContent = 'کد تخفیف داری؟'; $('discMsg').innerHTML = '';
 
-  $('sOrb').innerHTML    = icoFor(it);
+  $('sOrb').innerHTML    = iconOrFlag(it);
   $('sName').textContent = it.name;
   $('sDesc').textContent = it.desc || '';
 
@@ -873,7 +881,7 @@ function open(id, appKey){
     html += '<div class="lbl">بسته‌های پیشنهادی</div><div class="plans" id="fPlans">' +
               planRows(it).map(function(q){
                 return '<i data-q="' + q + '"' + (q === S.qty ? ' class="on"' : '') + '>' +
-                       '<s class="pg">' + icoFor(it) + '</s>' +
+                       '<s class="pg">' + iconOrFlag(it) + '</s>' +
                        '<b>' + fa(q) + (it.unit ? ' ' + esc(it.unit) : '') + '</b>' +
                        '<u>' + fa(Math.round(it.price * q)) + ' ' + esc(B.currency) + '</u>' +
                        '<em class="chk">✓</em></i>';
@@ -1553,6 +1561,10 @@ img{max-width:100%}
 .sect h2{margin:0;font-size:11.5px;font-weight:800;letter-spacing:1.2px;color:var(--dim);display:flex;align-items:center;gap:8px}
 .sect h2 s{text-decoration:none;width:5px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--c2),var(--c1))}
 .sect a{font-size:11.5px;color:var(--c1);font-weight:700;cursor:pointer}
+/* عنوانِ «پرفروش‌ها» عمدا کم‌رنگ‌تر است — خودِ ردیفِ بزرگ‌وشیشه‌ای زیرش
+   کافی‌ست چشم را جلب کند، عنوان فقط برچسب است نه یک تیترِ برجسته */
+#bestSect h2{opacity:.55}
+#bestSect h2 s{display:none}
 
 /* ═══ بنرِ احرازِ هویت ═══ */
 .verify{display:flex;align-items:center;gap:11px;margin:14px 2px 0;padding:13px 14px;border-radius:18px;
@@ -1636,18 +1648,22 @@ img{max-width:100%}
   stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .navi svg .fl{fill:currentColor;stroke:none}
 
-/* ═══ پرفروش‌ها ═══ */
-.bestrow{display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:16px;margin-bottom:8px;
-  border:1px solid var(--line);background:var(--pane)}
-.bestrow .rk{width:22px;height:22px;flex:0 0 auto;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:900;
+/* ═══ پرفروش‌ها — بزرگ‌تر و شیشه‌ای؛ عمدا بدونِ backdrop-filter چون
+   کارتِ تکرارشونده است (قاعده‌ی بالایِ فایل) — حسِ شیشه از رنگِ نیم‌شفاف +
+   نورِ لبه‌ی داخلی می‌آید، نه بلور. ═══ */
+.bestrow{display:flex;align-items:center;gap:13px;padding:16px 17px;border-radius:20px;margin-bottom:10px;
+  border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.055);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09)}
+.bestrow .rk{width:26px;height:26px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;font-size:12.5px;font-weight:900;
   color:#111;background:linear-gradient(135deg,var(--c1),#FFD866)}
-.bestrow .e{width:19px;height:19px;flex:0 0 auto;color:#22C55E}
+.bestrow .e{width:24px;height:24px;flex:0 0 auto;color:#22C55E}
 .bestrow .e svg{width:100%;height:100%;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .bestrow .e svg .fl{fill:currentColor;stroke:none}
+.bestrow .e .flagico{font-size:24px;line-height:1}
 .bestrow .m{flex:1;min-width:0}
-.bestrow .m b{display:block;font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bestrow .m span{display:block;font-size:10px;color:var(--dim);margin-top:2px}
-.bestrow .p{flex:0 0 auto;font-size:11.5px;font-weight:800;color:var(--c1)}
+.bestrow .m b{display:block;font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bestrow .m span{display:block;font-size:10.5px;color:var(--dim);margin-top:3px}
+.bestrow .p{flex:0 0 auto;font-size:12.5px;font-weight:800;color:var(--c1)}
 
 /* ═══ ردیف‌های اعتمادسازی — بج‌های دایره‌ایِ رنگیِ بزرگ، طبقِ مرجع ═══ */
 .trustwrap{display:flex;flex-direction:column;gap:16px;margin:22px 2px 4px}
@@ -1688,6 +1704,7 @@ img{max-width:100%}
 .orb svg{position:relative;width:28px;height:28px;display:block;overflow:visible;
   fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .orb svg .fl{fill:currentColor;stroke:none}
+.orb .flagico{font-size:28px;line-height:1}
 .tile h3{position:relative;margin:0;font-size:13px;font-weight:800;line-height:1.55;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .tile p{position:relative;margin:4px 0 0;font-size:10.5px;color:var(--dim);line-height:1.65;
@@ -1712,6 +1729,7 @@ img{max-width:100%}
   color:#fff;background:#22C55E;border:1px solid rgba(255,255,255,.22)}
 .ord .e svg{width:21px;height:21px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ord .e svg .fl{fill:currentColor;stroke:none}
+.ord .e .flagico{font-size:21px;line-height:1}
 .ord .m{flex:1;min-width:0}
 .ord .m b{display:block;font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ord .m span{display:block;font-size:10px;color:var(--dim);margin-top:3px;direction:ltr;text-align:right}
@@ -1900,6 +1918,7 @@ body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition
 .sheet .head{display:flex;align-items:center;gap:13px;margin-bottom:16px}
 .sheet .head .orb{width:60px;height:60px;margin:0}
 .sheet .head .orb svg{width:30px;height:30px}
+.sheet .head .orb .flagico{font-size:30px;line-height:1}
 .sheet .head h2{margin:0;font-size:16.5px;font-weight:900}
 .sheet .head p{margin:4px 0 0;font-size:11.5px;color:var(--dim);line-height:1.7}
 .field{margin-bottom:14px}
@@ -1921,6 +1940,7 @@ body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition
   text-decoration:none;color:#fff;background:#22C55E;border:1px solid rgba(255,255,255,.2)}
 .plans i .pg svg{width:19px;height:19px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .plans i .pg svg .fl{fill:currentColor;stroke:none}
+.plans i .pg .flagico{font-size:19px;line-height:1}
 .plans i b{flex:1;min-width:0;font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .plans i u{flex:0 0 auto;text-decoration:none;font-size:12px;font-weight:800;color:var(--c1)}
 .plans i .chk{width:22px;height:22px;flex:0 0 auto;border-radius:7px;border:1.5px solid var(--line);
