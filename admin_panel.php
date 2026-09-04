@@ -470,7 +470,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         cfgSet(function (&$c) use ($post) {
             $c['join']['on'] = !empty($post['jn_on']);
             // 📝 متنِ قفل و متنِ دکمه از اینجا دست نمی‌خورَند — ویرایششان
-            // فقط داخل خودِ ربات است (/panel ← 🔒 عضویت اجباری).
+            // فقط داخل خودِ ربات است (پنل ← 🔒 عضویت اجباری).
         });
         go('عضویت اجباری ذخیره شد.');
     }
@@ -833,7 +833,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $all[$id]['smm_auto_price'] = !empty($post['smm_auto_price']);
             $all[$id]['sale_cat'] = in_array($post['sale_cat'] ?? '', ['fake_member', 'boost'], true) ? $post['sale_cat'] : '';
             // 📝 متن‌های اختصاصیِ محصول از اینجا دست نمی‌خورَند — ویرایششان
-            // فقط داخل خودِ ربات است (/panel ← 🎨 دکمه‌ها ← محصول ← 📝
+            // فقط داخل خودِ ربات است (پنل ← 🎨 دکمه‌ها ← محصول ← 📝
             // متن‌های اختصاصی)، تا ذخیره‌ی هر فیلدِ دیگر اینجا پاکشان نکند.
         });
         go('محصول به‌روزرسانی شد.');
@@ -1234,7 +1234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($u <= 0) go('آیدی عددی معتبر بدهید.', 'err');
         BotManager::addAdmin($bid, $u);
         $b = BotManager::get($bid);
-        if ($b) sendMsg($b['token'], $u, "👑 شما به‌عنوان مدیر ربات @" . h($b['username']) . " ثبت شدید.\n\nبا /panel وارد پنل شوید.");
+        if ($b) sendMsg($b['token'], $u, "👑 شما به‌عنوان مدیر ربات @" . h($b['username']) . " ثبت شدید.\n\nبا پنل وارد پنل شوید.");
         go('مدیر اضافه شد.');
     }
     if ($a === 'del_bot_admin') {
@@ -2037,7 +2037,7 @@ $tabFolders = [
       ویرایش <b>دکمه‌ها</b>، <b>متن‌ها</b>، <b>رنگ‌ها</b> و <b>متن دکمه‌های ثابت</b>
       حالا داخل <b>خود ربات</b> است — چون آنجا می‌توانید ایموجی پریمیوم و نقل‌قول
       را مستقیم تایپ کنید.<br><br>
-      در ربات <code>/panel</code> را بزنید → 🎨 دکمه‌ها · 📝 متن‌ها · 💠 رنگ دکمه‌های شیشه‌ای
+      در ربات <code>پنل</code> را بزنید → 🎨 دکمه‌ها · 📝 متن‌ها · 💠 رنگ دکمه‌های شیشه‌ای
     </div>
   </div></div>
 
@@ -2268,7 +2268,7 @@ $tabFolders = [
 
       <div class="note">
         📝 متنِ لیستِ تعرفه‌ها (و متغیرِ <code>{list}</code>) فقط داخل خودِ ربات ویرایش می‌شود:
-        <code>/panel</code> ← 📋 لیست تعرفه‌ها ← ✏️ متن تعرفه.
+        <code>پنل</code> ← 📋 لیست تعرفه‌ها ← ✏️ متن تعرفه.
       </div>
 
       <div class="grid2" style="margin-top:14px">
@@ -2388,7 +2388,7 @@ $tabFolders = [
       مشتری که رویشان بزند، مستقیم می‌رود سراغ
       <b>لینک کانال ← تعداد ← سرعت ← ادمین کردن ربات ← فاکتور</b>.<br>
       قیمت، تعداد و ضریب سرعت‌ها را همین‌جا تنظیم کنید.
-      (ایموجی، رنگ و ایموجی پریمیوم داخل خود ربات: <code>/panel</code> ← 🔘 دکمه‌ها.)
+      (ایموجی، رنگ و ایموجی پریمیوم داخل خود ربات: <code>پنل</code> ← 🔘 دکمه‌ها.)
     </div>
   </div></div>
 
@@ -2457,7 +2457,7 @@ $tabFolders = [
 
         <div class="note" style="margin-top:14px">
           📝 متن‌های مخصوصِ این محصول، و متنِ دکمه‌های «قبلی/بعدی»یِ حالتِ اسلایدر، فقط داخل خودِ ربات
-          ویرایش می‌شوند (با ایموجی پریمیوم و نقل‌قول): <code>/panel</code> ← 🎨 دکمه‌ها ← این دکمه ←
+          ویرایش می‌شوند (با ایموجی پریمیوم و نقل‌قول): <code>پنل</code> ← 🎨 دکمه‌ها ← این دکمه ←
           📝 متن‌های اختصاصی / ⚡️ سرعت‌ها ← 🎠 حالتِ نمایش.
         </div>
 
@@ -2518,7 +2518,7 @@ $tabFolders = [
           <div class="muted" style="margin-top:6px">
             متن دکمه = ایموجی + متن + «نفر در روز». مثلا <code>🏃 نیمه‌سریع — 3,500/روز</code><br>
             ✨ ایموجی پریمیوم فقط داخل ربات تنظیم می‌شود:
-            <code>/panel</code> ← 🔘 دکمه‌ها ← این دکمه ← ⚡️ سرعت‌ها
+            <code>پنل</code> ← 🔘 دکمه‌ها ← این دکمه ← ⚡️ سرعت‌ها
           </div>
         </div>
 
@@ -2611,7 +2611,7 @@ $tabFolders = [
               HTML مجاز است: <code>&lt;b&gt;</code> <code>&lt;i&gt;</code> <code>&lt;code&gt;</code>
               <code>&lt;blockquote&gt;</code> <code>&lt;blockquote expandable&gt;</code><br>
               ✨ برای <b>ایموجی پریمیوم</b> و نقل‌قول آماده، متن را داخل ربات بنویسید:
-              <code>/panel</code> ← 🔘 دکمه‌ها ← این دکمه ← 📢 گزارش خرید ← ✏️ متن گزارش
+              <code>پنل</code> ← 🔘 دکمه‌ها ← این دکمه ← 📢 گزارش خرید ← ✏️ متن گزارش
             </div>
           </div>
 
@@ -2641,7 +2641,7 @@ $tabFolders = [
             <div class="muted" style="margin-top:6px">
               دکمه بدون لینک نشان داده نمی‌شود. متن‌ها عمداً بدون ایموجی‌اند —
               ✨ ایموجی پریمیوم را داخل ربات بگذارید:
-              <code>/panel</code> ← 📢 گزارش خرید ← محصول ← دکمه اول/دوم ← ✨ پریمیوم
+              <code>پنل</code> ← 📢 گزارش خرید ← محصول ← دکمه اول/دوم ← ✨ پریمیوم
             </div>
           </div>
 
@@ -2686,7 +2686,7 @@ $tabFolders = [
           <?php foreach (styleMap() as $sk => $sl): ?>
             <option value="<?= h($sk) ?>" <?= $sk === 'success' ? 'selected' : '' ?>><?= h($sl) ?></option>
           <?php endforeach; ?></select></div>
-        <div><label>✨ ایموجی پریمیوم (کد)</label><input name="icon" placeholder="از /emoji در ربات" style="direction:ltr"></div>
+        <div><label>✨ ایموجی پریمیوم (کد)</label><input name="icon" placeholder="از دریافت ایموجی در ربات" style="direction:ltr"></div>
         <div><label>ردیف (۰ = خودکار)</label><input name="row" type="number" min="0" value="0"></div>
         <div><label>ترتیب</label><input name="order" type="number" min="1" value="99"></div>
         <div><label>ربات اپلودر تحویل</label><select name="bot_id">
@@ -3167,7 +3167,7 @@ $tabFolders = [
         <h3 style="font-size:13.5px;margin:18px 0 9px">📝 متن‌های این ربات</h3>
         <div class="note">
           برای گذاشتن <b>ایموجی پریمیوم</b> داخل متن‌ها، از نوار ابزار ✨ استفاده کنید —
-          کد را با دستور <code>/emoji</code> در ربات مادر بگیرید.
+          کد را با دستور <code>دریافت ایموجی</code> در ربات مادر بگیرید.
         </div>
         <div class="tgrid">
           <?php
@@ -3218,7 +3218,7 @@ $tabFolders = [
         <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="bots">
         <input type="hidden" name="action" value="add_bot_admin"><input type="hidden" name="id" value="<?= h($b['id']) ?>">
         <div style="flex:1;min-width:170px"><label>آیدی عددی مدیر جدید</label>
-          <input name="user_id" type="number" placeholder="کاربر با /id آیدیش را می‌گیرد" style="direction:ltr"></div>
+          <input name="user_id" type="number" placeholder="کاربر با «آیدی» آیدیش را می‌گیرد" style="direction:ltr"></div>
         <button class="btn b">افزودن مدیر</button>
       </form>
 
@@ -4125,10 +4125,10 @@ def join_gate(user_id):
   </h2><div class="body">
     <div class="note">
       فقط شماره‌ی تلگرام فروخته می‌شود. فروشنده رو انتخاب کن، کلیدش رو بذار، بقیه خودکاره.
-      متن‌ها و ظاهرِ مینی‌اپ (که تلگرامیه، نه اینجا) همچنان تو <code>/panel</code> ← ☎️ شماره مجازی تنظیم می‌شن.
+      متن‌ها و ظاهرِ مینی‌اپ (که تلگرامیه، نه اینجا) همچنان تو <code>پنل</code> ← ☎️ شماره مجازی تنظیم می‌شن.
     </div>
     <?php if ($numOpenCount): ?>
-      <div class="flash warn">⏳ <?= $numOpenCount ?> شماره‌ی باز الان منتظرِ کد هستن — از <code>/panel</code> ← 📋 شماره‌های باز ببین.</div>
+      <div class="flash warn">⏳ <?= $numOpenCount ?> شماره‌ی باز الان منتظرِ کد هستن — از <code>پنل</code> ← 📋 شماره‌های باز ببین.</div>
     <?php endif; ?>
 
     <form method="post">
@@ -4204,7 +4204,7 @@ def join_gate(user_id):
   <?php $MAC = maCfg(); $maBase = maBaseUrl(); ?>
   <div class="card"><h2>🚀 مینی‌اپ‌ها</h2><div class="body">
     <div class="note">
-      متن‌ها، دکمه‌ی زیرِ محصولات، و دکمه‌های شیشه‌ایِ فاکتور همچنان تو <code>/panel</code> ← 🚀 تنظیماتِ مینی‌اپ‌ها می‌مونن —
+      متن‌ها، دکمه‌ی زیرِ محصولات، و دکمه‌های شیشه‌ایِ فاکتور همچنان تو <code>پنل</code> ← 🚀 تنظیماتِ مینی‌اپ‌ها می‌مونن —
       اینجا فقط آدرس، تمِ گرافیکی، دسته‌بندی‌ها و قیمتِ سرویس‌هاست.
     </div>
     <?php if ($maBase === ''): ?>
@@ -4322,7 +4322,7 @@ def join_gate(user_id):
     <?= !empty($DM['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
   </h2><div class="body">
     <div class="note">
-      متن‌های پیام‌ها (وقتی الماس می‌گیره، لِول‌آپ، هدیه، زندان و...) همچنان تو <code>/panel</code> ← 💎 الماس ← ✏️ متن‌ها می‌مونن.
+      متن‌های پیام‌ها (وقتی الماس می‌گیره، لِول‌آپ، هدیه، زندان و...) همچنان تو <code>پنل</code> ← 💎 الماس ← ✏️ متن‌ها می‌مونن.
     </div>
     <div class="stats" style="margin-bottom:16px">
       <div class="stat"><div class="n"><?= number_format($DMS['users']) ?></div><div class="l">👥 بازیکن</div></div>
@@ -4409,7 +4409,7 @@ def join_gate(user_id):
   </h2><div class="body">
     <div class="note">
       شرط‌ها با <b>الماس</b> بازی می‌شود (تبِ «💎 الماس»)، نه پول نقد. متن‌های پیام‌ها و ایموجیِ پریمیومِ دکمه‌ها
-      همچنان تو <code>/panel</code> ← 🎮 بازی‌ها می‌مونن.
+      همچنان تو <code>پنل</code> ← 🎮 بازی‌ها می‌مونن.
     </div>
     <form method="post">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="games">
@@ -4535,7 +4535,7 @@ def join_gate(user_id):
       <details class="subcard" open><summary><h3>✏️ متن‌ها و دکمه‌ها</h3></summary>
         <div class="note">
           داخلِ متن‌ها می‌توانید ایموجیِ پریمیوم هم بگذارید — کدش را از داخلِ خودِ ربات با
-          <code>/panel</code> ← 🔘 ایموجیِ پریمیوم بگیرید و به‌شکلِ <code>&lt;tg-emoji emoji-id="..."&gt;✨&lt;/tg-emoji&gt;</code>
+          <code>پنل</code> ← 🔘 ایموجیِ پریمیوم بگیرید و به‌شکلِ <code>&lt;tg-emoji emoji-id="..."&gt;✨&lt;/tg-emoji&gt;</code>
           داخلِ متن بچسبانید. برایِ خودِ سه‌تا دکمه، شناسه‌ی همان ایموجیِ پریمیوم را (بدونِ تگ، فقط عدد) در
           کادرِ «ایموجیِ دکمه» زیرِ همان دکمه بگذارید.
         </div>
@@ -4621,7 +4621,7 @@ def join_gate(user_id):
       <details class="subcard" open><summary><h3>✏️ متن‌ها و دکمه‌ها</h3></summary>
         <div class="note">
           داخلِ متن‌ها ایموجیِ پریمیوم با <code>&lt;tg-emoji emoji-id="..."&gt;✨&lt;/tg-emoji&gt;</code> — کدش را از
-          <code>/panel</code> ← 🔘 ایموجیِ پریمیوم بگیرید. برایِ خودِ دکمه‌ها، شناسه را (بدونِ تگ) در کادرِ زیرِ
+          <code>پنل</code> ← 🔘 ایموجیِ پریمیوم بگیرید. برایِ خودِ دکمه‌ها، شناسه را (بدونِ تگ) در کادرِ زیرِ
           همان دکمه بگذارید و رنگش را هم از کنارش انتخاب کنید.
         </div>
         <?php foreach (mnDefaults()['texts'] as $k => $def): $isBtn = in_array($k, ['btn_field','btn_join','btn_cancel','btn_cash'], true); ?>
@@ -4724,7 +4724,7 @@ def join_gate(user_id):
 
   <details class="card"><summary><h2 style="border:0;padding:0;background:none">🩺 تشخیص و سرعت</h2></summary><div class="body">
     <div class="note">
-      این ابزارها قبلا فقط داخل <code>/panel</code> ربات بودند؛ هرکدام یک گزارشِ لحظه‌ای می‌سازد —
+      این ابزارها قبلا فقط داخل <code>پنل</code> ربات بودند؛ هرکدام یک گزارشِ لحظه‌ای می‌سازد —
       نتیجه همین‌جا بالای صفحه نشان داده می‌شود.
     </div>
     <div class="grid2" style="margin-top:12px">
@@ -4852,7 +4852,7 @@ def join_gate(user_id):
         <label style="font-weight:500"><input type="checkbox" name="jn_on" style="width:auto"
           <?= !empty($J['on']) ? 'checked' : '' ?>> قفل عضویت روشن باشد</label>
       </div>
-      <div class="muted">📝 متنِ قفل و متنِ دکمه فقط داخل خودِ ربات ویرایش می‌شوند: <code>/panel</code> ← 🔒 عضویت اجباری</div>
+      <div class="muted">📝 متنِ قفل و متنِ دکمه فقط داخل خودِ ربات ویرایش می‌شوند: <code>پنل</code> ← 🔒 عضویت اجباری</div>
       <div style="margin-top:14px"><button class="btn g">ذخیره</button></div>
     </form>
   </div></details>
@@ -4978,7 +4978,7 @@ document.querySelectorAll('form').forEach(function (f) {
 
 // انتخاب متن را داخل تگ می‌پیچد (نقل‌قول، پررنگ، ...)
 function premEmoji(id) {
-  var code = prompt('کد ایموجی پریمیوم را بگذارید:\n(با دستور /emoji در ربات مادر می‌گیرید)');
+  var code = prompt('کد ایموجی پریمیوم را بگذارید:\n(با دستور دریافت ایموجی در ربات مادر می‌گیرید)');
   if (!code) return;
   code = code.trim();
   if (!/^[0-9]+$/.test(code)) { alert('کد باید فقط عدد باشد.'); return; }

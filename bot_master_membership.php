@@ -3363,7 +3363,7 @@ function hintHideOnce($uid, $chatId) {
     mutateUser($uid, function (&$user) {
         if ($user !== null) $user['hide_hint'] = true;
     });
-    sendMsg(BOT_TOKEN, $chatId, "ℹ️ برای بستن منو هر وقت خواستید /hide را بزنید.");
+    sendMsg(BOT_TOKEN, $chatId, "ℹ️ برای بستن منو هر وقت خواستید «" . UT('hide_menu') . "» را بزنید.");
 }
 
 /**
@@ -4560,7 +4560,7 @@ function createOrderAndAsk($uid, $chatId, $username, $type, $productId, $amount,
         Order::delete($oid);
         chTechAlert(
             "⚠️ <b>درگاه پرداخت جواب نداد</b>\n\n<code>" . h($err) . "</code>\n\n" .
-            "فعلا کارت به کارت استفاده می‌شود. /panel ← 💠 درگاه پرداخت");
+            "فعلا کارت به کارت استفاده می‌شود. پنل ← 💠 درگاه پرداخت");
     }
 
     [$method, $wallet] = walletFor($currency);
@@ -5061,7 +5061,7 @@ function flowFinish($uid, $chatId, $uname) {
                 "⚠️ <b>قیمت این محصول صفر است، پس فاکتور ساخته نمی‌شود.</b>\n\n" .
                 "محصول: <b>" . h($p['name']) . "</b>\n\n" .
                 "قیمتش را بگذارید:\n" .
-                "• داخل ربات: /panel ← 🔘 دکمه‌ها ← این دکمه ← 💰 قیمت\n" .
+                "• داخل ربات: پنل ← 🔘 دکمه‌ها ← این دکمه ← 💰 قیمت\n" .
                 "• یا پنل وب ← 🛒 محصولات",
                 inlineKb(parseSubProductId($p['id'])
                     ? [[btnCb('💰 تنظیم قیمت همین حالا', 'sbpr_' . implode('|', $p['btn']), 'buy')]]
@@ -5161,7 +5161,7 @@ function campaignFromOrder($o) {
         });
         chTechAlert(
             "⏸ <b>" . h($title) . "</b> — قفل نشد، ربات در کانال ادمین نیست.\n" .
-            "<code>" . h($o['id']) . "</code> · /panel ← 🔒 قفل‌ها");
+            "<code>" . h($o['id']) . "</code> · پنل ← 🔒 قفل‌ها");
         return Campaign::get($c['id']);
     }
 
@@ -5176,7 +5176,7 @@ function campaignFromOrder($o) {
     $picked = assignCampaignBots($c['id']);   // 🎯 روی حداکثر ۲ ربات می‌نشیند
     $c = Campaign::get($c['id']);
 
-    // بدون پیام اضافه به ادمین — وضعیت قفل‌ها در /panel ← 🔒 قفل‌ها دیده می‌شود
+    // بدون پیام اضافه به ادمین — وضعیت قفل‌ها در پنل ← 🔒 قفل‌ها دیده می‌شود
 
     return $c;
 }
@@ -7039,8 +7039,8 @@ function autoSetupRun() {
 
     $probs = [];
     if ($noPrice) $probs[] = "قیمت این دکمه‌ها صفر است: <b>" . h(implode('، ', array_unique($noPrice))) . "</b>\n" .
-                             "   /panel → 🔘 دکمه‌ها → روی دکمه → 💰 قیمت";
-    if (!$items) $probs[] = "هیچ دکمهٔ فروشی ندارید — /panel → 🔘 دکمه‌ها → ➕ زیردکمه";
+                             "   پنل → 🔘 دکمه‌ها → روی دکمه → 💰 قیمت";
+    if (!$items) $probs[] = "هیچ دکمهٔ فروشی ندارید — پنل → 🔘 دکمه‌ها → ➕ زیردکمه";
     $w = cfg()['wallets'];
     if (trim($w['card'] ?? '') === '' && trim($w['usdt'] ?? '') === '')
         $probs[] = "مقصد پرداخت تنظیم نشده — پنل وب → ⚙️ تنظیمات";
@@ -7048,7 +7048,7 @@ function autoSetupRun() {
     if ($probs) $text .= "\n⚠️ <b>باقی‌مانده:</b>\n• " . implode("\n• ", $probs) . "\n";
     else $text .= "\n✅ <b>آماده فروش است.</b>\n";
 
-    $text .= "\n🧪 تست: /start ← خرید محصول ← روی یکی از دکمه‌ها بزنید\n";
+    $text .= "\n🧪 تست: شروع ← خرید محصول ← روی یکی از دکمه‌ها بزنید\n";
     $text .= "باید بپرسد: لینک کانال ← تعداد ← سرعت ← ادمین کردن ربات ← فاکتور";
 
     return $text;
@@ -8399,7 +8399,7 @@ function masterHandle($update) {
             $isIcon = in_array($which, ['pi', 'ni'], true);
             $act = 'ed_bcar_' . $which;
             $ask = $isIcon
-                ? "✨ کد ایموجی پریمیوم را بفرستید.\nبا /emoji می‌گیرید. برای حذف خط تیره بفرستید."
+                ? "✨ کد ایموجی پریمیوم را بفرستید.\nبا دریافت ایموجی می‌گیرید. برای حذف خط تیره بفرستید."
                 : '✏️ متن جدید دکمه را بفرستید:';
             answerCb(BOT_TOKEN, $cbId);
             setState(ADMIN_ID, $act, ['btn' => $bid]);
@@ -8721,7 +8721,7 @@ function masterHandle($update) {
 
         foreach ([['ebt_', 'ed_btext', '✏️ متن جدید دکمه را بفرستید (ایموجی پریمیوم مجاز است):'],
                   ['ebe_', 'ed_bemoji', '😀 ایموجی جدید را بفرستید (یا خط تیره برای حذف):'],
-                  ['ebi_', 'ed_bicon', "✨ کد ایموجی پریمیوم را بفرستید.\nبا /emoji می‌گیرید. برای حذف خط تیره بفرستید."],
+                  ['ebi_', 'ed_bicon', "✨ کد ایموجی پریمیوم را بفرستید.\nبا دریافت ایموجی می‌گیرید. برای حذف خط تیره بفرستید."],
                   ['ebr_', 'ed_brow', '📐 شماره ردیف را بفرستید (۰ = خودکار):'],
                   ['ebo_', 'ed_border', '🔢 شماره ترتیب را بفرستید:'],
                   ['ebv_', 'ed_bvalue', '📝 مقدار دکمه را بفرستید (متن، آدرس، یا شناسه محصول):']] as $it) {
@@ -9147,8 +9147,13 @@ function masterHandle($update) {
         return;
     }
 
-    // /start [ref…]
-    if (str_starts_with($text, '/start')) {
+    // /start [ref…] — این یکی را نمی‌شود بدونِ / کرد: تلگرام خودش وقتی
+    // کاربر دکمه‌ی Start را می‌زند یا رویِ لینکِ t.me/bot?start=xxx کلیک
+    // می‌کند، همین متنِ لفظی «/start» (با یا بدونِ کدِ رفرال) را به‌عنوانِ
+    // پیام می‌فرستد — این رفتارِ خودِ پلتفرم است، نه چیزی که ربات تصمیم
+    // بگیرد. برایِ کسی که می‌خواهد دستی و بدونِ / تایپ کند، «شروع» هم
+    // همان کار را می‌کند (بدونِ کدِ رفرال).
+    if (str_starts_with($text, '/start') || $text === 'شروع') {
         $arg = trim(explode(' ', $text, 2)[1] ?? '');
         $ref = (str_starts_with($arg, 'ref')) ? (int)substr($arg, 3) : null;
         touchUser($uid, $uname, $fname, $ref);
@@ -9164,18 +9169,18 @@ function masterHandle($update) {
     $u = getUser($uid);
     if ($u && !empty($u['banned'])) { sendMsg(BOT_TOKEN, $chatId, T('banned')); return; }
 
-    if ($text === '/panel' || $text === '/admin') {
+    if ($text === 'پنل' || $text === 'مدیریت') {
         if (!isAdmin($uid)) { sendMsg(BOT_TOKEN, $chatId, "🔒 دسترسی ندارید."); return; }
         admHome($chatId);
         return;
     }
-    if ($text === '/id')     { sendMsg(BOT_TOKEN, $chatId, "🆔 <code>{$uid}</code>"); return; }
-    if ($text === '/setup') {
+    if ($text === 'آیدی' || $text === 'آیدی من') { sendMsg(BOT_TOKEN, $chatId, "🆔 <code>{$uid}</code>"); return; }
+    if ($text === 'بررسی خودکار') {
         if (!isAdmin($uid)) return;
         autoSetup($chatId);
         return;
     }
-    if ($text === '/emoji') {
+    if ($text === 'دریافت ایموجی') {
         if (!isAdmin($uid)) return;
         setState($uid, 'grab_emoji');
         sendMsg(BOT_TOKEN, $chatId,
@@ -9185,13 +9190,13 @@ function masterHandle($update) {
             inlineKb([[btnCb(UT('cancel'), 'cancel', 'cancel')]]));
         return;
     }
-    if ($text === '/cancel') { clearState($uid); sendMsg(BOT_TOKEN, $chatId, "❌ لغو شد.", mainKeyboard()); return; }
-    if ($text === '/orders' || $text === '/track') {
+    if ($text === 'لغو') { clearState($uid); sendMsg(BOT_TOKEN, $chatId, "❌ لغو شد.", mainKeyboard()); return; }
+    if ($text === 'سفارش من' || $text === 'سفارش‌های من' || $text === 'سفارشهای من') {
         clearState($uid); showOrders($uid, $chatId, [], $msg['message_id'] ?? null); return;
     }
-    if (str_starts_with($text, '/track ')) {
+    if (str_starts_with($text, 'پیگیری ')) {
         clearState($uid);
-        showOrderStatus($uid, $chatId, substr($text, 7), $msg['message_id'] ?? null);
+        showOrderStatus($uid, $chatId, trim(mb_substr($text, mb_strlen('پیگیری '))), $msg['message_id'] ?? null);
         return;
     }
     // کد پیگیری را خالی فرستاده — بدون هیچ دستوری
@@ -9200,10 +9205,10 @@ function masterHandle($update) {
         showOrderStatus($uid, $chatId, $text, $msg['message_id'] ?? null);
         return;
     }
-    if ($text === '/menu')   { showHome($uid, $chatId, $fname); return; }
-    if ($text === '/hide' || $text === UT('hide_menu')) {
+    if ($text === 'منو')   { showHome($uid, $chatId, $fname); return; }
+    if ($text === UT('hide_menu')) {
         sendMsg(BOT_TOKEN, $chatId,
-            "✅ منو بسته شد.\n\nبرای برگرداندنش /menu را بزنید.", removeKb());
+            "✅ منو بسته شد.\n\nبرای برگرداندنش «منو» را بزنید.", removeKb());
         return;
     }
 
@@ -10879,7 +10884,7 @@ function runMenuAction($act, $uid, $chatId, $uname, $fname, $replyTo = null) {
                     if (isAdmin($uid)) {
                         sendMsg(BOT_TOKEN, $chatId,
                             "⚠️ متن دکمه «" . h($b['text']) . "» هنوز تنظیم نشده.\n" .
-                            "/panel → 🎨 دکمه‌ها → همین دکمه → 📝 مقدار");
+                            "پنل → 🎨 دکمه‌ها → همین دکمه → 📝 مقدار");
                         return;
                     }
                     sendMsg(BOT_TOKEN, $chatId, T('buy_empty'));
@@ -11121,7 +11126,7 @@ function childHandle($botId, $update) {
         if ($data === 'u_batch') {
             answerCb($token, $cbId);
             childSetState($botId, $uid, 'batch', ['files' => []]);
-            sendMsg($token, $chatId, "📤 فایل‌ها را یکی‌یکی بفرستید.\nدر پایان /done را بزنید.",
+            sendMsg($token, $chatId, "📤 فایل‌ها را یکی‌یکی بفرستید.\nدر پایان «تمام» را بزنید.",
                 inlineKb([[['text' => UT('cancel'), 'callback_data' => 'u_cancel', 'style' => gs('cancel') ?: null]]]));
             return;
         }
@@ -11188,7 +11193,10 @@ function childHandle($botId, $update) {
     botUserTouch($botId, $uid, $uname, $fname);
 
     // ---- /start [code] ----
-    if (str_starts_with($text, '/start')) {
+    // «/start CODE» همان لینکِ تحویلِ فایل است (t.me/…?start=CODE) — این
+    // را تلگرام خودش می‌فرستد و نمی‌شود بدونِ / کرد. «شروع» فقط جایگزینِ
+    // حالتِ بدونِ کد است، برایِ کسی که دستی تایپ می‌کند.
+    if (str_starts_with($text, '/start') || $text === 'شروع') {
         $code = trim(explode(' ', $text, 2)[1] ?? '');
 
         if ($code === '') {
@@ -11213,7 +11221,7 @@ function childHandle($botId, $update) {
 
     if (!$isOwner) return;   // ربات عمومی است ولی فقط مالک می‌تواند آپلود کند
 
-    if ($text === '/panel' || $text === '/menu') { childMenu($bot, $chatId); return; }
+    if ($text === 'پنل' || $text === 'منو') { childMenu($bot, $chatId); return; }
 
     $st = childState($botId, $uid);
     if (!$st) return;
@@ -11240,7 +11248,7 @@ function childHandle($botId, $update) {
     if ($st['action'] === 'batch') {
         $files = $st['data']['files'] ?? [];
 
-        if ($text === '/done') {
+        if ($text === 'تمام') {
             if (!$files) { sendMsg($token, $chatId, "⚠️ هیچ فایلی نفرستادید."); return; }
             $code = Links::create($botId, $files, count($files) . ' فایل');
             childClearState($botId, $uid);
@@ -11252,11 +11260,11 @@ function childHandle($botId, $update) {
         }
 
         $f = extractFile($msg);
-        if (!$f) { sendMsg($token, $chatId, "⚠️ فایل بفرستید یا /done بزنید."); return; }
+        if (!$f) { sendMsg($token, $chatId, "⚠️ فایل بفرستید یا «تمام» بزنید."); return; }
         [$type, $fid, $name] = $f;
         $files[] = ['type' => $type, 'file_id' => $fid, 'name' => $name, 'caption' => $msg['caption'] ?? ''];
         childSetState($botId, $uid, 'batch', ['files' => $files]);
-        sendMsg($token, $chatId, "✅ " . count($files) . " فایل ثبت شد. (/done برای پایان)");
+        sendMsg($token, $chatId, "✅ " . count($files) . " فایل ثبت شد. («تمام» برای پایان)");
         return;
     }
 }
