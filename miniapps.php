@@ -20,6 +20,7 @@
 require_once __DIR__ . '/miniapp_view_tg.php';
 require_once __DIR__ . '/miniapp_view_num.php';
 require_once __DIR__ . '/miniapp_view_react.php';
+require_once __DIR__ . '/miniapp_view_unified.php';
 
 // ============================================================
 // ⚙️ پیکربندی پیش‌فرض
@@ -1512,6 +1513,13 @@ function maReady($key) {
     return !empty($a['on']) && maUrl($key) !== '';
 }
 
+/** آیا اپِ یکپارچه چیزی برای نشان‌دادن دارد؟ — یعنی آدرس ثبت شده و حداقل یکی از سه اپ روشن است. */
+function maUnifiedReady() {
+    if (maUrl('unified') === '') return false;
+    foreach (maKeys() as $k) if (maReady($k)) return true;
+    return false;
+}
+
 // ============================================================
 // 🎛 دکمه‌های مینی‌اپ زیر محصولات
 // ============================================================
@@ -1526,26 +1534,25 @@ function maMergeOn() {
  * دکمه‌های مینی‌اپ به شکل «زیردکمه» — تا در همان لیست ثبت سفارش،
  * با همان ترتیب و چیدمان، کنار بقیه بنشینند.
  */
+/**
+ * 🧩 دیگر سه دکمه‌ی جدا نیست — یک دکمه‌ی «فروشگاه» که هر سه اپ را
+ * پشتِ خودش دارد. کاربر یک‌بار وارد می‌شود و بینِ استارز/شماره/
+ * ری‌اکشن با تبِ پایین جابه‌جا می‌شود، نه با برگشتن به ربات.
+ */
 function maSubItems() {
-    $out = [];
-    foreach (maKeys() as $k) {
-        if (!maReady($k)) continue;
-        $a = maGet($k);
-        $b = $a['btn'] ?? [];
-        $out[] = [
-            'id'      => '__ma_' . $k,
-            'emoji'   => (string)($b['emoji'] ?? ''),
-            'text'    => (string)($b['text'] ?? (maAppLabels()[$k] ?? $k)),
-            'color'   => (string)($b['color'] ?? 'none'),
-            'icon'    => (string)($b['icon'] ?? ''),
-            'order'   => (int)($b['order'] ?? 99),
-            'row'     => (int)($b['row'] ?? 0),
-            'on'      => true,
-            'action'  => '',
-            '_webapp' => maUrl($k),
-        ];
-    }
-    return $out;
+    if (!maUnifiedReady()) return [];
+    return [[
+        'id'      => '__ma_unified',
+        'emoji'   => '🛍',
+        'text'    => 'فروشگاه',
+        'color'   => 'none',
+        'icon'    => '',
+        'order'   => 1,
+        'row'     => 0,
+        'on'      => true,
+        'action'  => '',
+        '_webapp' => maUrl('unified'),
+    ]];
 }
 
 /**
@@ -1553,31 +1560,8 @@ function maSubItems() {
  * هر مینی‌اپ دکمه خودش را دارد و کاملا جدا از دیگری است.
  */
 function maRows() {
-    $rows = [];
-    $list = [];
-    foreach (maKeys() as $k) {
-        if (!maReady($k)) continue;
-        $a = maGet($k);
-        $list[] = ['key' => $k, 'order' => (int)($a['btn']['order'] ?? 99), 'app' => $a];
-    }
-    usort($list, fn($x, $y) => $x['order'] <=> $y['order']);
-
-    $items = [];
-    foreach ($list as $x) {
-        $a = $x['app'];
-        $label = trim((string)($a['btn']['emoji'] ?? '') . ' ' . (string)($a['btn']['text'] ?? ''));
-        if ($label === '') $label = maAppLabels()[$x['key']] ?? $x['key'];
-
-        $b = ['text' => $label, 'web_app' => ['url' => maUrl($x['key'])]];
-        if (isStyle($a['btn']['color'] ?? '')) $b['style'] = $a['btn']['color'];
-        if (!empty($a['btn']['icon'])) $b['icon_custom_emoji_id'] = (string)$a['btn']['icon'];
-        $items[] = $b;
-    }
-    if (!$items) return [];
-
-    // چیدمان دلخواه ادمین — مثل چیدمان زیردکمه‌های ثبت سفارش
-    $layout = trim((string)(maCfg()['row_layout'] ?? ''));
-    return $layout !== '' ? layoutRows($items, $layout) : array_map(fn($b) => [$b], $items);
+    if (!maUnifiedReady()) return [];
+    return [[['text' => '🛍 فروشگاه', 'web_app' => ['url' => maUrl('unified')]]]];
 }
 
 // ============================================================
@@ -2763,6 +2747,13 @@ function maSecurityHeaders() {
 
 /** صفحه HTML مینی‌اپ */
 function maServe($key) {
+    // 🧩 مینی‌اپِ یکپارچه — کاتالوگِ tg/num/react کنارِ هم، پشتِ یک آدرس.
+    if ($key === 'unified') {
+        if (!maUnifiedReady()) { http_response_code(200); header('Content-Type: text/html; charset=utf-8'); echo maClosedPage(['title' => 'فروشگاه']); exit; }
+        maSecurityHeaders();
+        echo maViewUnified(maBootUnified());
+        exit;
+    }
     if (!in_array($key, maKeys(), true)) { http_response_code(404); echo 'not found'; exit; }
 
     $a = maGet($key);
@@ -2818,6 +2809,90 @@ function maBoot($key, $a) {
         'topup'    => maTopupInfo(),
         'api'      => maApiUrl(),
     ];
+}
+
+/**
+ * 🧩 بوتِ مینی‌اپِ یکپارچه — سه اپِ tg/num/react را زیرِ یک سقف می‌آورد.
+ *
+ * هیچ داده‌ی تازه‌ای اینجا ساخته نمی‌شود؛ فقط boot هرکدام کنارِ هم
+ * چیده می‌شود و هر آیتم/دسته با app برچسب می‌خورد تا صفحه بداند برایِ
+ * سفارشِ همان آیتم، کدام app را به maApi() بفرستد. کاتالوگ/سفارش/
+ * تحویل هرکدام دقیقا همان مسیرِ آزموده‌ی خودشان را طی می‌کنند — این
+ * فقط یک لایه‌ی نمایشِ مشترک روی سرشان است.
+ */
+function maBootUnified() {
+    $items = []; $cats = []; $apps = [];
+    foreach (maKeys() as $k) {
+        if (!maReady($k)) continue;
+        $a = maGet($k);
+        foreach (maItemsPublic($a, maTopN($k)) as $it) { $it['app'] = $k; $items[] = $it; }
+        foreach (maCatsPublic($a, $k) as $c) { $c['app'] = $k; $cats[] = $c; }
+        $apps[$k] = [
+            'title' => (string)$a['title'],
+            'emoji' => trim((string)($a['btn']['emoji'] ?? '')),
+        ];
+    }
+    return [
+        'app'      => 'unified',
+        'title'    => 'فروشگاه',
+        'sub'      => 'استارز · شماره مجازی · ری‌اکشن و استوری',
+        'hero'     => 'همه‌چیز در یک‌جا — سریع، امن، ۲۴ ساعته',
+        'note'     => '',
+        'currency' => 'تومان',
+        'ui'       => maUiAll('tg'),
+        'apps'     => $apps,
+        'cats'     => $cats,
+        'items'    => $items,
+        'catn'     => count($cats),
+        'total'    => count($items),
+        'best'     => maBestSellers(8),
+        'topup'    => maTopupInfo(),
+        'api'      => maApiUrl(),
+    ];
+}
+
+/**
+ * پرفروش‌ترین‌ها — از رویِ سفارش‌های واقعا پرداخت‌شده/تحویل‌شده، نه
+ * چیزِ دستی. کش می‌شود چون یک GROUP BY رویِ کل جدولِ سفارش‌هاست.
+ */
+function maBestSellers($limit = 8) {
+    $limit = max(1, min(24, (int)$limit));
+    $ck = 'ma_best_' . $limit;
+    $cached = maCacheGet($ck, 300);
+    if (is_array($cached)) return $cached;
+
+    $counts = [];
+    $db = maOrdersDb();
+    if ($db) {
+        $n = $limit * 4;
+        $res = $db->query(
+            "SELECT json_extract(data,'\$.app') AS ap, json_extract(data,'\$.item_id') AS iid, COUNT(*) AS n " .
+            "FROM orders WHERE status IN ('paid','done') GROUP BY ap, iid ORDER BY n DESC LIMIT {$n}"
+        );
+        if ($res) while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            if (!$row['iid']) continue;
+            $counts[$row['ap'] . '|' . $row['iid']] = (int)$row['n'];
+        }
+    }
+
+    $out = [];
+    foreach (maKeys() as $k) {
+        if (!maReady($k) || !$counts) continue;
+        $a = maGet($k);
+        foreach ((array)($a['items'] ?? []) as $i) {
+            if (empty($i['on']) || trim((string)($i['name'] ?? '')) === '') continue;
+            $n = $counts[$k . '|' . (string)$i['id']] ?? 0;
+            if ($n <= 0) continue;
+            $out[] = [
+                'app' => $k, 'id' => (string)$i['id'], 'name' => (string)$i['name'],
+                'emoji' => (string)($i['emoji'] ?? '💠'), 'price' => maItemPrice($i), 'sold' => $n,
+            ];
+        }
+    }
+    usort($out, fn($x, $y) => $y['sold'] <=> $x['sold']);
+    $out = array_slice($out, 0, $limit);
+    maCachePut($ck, $out);
+    return $out;
 }
 
 /** چند محصول در خودِ صفحه بیاید — ۰ یعنی همه */
@@ -3093,7 +3168,11 @@ function maApi() {
 
     $action = (string)($body['action'] ?? $_GET['action'] ?? '');
     $key    = (string)($body['app'] ?? $_GET['app'] ?? '');
-    if (!in_array($key, maKeys(), true)) maApiOut(['ok' => false, 'error' => 'bad_app'], 400);
+    // 🧩 «unified» مینی‌اپ خودش نیست — پوسته‌ای است که سه‌تای دیگر را
+    // کنار هم نشان می‌دهد، پس کاتالوگ/تنظیماتِ خودش ($a) ندارد. اکشن‌های
+    // زیرِ همین کلید (me_all، airdrop_*) هیچ‌کدام به $a نیاز ندارند.
+    $isUnified = ($key === 'unified');
+    if (!$isUnified && !in_array($key, maKeys(), true)) maApiOut(['ok' => false, 'error' => 'bad_app'], 400);
 
     $initData = (string)($body['initData'] ?? '');
     $reason = '';
@@ -3115,8 +3194,8 @@ function maApi() {
     $u = getUser($uid);
     if ($u && !empty($u['banned'])) maApiOut(['ok' => false, 'error' => 'banned', 'message' => 'دسترسی شما مسدود است.'], 403);
 
-    $a = maGet($key);
-    if (empty($a['on'])) maApiOut(['ok' => false, 'error' => 'closed', 'message' => 'این بخش موقتا بسته است.'], 403);
+    $a = $isUnified ? null : maGet($key);
+    if (!$isUnified && empty($a['on'])) maApiOut(['ok' => false, 'error' => 'closed', 'message' => 'این بخش موقتا بسته است.'], 403);
 
     // ---- 🔔 صندوقِ اعلان‌های همین مینی‌اپ ----
     if ($action === 'notes') {
@@ -3146,6 +3225,45 @@ function maApi() {
                 'date' => $o['created_at'],
             ], MaOrder::forUser($uid, 8, $key)),
         ]);
+    }
+
+    // ---- 🧾 سفارش‌های من، از هر سه اپ با هم — برای پروفایلِ یکپارچه ----
+    if ($action === 'me_all') {
+        maApiOut([
+            'ok' => true,
+            'balance' => (float)($u['balance'] ?? 0),
+            'orders' => array_map(fn($o) => [
+                'id' => $o['id'], 'name' => $o['item_name'], 'emoji' => $o['item_emoji'],
+                'total' => $o['total'], 'status' => MaOrder::statusLabel($o['status']),
+                'date' => $o['created_at'], 'app' => $o['app'],
+            ], MaOrder::forUser($uid, 20, null)),
+        ]);
+    }
+
+    // ---- 💎 ایردراپ: وضعیت/لیدربورد/رفرال/ماموریت/تبدیل ----
+    if ($action === 'airdrop_state') {
+        maApiOut(['ok' => true] + adState($uid, (string)($user['first_name'] ?? ''), $uname));
+    }
+    if ($action === 'airdrop_leaderboard') {
+        maApiOut(['ok' => true, 'list' => adLeaderboard(50), 'me' => $uid]);
+    }
+    if ($action === 'airdrop_referral') {
+        maApiOut(['ok' => true] + adReferralInfo($uid));
+    }
+    if ($action === 'airdrop_mission_claim') {
+        if (!maRateOk('adcl', $uid, 20, 60))
+            maApiOut(['ok' => false, 'error' => 'rate_limited', 'message' => 'کمی صبر کن.'], 429);
+        [$mok, $mres] = adClaimMission($uid, (string)($body['id'] ?? ''));
+        if (!$mok) maApiOut(['ok' => false, 'error' => 'not_ready', 'message' => (string)$mres], 400);
+        maApiOut(['ok' => true, 'reward' => $mres, 'state' => adState($uid)]);
+    }
+    if ($action === 'airdrop_redeem') {
+        if (!maRateOk('adrd', $uid, 10, 60))
+            maApiOut(['ok' => false, 'error' => 'rate_limited', 'message' => 'کمی صبر کن.'], 429);
+        $ramt = maNum($body['amount'] ?? 0);
+        [$rok, $rres] = adRedeem($uid, $ramt);
+        if (!$rok) maApiOut(['ok' => false, 'error' => 'bad_amount', 'message' => (string)$rres], 400);
+        maApiOut(['ok' => true, 'toman' => $rres, 'balance' => (float)(getUser($uid)['balance'] ?? 0), 'state' => adState($uid)]);
     }
 
     // ---- 👑 بخش مدیر: سود و قیمت — فقط برای ادمین ----

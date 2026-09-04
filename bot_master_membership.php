@@ -218,6 +218,7 @@ require_once __DIR__ . '/prices.php';
 require_once __DIR__ . '/diamond.php';
 require_once __DIR__ . '/channels.php';
 require_once __DIR__ . '/games.php';
+require_once __DIR__ . '/airdrop.php';
 require_once __DIR__ . '/bank.php';
 require_once __DIR__ . '/mine.php';
 require_once __DIR__ . '/profit.php';
