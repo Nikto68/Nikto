@@ -3295,6 +3295,9 @@ function maApi() {
         if (!$bok) maApiOut(['ok' => false, 'error' => 'boost_failed', 'message' => (string)$bres], 400);
         maApiOut(['ok' => true, 'boost_n' => $bres, 'balance' => (float)(getUser($uid)['balance'] ?? 0), 'state' => adState($uid)]);
     }
+    if ($action === 'airdrop_history') {
+        maApiOut(['ok' => true, 'list' => adRedeemLog($uid, 20)]);
+    }
 
     // ---- 🏷 پیش‌نمایشِ کد تخفیف — قبل از ثبتِ سفارش، در ویزاردِ پرداخت ----
     if ($action === 'coupon_check') {

@@ -133,21 +133,57 @@ __SKIN__
           <span id="crystalOf">از … کریستال</span>
         </div>
       </div>
-      <div class="ratebox" id="rateBox">۳۰ کریستال در ساعت</div>
+      <div class="ratepill" id="rateBoxWrap">
+        <b id="rateBox">۳۰ کریستال در ساعت</b>
+        <s id="rateInfo">ⓘ</s>
+      </div>
       <div class="ticknext">
         <i class="nextpop" id="nextPop">۱+ 💎</i>
-        <span>کریستالِ بعدی تا</span><b id="tickCountdown">۰۰:۰۰</b>
+        <span>کریستالِ بعدی</span><b id="tickCountdown">۰۰:۰۰</b>
       </div>
-      <div class="endbox" id="endBox">پایان فصل: —</div>
+
+      <div class="mineActions">
+        <button class="mact" id="mineGuideBtn"><s>📖</s>راهنما</button>
+        <button class="mact" id="mineHistBtn"><s>🧾</s>تاریخچه</button>
+      </div>
+      <div class="mpanel" id="mineGuidePanel">
+        <p>⛏ هر <b>۲ دقیقه</b> یک کریستال به‌صورت خودکار استخراج می‌شود — حتی وقتی اپ بسته است.</p>
+        <p>⭐️ با بالا رفتنِ <b>سطح</b>، سرعتِ استخراج بیشتر می‌شود.</p>
+        <p>⚡️ با «افزایشِ سرعت» می‌تونی سریع‌تر از حالتِ عادی استخراج کنی.</p>
+        <p>💱 هر وقت خواستی، کریستال‌ها رو از تبِ «پاداش‌ها» به کیف‌پول تبدیل کن.</p>
+      </div>
+      <div class="mpanel" id="mineHistPanel">
+        <div id="histList"><div class="void"><div>🧾</div>در حال خواندن…</div></div>
+      </div>
+
       <div class="statrow">
-        <div class="stat"><i>⭐️</i><b id="stLevel">۱</b><span>سطح</span></div>
-        <div class="stat"><i>⚡️</i><b id="stRate">×۱</b><span>سرعت استخراج</span></div>
+        <div class="stat"><i>🔥</i><b id="stStreak">۰</b><span>استریک روزانه</span></div>
+        <div class="stat"><i>💰</i><b id="stWallet">۰</b><span>کیف پول</span></div>
         <div class="stat"><i>💎</i><b id="stTotal">۰</b><span>کل کریستال</span></div>
       </div>
-      <button class="go boostbtn" id="boostGo">
-        <span>⚡️ افزایش سرعت</span><em id="boostPriceLbl">۱۰۰ تومان</em>
+
+      <div class="lvlcard">
+        <div class="lvlrow">
+          <div class="lvlmid">
+            <b id="stLevel">سطح ۱</b>
+            <span id="stRate">سرعتِ استخراج ×۱</span>
+          </div>
+          <i class="ico" id="lvlIco"></i>
+        </div>
+        <div class="lvlbar"><i id="lvlBarFg"></i></div>
+        <p>با هر ارتقاءِ سطح، سرعتِ استخراجت را زیاد کن</p>
+      </div>
+      <div class="endbox" id="endBox">پایان فصل: —</div>
+
+      <div class="sect"><h2><s></s><span>تقویت‌ها</span></h2></div>
+      <button class="boostrow" id="boostGo" type="button">
+        <span class="boostprice" id="boostPriceLbl">۱۰۰ تومان</span>
+        <span class="boostmid">
+          <b>افزایش سرعت</b>
+          <em id="boostHint">پله <b id="boostLevel">۰ از ۲۵</b> · هر پله ۲۰٪ سریع‌تر</em>
+        </span>
+        <i class="ico" id="boostIco"></i>
       </button>
-      <div class="boosthint" id="boostHint">پله <b id="boostLevel">۰ از ۲۵</b> · هر پله ۲۰٪ سریع‌تر</div>
     </div>
 
     <!-- ماموریت‌ها -->
@@ -322,8 +358,14 @@ setTimeout(hideSplash, SPLASH_MAX);
 
 if (TG) {
   try { TG.ready(); TG.expand(); } catch(e){}
-  try { TG.setHeaderColor && TG.setHeaderColor(getComputedStyle(document.body).backgroundColor); } catch(e){}
-  try { TG.setBackgroundColor && TG.setBackgroundColor(getComputedStyle(document.body).backgroundColor); } catch(e){}
+  // نکته: setHeaderColor/setBackgroundColor فقط hex («#...») یا کلیدواژه‌های
+  // تم (bg_color/secondary_bg_color) را می‌پذیرند — نه رشته‌ی rgb(...) که
+  // getComputedStyle(...).backgroundColor برمی‌گرداند. با آن رشته، تلگرام
+  // بی‌صدا رد می‌کند و هدر رنگِ پیش‌فرضِ خودش (نه رنگِ تمِ اپ) می‌ماند —
+  // دقیقا همان نواری که بالای صفحه ناهمخوان دیده می‌شود.
+  var __bgHex = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  try { TG.setHeaderColor && TG.setHeaderColor(__bgHex); } catch(e){}
+  try { TG.setBackgroundColor && TG.setBackgroundColor(__bgHex); } catch(e){}
   try { TG.disableVerticalSwipes && TG.disableVerticalSwipes(); } catch(e){}
 }
 function tap(k){ try{ TG && TG.HapticFeedback && TG.HapticFeedback.impactOccurred(k||'light'); }catch(e){} }
@@ -1259,9 +1301,16 @@ function airDrawMine(){
   $('rateBox').textContent = fa(s.rate) + ' کریستال در ساعت' + (s.boost_n > 0 ? ' (بوست ×' + fa(1 + s.boost_step * s.boost_n) + ')' : '');
   var left = (s.season_end || 0) - Math.floor(Date.now()/1000);
   $('endBox').textContent = 'پایان فصل ' + s.season + ': ' + fmtHMS(left);
-  $('stLevel').textContent = fa(s.level);
-  $('stRate').textContent  = '×' + fa(s.level);
+
+  $('stStreak').textContent = fa(s.streak);
+  $('stWallet').textContent = fa(Math.floor(s.wallet_balance));
   $('stTotal').textContent = fa(Math.floor(s.crystals));
+
+  $('stLevel').textContent = 'سطح ' + fa(s.level);
+  $('stRate').textContent  = 'سرعتِ استخراج ×' + fa(s.level);
+  $('lvlBarFg').style.width = (pct * 100).toFixed(1) + '%';
+  if (!$('lvlIco').firstChild)   $('lvlIco').innerHTML = ICONS.bolt;
+  if (!$('boostIco').firstChild) $('boostIco').innerHTML = ICONS.bolt;
 
   // نمایشِ نمایشیِ استخراج: شمارش‌معکوس تا کریستالِ بعدی، از رویِ کسرِ اعشاریِ
   // موجودیِ واقعی — هر بار state تازه می‌رسد خودش را با سرور همگام می‌کند.
@@ -1274,7 +1323,7 @@ function airDrawMine(){
   $('boostPriceLbl').textContent = fa(s.boost_price) + ' تومان';
   var atCap = s.boost_n >= s.boost_max;
   $('boostGo').disabled = atCap;
-  $('boostGo').querySelector('span').textContent = atCap ? '⚡️ به سقفِ سرعت رسیدی' : '⚡️ افزایش سرعت';
+  $('boostGo').querySelector('.boostmid b').textContent = atCap ? 'به سقفِ سرعت رسیدی' : 'افزایش سرعت';
 }
 function airDrawMissions(){
   var s = AD.state;
@@ -1312,6 +1361,38 @@ function airDrawRewards(){
   var s = AD.state;
   if (!s) return;
   $('redeemHint').textContent = 'هر ' + fa(1) + ' کریستال = ' + fa(s.redeem_rate) + ' تومان · حداقل ' + fa(s.redeem_min) + ' کریستال · موجودی: ' + fa(Math.floor(s.crystals)) + ' 💎';
+}
+$('rateInfo').onclick = function(){
+  tap();
+  var s = AD.state; if (!s) return;
+  toast('نرخِ پایه × سطح × بوست — سطح‌های بالاتر و بوستِ خریداری‌شده هردو نرخ را زیاد می‌کنند.');
+};
+function toggleMinePanel(id){
+  var isOn = $(id).classList.contains('on');
+  ['mineGuidePanel', 'mineHistPanel'].forEach(function(p){ $(p).classList.remove('on'); });
+  $('mineGuideBtn').classList.remove('on'); $('mineHistBtn').classList.remove('on');
+  if (isOn) return;
+  $(id).classList.add('on');
+  if (id === 'mineGuidePanel') $('mineGuideBtn').classList.add('on');
+  if (id === 'mineHistPanel')  { $('mineHistBtn').classList.add('on'); loadMineHistory(); }
+}
+$('mineGuideBtn').onclick = function(){ tap(); toggleMinePanel('mineGuidePanel'); };
+$('mineHistBtn').onclick  = function(){ tap(); toggleMinePanel('mineHistPanel'); };
+function loadMineHistory(){
+  var box = $('histList');
+  box.innerHTML = '<div class="void"><div>🧾</div>در حال خواندن…</div>';
+  api('unified', 'airdrop_history', {}, function(j){
+    var list = j.list || [];
+    if (!list.length){ box.innerHTML = '<div class="void"><div>🧾</div>هنوز تبدیلی نداشتی.</div>'; return; }
+    var h = '';
+    list.forEach(function(r){
+      h += '<div class="histrow"><span class="m"><b>' + fa(r.crystals) + ' 💎</b><span>' + agoTxt(r.t) + '</span></span>' +
+           '<span class="p">+' + fa(r.toman) + ' تومان</span></div>';
+    });
+    box.innerHTML = h;
+  }, function(){
+    box.innerHTML = '<div class="void"><div>🧾</div>خوانده نشد.</div>';
+  });
 }
 $('boostGo').onclick = function(){
   var btn = this; btn.disabled = true; tap('medium');
@@ -1709,27 +1790,69 @@ img{max-width:100%}
 .ringmid i{font-style:normal;font-size:30px}
 .ringmid b{font-size:26px;font-weight:900}
 .ringmid span{font-size:10.5px;color:var(--dim)}
-.ratebox{text-align:center;margin-top:16px;font-size:12.5px;font-weight:800;color:var(--c1)}
-.endbox{text-align:center;margin-top:6px;font-size:11px;color:var(--dim)}
-.statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:18px}
+.ratepill{display:flex;align-items:center;justify-content:center;gap:6px;margin:16px auto 0;width:fit-content;
+  padding:8px 16px;border-radius:99px;border:1px solid var(--line);background:var(--pane)}
+.ratepill b{font-size:12.5px;font-weight:800;color:var(--ink)}
+.ratepill s{font-style:normal;font-size:12px;color:var(--dim);cursor:pointer}
+.endbox{text-align:center;margin-top:10px;font-size:11px;color:var(--dim)}
+.statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px}
 .stat{padding:14px 6px;border-radius:18px;text-align:center;border:1px solid var(--line);background:var(--pane)}
 .stat i{display:block;font-style:normal;font-size:17px;margin-bottom:6px}
 .stat b{display:block;font-size:15px;font-weight:900}
 .stat span{display:block;font-size:9.5px;color:var(--dim);margin-top:3px}
-.ticknext{position:relative;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;
-  padding:10px 14px;border-radius:16px;border:1px solid var(--line);background:var(--pane2);
-  font-size:11.5px;color:var(--dim);font-weight:700}
-.ticknext b{font-size:14px;font-weight:900;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* ═══ باکسِ بزرگِ «کریستالِ بعدی» ═══ */
+.ticknext{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  margin-top:12px;padding:16px;border-radius:20px;border:1px solid var(--line);background:var(--pane2);
+  font-size:12px;color:var(--dim);font-weight:700}
+.ticknext b{font-size:26px;font-weight:900;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:.5px}
 .nextpop{position:absolute;top:-8px;left:50%;transform:translate(-50%,0);opacity:0;pointer-events:none;
   font-style:normal;font-size:13px;font-weight:900;color:#22C55E}
 .nextpop.on{animation:nextPop 1.1s cubic-bezier(.2,.9,.3,1)}
 @keyframes nextPop{0%{opacity:0;transform:translate(-50%,4px) scale(.8)}20%{opacity:1;transform:translate(-50%,-14px) scale(1.05)}
   75%{opacity:1;transform:translate(-50%,-22px) scale(1)}100%{opacity:0;transform:translate(-50%,-34px) scale(.95)}}
 @media (prefers-reduced-motion:reduce){ .nextpop.on{animation:none} }
-.boostbtn{margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px}
-.boostbtn em{font-style:normal;font-weight:800;opacity:.85;font-size:12.5px}
-.boosthint{text-align:center;margin-top:8px;font-size:10.5px;color:var(--dim)}
-.boosthint b{color:var(--ink);font-weight:800}
+
+/* ═══ راهنما / تاریخچه ═══ */
+.mineActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.mact{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;border-radius:14px;cursor:pointer;
+  border:1px solid var(--line);background:var(--pane);color:var(--dim);font-family:inherit;font-size:12px;font-weight:800}
+.mact s{font-style:normal}
+.mact.on{color:var(--ink);border-color:color-mix(in srgb,var(--c3) 45%,transparent);
+  background:color-mix(in srgb,var(--c3) 12%,transparent)}
+.mpanel{display:none;margin-top:9px;padding:14px;border-radius:16px;border:1px solid var(--line);background:var(--pane2)}
+.mpanel.on{display:block}
+.mpanel p{margin:0 0 9px;font-size:11.5px;line-height:1.9;color:var(--dim)}
+.mpanel p:last-child{margin-bottom:0}
+.mpanel p b{color:var(--ink)}
+.histrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 2px;
+  border-bottom:1px solid var(--line)}
+.histrow:last-child{border-bottom:0}
+.histrow .m{display:flex;flex-direction:column;gap:2px}
+.histrow .m b{font-size:12.5px;font-weight:800;color:var(--ink)}
+.histrow .m span{font-size:10px;color:var(--dim)}
+.histrow .p{font-size:12px;font-weight:800;color:#22C55E}
+
+/* ═══ کارتِ سطح ═══ */
+.lvlcard{margin-top:14px;padding:15px;border-radius:20px;border:1px solid var(--line);background:var(--pane)}
+.lvlrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.lvlmid b{display:block;font-size:14.5px;font-weight:900}
+.lvlmid span{display:block;font-size:11px;color:var(--dim);margin-top:3px}
+.lvlbar{position:relative;height:8px;border-radius:99px;background:var(--pane2);overflow:hidden;margin-top:13px}
+.lvlbar i{position:absolute;inset:0 auto 0 0;width:0;border-radius:inherit;
+  background:linear-gradient(90deg,#22C55E,#38BDF8);transition:width .4s ease}
+.lvlcard p{margin:10px 0 0;font-size:10.5px;color:var(--dim)}
+
+/* ═══ ردیفِ تقویت (بوست) ═══ */
+.boostrow{width:100%;margin-top:10px;display:flex;align-items:center;gap:12px;padding:13px 14px;
+  border-radius:18px;cursor:pointer;font-family:inherit;text-align:right;
+  border:1px solid var(--line);background:var(--pane);color:var(--ink)}
+.boostrow[disabled]{cursor:default;opacity:.55}
+.boostrow .boostprice{flex:0 0 auto;padding:7px 12px;border-radius:99px;font-size:11px;font-weight:800;
+  color:#fff;background:#38BDF8}
+.boostrow .boostmid{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.boostrow .boostmid b{font-size:13px;font-weight:900}
+.boostrow .boostmid em{font-style:normal;font-size:10.5px;color:var(--dim)}
 .adock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(11px + var(--safe));z-index:30;
   width:min(94vw,420px);display:flex;gap:3px;padding:7px;border-radius:26px;
   border:1px solid var(--line);background:rgba(255,255,255,.09);

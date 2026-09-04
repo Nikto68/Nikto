@@ -187,8 +187,28 @@ function adTick($uid, $name = '', $username = '') {
         $u['last_tick'] = $now;
         if ($name !== '')     $u['data']['name'] = mb_substr($name, 0, 40);
         if ($username !== '') $u['data']['username'] = mb_substr(ltrim($username, '@'), 0, 40);
+        adTouchStreak($u);
         return $u;
     });
+}
+
+/**
+ * استریکِ روزانه — بر پایه‌ی تاریخِ UTC، دقیقا همان قاعده‌ای که ماموریتِ
+ * «حضور روزانه» استفاده می‌کند: امروز = بدونِ تغییر، فردا (نسبت به آخرین
+ * بازدید) = +۱، هر فاصله‌ی بیشتر = ریست به ۱. چون adTick() با هر خواندنِ
+ * وضعیت اجرا می‌شود (نه فقط وقتی کاربر دکمه‌ای می‌زند)، خودِ باز کردنِ
+ * مینی‌اپ در یک روزِ تازه کافی است تا استریک حساب شود.
+ */
+function adTouchStreak(&$u) {
+    $today = gmdate('Y-m-d');
+    $last = (string)($u['data']['streak_date'] ?? '');
+    if ($last === $today) return;
+    if ($last === gmdate('Y-m-d', strtotime('-1 day'))) {
+        $u['data']['streak'] = (int)($u['data']['streak'] ?? 0) + 1;
+    } else {
+        $u['data']['streak'] = 1;
+    }
+    $u['data']['streak_date'] = $today;
 }
 
 /** وضعیتِ کامل برای نمایش — بعد از تسویه. */
@@ -215,6 +235,8 @@ function adState($uid, $name = '', $username = '') {
         'missions'   => adMissions($uid, $u),
         'redeem_rate'=> AD_REDEEM_RATE,
         'redeem_min' => AD_REDEEM_MIN,
+        'streak'         => (int)($u['data']['streak'] ?? 0),
+        'wallet_balance' => function_exists('getUser') ? (float)(getUser($uid)['balance'] ?? 0) : 0.0,
     ];
 }
 
@@ -396,10 +418,20 @@ function adRedeem($uid, $amount) {
         $u['crystals'] = round($u['crystals'] - $amount, 4);
         $toman = round($amount * AD_REDEEM_RATE, 2);
         $ok = true;
+        $log = (array)($u['data']['redeem_log'] ?? []);
+        array_unshift($log, ['t' => time(), 'crystals' => $amount, 'toman' => $toman]);
+        $u['data']['redeem_log'] = array_slice($log, 0, 20);
     });
     if (!$ok) return [false, 'کریستال کافی نیست.'];
     if (function_exists('addBalance')) addBalance($uid, $toman);
     return [true, $toman];
+}
+
+/** تاریخچه‌ی تبدیل‌های اخیر — همان چیزی که «تاریخچه» تو تبِ معدن نشان می‌دهد. */
+function adRedeemLog($uid, $limit = 20) {
+    $u = adUser($uid);
+    $log = (array)($u['data']['redeem_log'] ?? []);
+    return array_slice($log, 0, max(1, min(20, (int)$limit)));
 }
 
 // ============================================================
