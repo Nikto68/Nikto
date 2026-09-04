@@ -227,15 +227,52 @@ __SKIN__
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet">
   <div class="grip"></div>
+  <div class="wizsteps" id="wizSteps">
+    <div class="wdot" data-s="3"><i>۳</i><span>تایید</span></div>
+    <div class="wline"></div>
+    <div class="wdot" data-s="2"><i>۲</i><span>پرداخت</span></div>
+    <div class="wline"></div>
+    <div class="wdot" data-s="1"><i>۱</i><span>اطلاعات</span></div>
+  </div>
   <div class="head">
     <div class="orb" id="sOrb">💠</div>
     <div style="flex:1;min-width:0"><h2 id="sName">—</h2><p id="sDesc"></p></div>
   </div>
-  <div id="sField"></div>
-  <div class="total"><span>مبلغ قابل پرداخت</span><b id="sTotal">۰</b></div>
-  <button class="go" id="sWal">پرداخت از کیف وپول</button>
-  <button class="go alt" id="sGo">شارژ حساب</button>
-  <div class="walbox" id="sWalNote"></div>
+
+  <!-- گامِ ۱: اطلاعات -->
+  <div class="wpanel on" id="wPanel1">
+    <div class="lbl">جزییاتِ سفارش</div>
+    <div class="orow" id="orderInfo"></div>
+    <div id="sField"></div>
+  </div>
+
+  <!-- گامِ ۲: پرداخت -->
+  <div class="wpanel" id="wPanel2">
+    <div class="lbl">روشِ پرداخت</div>
+    <div class="paytiles" id="payTiles"></div>
+    <div class="walbox" id="payNote" style="display:none"></div>
+    <div class="lbl">تخفیف و پاداش</div>
+    <div class="disctoggle" id="discToggle"><span id="discToggleTxt">کد تخفیف داری؟</span><i>٪</i></div>
+    <div class="discform" id="discForm" style="display:none">
+      <div class="field" style="margin-bottom:0">
+        <input id="discCode" type="text" placeholder="کد تخفیف را وارد کن" dir="ltr" style="text-align:center;text-transform:uppercase">
+      </div>
+      <button class="go alt" id="discApply" style="margin-top:9px;padding:12px">اعمالِ کد</button>
+      <div class="discmsg" id="discMsg"></div>
+    </div>
+    <div class="lbl">ریزِ مبلغ</div>
+    <div class="orow" id="breakdown"></div>
+  </div>
+
+  <!-- گامِ ۳: تایید -->
+  <div class="wpanel" id="wPanel3">
+    <div class="lbl">مرورِ نهاییِ سفارش</div>
+    <div class="orow" id="confirmBox"></div>
+  </div>
+
+  <div class="total"><span id="totalLbl">مبلغ قابل پرداخت</span><b id="sTotal">۰</b></div>
+  <button class="go" id="sNext">ادامه</button>
+  <button class="ghost" id="sBack" style="display:none">بازگشت</button>
   <button class="ghost" id="sNo">بستن</button>
 </div>
 
@@ -389,7 +426,7 @@ function toast(m, good){
 function setBal(v){
   S.bal = Number(v) || 0;
   $('balTop').textContent = fa(S.bal);
-  if (S.item) walletState();
+  if (S.item && W.step === 2) drawPayNote();
 }
 
 /* ── ناوبریِ اصلی ── */
@@ -754,6 +791,8 @@ function selfChip(){
   if (!v) return '';
   return '<div class="selfrow"><button type="button" class="self">👤 برای خودم</button><em>' + esc(v) + '</em></div>';
 }
+var W = { step:1, pay:'', coupon:'', discount:0, toppedUp:false };
+
 function open(id, appKey){
   var it = null;
   for (var i=0;i<B.items.length;i++) if (B.items[i].id === id && B.items[i].app === appKey) it = B.items[i];
@@ -762,12 +801,19 @@ function open(id, appKey){
   S.item = it;
   S.qty = (it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username' || it.ask === 'qty_link')
              ? (Number(it.min) > 0 ? Number(it.min) : 1) : 1;
+  W = { step:1, pay:'', coupon:'', discount:0, toppedUp:false };
+  $('discCode').value = ''; $('discForm').style.display = 'none';
+  $('discToggleTxt').textContent = 'کد تخفیف داری؟'; $('discMsg').innerHTML = '';
 
   $('sOrb').textContent  = it.emoji || '💠';
   $('sName').textContent = it.name;
   $('sDesc').textContent = it.desc || '';
-  $('sGo').disabled  = false; $('sGo').textContent  = 'شارژ حساب';
-  $('sWal').disabled = false; $('sWal').textContent = 'پرداخت از کیف پول';
+
+  var appTitle = (B.apps && B.apps[appKey]) ? B.apps[appKey].title : '';
+  $('orderInfo').innerHTML =
+    '<div class="orow-line"><span>نوعِ سرویس</span><b>' + esc(appTitle) + '</b></div>' +
+    '<div class="orow-line"><span>محصول</span><b>' + esc(it.name) + '</b></div>' +
+    (it.unit ? '<div class="orow-line"><span>قیمتِ هر ' + esc(it.unit) + '</span><b>' + fa(it.price) + ' ' + esc(B.currency) + '</b></div>' : '');
 
   var f = $('sField'), html = '';
   var hasQty = it.ask === 'qty' || it.ask === 'qty_wallet' || it.ask === 'qty_username' || it.ask === 'qty_link';
@@ -825,7 +871,8 @@ function open(id, appKey){
     });
   }
   setQty(S.qty);
-  if (it.stale){ $('sGo').disabled = true; $('sWal').disabled = true; }
+  wizGo(1);
+  $('sNext').disabled = !!it.stale;
   $('scrim').classList.add('on');
   $('sheet').classList.add('on');
   backBtn();
@@ -865,15 +912,10 @@ function sum(){
     return Math.round(it.price * Math.max(0, S.qty));
   return it.price;
 }
-function total(){ $('sTotal').textContent = fa(sum()) + ' ' + B.currency; walletState(); }
-function walletState(){
-  var it = S.item; if (!it) return;
-  var t = sum(), enough = S.bal >= t;
-  $('sWal').disabled = !enough || !!it.stale;
-  $('sGo').style.display = enough ? 'none' : '';
-  $('sWalNote').innerHTML = enough
-    ? '👛 موجودی شما: <b>' + fa(S.bal) + '</b> ' + esc(B.currency) + ' · بعد از پرداخت: <b>' + fa(S.bal - t) + '</b>'
-    : '⚠️ موجودی کافی نیست — موجودی: <b>' + fa(S.bal) + '</b> ' + esc(B.currency) + ' · کسری: <b>' + fa(t - S.bal) + '</b>';
+function finalTotal(){ return Math.max(0, sum() - (W.discount || 0)); }
+function total(){
+  $('sTotal').textContent = fa(finalTotal()) + ' ' + B.currency;
+  if (W.step === 2) buildBreakdown();
 }
 function shut(){
   $('scrim').classList.remove('on'); $('sheet').classList.remove('on');
@@ -896,13 +938,149 @@ function validate(){
   }
   return fv;
 }
-function send(payMode, btn){
+
+/* ══════════════════ ویزاردِ ۳مرحله‌ای ══════════════════
+   پرداختِ سفارش همیشه از کیف‌پول انجام می‌شود (همان مسیرِ آزموده‌ی
+   قبلی، بدونِ تغییر) — تایل‌هایِ «درگاه»/«کارت» راهِ شارژِ کسری‌اند،
+   نه یک مسیرِ پرداختِ مستقلِ تازه؛ صادقانه‌تر از وانمود کردن به
+   چیزی که در سرور وجود ندارد. */
+var STEP_NAMES = { 1:'اطلاعات', 2:'پرداخت', 3:'تایید' };
+function wizGo(step){
+  W.step = step;
+  ['1','2','3'].forEach(function(s){
+    $('wPanel' + s).classList.toggle('on', Number(s) === step);
+  });
+  var dots = $('wizSteps').querySelectorAll('.wdot');
+  for (var i=0;i<dots.length;i++){
+    var s = Number(dots[i].getAttribute('data-s'));
+    dots[i].classList.toggle('cur', s === step);
+    dots[i].classList.toggle('done', s < step);
+  }
+  $('sBack').style.display = step > 1 ? '' : 'none';
+  if (step === 1) $('sNext').textContent = 'ادامه و انتخابِ پرداخت';
+  if (step === 2) { $('sNext').textContent = 'مرورِ نهاییِ سفارش'; buildPayTiles(); buildBreakdown(); }
+  if (step === 3) { $('sNext').textContent = 'پرداختِ نهایی'; buildConfirm(); }
+  total();
+}
+$('sBack').onclick = function(){ tap(); if (W.step > 1) wizGo(W.step - 1); };
+
+var PAY_ICONS = { wallet:'wallet', card:'bag', gw:'gem' };
+function buildPayTiles(){
+  var t = B.topup || {}, tiles = [];
+  tiles.push({ id:'wallet', label:'کیفِ پول', ico:'wallet' });
+  if (t.card) tiles.push({ id:'card', label:'کارت‌به‌کارت', ico:'bag' });
+  if (t.gw)   tiles.push({ id:'gw',   label:(t.gwcoin ? 'پرداختِ ' + t.gwcoin : 'درگاهِ پرداخت'), ico:'gem' });
+  if (!W.pay || !tiles.some(function(x){ return x.id === W.pay; }))
+    W.pay = (S.bal >= finalTotal()) ? 'wallet' : (tiles[1] ? tiles[1].id : 'wallet');
+  var h = '';
+  tiles.forEach(function(x){
+    h += '<div class="paytile' + (W.pay === x.id ? ' on' : '') + '" data-pay="' + x.id + '">' +
+           '<i class="ico">' + ICONS[x.ico] + '</i><span>' + esc(x.label) + '</span>' +
+           (x.id === 'wallet' ? '<em class="paybal">' + fa(S.bal) + '</em>' : '') +
+         '</div>';
+  });
+  $('payTiles').innerHTML = h;
+  drawPayNote();
+}
+$('payTiles').addEventListener('click', function(ev){
+  var el = ev.target.closest ? ev.target.closest('[data-pay]') : null;
+  if (!el) return;
+  tap(); W.pay = el.getAttribute('data-pay');
+  var all = $('payTiles').querySelectorAll('.paytile');
+  for (var i=0;i<all.length;i++) all[i].classList.toggle('on', all[i].getAttribute('data-pay') === W.pay);
+  drawPayNote();
+});
+function drawPayNote(){
+  var note = $('payNote'), need = finalTotal();
+  if (W.pay === 'wallet'){
+    note.style.display = '';
+    note.innerHTML = S.bal >= need
+      ? '👛 موجودیِ شما: <b>' + fa(S.bal) + '</b> ' + esc(B.currency) + ' · بعدِ پرداخت: <b>' + fa(S.bal - need) + '</b>'
+      : '⚠️ موجودیِ کیف‌پول کافی نیست — کسری: <b>' + fa(need - S.bal) + '</b> ' + esc(B.currency) +
+        '. یکی از روش‌هایِ دیگر را انتخاب کن تا کیف‌پولت شارژ شود، بعد برگرد همین‌جا.';
+  } else {
+    var need2 = Math.max(0, need - S.bal);
+    note.style.display = '';
+    note.innerHTML = '💳 با این روش، ابتدا کسریِ کیف‌پولت (<b>' + fa(need2) + '</b> ' + esc(B.currency) + ') شارژ می‌شود؛ ' +
+      'راهنمای پرداخت داخلِ ربات برایت فرستاده می‌شود. بعدِ واریز، دکمه‌ی «بررسیِ موجودی» را بزن.' +
+      '<br><button type="button" class="go alt" id="topupNowBtn" style="margin-top:9px;padding:11px">' +
+      (need2 > 0 ? 'شارژِ ' + fa(need2) + ' ' + esc(B.currency) : 'شارژِ کیف‌پول') + '</button>' +
+      '<button type="button" class="ghost" id="checkBalBtn" style="margin-top:7px;padding:11px">🔄 بررسیِ موجودی</button>';
+    var tb = document.getElementById('topupNowBtn');
+    if (tb) tb.onclick = function(){ doTopup(need2 > 0 ? need2 : Math.max(1000, need)); };
+    var cb = document.getElementById('checkBalBtn');
+    if (cb) cb.onclick = refreshBalanceThenNote;
+  }
+}
+function doTopup(amount){
+  tap('medium');
+  api((B.apps && B.apps.tg) ? 'tg' : Object.keys(B.apps||{})[0], 'topup', { amount: Math.ceil(amount) }, function(j){
+    toast(j.message || 'درخواستِ شارژ ثبت شد — داخلِ ربات را ببین.', true);
+    W.toppedUp = true;
+  }, function(j){
+    toast((j && j.message) ? j.message : 'ثبتِ درخواستِ شارژ انجام نشد.');
+  });
+}
+function refreshBalanceThenNote(){
+  tap();
+  api('unified', 'me_all', {}, function(m){
+    S.me = m; setBal(m.balance);
+    if (S.bal >= finalTotal() && W.pay !== 'wallet') { W.pay = 'wallet'; buildPayTiles(); }
+    else drawPayNote();
+    toast('موجودی به‌روزرسانی شد.', true);
+  }, function(){ toast('موجودی خوانده نشد.'); });
+}
+
+$('discToggle').onclick = function(){
+  tap();
+  var open = $('discForm').style.display !== 'none';
+  $('discForm').style.display = open ? 'none' : '';
+};
+$('discApply').onclick = function(){
+  var code = $('discCode').value.trim();
+  if (!code) { toast('کد تخفیف را وارد کن.'); return; }
+  var btn = this, old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'در حالِ بررسی…'; tap('medium');
+  api('unified', 'coupon_check', { code: code, subtotal: sum() }, function(j){
+    btn.disabled = false; btn.textContent = old;
+    W.coupon = j.code; W.discount = Number(j.discount) || 0;
+    $('discToggleTxt').textContent = '✓ کدِ ' + j.code + ' اعمال شد';
+    $('discMsg').innerHTML = '<b style="color:var(--c2)">' + fa(W.discount) + ' ' + esc(B.currency) + ' تخفیف اعمال شد ✓</b>';
+    buildPayTiles(); buildBreakdown(); total();
+    buzz('success');
+  }, function(j){
+    btn.disabled = false; btn.textContent = old;
+    W.coupon = ''; W.discount = 0;
+    $('discMsg').innerHTML = '<span style="color:var(--c4)">' + esc((j && j.message) ? j.message : 'کد معتبر نیست.') + '</span>';
+    buildBreakdown(); total();
+  });
+};
+function buildBreakdown(){
+  var s = sum();
+  var h = '<div class="orow-line"><span>مبلغِ محصول</span><b>' + fa(s) + ' ' + esc(B.currency) + '</b></div>';
+  if (W.discount > 0) h += '<div class="orow-line disc"><span>تخفیف (' + esc(W.coupon) + ')</span><b>− ' + fa(W.discount) + ' ' + esc(B.currency) + '</b></div>';
+  h += '<div class="orow-line total"><span>مبلغِ قابلِ پرداخت</span><b>' + fa(finalTotal()) + ' ' + esc(B.currency) + '</b></div>';
+  $('breakdown').innerHTML = h;
+}
+function buildConfirm(){
+  var it = S.item; if (!it) return;
+  var payLabel = W.pay === 'wallet' ? 'کیفِ پول' : (W.pay === 'card' ? 'کارت‌به‌کارت' : 'درگاهِ پرداخت');
+  var fx = $('fTxt');
+  var h = '<div class="orow-line"><span>محصول</span><b>' + esc(it.name) + '</b></div>';
+  if (it.ask && it.ask.indexOf('qty') === 0) h += '<div class="orow-line"><span>تعداد</span><b>' + fa(S.qty) + (it.unit ? ' ' + esc(it.unit) : '') + '</b></div>';
+  if (fx && fx.value.trim()) h += '<div class="orow-line"><span>گیرنده/فیلد</span><b dir="ltr">' + esc(fx.value.trim()) + '</b></div>';
+  h += '<div class="orow-line"><span>روشِ پرداخت</span><b>' + esc(payLabel) + '</b></div>';
+  if (W.discount > 0) h += '<div class="orow-line disc"><span>تخفیف</span><b>− ' + fa(W.discount) + ' ' + esc(B.currency) + '</b></div>';
+  h += '<div class="orow-line total"><span>مبلغِ نهایی</span><b>' + fa(finalTotal()) + ' ' + esc(B.currency) + '</b></div>';
+  $('confirmBox').innerHTML = h;
+}
+
+function send(btn){
   if (S.busy || !S.item) return;
-  var fv = validate(); if (fv === null) return;
-  var it = S.item;
+  var it = S.item, fx = $('fTxt'), fv = fx ? fx.value.trim() : '';
   S.busy = true; btn.disabled = true;
   var old = btn.textContent; btn.textContent = 'در حال ثبت…'; tap('medium');
-  api(it.app, 'order', { item: it.id, qty: S.qty, field: fv, seen_price: it.price, pay: payMode },
+  api(it.app, 'order', { item: it.id, qty: S.qty, field: fv, seen_price: it.price, pay: 'wallet', coupon: W.coupon },
     function(j){
       S.busy = false; btn.disabled = false; btn.textContent = old;
       if (typeof j.balance === 'number') setBal(j.balance);
@@ -916,16 +1094,34 @@ function send(payMode, btn){
     function(j){
       S.busy = false; btn.disabled = false; btn.textContent = old;
       if (j && j.error === 'price_changed' && j.price){ it.price = j.price; total(); }
+      if (j && j.error === 'bad_coupon'){
+        W.coupon = ''; W.discount = 0; toast((j && j.message) ? j.message : 'کدِ تخفیف دیگر معتبر نیست.');
+        wizGo(2); return;
+      }
       if (j && j.error === 'no_balance'){
         if (typeof j.balance === 'number') { S.bal = j.balance; setBal(j.balance); }
-        walletState(); toast((j && j.message) ? j.message : 'موجودی کافی نیست.');
-        shut(); go('me'); return;
+        toast((j && j.message) ? j.message : 'موجودی کافی نیست.');
+        wizGo(2); return;
       }
       toast((j && j.message) ? j.message : 'ثبت سفارش انجام نشد.');
     });
 }
-$('sWal').onclick = function(){ send('wallet', this); };
-$('sGo').onclick  = function(){ shut(); tap(); go('me'); };
+$('sNext').onclick = function(){
+  tap('medium');
+  if (W.step === 1){
+    var fv = validate(); if (fv === null) return;
+    wizGo(2);
+  } else if (W.step === 2){
+    if (W.pay === 'wallet'){
+      if (S.bal < finalTotal()) { toast('موجودیِ کیف‌پول کافی نیست — یکی از روش‌های شارژ را انتخاب کن.'); return; }
+      wizGo(3);
+    } else {
+      toast('بعدِ شارژِ کیف‌پول، «بررسیِ موجودی» را بزن تا ادامه بدهی.');
+    }
+  } else if (W.step === 3){
+    send(this);
+  }
+};
 $('wGo').onclick   = function(){ if (TG) { try{ TG.close(); }catch(e){} } else location.reload(); };
 $('wBack').onclick = function(){ $('win').classList.remove('on'); tap(); go('shop'); };
 $('wNote').onclick = function(){ $('win').classList.remove('on'); tap(); go('note'); };
@@ -1517,6 +1713,56 @@ body.kb-open .scrim{backdrop-filter:none;-webkit-backdrop-filter:none;transition
 .plans i.on{border-color:color-mix(in srgb,var(--c1) 60%,transparent);
   background:linear-gradient(120deg,color-mix(in srgb,var(--c1) 12%,transparent),transparent)}
 .plans i.on .chk{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c3))}
+
+/* ═══ ویزاردِ ۳مرحله‌ای — نشانگرِ گام‌ها ═══ */
+.wizsteps{display:flex;align-items:center;justify-content:center;gap:8px;margin:2px 0 16px}
+.wdot{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 0 auto}
+.wdot i{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-style:normal;
+  font-size:12.5px;font-weight:900;color:var(--dim);background:var(--pane2);border:1px solid var(--line);transition:.2s}
+.wdot span{font-size:9.5px;font-weight:800;color:var(--dim)}
+.wdot.cur i{color:#fff;background:linear-gradient(135deg,var(--c1),var(--c3));border-color:transparent;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--c1) 18%,transparent)}
+.wdot.cur span{color:var(--ink)}
+.wdot.done i{color:#fff;background:var(--c2);border-color:transparent}
+.wline{width:30px;height:1.5px;background:var(--line);margin-bottom:16px}
+
+.wpanel{display:none}
+.wpanel.on{display:block;animation:pgIn .25s cubic-bezier(.2,.9,.3,1)}
+
+/* ═══ ردیف‌هایِ اطلاعات/ریزِ مبلغ — یک قابِ نرم دورِ چندتا سطر ═══ */
+.orow{border-radius:18px;border:1px solid var(--line);background:var(--pane2);padding:4px 14px;margin-bottom:14px}
+.orow-line{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;
+  border-bottom:1px solid var(--line);font-size:12.5px}
+.orow-line:last-child{border-bottom:none}
+.orow-line span{color:var(--dim)}
+.orow-line b{font-weight:800;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orow-line.disc b{color:var(--c2)}
+.orow-line.total{padding-top:13px}
+.orow-line.total span{color:var(--ink);font-weight:800}
+.orow-line.total b{font-size:15px;background:linear-gradient(90deg,var(--c1),var(--c3));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ═══ تایل‌هایِ روشِ پرداخت ═══ */
+.paytiles{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:4px}
+.paytile{position:relative;padding:14px 6px 12px;border-radius:18px;text-align:center;cursor:pointer;
+  border:1px solid var(--line);background:var(--pane2)}
+.paytile:active{transform:scale(.97)}
+.paytile .ico{margin:0 auto 8px}
+.paytile span{display:block;font-size:10.5px;font-weight:800;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.paytile .paybal{display:block;font-size:9px;color:var(--dim);margin-top:2px;font-style:normal}
+.paytile.on{border-color:color-mix(in srgb,var(--c1) 60%,transparent);
+  background:linear-gradient(120deg,color-mix(in srgb,var(--c1) 14%,transparent),transparent)}
+.paytile.on:after{content:"✓";position:absolute;top:7px;left:7px;width:18px;height:18px;border-radius:50%;
+  display:grid;place-items:center;font-size:10px;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c3))}
+.paytile.on span{color:var(--ink)}
+
+/* ═══ کدِ تخفیف ═══ */
+.disctoggle{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-radius:16px;
+  border:1px solid var(--line);background:var(--pane2);cursor:pointer;margin-bottom:10px;font-size:12.5px;font-weight:700}
+.disctoggle i{font-style:normal;font-size:15px;color:var(--c1)}
+.discform{margin-bottom:10px}
+.discmsg{font-size:11px;line-height:1.8;margin-top:8px}
+
 .total{display:flex;justify-content:space-between;align-items:center;margin:16px 0;padding:15px 16px;
   border-radius:18px;border:1px solid var(--line);
   background:linear-gradient(120deg,color-mix(in srgb,var(--c1) 10%,transparent),color-mix(in srgb,var(--c3) 8%,transparent))}
