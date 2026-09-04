@@ -1,7 +1,9 @@
 <?php
 /**
- * 🎮 «بازی الماسی» — منویِ دسته‌بندی‌شده‌ی بازی‌ها + دو بازیِ تازه
- * (سنگ‌کاغذقیچی، بسکتبال). «مین» (مین‌یاب) از قبل در mine.php هست.
+ * 🎮 «بازی الماسی» — یک لیستِ عمودی (دقیقا مثلِ مرجع) از همه‌ی
+ * بازی‌ها: مین، دوز، سنگ‌کاغذقیچی، بسکتبال. دو تای آخر این‌جا تازه
+ * ساخته شده‌اند؛ «مین» در mine.php و «دوز» در games.php از قبل
+ * هستند — این‌جا فقط یک دکمه‌ی راهنما به دستورِ خودشان می‌زند.
  *
  * عمدا جدا از games.php: آن فایل قبلا با منطقِ «چالش/دوز» (تخته‌ی
  * ۳×۳) بافته شده و هر شاخه‌ای رویِ kind شرط دارد — قاطی کردنِ یک
@@ -33,8 +35,10 @@ function arDefaults() {
             'off'   => '🔒 «بازی الماسی» فعلا خاموش است.',
             'group_only' => '🎮 بازی الماسی فقط داخلِ گروه کار می‌کند.',
             'hub'   => "💎 <b>بازی الماسی</b>\n\nیکی از بازی‌ها را انتخاب کن:",
-            'btn_mine' => '⛏ مین', 'btn_rps' => '✂️ سنگ کاغذ قیچی', 'btn_bball' => '🏀 بسکتبال',
+            'btn_mine' => '⛏ مین (۱ پیشی)', 'btn_duel' => '❌⭕ دوز (۲ پیشی)',
+            'btn_rps' => '✂️ سنگ کاغذ قیچی (۲ پیشی)', 'btn_bball' => '🏀 بسکتبال (۱ پیشی)',
             'mine_tip' => "⛏ برای معدن بنویس: <code>مین ۵۰۰</code> (به‌جایِ ۵۰۰ هر مبلغی)",
+            'duel_tip' => "❌⭕ برای دوز بنویس: <code>{word} ۵۰۰</code> (به‌جایِ ۵۰۰ هر مبلغی)",
 
             'ask_stake'   => '💎 با چند الماس شرط ببندیم؟',
             'bad_stake'   => '❌ شرط باید بینِ <b>{min}</b> تا <b>{max}</b> الماس باشد.',
@@ -197,10 +201,15 @@ function arTick($limit = 20) {
 // 🎣 منویِ هاب
 // ============================================================
 
+// 📋 لیستِ عمودی — دقیقا مثلِ مرجع: هر بازی یک ردیفِ جدا، با تعدادِ
+// «پیشی»/بازیکنِ لازم کنارِ اسمش. هرچه بازیِ تازه‌ای اضافه شد، همین‌جا
+// یک ردیفِ دیگر به لیست اضافه می‌شود — نه کنارِ ردیف‌هایِ قبلی.
 function arHubKb() {
     return inlineKb([
         [btnCb(arT('btn_mine'), 'ar_mine', null, 'primary')],
-        [btnCb(arT('btn_rps'), 'ar_new_rps', null, 'success'), btnCb(arT('btn_bball'), 'ar_new_bball', null, 'success')],
+        [btnCb(arT('btn_duel'), 'ar_duel', null, 'primary')],
+        [btnCb(arT('btn_rps'), 'ar_new_rps', null, 'primary')],
+        [btnCb(arT('btn_bball'), 'ar_new_bball', null, 'primary')],
     ]);
 }
 
@@ -343,6 +352,12 @@ function arCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
     if ($data === 'ar_mine') {
         answerCb(BOT_TOKEN, $cbId);
         sendMsg(BOT_TOKEN, $chatId, arT('mine_tip'));
+        return true;
+    }
+    if ($data === 'ar_duel') {
+        answerCb(BOT_TOKEN, $cbId);
+        $word = trim(explode(',', (string)gmVal('word_duel', 'چالش'))[0]) ?: 'چالش';
+        sendMsg(BOT_TOKEN, $chatId, arT('duel_tip', ['word' => $word]));
         return true;
     }
     if ($data === 'ar_new_rps' || $data === 'ar_new_bball') {
