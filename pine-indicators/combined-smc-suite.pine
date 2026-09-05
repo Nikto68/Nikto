@@ -1,0 +1,720 @@
+// This source code combines trimmed-down pieces of four public-domain-style
+// Pine Script v5 indicators into one script, per user spec:
+//   - "nikto"  (Mxwll MTF S/R)                 -> kept: 4H / Daily / Weekly S/R levels only
+//   - "sina"   (LuxAlgo Pure Price Action ICT) -> kept: Market Structure (BOS) + Buyside/Sellside Liquidity
+//   - "nexua"  (Mxwll Suite)                   -> kept: i-CHoCH/i-BOS, Order Blocks + auto HH/LH/LL/HL, Areas of Interest (buy/sell zones)
+//   - "smc"    (FluidTrades SMC Lite)          -> kept: Supply/Demand POI zones (resistance/support) only
+// All identifiers are namespaced per source (sr_, liq_, nx_, smc_) to avoid collisions.
+//@version=5
+indicator("Combined SMC Suite", shorttitle = "Combined SMC Suite", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 2000)
+
+// ============================================================================
+// SECTION 1 — Multi-Timeframe S/R (from "nikto"): 4H / Daily / Weekly only
+// ============================================================================
+
+srExtend  = input.string(defval = "Both", title = "Extend Lines", options = ["Left", "Right", "Both", "None"], group = "Multi-Timeframe S/R")
+srStyleIn = input.string(defval = "Dotted", title = "Line Style", options = ["Dotted", "Solid", "Dashed"], group = "Multi-Timeframe S/R")
+sr4hShow  = input.bool(true, "4 Hour Levels", group = "Multi-Timeframe S/R", inline = "sr1")
+sr4hCol   = input.color(color.white, "", group = "Multi-Timeframe S/R", inline = "sr1")
+srDShow   = input.bool(true, "Daily Levels", group = "Multi-Timeframe S/R", inline = "sr2")
+srDCol    = input.color(color.purple, "", group = "Multi-Timeframe S/R", inline = "sr2")
+srWShow   = input.bool(true, "Weekly Levels", group = "Multi-Timeframe S/R", inline = "sr3")
+srWCol    = input.color(color.aqua, "", group = "Multi-Timeframe S/R", inline = "sr3")
+
+srFinStyle = switch srStyleIn
+    "Dotted" => line.style_dotted
+    "Dashed" => line.style_dashed
+    => line.style_solid
+
+type srPriceVals
+    float higH
+    float loW
+    int   hiIndex
+    int   loIndex
+
+var srPv = matrix.new<srPriceVals>(3, 4)
+if barstate.isfirst
+    for x = 0 to 2
+        for i = 0 to 3
+            value = switch
+                i == 0 => srPriceVals.new(higH = 0)
+                i == 1 => srPriceVals.new(loW = 1e8)
+                i == 2 => srPriceVals.new(hiIndex = 0)
+                i == 3 => srPriceVals.new(loIndex = 0)
+            srPv.set(x, i, value)
+
+method srDetermine(float id, int A, int B, float C) =>
+    switch id == C
+        true => A
+        => B
+
+method srAppend(matrix<srPriceVals> id, int length, int row) =>
+    if barstate.islastconfirmedhistory
+        for i = 0 to length
+            id.set(row, 0, srPriceVals.new(higH = math.max(math.avg(close[i], high[i]), nz(id.get(row, 0).higH, 0))))
+            id.set(row, 2, srPriceVals.new(hiIndex = math.avg(close[i], high[i]).srDetermine(math.round(time[i]), nz(id.get(row, 2).hiIndex, 0), id.get(row, 0).higH)))
+            id.set(row, 1, srPriceVals.new(loW = math.min(math.avg(close[i], low[i]), nz(id.get(row, 1).loW, 1e8))))
+            id.set(row, 3, srPriceVals.new(loIndex = math.avg(close[i], low[i]).srDetermine(math.round(time[i]), nz(id.get(row, 3).loIndex, 0), id.get(row, 1).loW)))
+
+srReq(int length, int row) =>
+    srPv.srAppend(length, row)
+    loW     = srPv.get(row, 1).loW
+    higH    = srPv.get(row, 0).higH
+    hiIndex = srPv.get(row, 2).hiIndex
+    loIndex = srPv.get(row, 3).loIndex
+    [loW, higH, hiIndex, loIndex]
+
+[sr4hS, sr4hR, sr4hRtime, sr4hStime] = request.security(syminfo.tickerid, "240",  srReq(30, 0), lookahead = barmerge.lookahead_on)
+[srDS,  srDR,  srDRtime,  srDStime]  = request.security(syminfo.tickerid, "1440", srReq(30, 1), lookahead = barmerge.lookahead_on)
+[srWS,  srWR,  srWRtime,  srWStime]  = request.security(syminfo.tickerid, "W",    srReq(15, 2), lookahead = barmerge.lookahead_on)
+
+srEx = switch srExtend
+    "None"  => extend.none
+    "Left"  => extend.left
+    "Right" => extend.right
+    "Both"  => extend.both
+
+type srObjects
+    line support
+    line resistance
+
+var srObj = matrix.new<srObjects>(3, 2)
+
+method srCondS(float id) => not na(id) and id != 1e8
+method srCondR(float id) => not na(id) and id != 0
+
+method srSetSupport(matrix<srObjects> id, int row, int column, line ln) =>
+    if not na(id.get(row, column))
+        id.get(row, column).support.delete()
+    id.set(row, column, srObjects.new(support = ln))
+
+method srSetResistance(matrix<srObjects> id, int row, int column, line ln) =>
+    if not na(srObj.get(row, column))
+        srObj.get(row, column).resistance.delete()
+    id.set(row, column, srObjects.new(resistance = ln))
+
+if barstate.islast
+    if sr4hShow
+        if sr4hS.srCondS()
+            srObj.srSetSupport(0, 0, line.new(sr4hStime, sr4hS, last_bar_time + (time - time[5]), sr4hS, extend = srEx, xloc = xloc.bar_time, width = 1, style = srFinStyle, color = sr4hCol))
+        if sr4hR.srCondR()
+            srObj.srSetResistance(0, 1, line.new(sr4hRtime, sr4hR, last_bar_time + (time - time[5]), sr4hR, extend = srEx, xloc = xloc.bar_time, width = 1, style = srFinStyle, color = sr4hCol))
+
+    if srDShow
+        if srDS.srCondS()
+            srObj.srSetSupport(1, 0, line.new(srDStime, srDS, last_bar_time + (time - time[5]), srDS, extend = srEx, xloc = xloc.bar_time, color = srDCol, width = 1, style = srFinStyle))
+        if srDR.srCondR()
+            srObj.srSetResistance(1, 1, line.new(srDRtime, srDR, last_bar_time + (time - time[5]), srDR, extend = srEx, xloc = xloc.bar_time, color = srDCol, width = 1, style = srFinStyle))
+
+    if srWShow
+        if srWS.srCondS()
+            srObj.srSetSupport(2, 0, line.new(srWStime, srWS, last_bar_time + (time - time[5]), srWS, extend = srEx, xloc = xloc.bar_time, color = srWCol, style = srFinStyle))
+        if srWR.srCondR()
+            srObj.srSetResistance(2, 1, line.new(srWRtime, srWR, last_bar_time + (time - time[5]), srWR, extend = srEx, xloc = xloc.bar_time, color = srWCol, style = srFinStyle))
+
+    srRes    = array.from("4 Hour: ♦", "Daily: ♦", "Weekly: ♦")
+    srResCol = array.from(sr4hCol, srDCol, srWCol)
+    srValS   = array.from(sr4hS, srDS, srWS)
+    srValR   = array.from(sr4hR, srDR, srWR)
+    var table srTab = table.new(position.bottom_right, 10, 10, bgcolor = #20222C, border_color = #363843, frame_color = #363843, border_width = 1, frame_width = 1)
+    srTab.cell(1, 0, "Resolution", text_color = color.white)
+    srTab.cell(2, 0, "Support", text_color = color.white)
+    srTab.cell(3, 0, "Resistance", text_color = color.white)
+    for i = 0 to 2
+        srTab.cell(1, i + 1, text = srRes.get(i), text_halign = text.align_right, text_size = size.small, text_color = srResCol.get(i))
+        srFinS = switch srValS.get(i).srCondS()
+            true => str.tostring(srValS.get(i), format.mintick)
+            => "Calculating"
+        srFinR = switch srValR.get(i).srCondR()
+            true => str.tostring(srValR.get(i), format.mintick)
+            => "Calculating"
+        srTab.cell(2, i + 1, text = srFinS, text_size = size.small, text_color = srResCol.get(i))
+        srTab.cell(3, i + 1, text = srFinR, text_size = size.small, text_color = srResCol.get(i))
+
+alertcondition(ta.crossover(high, sr4hR), "4-Hour Resistance Crossover", "4-Hour Resistance Crossover")
+alertcondition(ta.crossunder(low, sr4hS), "4-Hour Support Crossunder", "4-Hour Support Crossunder")
+alertcondition(ta.crossover(high, srDR), "1-Day Resistance Crossover", "1-Day Resistance Crossover")
+alertcondition(ta.crossunder(low, srDS), "1-Day Support Crossunder", "1-Day Support Crossunder")
+alertcondition(ta.crossover(high, srWR), "1-Week Resistance Crossover", "1-Week Resistance Crossover")
+alertcondition(ta.crossunder(low, srWS), "1-Week Support Crossunder", "1-Week Support Crossunder")
+
+// ============================================================================
+// SECTION 2 — Market Structure (BOS) + Buyside/Sellside Liquidity (from "sina")
+// ============================================================================
+
+liqMsShow    = input.bool(true, "Show Market Structure (BOS)", group = "Market Structure (BOS)")
+liqMsTerm    = input.string("Intermediate Term", "  Detection", options = ["Short Term", "Intermediate Term", "Long Term"], group = "Market Structure (BOS)")
+liqMsTextIn  = input.string("Enabled", "  Labels", options = ["Enabled", "Disabled"], group = "Market Structure (BOS)")
+liqMsLineSty = input.string("Solid", "  Line Style", options = ["Solid", "Dashed", "Dotted"], group = "Market Structure (BOS)")
+liqMsBullCol = input.color(#089981, "  Line Colors, Bullish", group = "Market Structure (BOS)", inline = "liqMS")
+liqMsBearCol = input.color(#f23645, "Bearish", group = "Market Structure (BOS)", inline = "liqMS")
+liqMsTextOn  = liqMsTextIn == "Enabled"
+
+liqShow    = input.bool(true, "Show Buyside & Sellside Liquidity", group = "Liquidity (Buy/Sell Side)")
+liqTerm    = input.string("Intermediate Term", "  Detection", options = ["Short Term", "Intermediate Term", "Long Term"], group = "Liquidity (Buy/Sell Side)")
+liqMarIn   = input.float(6.9, "  Margin", minval = 4, maxval = 9, step = 0.1, group = "Liquidity (Buy/Sell Side)")
+liqBuyCol  = input.color(#089981, "  Line Colors, Buyside", inline = "liqLIQ", group = "Liquidity (Buy/Sell Side)")
+liqSellCol = input.color(#f23645, "Sellside", inline = "liqLIQ", group = "Liquidity (Buy/Sell Side)")
+liqVisible = input.int(3, "  Visible Levels", minval = 1, maxval = 50, group = "Liquidity (Buy/Sell Side)")
+liqMar     = 10 / liqMarIn
+
+type liqBar
+    float open  = open
+    float high  = high
+    float low   = low
+    float close = close
+    int   index = bar_index
+
+type liqICTMS
+    float lastPrice
+    float midPrice
+    float prevPrice
+    int   lastIndex
+    int   midIndex
+    int   prevIndex
+    label lastLabel
+    label midLabel
+    label prevLabel
+    bool  isCrossed
+    bool  isConfirmed
+    int   marketStructure
+    line  msLine
+    box   msLabel
+    box   swpBox
+
+type liqMS
+    int type = 0
+
+type liqSwing
+    float y = na
+    int   x = na
+    bool  crossed = false
+
+type liqZZ
+    int   [] d
+    int   [] x
+    float [] y
+
+type liqZone
+    box  bx
+    box  bxz
+    box  bxt
+    bool brZ
+    bool brL
+    line ln
+    line lne
+
+liqBarObj = liqBar.new()
+
+liqLineStyle(styleInText) =>
+    switch styleInText
+        'Solid'  => line.style_solid
+        'Dotted' => line.style_dotted
+        'Dashed' => line.style_dashed
+
+liqQueryRaw(lastPrice, midPrice, prevPrice, isSwingHigh) =>
+    if isSwingHigh
+        prevPrice < midPrice and midPrice >= lastPrice
+    else
+        prevPrice > midPrice and midPrice <= lastPrice
+
+method liqQueryPatterns(liqICTMS this, isSwingHigh) =>
+    if isSwingHigh
+        this.prevPrice < this.midPrice and this.midPrice >= this.lastPrice
+    else
+        this.prevPrice > this.midPrice and this.midPrice <= this.lastPrice
+
+method liqUpdatePattern(liqICTMS this, price, index) =>
+    this.isCrossed := false
+    this.prevPrice := this.midPrice, this.midPrice := this.lastPrice, this.lastPrice := price
+    this.prevIndex := this.midIndex, this.midIndex := this.lastIndex, this.lastIndex := index
+    this.prevLabel := this.midLabel, this.midLabel := this.lastLabel
+
+method liqSetType(liqMS this, value) =>
+    this.type := value
+
+method liqRenderStructures(liqICTMS this, isBullish, marketStructure, color, style, labelEnabled) =>
+    condition = isBullish ? liqBarObj.close > this.lastPrice : liqBarObj.close < this.lastPrice
+    if condition and not this.isCrossed
+        this.isCrossed := true
+        this.isConfirmed := false
+        this.msLine := line.new(this.lastIndex, this.lastPrice, liqBarObj.index, this.lastPrice, color = color, style = liqLineStyle(style))
+        this.swpBox := box.new(liqBarObj.index, this.lastPrice, liqBarObj.index, this.lastPrice, color.new(color, 73), bgcolor = color.new(color, 73))
+        if labelEnabled
+            this.msLabel := box.new(this.lastIndex, this.lastPrice, liqBarObj.index, this.lastPrice, color(na), bgcolor = color(na),
+             text = marketStructure.type == (isBullish ? -1 : 1) ? 'MSS' : 'BOS', text_size = size.tiny, text_halign = text.align_left, text_valign = isBullish ? text.align_bottom : text.align_top, text_color = color.new(color, 17))
+        marketStructure.liqSetType(isBullish ? 1 : -1)
+
+method liqInOut(liqZZ aZZ, int _d, int _x, float _y) =>
+    aZZ.d.unshift(_d), aZZ.x.unshift(_x), aZZ.y.unshift(_y), aZZ.d.pop(), aZZ.x.pop(), aZZ.y.pop()
+
+// -- swing detection engine (feeds both Market Structure and Liquidity) --
+var liqICTMS liqStLow  = liqICTMS.new()
+var liqICTMS liqStHigh = liqICTMS.new()
+var liqMS    liqStMS   = liqMS.new()
+if liqQueryRaw(liqBarObj.low, liqBarObj.low[1], liqBarObj.low[2], false)
+    liqStLow.liqUpdatePattern(liqBarObj.low[1], liqBarObj.index[1])
+if liqQueryRaw(liqBarObj.high, liqBarObj.high[1], liqBarObj.high[2], true)
+    liqStHigh.liqUpdatePattern(liqBarObj.high[1], liqBarObj.index[1])
+
+var liqICTMS liqItLow  = liqICTMS.new()
+var liqICTMS liqItHigh = liqICTMS.new()
+var liqMS    liqItMS   = liqMS.new()
+liqCITL = liqStLow.liqQueryPatterns(false)
+if liqCITL and liqCITL != liqCITL[1]
+    liqItLow.liqUpdatePattern(liqStLow.midPrice, liqStLow.midIndex)
+liqCITH = liqStHigh.liqQueryPatterns(true)
+if liqCITH and liqCITH != liqCITH[1]
+    liqItHigh.liqUpdatePattern(liqStHigh.midPrice, liqStHigh.midIndex)
+
+var liqICTMS liqLtLow  = liqICTMS.new()
+var liqICTMS liqLtHigh = liqICTMS.new()
+var liqMS    liqLtMS   = liqMS.new()
+liqCLTL = liqItLow.liqQueryPatterns(false)
+if liqCLTL and liqCLTL != liqCLTL[1]
+    liqLtLow.isCrossed := false
+    liqLtLow.lastPrice := liqItLow.midPrice
+    liqLtLow.lastIndex := liqItLow.midIndex
+liqCLTH = liqItHigh.liqQueryPatterns(true)
+if liqCLTH and liqCLTH != liqCLTH[1]
+    liqLtHigh.isCrossed := false
+    liqLtHigh.lastPrice := liqItHigh.midPrice
+    liqLtHigh.lastIndex := liqItHigh.midIndex
+
+// -- Market Structure (BOS) --
+if liqMsShow
+    if liqMsTerm == 'Short Term'
+        liqStLow.liqRenderStructures(false, liqStMS, liqMsBearCol, liqMsLineSty, liqMsTextOn)
+        liqStHigh.liqRenderStructures(true, liqStMS, liqMsBullCol, liqMsLineSty, liqMsTextOn)
+    if liqMsTerm == 'Intermediate Term'
+        liqItLow.liqRenderStructures(false, liqItMS, liqMsBearCol, liqMsLineSty, liqMsTextOn)
+        liqItHigh.liqRenderStructures(true, liqItMS, liqMsBullCol, liqMsLineSty, liqMsTextOn)
+    if liqMsTerm == 'Long Term'
+        liqLtLow.liqRenderStructures(false, liqLtMS, liqMsBearCol, liqMsLineSty, liqMsTextOn)
+        liqLtHigh.liqRenderStructures(true, liqLtMS, liqMsBullCol, liqMsLineSty, liqMsTextOn)
+
+// -- Buyside & Sellside Liquidity --
+liqMaxSize = 50
+liqAtr     = ta.atr(10)
+var liqZZ liqAZZ = liqZZ.new(array.new<int>(liqMaxSize, 0), array.new<int>(liqMaxSize, 0), array.new<float>(liqMaxSize, na))
+var liqZone[] liqBuyZones  = array.new<liqZone>(1, liqZone.new(box(na), box(na), box(na), false, false, line(na), line(na)))
+var liqZone[] liqSellZones = array.new<liqZone>(1, liqZone.new(box(na), box(na), box(na), false, false, line(na), line(na)))
+var int liqDir = na, var int liqX1 = na, var float liqY1 = na, var int liqX2 = na, var float liqY2 = na
+
+[liqTopLQ, liqBtmLQ] = switch liqTerm
+    'Short Term'        => [liqSwing.new(liqStHigh.lastPrice, liqStHigh.lastIndex), liqSwing.new(liqStLow.lastPrice, liqStLow.lastIndex)]
+    'Intermediate Term' => [liqSwing.new(liqItHigh.lastPrice, liqItHigh.lastIndex), liqSwing.new(liqItLow.lastPrice, liqItLow.lastIndex)]
+    'Long Term'         => [liqSwing.new(liqLtHigh.lastPrice, liqLtHigh.lastIndex), liqSwing.new(liqLtLow.lastPrice, liqLtLow.lastIndex)]
+
+if not liqShow
+    liqTopLQ := liqSwing.new(0, 0)
+    liqBtmLQ := liqSwing.new(0, 0)
+
+liqSwingHigh = liqTopLQ.y
+liqSwingLow  = liqBtmLQ.y
+liqX2 := liqBarObj.index - 1
+
+if liqSwingHigh > 0 and liqSwingHigh != liqSwingHigh[1]
+    liqDir := liqAZZ.d.get(0)
+    liqX1  := liqAZZ.x.get(0)
+    liqX2  := liqTopLQ.x
+    liqY1  := liqAZZ.y.get(0)
+    liqY2  := liqSwingHigh
+    if liqDir < 1
+        liqAZZ.liqInOut(1, liqX2, liqY2)
+    else
+        if liqDir == 1 and liqSwingHigh > liqY1
+            liqAZZ.x.set(0, liqX2), liqAZZ.y.set(0, liqY2)
+
+    count = 0
+    st_P  = 0.
+    st_B  = 0
+    minP  = 0.
+    maxP  = 10e6
+    for i = 0 to liqMaxSize - 1
+        if liqAZZ.d.get(i) == 1
+            if liqAZZ.y.get(i) > liqSwingHigh + (liqAtr / liqMar)
+                break
+            else
+                if liqAZZ.y.get(i) > liqSwingHigh - (liqAtr / liqMar) and liqAZZ.y.get(i) < liqSwingHigh + (liqAtr / liqMar)
+                    count += 1
+                    st_B := liqAZZ.x.get(i)
+                    st_P := liqAZZ.y.get(i)
+                    if liqAZZ.y.get(i) > minP
+                        minP := liqAZZ.y.get(i)
+                    if liqAZZ.y.get(i) < maxP
+                        maxP := liqAZZ.y.get(i)
+    if count > 2
+        getB = liqBuyZones.get(0)
+        if st_B == getB.bx.get_left()
+            getB.bx.set_top(math.avg(minP, maxP) + (liqAtr / liqMar))
+            getB.bx.set_rightbottom(liqBarObj.index + 10, math.avg(minP, maxP) - (liqAtr / liqMar))
+        else
+            liqBuyZones.unshift(
+             liqZone.new(
+               box.new(st_B, math.avg(minP, maxP) + (liqAtr / liqMar), liqBarObj.index + 10, math.avg(minP, maxP) - (liqAtr / liqMar), bgcolor = color(na), border_color = color(na)),
+               box.new(na, na, na, na, bgcolor = color(na), border_color = color(na)),
+               box.new(st_B, st_P, liqBarObj.index + 10, st_P, text = 'Buyside liquidity', text_size = size.tiny, text_halign = text.align_left, text_valign = text.align_bottom, text_color = color.new(liqBuyCol, 25), bgcolor = color(na), border_color = color(na)),
+               false,
+               false,
+               line.new(st_B, st_P, liqBarObj.index - 1, st_P, color = color.new(liqBuyCol, 0)),
+               line.new(liqBarObj.index - 1, st_P, na, st_P, color = color.new(liqBuyCol, 0), style = line.style_dotted))
+             )
+        if liqBuyZones.size() > liqVisible
+            getLast = liqBuyZones.pop()
+            getLast.bx.delete()
+            getLast.bxz.delete()
+            getLast.bxt.delete()
+            getLast.ln.delete()
+            getLast.lne.delete()
+
+if liqSwingLow > 0 and liqSwingLow != liqSwingLow[1]
+    liqDir := liqAZZ.d.get(0)
+    liqX1  := liqAZZ.x.get(0)
+    liqX2  := liqBtmLQ.x
+    liqY1  := liqAZZ.y.get(0)
+    liqY2  := liqSwingLow
+    if liqDir > -1
+        liqAZZ.liqInOut(-1, liqX2, liqY2)
+    else
+        if liqDir == -1 and liqSwingLow < liqY1
+            liqAZZ.x.set(0, liqX2), liqAZZ.y.set(0, liqY2)
+
+    count = 0
+    st_P  = 0.
+    st_B  = 0
+    minP  = 0.
+    maxP  = 10e6
+    for i = 0 to liqMaxSize - 1
+        if liqAZZ.d.get(i) == -1
+            if liqAZZ.y.get(i) < liqSwingLow - (liqAtr / liqMar)
+                break
+            else
+                if liqAZZ.y.get(i) > liqSwingLow - (liqAtr / liqMar) and liqAZZ.y.get(i) < liqSwingLow + (liqAtr / liqMar)
+                    count += 1
+                    st_B := liqAZZ.x.get(i)
+                    st_P := liqAZZ.y.get(i)
+                    if liqAZZ.y.get(i) > minP
+                        minP := liqAZZ.y.get(i)
+                    if liqAZZ.y.get(i) < maxP
+                        maxP := liqAZZ.y.get(i)
+    if count > 2
+        getB = liqSellZones.get(0)
+        if st_B == getB.bx.get_left()
+            getB.bx.set_top(math.avg(minP, maxP) + (liqAtr / liqMar))
+            getB.bx.set_rightbottom(liqBarObj.index + 10, math.avg(minP, maxP) - (liqAtr / liqMar))
+        else
+            liqSellZones.unshift(
+             liqZone.new(
+               box.new(st_B, math.avg(minP, maxP) + (liqAtr / liqMar), liqBarObj.index + 10, math.avg(minP, maxP) - (liqAtr / liqMar), bgcolor = color(na), border_color = color(na)),
+               box.new(na, na, na, na, bgcolor = color(na), border_color = color(na)),
+               box.new(st_B, st_P, liqBarObj.index + 10, st_P, text = 'Sellside liquidity', text_size = size.tiny, text_halign = text.align_left, text_valign = text.align_top, text_color = color.new(liqSellCol, 25), bgcolor = color(na), border_color = color(na)),
+               false,
+               false,
+               line.new(st_B, st_P, liqBarObj.index - 1, st_P, color = color.new(liqSellCol, 0)),
+               line.new(liqBarObj.index - 1, st_P, na, st_P, color = color.new(liqSellCol, 0), style = line.style_dotted))
+             )
+        if liqSellZones.size() > liqVisible
+            getLast = liqSellZones.pop()
+            getLast.bx.delete()
+            getLast.bxz.delete()
+            getLast.bxt.delete()
+            getLast.ln.delete()
+            getLast.lne.delete()
+
+for i = 0 to liqBuyZones.size() - 1
+    x = liqBuyZones.get(i)
+    if not x.brL
+        x.lne.set_x2(liqBarObj.index)
+        if liqBarObj.high > x.bx.get_top()
+            x.brL := true
+
+for i = 0 to liqSellZones.size() - 1
+    x = liqSellZones.get(i)
+    if not x.brL
+        x.lne.set_x2(liqBarObj.index)
+        if liqBarObj.low < x.bx.get_bottom()
+            x.brL := true
+
+// ============================================================================
+// SECTION 3 — i-CHoCH/i-BOS + Order Blocks + Auto HH/LH/LL/HL + Areas of
+// Interest (buy/sell zones) (from "nexua")
+// ============================================================================
+
+nxBullCol  = input.color(#14D990, "Bull Color", group = "Internal Structure (i-BOS/i-CHoCH)", inline = "nx1")
+nxBearCol  = input.color(#F24968, "Bear Color", group = "Internal Structure (i-BOS/i-CHoCH)", inline = "nx1")
+nxIntSens  = input.int(3, "Sensitivity", options = [3, 5, 8], group = "Internal Structure (i-BOS/i-CHoCH)")
+nxIntStru  = input.string("All", "Structure Type", options = ["All", "BoS", "CHoCH"], group = "Internal Structure (i-BOS/i-CHoCH)")
+
+nxShowOB   = input.bool(true, "Show Order Blocks", group = "Order Blocks & Swings")
+nxExtSens  = input.int(25, "Swing Sensitivity", options = [10, 25, 50], group = "Order Blocks & Swings")
+nxShowLast = input.int(10, "Order Blocks To Keep", minval = 0, group = "Order Blocks & Swings")
+nxShowHHLH = input.bool(true, "Show HH/LH", group = "Order Blocks & Swings")
+nxShowHLLL = input.bool(true, "Show LH/LL", group = "Order Blocks & Swings")
+
+nxShowAOE  = input.bool(true, "Show Buy/Sell Areas of Interest", group = "Areas of Interest (Buy/Sell Zones)")
+
+var float nxBigUp = 0.0
+var float nxBigDn = 0.0
+
+var nxHighArr  = array.new_float()
+var nxLowArr   = array.new_float()
+var nxCloseArr = array.new_float()
+var nxOpenArr  = array.new_float()
+
+nxHighArr.unshift(high), nxLowArr.unshift(low)
+nxCloseArr.unshift(close), nxOpenArr.unshift(open)
+
+nxCalculatePivots(length) =>
+    var int nxIntraCalc = 0
+    if bar_index > length + 1
+        up  = nxHighArr.slice(0, length).max()
+        dn  = nxLowArr.slice(0, length).min()
+        cHi = nxHighArr.get(length)
+        cLo = nxLowArr.get(length)
+        nxIntraCalc := switch
+            cHi > up => 0
+            cLo < dn => 1
+            => nxIntraCalc[1]
+        topSwing = switch
+            nxIntraCalc == 0 and nxIntraCalc[1] != 0 => cHi
+            => 0
+        botSwing = switch
+            nxIntraCalc == 1 and nxIntraCalc[1] != 1 => cLo
+            => 0
+        [topSwing, botSwing]
+
+[nxBigUpper, nxBigLower]     = nxCalculatePivots(nxExtSens)
+[nxSmallUpper, nxSmallLower] = nxCalculatePivots(nxIntSens)
+
+var label[] nxUpLabel   = array.new_label(1)
+var label[] nxDnLabel   = array.new_label(1)
+var box[]   nxHighBlock = array.new_box()
+var box[]   nxLowBlock  = array.new_box()
+
+nxDrawChar(x, y, str, col, down) =>
+    style = switch down
+        true => label.style_label_down
+        => label.style_label_up
+    line.new(int(x), y, bar_index, y, color = col, style = line.style_dashed)
+    label.new(math.round(math.avg(x, bar_index)), y, str, color = #00000000, textcolor = col, style = style, size = size.small)
+
+nxOrderBlocksAndSwings() =>
+    if nxBigUpper != 0
+        x1 = bar_index - nxExtSens
+        txt = switch nxBigUpper > nxBigUp
+            true => 'HH'
+            => 'LH'
+        if nxShowHHLH
+            nxUpLabel.set(0, label.new(x1, nxBigUpper, txt, color = color.new(color.white, 100), textcolor = nxBearCol, style = label.style_label_down, size = size.small))
+        if nxShowOB
+            nxHighBlock.push(box.new(x1, nxBigUpper, last_bar_index + 5, nxBigUpper * .998, border_color = color.new(color.red, 75), bgcolor = color.new(color.red, 95)))
+        nxBigUp := nxBigUpper
+
+    if nxBigLower != 0
+        x1 = bar_index - nxExtSens
+        txt = switch nxBigLower < nxBigDn
+            true => "LL"
+            => "HL"
+        if nxShowHLLL
+            nxDnLabel.set(0, label.new(x1, nxBigLower, txt, color = #ffffff00, textcolor = nxBullCol, style = label.style_label_up, size = size.small))
+        if nxShowOB
+            nxLowBlock.push(box.new(x1, nxBigLower, last_bar_index + 5, nxBigLower * 1.002, border_color = color.new(color.blue, 75), bgcolor = color.new(color.blue, 95)))
+        nxBigDn := nxBigLower
+
+nxOrderBlocksAndSwings()
+
+method nxUpdateBox(box[] id) =>
+    if id.size() > 0
+        for i = 0 to id.size() - 1
+            id.get(i).set_right(last_bar_index + 5)
+
+method nxCleanseLevel(box[] id, bool isHighBlock) =>
+    if id.size() > 0
+        for i = id.size() - 1 to 0
+            condition = switch isHighBlock
+                true => close >= id.get(i).get_top()
+                => close <= id.get(i).get_bottom()
+            if condition
+                id.remove(i).delete()
+        if id.size() > nxShowLast and nxShowLast != 0
+            for i = id.size() - nxShowLast to 0
+                id.remove(i).delete()
+
+nxHighBlock.nxCleanseLevel(true)
+nxLowBlock.nxCleanseLevel(false)
+
+if barstate.islast
+    nxHighBlock.nxUpdateBox()
+    nxLowBlock.nxUpdateBox()
+
+nxDrawInternal() =>
+    var map<string, float> nxKV = map.new<string, float>()
+    if nxKV.size() == 0
+        nxKV.put("movingSmall", 0)
+
+    if nxSmallUpper != 0
+        nxKV.put("upsideSmall", 1)
+        nxKV.put("upaxisSmall", nxSmallUpper)
+        nxKV.put("upaxis2Small", bar_index - nxIntSens)
+
+    if nxSmallLower != 0
+        nxKV.put("downsideSmall", 1)
+        nxKV.put("dnaxisSmall", nxSmallLower)
+        nxKV.put("dnaxis2Small", bar_index - nxIntSens)
+
+    if ta.crossover(close, nxKV.get("upaxisSmall"))
+        if nxKV.get("upsideSmall") != 0
+            str = switch
+                nxKV.get("movingSmall") < 0 => nxIntStru != "BoS"   ? 'I-CHoCH' : ""
+                => nxIntStru != "CHoCH" ? 'I-BoS' : ""
+            if nxIntStru == "All" or str.contains(str, nxIntStru)
+                nxDrawChar(nxKV.get("upaxis2Small"), nxKV.get("upaxisSmall"), str, nxBullCol, true)
+            nxKV.put("upsideSmall", 0)
+            nxKV.put("movingSmall", 1)
+
+    if ta.crossunder(close, nxKV.get("dnaxisSmall"))
+        if nxKV.get("downsideSmall") != 0
+            str = switch
+                nxKV.get("movingSmall") > 0 => nxIntStru != "BoS"   ? 'I-CHoCH' : ""
+                => nxIntStru != "CHoCH" ? 'I-BoS' : ""
+            if nxIntStru == "All" or str.contains(str, nxIntStru)
+                nxDrawChar(nxKV.get("dnaxis2Small"), nxKV.get("dnaxisSmall"), str, nxBearCol, false)
+            nxKV.put("downsideSmall", 0)
+            nxKV.put("movingSmall", -1)
+
+nxDrawInternal()
+
+nxDrawAOE() =>
+    aoeAtr = ta.atr(14)
+    if nxShowAOE
+        if nxCloseArr.size() > 50
+            aoi     = nxCloseArr.slice(0, 50)
+            aoi2    = nxOpenArr.slice(0, 50)
+            maxaoiH = math.max(aoi.max(), aoi2.max())
+            minaoiL = math.min(aoi.min(), aoi2.min())
+
+            var map<string, box> nxAoeLevels = map.new<string, box>()
+            if nxAoeLevels.size() == 0
+                nxAoeLevels.put("High", box.new(bar_index[50], maxaoiH * 1.01, bar_index + 5, maxaoiH, border_color = #00000000, bgcolor = color.new(#F24968, 90), text = "Area of Interest", text_size = size.small, text_color = color.new(#F24968, 33)))
+                nxAoeLevels.put("Low", box.new(bar_index[50], minaoiL, bar_index + 5, minaoiL * .99, border_color = #00000000, bgcolor = color.new(#14D990, 90), text = "Area of Interest", text_size = size.small, text_color = color.new(#14D990, 33)))
+
+            getHighBox = nxAoeLevels.get("High")
+            if close <= getHighBox.get_top() * 1.01
+                getHighBox.set_lefttop(bar_index[50], maxaoiH + aoeAtr)
+                getHighBox.set_rightbottom(bar_index + 5, maxaoiH)
+                getHighBox.set_text("Area of Interest")
+            else
+                getHighBox.set_lefttop(bar_index + 5, maxaoiH + aoeAtr)
+                getHighBox.set_rightbottom(bar_index + 5, maxaoiH + aoeAtr)
+                getHighBox.set_text("")
+
+            getLowBox = nxAoeLevels.get("Low")
+            if close >= getLowBox.get_bottom() * .99
+                getLowBox.set_lefttop(bar_index[50], minaoiL)
+                getLowBox.set_rightbottom(bar_index + 5, minaoiL - aoeAtr)
+                getLowBox.set_text("Area of Interest")
+            else
+                getLowBox.set_lefttop(bar_index + 5, minaoiL)
+                getLowBox.set_rightbottom(bar_index + 5, -aoeAtr)
+                getLowBox.set_text("")
+
+nxDrawAOE()
+
+// ============================================================================
+// SECTION 4 — Supply/Demand POI zones (resistance/support only) (from "smc")
+// ============================================================================
+
+smcSwingLen       = input.int(10, "Swing High/Low Length", group = "Supply/Demand Zones (POI)", minval = 1, maxval = 50)
+smcHistory        = input.int(20, "History To Keep", group = "Supply/Demand Zones (POI)", minval = 5, maxval = 50)
+smcBoxWidth       = input.float(2.5, "Supply/Demand Box Width", group = "Supply/Demand Zones (POI)", minval = 1, maxval = 10, step = 0.5)
+smcSupplyCol      = input.color(color.new(#EDEDED, 70), "Supply", group = "Supply/Demand Zones (POI)", inline = "smc3")
+smcSupplyOutline  = input.color(color.new(color.white, 75), "Outline", group = "Supply/Demand Zones (POI)", inline = "smc3")
+smcDemandCol      = input.color(color.new(#00FFFF, 70), "Demand", group = "Supply/Demand Zones (POI)", inline = "smc4")
+smcDemandOutline  = input.color(color.new(color.white, 75), "Outline", group = "Supply/Demand Zones (POI)", inline = "smc4")
+smcPoiLabelCol    = input.color(color.white, "POI Label", group = "Supply/Demand Zones (POI)", inline = "smc7")
+
+smcArrayAddPop(arr, newVal) =>
+    array.unshift(arr, newVal)
+    array.pop(arr)
+
+smcCheckOverlap(newPoi, boxArr, atrVal) =>
+    atrThreshold = atrVal * 2
+    ok = true
+    for i = 0 to array.size(boxArr) - 1
+        top    = box.get_top(array.get(boxArr, i))
+        bottom = box.get_bottom(array.get(boxArr, i))
+        poi    = (top + bottom) / 2
+        upperB = poi + atrThreshold
+        lowerB = poi - atrThreshold
+        if newPoi >= lowerB and newPoi <= upperB
+            ok := false
+            break
+        else
+            ok := true
+    ok
+
+smcSupplyDemand(valueArr, bnArr, boxArr, labelArr, boxType, atrVal) =>
+    atrBuffer = atrVal * (smcBoxWidth / 10)
+    boxLeft   = array.get(bnArr, 0)
+    boxRight  = bar_index
+    var float boxTop    = 0.00
+    var float boxBottom = 0.00
+    var float poi       = 0.00
+
+    if boxType == 1
+        boxTop    := array.get(valueArr, 0)
+        boxBottom := boxTop - atrBuffer
+        poi       := (boxTop + boxBottom) / 2
+    else if boxType == -1
+        boxBottom := array.get(valueArr, 0)
+        boxTop    := boxBottom + atrBuffer
+        poi       := (boxTop + boxBottom) / 2
+
+    okToDraw = smcCheckOverlap(poi, boxArr, atrVal)
+
+    if boxType == 1 and okToDraw
+        box.delete(array.get(boxArr, array.size(boxArr) - 1))
+        smcArrayAddPop(boxArr, box.new(left = boxLeft, top = boxTop, right = boxRight, bottom = boxBottom, border_color = smcSupplyOutline,
+             bgcolor = smcSupplyCol, extend = extend.right, text = 'SUPPLY', text_halign = text.align_center, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
+        box.delete(array.get(labelArr, array.size(labelArr) - 1))
+        smcArrayAddPop(labelArr, box.new(left = boxLeft, top = poi, right = boxRight, bottom = poi, border_color = color.new(smcPoiLabelCol, 90),
+             bgcolor = color.new(smcPoiLabelCol, 90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
+
+    else if boxType == -1 and okToDraw
+        box.delete(array.get(boxArr, array.size(boxArr) - 1))
+        smcArrayAddPop(boxArr, box.new(left = boxLeft, top = boxTop, right = boxRight, bottom = boxBottom, border_color = smcDemandOutline,
+             bgcolor = smcDemandCol, extend = extend.right, text = 'DEMAND', text_halign = text.align_center, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
+        box.delete(array.get(labelArr, array.size(labelArr) - 1))
+        smcArrayAddPop(labelArr, box.new(left = boxLeft, top = poi, right = boxRight, bottom = poi, border_color = color.new(smcPoiLabelCol, 90),
+             bgcolor = color.new(smcPoiLabelCol, 90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
+
+smcExtendBoxEndpoint(boxArr) =>
+    for i = 0 to array.size(boxArr) - 1
+        box.set_right(array.get(boxArr, i), bar_index + 100)
+
+smcAtr       = ta.atr(50)
+smcSwingHigh = ta.pivothigh(high, smcSwingLen, smcSwingLen)
+smcSwingLow  = ta.pivotlow(low, smcSwingLen, smcSwingLen)
+
+var smcSwingHighValues = array.new_float(5, 0.00)
+var smcSwingLowValues  = array.new_float(5, 0.00)
+var smcSwingHighBns    = array.new_int(5, 0)
+var smcSwingLowBns     = array.new_int(5, 0)
+
+var smcCurrentSupplyBox = array.new_box(smcHistory, na)
+var smcCurrentDemandBox = array.new_box(smcHistory, na)
+var smcCurrentSupplyPoi = array.new_box(smcHistory, na)
+var smcCurrentDemandPoi = array.new_box(smcHistory, na)
+
+if not na(smcSwingHigh)
+    smcArrayAddPop(smcSwingHighValues, smcSwingHigh)
+    smcArrayAddPop(smcSwingHighBns, bar_index[smcSwingLen])
+    smcSupplyDemand(smcSwingHighValues, smcSwingHighBns, smcCurrentSupplyBox, smcCurrentSupplyPoi, 1, smcAtr)
+else if not na(smcSwingLow)
+    smcArrayAddPop(smcSwingLowValues, smcSwingLow)
+    smcArrayAddPop(smcSwingLowBns, bar_index[smcSwingLen])
+    smcSupplyDemand(smcSwingLowValues, smcSwingLowBns, smcCurrentDemandBox, smcCurrentDemandPoi, -1, smcAtr)
+
+smcExtendBoxEndpoint(smcCurrentSupplyBox)
+smcExtendBoxEndpoint(smcCurrentDemandBox)
