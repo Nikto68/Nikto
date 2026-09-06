@@ -158,13 +158,6 @@ liqSellCol = input.color(#f23645, "Sellside", inline = "liqLIQ", group = "Liquid
 liqVisible = input.int(3, "  Visible Levels", minval = 1, maxval = 50, group = "Liquidity (Buy/Sell Side)")
 liqMar     = 10 / liqMarIn
 
-type liqBar
-    float open
-    float high
-    float low
-    float close
-    int   index
-
 type liqICTMS
     float lastPrice
     float midPrice
@@ -204,8 +197,6 @@ type liqZone
     line ln
     line lne
 
-liqBarObj = liqBar.new(open, high, low, close, bar_index)
-
 liqLineStyle(styleInText) =>
     switch styleInText
         'Solid'  => line.style_solid
@@ -234,14 +225,14 @@ method liqSetType(liqMS this, value) =>
     this.type := value
 
 method liqRenderStructures(liqICTMS this, isBullish, marketStructure, color, style, labelEnabled) =>
-    condition = isBullish ? liqBarObj.close > this.lastPrice : liqBarObj.close < this.lastPrice
+    condition = isBullish ? close > this.lastPrice : close < this.lastPrice
     if condition and not this.isCrossed
         this.isCrossed := true
         this.isConfirmed := false
-        this.msLine := line.new(this.lastIndex, this.lastPrice, liqBarObj.index, this.lastPrice, color = color, style = liqLineStyle(style))
-        this.swpBox := box.new(liqBarObj.index, this.lastPrice, liqBarObj.index, this.lastPrice, color.new(color, 73), bgcolor = color.new(color, 73))
+        this.msLine := line.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color = color, style = liqLineStyle(style))
+        this.swpBox := box.new(bar_index, this.lastPrice, bar_index, this.lastPrice, color.new(color, 73), bgcolor = color.new(color, 73))
         if labelEnabled
-            this.msLabel := box.new(this.lastIndex, this.lastPrice, liqBarObj.index, this.lastPrice, color(na), bgcolor = color(na),
+            this.msLabel := box.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color(na), bgcolor = color(na),
              text = marketStructure.type == (isBullish ? -1 : 1) ? 'MSS' : 'BOS', text_size = size.tiny, text_halign = text.align_left, text_valign = isBullish ? text.align_bottom : text.align_top, text_color = color.new(color, 17))
         marketStructure.liqSetType(isBullish ? 1 : -1)
 
@@ -252,10 +243,10 @@ method liqInOut(liqZZ aZZ, int _d, int _x, float _y) =>
 var liqICTMS liqStLow  = liqICTMS.new()
 var liqICTMS liqStHigh = liqICTMS.new()
 var liqMS    liqStMS   = liqMS.new()
-if liqQueryRaw(liqBarObj.low, (liqBarObj[1]).low, (liqBarObj[2]).low, false)
-    liqStLow.liqUpdatePattern((liqBarObj[1]).low, (liqBarObj[1]).index)
-if liqQueryRaw(liqBarObj.high, (liqBarObj[1]).high, (liqBarObj[2]).high, true)
-    liqStHigh.liqUpdatePattern((liqBarObj[1]).high, (liqBarObj[1]).index)
+if liqQueryRaw(low, low[1], low[2], false)
+    liqStLow.liqUpdatePattern(low[1], bar_index[1])
+if liqQueryRaw(high, high[1], high[2], true)
+    liqStHigh.liqUpdatePattern(high[1], bar_index[1])
 
 var liqICTMS liqItLow  = liqICTMS.new()
 var liqICTMS liqItHigh = liqICTMS.new()
@@ -312,7 +303,7 @@ if not liqShow
 
 liqSwingHigh = liqTopLQ.y
 liqSwingLow  = liqBtmLQ.y
-liqX2 := liqBarObj.index - 1
+liqX2 := bar_index - 1
 
 if liqSwingHigh > 0 and liqSwingHigh != liqSwingHigh[1]
     liqDir := liqAZZ.d.get(0)
@@ -348,17 +339,17 @@ if liqSwingHigh > 0 and liqSwingHigh != liqSwingHigh[1]
         getB = liqBuyZones.get(0)
         if st_B == getB.bx.get_left()
             getB.bx.set_top(math.avg(minP, maxP) + (liqAtr / liqMar))
-            getB.bx.set_rightbottom(liqBarObj.index + 10, math.avg(minP, maxP) - (liqAtr / liqMar))
+            getB.bx.set_rightbottom(bar_index + 10, math.avg(minP, maxP) - (liqAtr / liqMar))
         else
             liqBuyZones.unshift(
              liqZone.new(
-               box.new(st_B, math.avg(minP, maxP) + (liqAtr / liqMar), liqBarObj.index + 10, math.avg(minP, maxP) - (liqAtr / liqMar), bgcolor = color(na), border_color = color(na)),
+               box.new(st_B, math.avg(minP, maxP) + (liqAtr / liqMar), bar_index + 10, math.avg(minP, maxP) - (liqAtr / liqMar), bgcolor = color(na), border_color = color(na)),
                box.new(na, na, na, na, bgcolor = color(na), border_color = color(na)),
-               box.new(st_B, st_P, liqBarObj.index + 10, st_P, text = 'Buyside liquidity', text_size = size.tiny, text_halign = text.align_left, text_valign = text.align_bottom, text_color = color.new(liqBuyCol, 25), bgcolor = color(na), border_color = color(na)),
+               box.new(st_B, st_P, bar_index + 10, st_P, text = 'Buyside liquidity', text_size = size.tiny, text_halign = text.align_left, text_valign = text.align_bottom, text_color = color.new(liqBuyCol, 25), bgcolor = color(na), border_color = color(na)),
                false,
                false,
-               line.new(st_B, st_P, liqBarObj.index - 1, st_P, color = color.new(liqBuyCol, 0)),
-               line.new(liqBarObj.index - 1, st_P, na, st_P, color = color.new(liqBuyCol, 0), style = line.style_dotted))
+               line.new(st_B, st_P, bar_index - 1, st_P, color = color.new(liqBuyCol, 0)),
+               line.new(bar_index - 1, st_P, na, st_P, color = color.new(liqBuyCol, 0), style = line.style_dotted))
              )
         if liqBuyZones.size() > liqVisible
             getLast = liqBuyZones.pop()
@@ -402,17 +393,17 @@ if liqSwingLow > 0 and liqSwingLow != liqSwingLow[1]
         getB = liqSellZones.get(0)
         if st_B == getB.bx.get_left()
             getB.bx.set_top(math.avg(minP, maxP) + (liqAtr / liqMar))
-            getB.bx.set_rightbottom(liqBarObj.index + 10, math.avg(minP, maxP) - (liqAtr / liqMar))
+            getB.bx.set_rightbottom(bar_index + 10, math.avg(minP, maxP) - (liqAtr / liqMar))
         else
             liqSellZones.unshift(
              liqZone.new(
-               box.new(st_B, math.avg(minP, maxP) + (liqAtr / liqMar), liqBarObj.index + 10, math.avg(minP, maxP) - (liqAtr / liqMar), bgcolor = color(na), border_color = color(na)),
+               box.new(st_B, math.avg(minP, maxP) + (liqAtr / liqMar), bar_index + 10, math.avg(minP, maxP) - (liqAtr / liqMar), bgcolor = color(na), border_color = color(na)),
                box.new(na, na, na, na, bgcolor = color(na), border_color = color(na)),
-               box.new(st_B, st_P, liqBarObj.index + 10, st_P, text = 'Sellside liquidity', text_size = size.tiny, text_halign = text.align_left, text_valign = text.align_top, text_color = color.new(liqSellCol, 25), bgcolor = color(na), border_color = color(na)),
+               box.new(st_B, st_P, bar_index + 10, st_P, text = 'Sellside liquidity', text_size = size.tiny, text_halign = text.align_left, text_valign = text.align_top, text_color = color.new(liqSellCol, 25), bgcolor = color(na), border_color = color(na)),
                false,
                false,
-               line.new(st_B, st_P, liqBarObj.index - 1, st_P, color = color.new(liqSellCol, 0)),
-               line.new(liqBarObj.index - 1, st_P, na, st_P, color = color.new(liqSellCol, 0), style = line.style_dotted))
+               line.new(st_B, st_P, bar_index - 1, st_P, color = color.new(liqSellCol, 0)),
+               line.new(bar_index - 1, st_P, na, st_P, color = color.new(liqSellCol, 0), style = line.style_dotted))
              )
         if liqSellZones.size() > liqVisible
             getLast = liqSellZones.pop()
@@ -425,15 +416,15 @@ if liqSwingLow > 0 and liqSwingLow != liqSwingLow[1]
 for i = 0 to liqBuyZones.size() - 1
     x = liqBuyZones.get(i)
     if not x.brL
-        x.lne.set_x2(liqBarObj.index)
-        if liqBarObj.high > x.bx.get_top()
+        x.lne.set_x2(bar_index)
+        if high > x.bx.get_top()
             x.brL := true
 
 for i = 0 to liqSellZones.size() - 1
     x = liqSellZones.get(i)
     if not x.brL
-        x.lne.set_x2(liqBarObj.index)
-        if liqBarObj.low < x.bx.get_bottom()
+        x.lne.set_x2(bar_index)
+        if low < x.bx.get_bottom()
             x.brL := true
 
 // ============================================================================
