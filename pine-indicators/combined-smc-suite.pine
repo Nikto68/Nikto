@@ -253,17 +253,18 @@ method liqUpdatePattern(liqICTMS this, price, index) =>
 method liqSetType(liqMS this, value) =>
     this.type := value
 
-method liqRenderStructures(liqICTMS this, isBullish, marketStructure, color, style, labelEnabled) =>
+method liqRenderStructures(liqICTMS this, isBullish, marketStructure, color, style, labelEnabled, draw) =>
     condition = isBullish ? close > this.lastPrice : close < this.lastPrice
     fired = condition and not this.isCrossed
     if fired
         this.isCrossed := true
         this.isConfirmed := false
-        this.msLine := line.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color = color, style = liqLineStyle(style))
-        this.swpBox := box.new(bar_index, this.lastPrice, bar_index, this.lastPrice, color.new(color, 73), bgcolor = color.new(color, 73))
-        if labelEnabled
-            this.msLabel := box.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color(na), bgcolor = color(na),
-             text = marketStructure.type == (isBullish ? -1 : 1) ? 'MSS' : 'BOS', text_size = size.tiny, text_halign = text.align_left, text_valign = isBullish ? text.align_bottom : text.align_top, text_color = color.new(color, 17))
+        if draw
+            this.msLine := line.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color = color, style = liqLineStyle(style))
+            this.swpBox := box.new(bar_index, this.lastPrice, bar_index, this.lastPrice, color.new(color, 73), bgcolor = color.new(color, 73))
+            if labelEnabled
+                this.msLabel := box.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color(na), bgcolor = color(na),
+                 text = marketStructure.type == (isBullish ? -1 : 1) ? 'MSS' : 'BOS', text_size = size.tiny, text_halign = text.align_left, text_valign = isBullish ? text.align_bottom : text.align_top, text_color = color.new(color, 17))
         marketStructure.liqSetType(isBullish ? 1 : -1)
     fired
 
@@ -308,14 +309,23 @@ liqBullBOS = false
 liqBearBOS = false
 if liqMsShow
     if liqMsTerm == 'Short Term'
-        liqBearBOS := liqStLow.liqRenderStructures(false, liqStMS, liqMsBearCol, liqMsLineSty, liqMsTextOn)
-        liqBullBOS := liqStHigh.liqRenderStructures(true, liqStMS, liqMsBullCol, liqMsLineSty, liqMsTextOn)
+        liqBearBOS := liqStLow.liqRenderStructures(false, liqStMS, liqMsBearCol, liqMsLineSty, liqMsTextOn, true)
+        liqBullBOS := liqStHigh.liqRenderStructures(true, liqStMS, liqMsBullCol, liqMsLineSty, liqMsTextOn, true)
     if liqMsTerm == 'Intermediate Term'
-        liqBearBOS := liqItLow.liqRenderStructures(false, liqItMS, liqMsBearCol, liqMsLineSty, liqMsTextOn)
-        liqBullBOS := liqItHigh.liqRenderStructures(true, liqItMS, liqMsBullCol, liqMsLineSty, liqMsTextOn)
+        liqBearBOS := liqItLow.liqRenderStructures(false, liqItMS, liqMsBearCol, liqMsLineSty, liqMsTextOn, true)
+        liqBullBOS := liqItHigh.liqRenderStructures(true, liqItMS, liqMsBullCol, liqMsLineSty, liqMsTextOn, true)
     if liqMsTerm == 'Long Term'
-        liqBearBOS := liqLtLow.liqRenderStructures(false, liqLtMS, liqMsBearCol, liqMsLineSty, liqMsTextOn)
-        liqBullBOS := liqLtHigh.liqRenderStructures(true, liqLtMS, liqMsBullCol, liqMsLineSty, liqMsTextOn)
+        liqBearBOS := liqLtLow.liqRenderStructures(false, liqLtMS, liqMsBearCol, liqMsLineSty, liqMsTextOn, true)
+        liqBullBOS := liqLtHigh.liqRenderStructures(true, liqLtMS, liqMsBullCol, liqMsLineSty, liqMsTextOn, true)
+
+// Long-term structure bias for the trade filter below, tracked
+// unconditionally (independent of liqMsShow/liqMsTerm, which only control
+// what gets DRAWN). If the display above already consumed liqLtLow/liqLtHigh
+// this bar (liqMsTerm == 'Long Term'), don't process them a second time —
+// liqLtMS.type is already current from that call.
+if liqMsTerm != 'Long Term'
+    liqLtLow.liqRenderStructures(false, liqLtMS, liqMsBearCol, liqMsLineSty, false, false)
+    liqLtHigh.liqRenderStructures(true, liqLtMS, liqMsBullCol, liqMsLineSty, false, false)
 
 // -- Buyside & Sellside Liquidity --
 liqMaxSize = 50
@@ -861,8 +871,14 @@ if smcSignalDn or liqSellTouch or nxOBSellTouch
 else
     tradeBarsSinceBearZone := tradeBarsSinceBearZone + 1
 
-tradeBuyConfirm  = (liqBullBOS or nxBullFired) and tradeBarsSinceBullZone <= tradeConfirmBars
-tradeSellConfirm = (liqBearBOS or nxBearFired) and tradeBarsSinceBearZone <= tradeConfirmBars
+// Require the long-term structure to actually agree with the trade
+// direction (strict — neutral/never-confirmed blocks trades too), on top of
+// the break + zone confluence. This is what was missing before: a SELL
+// could confirm on nothing more than a short-term BOS near some zone even
+// while the bigger picture was still bullish, which is what was losing.
+tradeBias        = liqLtMS.type
+tradeBuyConfirm  = (liqBullBOS or nxBullFired) and tradeBarsSinceBullZone <= tradeConfirmBars and tradeBias == 1
+tradeSellConfirm = (liqBearBOS or nxBearFired) and tradeBarsSinceBearZone <= tradeConfirmBars and tradeBias == -1
 
 var string tradeType  = na
 var float  tradeEntry = na
@@ -915,22 +931,26 @@ if tradeType == "SELL" and (high >= tradeStop or low <= tradeTp4)
     tradeTp4   := na
 
 if tradeShow and barstate.islast
-    var table tradeTab = table.new(position.top_left, 2, 7, bgcolor = #20222C, border_color = #363843, frame_color = #363843, border_width = 1, frame_width = 1)
-    tradeCol = tradeType == "BUY" ? color.lime : tradeType == "SELL" ? color.red : color.gray
-    tradeTab.cell(0, 0, "Setup", text_color = color.white, bgcolor = #2A2E39)
-    tradeTab.cell(1, 0, na(tradeType) ? "—" : tradeType, text_color = tradeCol, bgcolor = #2A2E39)
-    tradeTab.cell(0, 1, "Entry", text_color = color.white)
-    tradeTab.cell(1, 1, na(tradeEntry) ? "—" : str.tostring(tradeEntry, format.mintick), text_color = color.white)
-    tradeTab.cell(0, 2, "Stop", text_color = color.white)
-    tradeTab.cell(1, 2, na(tradeStop) ? "—" : str.tostring(tradeStop, format.mintick), text_color = color.red)
-    tradeTab.cell(0, 3, "Target 1", text_color = color.white)
-    tradeTab.cell(1, 3, na(tradeTp1) ? "—" : str.tostring(tradeTp1, format.mintick), text_color = color.lime)
-    tradeTab.cell(0, 4, "Target 2", text_color = color.white)
-    tradeTab.cell(1, 4, na(tradeTp2) ? "—" : str.tostring(tradeTp2, format.mintick), text_color = color.lime)
-    tradeTab.cell(0, 5, "Target 3", text_color = color.white)
-    tradeTab.cell(1, 5, na(tradeTp3) ? "—" : str.tostring(tradeTp3, format.mintick), text_color = color.lime)
-    tradeTab.cell(0, 6, "Target 4", text_color = color.white)
-    tradeTab.cell(1, 6, na(tradeTp4) ? "—" : str.tostring(tradeTp4, format.mintick), text_color = color.lime)
+    var table tradeTab = table.new(position.top_left, 2, 8, bgcolor = #20222C, border_color = #363843, frame_color = #363843, border_width = 1, frame_width = 1)
+    tradeCol  = tradeType == "BUY" ? color.lime : tradeType == "SELL" ? color.red : color.gray
+    biasText  = tradeBias == 1 ? "Bullish" : tradeBias == -1 ? "Bearish" : "Neutral"
+    biasCol   = tradeBias == 1 ? color.lime : tradeBias == -1 ? color.red : color.gray
+    tradeTab.cell(0, 0, "Bias", text_color = color.white, bgcolor = #2A2E39)
+    tradeTab.cell(1, 0, biasText, text_color = biasCol, bgcolor = #2A2E39)
+    tradeTab.cell(0, 1, "Setup", text_color = color.white)
+    tradeTab.cell(1, 1, na(tradeType) ? "—" : tradeType, text_color = tradeCol)
+    tradeTab.cell(0, 2, "Entry", text_color = color.white)
+    tradeTab.cell(1, 2, na(tradeEntry) ? "—" : str.tostring(tradeEntry, format.mintick), text_color = color.white)
+    tradeTab.cell(0, 3, "Stop", text_color = color.white)
+    tradeTab.cell(1, 3, na(tradeStop) ? "—" : str.tostring(tradeStop, format.mintick), text_color = color.red)
+    tradeTab.cell(0, 4, "Target 1", text_color = color.white)
+    tradeTab.cell(1, 4, na(tradeTp1) ? "—" : str.tostring(tradeTp1, format.mintick), text_color = color.lime)
+    tradeTab.cell(0, 5, "Target 2", text_color = color.white)
+    tradeTab.cell(1, 5, na(tradeTp2) ? "—" : str.tostring(tradeTp2, format.mintick), text_color = color.lime)
+    tradeTab.cell(0, 6, "Target 3", text_color = color.white)
+    tradeTab.cell(1, 6, na(tradeTp3) ? "—" : str.tostring(tradeTp3, format.mintick), text_color = color.lime)
+    tradeTab.cell(0, 7, "Target 4", text_color = color.white)
+    tradeTab.cell(1, 7, na(tradeTp4) ? "—" : str.tostring(tradeTp4, format.mintick), text_color = color.lime)
 
 alertcondition(tradeType == "BUY" and tradeType != tradeType[1], title = "Trade Setup: BUY", message = "New BUY setup confirmed (CHoCH/BOS + zone confluence)")
 alertcondition(tradeType == "SELL" and tradeType != tradeType[1], title = "Trade Setup: SELL", message = "New SELL setup confirmed (CHoCH/BOS + zone confluence)")
