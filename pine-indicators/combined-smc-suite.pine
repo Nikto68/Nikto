@@ -1,11 +1,11 @@
 // This source code combines trimmed-down pieces of four public-domain-style
-// Pine Script v5 indicators into one script, per user spec:
+// Pine Script indicators into one script, per user spec:
 //   - "nikto"  (Mxwll MTF S/R)                 -> kept: 4H / Daily / Weekly S/R levels only
 //   - "sina"   (LuxAlgo Pure Price Action ICT) -> kept: Market Structure (BOS) + Buyside/Sellside Liquidity
 //   - "nexua"  (Mxwll Suite)                   -> kept: i-CHoCH/i-BOS, Order Blocks + auto HH/LH/LL/HL, Areas of Interest (buy/sell zones)
 //   - "smc"    (FluidTrades SMC Lite)          -> kept: Supply/Demand POI zones (resistance/support) only
 // All identifiers are namespaced per source (sr_, liq_, nx_, smc_) to avoid collisions.
-//@version=5
+//@version=6
 indicator("Combined SMC Suite", shorttitle = "Combined SMC Suite", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 2000)
 
 // ============================================================================
@@ -499,30 +499,30 @@ nxDrawChar(x, y, str, col, down) =>
     line.new(int(x), y, bar_index, y, color = col, style = line.style_dashed)
     label.new(math.round(math.avg(x, bar_index)), y, str, color = #00000000, textcolor = col, style = style, size = size.small)
 
-nxOrderBlocksAndSwings() =>
-    if nxBigUpper != 0
-        x1 = bar_index - nxExtSens
-        txt = switch nxBigUpper > nxBigUp
-            true => 'HH'
-            => 'LH'
-        if nxShowHHLH
-            nxUpLabel.set(0, label.new(x1, nxBigUpper, txt, color = color.new(color.white, 100), textcolor = nxBearCol, style = label.style_label_down, size = size.small))
-        if nxShowOB
-            nxHighBlock.push(box.new(x1, nxBigUpper, last_bar_index + 5, nxBigUpper * .998, border_color = color.new(color.red, 75), bgcolor = color.new(color.red, 95)))
-        nxBigUp := nxBigUpper
+// NOTE: this runs directly at script (global) scope, not inside a
+// function — Pine disallows reassigning a global `var` from inside a
+// function body (CE10088), and nxBigUp/nxBigDn are global.
+if nxBigUpper != 0
+    nxX1 = bar_index - nxExtSens
+    nxTxt = switch nxBigUpper > nxBigUp
+        true => 'HH'
+        => 'LH'
+    if nxShowHHLH
+        nxUpLabel.set(0, label.new(nxX1, nxBigUpper, nxTxt, color = color.new(color.white, 100), textcolor = nxBearCol, style = label.style_label_down, size = size.small))
+    if nxShowOB
+        nxHighBlock.push(box.new(nxX1, nxBigUpper, last_bar_index + 5, nxBigUpper * .998, border_color = color.new(color.red, 75), bgcolor = color.new(color.red, 95)))
+    nxBigUp := nxBigUpper
 
-    if nxBigLower != 0
-        x1 = bar_index - nxExtSens
-        txt = switch nxBigLower < nxBigDn
-            true => "LL"
-            => "HL"
-        if nxShowHLLL
-            nxDnLabel.set(0, label.new(x1, nxBigLower, txt, color = #ffffff00, textcolor = nxBullCol, style = label.style_label_up, size = size.small))
-        if nxShowOB
-            nxLowBlock.push(box.new(x1, nxBigLower, last_bar_index + 5, nxBigLower * 1.002, border_color = color.new(color.blue, 75), bgcolor = color.new(color.blue, 95)))
-        nxBigDn := nxBigLower
-
-nxOrderBlocksAndSwings()
+if nxBigLower != 0
+    nxX1 = bar_index - nxExtSens
+    nxTxt = switch nxBigLower < nxBigDn
+        true => "LL"
+        => "HL"
+    if nxShowHLLL
+        nxDnLabel.set(0, label.new(nxX1, nxBigLower, nxTxt, color = #ffffff00, textcolor = nxBullCol, style = label.style_label_up, size = size.small))
+    if nxShowOB
+        nxLowBlock.push(box.new(nxX1, nxBigLower, last_bar_index + 5, nxBigLower * 1.002, border_color = color.new(color.blue, 75), bgcolor = color.new(color.blue, 95)))
+    nxBigDn := nxBigLower
 
 method nxUpdateBox(box[] id) =>
     if id.size() > 0
