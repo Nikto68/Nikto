@@ -75,42 +75,52 @@ srEx = switch srExtend
     "Both"  => extend.both
 
 type srObjects
-    line support
-    line resistance
+    line  support
+    line  resistance
+    label supportLabel
+    label resistanceLabel
 
 var srObj = matrix.new<srObjects>(3, 2)
 
 method srCondS(float id) => not na(id) and id != 1e8
 method srCondR(float id) => not na(id) and id != 0
 
-method srSetSupport(matrix<srObjects> id, int row, int column, line ln) =>
+// Every S/R line also gets a small LONG/SHORT tag at its right edge — a
+// static description of what the level is (support = long area, resistance
+// = short area), not a trade call. Fixed green/red regardless of the
+// line's own timeframe color, so LONG vs SHORT reads at a glance.
+method srSetSupport(matrix<srObjects> id, int row, int column, line ln, float y) =>
     if not na(id.get(row, column))
         id.get(row, column).support.delete()
-    id.set(row, column, srObjects.new(support = ln))
+        id.get(row, column).supportLabel.delete()
+    lbl = label.new(last_bar_time + (time - time[5]) * 3, y, "LONG", xloc = xloc.bar_time, style = label.style_label_left, color = color.new(color.lime, 60), textcolor = color.lime, size = size.small)
+    id.set(row, column, srObjects.new(support = ln, supportLabel = lbl))
 
-method srSetResistance(matrix<srObjects> id, int row, int column, line ln) =>
+method srSetResistance(matrix<srObjects> id, int row, int column, line ln, float y) =>
     if not na(srObj.get(row, column))
         srObj.get(row, column).resistance.delete()
-    id.set(row, column, srObjects.new(resistance = ln))
+        srObj.get(row, column).resistanceLabel.delete()
+    lbl = label.new(last_bar_time + (time - time[5]) * 3, y, "SHORT", xloc = xloc.bar_time, style = label.style_label_left, color = color.new(color.red, 60), textcolor = color.red, size = size.small)
+    id.set(row, column, srObjects.new(resistance = ln, resistanceLabel = lbl))
 
 if barstate.islast
     if sr4hShow
         if sr4hS.srCondS()
-            srObj.srSetSupport(0, 0, line.new(sr4hStime, sr4hS, last_bar_time + (time - time[5]), sr4hS, extend = srEx, xloc = xloc.bar_time, width = 1, style = srFinStyle, color = sr4hCol))
+            srObj.srSetSupport(0, 0, line.new(sr4hStime, sr4hS, last_bar_time + (time - time[5]), sr4hS, extend = srEx, xloc = xloc.bar_time, width = 1, style = srFinStyle, color = sr4hCol), sr4hS)
         if sr4hR.srCondR()
-            srObj.srSetResistance(0, 1, line.new(sr4hRtime, sr4hR, last_bar_time + (time - time[5]), sr4hR, extend = srEx, xloc = xloc.bar_time, width = 1, style = srFinStyle, color = sr4hCol))
+            srObj.srSetResistance(0, 1, line.new(sr4hRtime, sr4hR, last_bar_time + (time - time[5]), sr4hR, extend = srEx, xloc = xloc.bar_time, width = 1, style = srFinStyle, color = sr4hCol), sr4hR)
 
     if srDShow
         if srDS.srCondS()
-            srObj.srSetSupport(1, 0, line.new(srDStime, srDS, last_bar_time + (time - time[5]), srDS, extend = srEx, xloc = xloc.bar_time, color = srDCol, width = 1, style = srFinStyle))
+            srObj.srSetSupport(1, 0, line.new(srDStime, srDS, last_bar_time + (time - time[5]), srDS, extend = srEx, xloc = xloc.bar_time, color = srDCol, width = 1, style = srFinStyle), srDS)
         if srDR.srCondR()
-            srObj.srSetResistance(1, 1, line.new(srDRtime, srDR, last_bar_time + (time - time[5]), srDR, extend = srEx, xloc = xloc.bar_time, color = srDCol, width = 1, style = srFinStyle))
+            srObj.srSetResistance(1, 1, line.new(srDRtime, srDR, last_bar_time + (time - time[5]), srDR, extend = srEx, xloc = xloc.bar_time, color = srDCol, width = 1, style = srFinStyle), srDR)
 
     if srWShow
         if srWS.srCondS()
-            srObj.srSetSupport(2, 0, line.new(srWStime, srWS, last_bar_time + (time - time[5]), srWS, extend = srEx, xloc = xloc.bar_time, color = srWCol, style = srFinStyle))
+            srObj.srSetSupport(2, 0, line.new(srWStime, srWS, last_bar_time + (time - time[5]), srWS, extend = srEx, xloc = xloc.bar_time, color = srWCol, style = srFinStyle), srWS)
         if srWR.srCondR()
-            srObj.srSetResistance(2, 1, line.new(srWRtime, srWR, last_bar_time + (time - time[5]), srWR, extend = srEx, xloc = xloc.bar_time, color = srWCol, style = srFinStyle))
+            srObj.srSetResistance(2, 1, line.new(srWRtime, srWR, last_bar_time + (time - time[5]), srWR, extend = srEx, xloc = xloc.bar_time, color = srWCol, style = srFinStyle), srWR)
 
     srRes    = array.from("4 Hour: ♦", "Daily: ♦", "Weekly: ♦")
     srResCol = array.from(sr4hCol, srDCol, srWCol)
