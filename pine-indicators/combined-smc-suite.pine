@@ -624,6 +624,9 @@ smcSupplyOutline  = input.color(color.new(color.white, 75), "Outline", group = "
 smcDemandCol      = input.color(color.new(#00FFFF, 70), "Demand", group = "Supply/Demand Zones (POI)", inline = "smc4")
 smcDemandOutline  = input.color(color.new(color.white, 75), "Outline", group = "Supply/Demand Zones (POI)", inline = "smc4")
 smcPoiLabelCol    = input.color(color.white, "POI Label", group = "Supply/Demand Zones (POI)", inline = "smc7")
+smcShowSignals    = input.bool(true, "Show Buy/Sell Signal On Touch", group = "Supply/Demand Zones (POI)")
+smcBuyCol         = input.color(color.lime, "Buy Signal", group = "Supply/Demand Zones (POI)", inline = "smcSig")
+smcSellCol        = input.color(color.red,  "Sell Signal", group = "Supply/Demand Zones (POI)", inline = "smcSig")
 
 smcArrayAddPop(arr, newVal) =>
     array.unshift(arr, newVal)
@@ -707,5 +710,41 @@ else if not na(smcSwingLow)
     smcArrayAddPop(smcSwingLowBns, bar_index[smcSwingLen])
     smcSupplyDemand(smcSwingLowValues, smcSwingLowBns, smcCurrentDemandBox, smcCurrentDemandPoi, -1, smcAtr)
 
+// -- Buy/Sell signal on touch, then remove the zone entirely (it's "filled") --
+// Slots are cleared to na in place (not array.remove) so the fixed-size
+// ring buffer that smcArrayAddPop relies on never shrinks.
+smcSignalUp = false
+smcSignalDn = false
+
+for i = 0 to smcCurrentDemandBox.size() - 1
+    zBox = smcCurrentDemandBox.get(i)
+    if not na(zBox)
+        zTop    = box.get_top(zBox)
+        zBottom = box.get_bottom(zBox)
+        if low <= zTop and high >= zBottom
+            smcSignalUp := true
+            box.delete(zBox)
+            box.delete(smcCurrentDemandPoi.get(i))
+            smcCurrentDemandBox.set(i, na)
+            smcCurrentDemandPoi.set(i, na)
+
+for i = 0 to smcCurrentSupplyBox.size() - 1
+    zBox = smcCurrentSupplyBox.get(i)
+    if not na(zBox)
+        zTop    = box.get_top(zBox)
+        zBottom = box.get_bottom(zBox)
+        if high >= zBottom and low <= zTop
+            smcSignalDn := true
+            box.delete(zBox)
+            box.delete(smcCurrentSupplyPoi.get(i))
+            smcCurrentSupplyBox.set(i, na)
+            smcCurrentSupplyPoi.set(i, na)
+
 smcExtendBoxEndpoint(smcCurrentSupplyBox)
 smcExtendBoxEndpoint(smcCurrentDemandBox)
+
+plotshape(smcShowSignals and smcSignalUp, title = "Buy Signal (Demand POI touched)", location = location.belowbar, style = shape.labelup, color = smcBuyCol, text = "BUY", textcolor = color.white, size = size.small)
+plotshape(smcShowSignals and smcSignalDn, title = "Sell Signal (Supply POI touched)", location = location.abovebar, style = shape.labeldown, color = smcSellCol, text = "SELL", textcolor = color.white, size = size.small)
+
+alertcondition(smcSignalUp, title = "SMC Buy Signal", message = "Price touched a Demand POI zone — potential BUY")
+alertcondition(smcSignalDn, title = "SMC Sell Signal", message = "Price touched a Supply POI zone — potential SELL")
