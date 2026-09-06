@@ -623,7 +623,7 @@ smcSupplyCol      = input.color(color.new(#EDEDED, 70), "Supply", group = "Suppl
 smcSupplyOutline  = input.color(color.new(color.white, 75), "Outline", group = "Supply/Demand Zones (POI)", inline = "smc3")
 smcDemandCol      = input.color(color.new(#00FFFF, 70), "Demand", group = "Supply/Demand Zones (POI)", inline = "smc4")
 smcDemandOutline  = input.color(color.new(color.white, 75), "Outline", group = "Supply/Demand Zones (POI)", inline = "smc4")
-smcPoiLabelCol    = input.color(color.white, "POI Label", group = "Supply/Demand Zones (POI)", inline = "smc7")
+smcPoiLabelCol    = input.color(color.white, "Zone Label", group = "Supply/Demand Zones (POI)", inline = "smc7")
 smcShowSignals    = input.bool(true, "Show Buy/Sell Signal On Touch", group = "Supply/Demand Zones (POI)")
 smcBuyCol         = input.color(color.lime, "Buy Signal", group = "Supply/Demand Zones (POI)", inline = "smcSig")
 smcSellCol        = input.color(color.red,  "Sell Signal", group = "Supply/Demand Zones (POI)", inline = "smcSig")
@@ -648,7 +648,7 @@ smcCheckOverlap(newPoi, boxArr, atrVal) =>
             ok := true
     ok
 
-smcSupplyDemand(valueArr, bnArr, boxArr, labelArr, boxType, atrVal) =>
+smcSupplyDemand(valueArr, bnArr, boxArr, boxType, atrVal) =>
     atrBuffer = atrVal * (smcBoxWidth / 10)
     boxLeft   = array.get(bnArr, 0)
     boxRight  = bar_index
@@ -665,23 +665,19 @@ smcSupplyDemand(valueArr, bnArr, boxArr, labelArr, boxType, atrVal) =>
         boxTop    := boxBottom + atrBuffer
         poi       := (boxTop + boxBottom) / 2
 
+    // poi is only used to keep new zones from overlapping recent ones —
+    // no separate "POI" midline box is drawn, only the zone's top/bottom.
     okToDraw = smcCheckOverlap(poi, boxArr, atrVal)
 
     if boxType == 1 and okToDraw
         box.delete(array.get(boxArr, array.size(boxArr) - 1))
         smcArrayAddPop(boxArr, box.new(left = boxLeft, top = boxTop, right = boxRight, bottom = boxBottom, border_color = smcSupplyOutline,
              bgcolor = smcSupplyCol, extend = extend.right, text = 'SUPPLY', text_halign = text.align_center, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
-        box.delete(array.get(labelArr, array.size(labelArr) - 1))
-        smcArrayAddPop(labelArr, box.new(left = boxLeft, top = poi, right = boxRight, bottom = poi, border_color = color.new(smcPoiLabelCol, 90),
-             bgcolor = color.new(smcPoiLabelCol, 90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
 
     else if boxType == -1 and okToDraw
         box.delete(array.get(boxArr, array.size(boxArr) - 1))
         smcArrayAddPop(boxArr, box.new(left = boxLeft, top = boxTop, right = boxRight, bottom = boxBottom, border_color = smcDemandOutline,
              bgcolor = smcDemandCol, extend = extend.right, text = 'DEMAND', text_halign = text.align_center, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
-        box.delete(array.get(labelArr, array.size(labelArr) - 1))
-        smcArrayAddPop(labelArr, box.new(left = boxLeft, top = poi, right = boxRight, bottom = poi, border_color = color.new(smcPoiLabelCol, 90),
-             bgcolor = color.new(smcPoiLabelCol, 90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
 
 smcExtendBoxEndpoint(boxArr) =>
     for i = 0 to array.size(boxArr) - 1
@@ -698,17 +694,15 @@ var smcSwingLowBns     = array.new_int(5, 0)
 
 var smcCurrentSupplyBox = array.new_box(smcHistory, na)
 var smcCurrentDemandBox = array.new_box(smcHistory, na)
-var smcCurrentSupplyPoi = array.new_box(smcHistory, na)
-var smcCurrentDemandPoi = array.new_box(smcHistory, na)
 
 if not na(smcSwingHigh)
     smcArrayAddPop(smcSwingHighValues, smcSwingHigh)
     smcArrayAddPop(smcSwingHighBns, bar_index[smcSwingLen])
-    smcSupplyDemand(smcSwingHighValues, smcSwingHighBns, smcCurrentSupplyBox, smcCurrentSupplyPoi, 1, smcAtr)
+    smcSupplyDemand(smcSwingHighValues, smcSwingHighBns, smcCurrentSupplyBox, 1, smcAtr)
 else if not na(smcSwingLow)
     smcArrayAddPop(smcSwingLowValues, smcSwingLow)
     smcArrayAddPop(smcSwingLowBns, bar_index[smcSwingLen])
-    smcSupplyDemand(smcSwingLowValues, smcSwingLowBns, smcCurrentDemandBox, smcCurrentDemandPoi, -1, smcAtr)
+    smcSupplyDemand(smcSwingLowValues, smcSwingLowBns, smcCurrentDemandBox, -1, smcAtr)
 
 // -- Buy/Sell signal on touch, then remove the zone entirely (it's "filled") --
 // Slots are cleared to na in place (not array.remove) so the fixed-size
@@ -724,9 +718,7 @@ for i = 0 to smcCurrentDemandBox.size() - 1
         if low <= zTop and high >= zBottom
             smcSignalUp := true
             box.delete(zBox)
-            box.delete(smcCurrentDemandPoi.get(i))
             smcCurrentDemandBox.set(i, na)
-            smcCurrentDemandPoi.set(i, na)
 
 for i = 0 to smcCurrentSupplyBox.size() - 1
     zBox = smcCurrentSupplyBox.get(i)
@@ -736,9 +728,7 @@ for i = 0 to smcCurrentSupplyBox.size() - 1
         if high >= zBottom and low <= zTop
             smcSignalDn := true
             box.delete(zBox)
-            box.delete(smcCurrentSupplyPoi.get(i))
             smcCurrentSupplyBox.set(i, na)
-            smcCurrentSupplyPoi.set(i, na)
 
 smcExtendBoxEndpoint(smcCurrentSupplyBox)
 smcExtendBoxEndpoint(smcCurrentDemandBox)
