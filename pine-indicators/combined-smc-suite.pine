@@ -9,21 +9,6 @@
 indicator("Combined SMC Suite", shorttitle = "Combined SMC Suite", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 2000)
 
 // ============================================================================
-// TREND FILTER — gates every BUY/SELL signal in this script (S/R touch,
-// liquidity sweep, POI touch, trade table). Added because signals were
-// firing against the prevailing trend (e.g. a SELL right before a strong
-// pump) — no single zone touch or structure break, on its own, should be
-// allowed to fight what price is actually doing on a higher level.
-// ============================================================================
-trendMaLen   = input.int(50, "Trend Filter MA Length", group = "Trend Filter", minval = 1, tooltip = "No BUY signal fires anywhere in this script while close is below this MA; no SELL fires while close is above it.")
-trendShowMa  = input.bool(true, "Show Trend MA Line", group = "Trend Filter")
-trendMa      = ta.sma(close, trendMaLen)
-globalBullOK = close > trendMa
-globalBearOK = close < trendMa
-
-plot(trendShowMa ? trendMa : na, title = "Trend Filter MA", color = color.new(color.yellow, 40), linewidth = 2)
-
-// ============================================================================
 // SECTION 1 — Multi-Timeframe S/R (from "nikto"): 4H / Daily / Weekly only
 // ============================================================================
 
@@ -153,35 +138,6 @@ alertcondition(ta.crossunder(low, srDS), "1-Day Support Crossunder", "1-Day Supp
 alertcondition(ta.crossover(high, srWR), "1-Week Resistance Crossover", "1-Week Resistance Crossover")
 alertcondition(ta.crossunder(low, srWS), "1-Week Support Crossunder", "1-Week Support Crossunder")
 
-// -- Buy/Sell signal when price reaches any of the 4H/Daily/Weekly levels --
-srShowSignals = input.bool(true, "Show Buy/Sell Signal On Touch", group = "Multi-Timeframe S/R")
-srBuyCol      = input.color(color.lime, "Buy Signal", group = "Multi-Timeframe S/R", inline = "srSig")
-srSellCol     = input.color(color.red,  "Sell Signal", group = "Multi-Timeframe S/R", inline = "srSig")
-
-srTouchEdge(level) =>
-    now = not na(level) and level != 0 and high >= level and low <= level
-    now and not now[1]
-
-sr4hRTouch = srTouchEdge(sr4hR)
-sr4hSTouch = srTouchEdge(sr4hS)
-srDRTouch  = srTouchEdge(srDR)
-srDSTouch  = srTouchEdge(srDS)
-srWRTouch  = srTouchEdge(srWR)
-srWSTouch  = srTouchEdge(srWS)
-
-srSellSignal = (sr4hRTouch or srDRTouch or srWRTouch) and globalBearOK
-srBuySignal  = (sr4hSTouch or srDSTouch or srWSTouch) and globalBullOK
-srSellTF     = srWRTouch ? "W" : srDRTouch ? "D" : "4H"
-srBuyTF      = srWSTouch ? "W" : srDSTouch ? "D" : "4H"
-
-if srShowSignals and srBuySignal
-    label.new(bar_index, low, text = "BUY " + srBuyTF, style = label.style_label_up, color = srBuyCol, textcolor = color.white, size = size.small)
-if srShowSignals and srSellSignal
-    label.new(bar_index, high, text = "SELL " + srSellTF, style = label.style_label_down, color = srSellCol, textcolor = color.white, size = size.small)
-
-alertcondition(srBuySignal, "S/R Buy Signal", "Price touched a 4H/Daily/Weekly support level — potential BUY")
-alertcondition(srSellSignal, "S/R Sell Signal", "Price touched a 4H/Daily/Weekly resistance level — potential SELL")
-
 // ============================================================================
 // SECTION 2 — Market Structure (BOS) + Buyside/Sellside Liquidity (from "sina")
 // ============================================================================
@@ -268,20 +224,17 @@ method liqUpdatePattern(liqICTMS this, price, index) =>
 method liqSetType(liqMS this, value) =>
     this.type := value
 
-method liqRenderStructures(liqICTMS this, isBullish, marketStructure, color, style, labelEnabled, draw) =>
+method liqRenderStructures(liqICTMS this, isBullish, marketStructure, color, style, labelEnabled) =>
     condition = isBullish ? close > this.lastPrice : close < this.lastPrice
-    fired = condition and not this.isCrossed
-    if fired
+    if condition and not this.isCrossed
         this.isCrossed := true
         this.isConfirmed := false
-        if draw
-            this.msLine := line.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color = color, style = liqLineStyle(style))
-            this.swpBox := box.new(bar_index, this.lastPrice, bar_index, this.lastPrice, color.new(color, 73), bgcolor = color.new(color, 73))
-            if labelEnabled
-                this.msLabel := box.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color(na), bgcolor = color(na),
-                 text = marketStructure.type == (isBullish ? -1 : 1) ? 'MSS' : 'BOS', text_size = size.tiny, text_halign = text.align_left, text_valign = isBullish ? text.align_bottom : text.align_top, text_color = color.new(color, 17))
+        this.msLine := line.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color = color, style = liqLineStyle(style))
+        this.swpBox := box.new(bar_index, this.lastPrice, bar_index, this.lastPrice, color.new(color, 73), bgcolor = color.new(color, 73))
+        if labelEnabled
+            this.msLabel := box.new(this.lastIndex, this.lastPrice, bar_index, this.lastPrice, color(na), bgcolor = color(na),
+             text = marketStructure.type == (isBullish ? -1 : 1) ? 'MSS' : 'BOS', text_size = size.tiny, text_halign = text.align_left, text_valign = isBullish ? text.align_bottom : text.align_top, text_color = color.new(color, 17))
         marketStructure.liqSetType(isBullish ? 1 : -1)
-    fired
 
 method liqInOut(liqZZ aZZ, int _d, int _x, float _y) =>
     aZZ.d.unshift(_d), aZZ.x.unshift(_x), aZZ.y.unshift(_y), aZZ.d.pop(), aZZ.x.pop(), aZZ.y.pop()
@@ -320,27 +273,16 @@ if liqCLTH and liqCLTH != liqCLTH[1]
     liqLtHigh.lastIndex := liqItHigh.midIndex
 
 // -- Market Structure (BOS) --
-liqBullBOS = false
-liqBearBOS = false
 if liqMsShow
     if liqMsTerm == 'Short Term'
-        liqBearBOS := liqStLow.liqRenderStructures(false, liqStMS, liqMsBearCol, liqMsLineSty, liqMsTextOn, true)
-        liqBullBOS := liqStHigh.liqRenderStructures(true, liqStMS, liqMsBullCol, liqMsLineSty, liqMsTextOn, true)
+        liqStLow.liqRenderStructures(false, liqStMS, liqMsBearCol, liqMsLineSty, liqMsTextOn)
+        liqStHigh.liqRenderStructures(true, liqStMS, liqMsBullCol, liqMsLineSty, liqMsTextOn)
     if liqMsTerm == 'Intermediate Term'
-        liqBearBOS := liqItLow.liqRenderStructures(false, liqItMS, liqMsBearCol, liqMsLineSty, liqMsTextOn, true)
-        liqBullBOS := liqItHigh.liqRenderStructures(true, liqItMS, liqMsBullCol, liqMsLineSty, liqMsTextOn, true)
+        liqItLow.liqRenderStructures(false, liqItMS, liqMsBearCol, liqMsLineSty, liqMsTextOn)
+        liqItHigh.liqRenderStructures(true, liqItMS, liqMsBullCol, liqMsLineSty, liqMsTextOn)
     if liqMsTerm == 'Long Term'
-        liqBearBOS := liqLtLow.liqRenderStructures(false, liqLtMS, liqMsBearCol, liqMsLineSty, liqMsTextOn, true)
-        liqBullBOS := liqLtHigh.liqRenderStructures(true, liqLtMS, liqMsBullCol, liqMsLineSty, liqMsTextOn, true)
-
-// Long-term structure bias for the trade filter below, tracked
-// unconditionally (independent of liqMsShow/liqMsTerm, which only control
-// what gets DRAWN). If the display above already consumed liqLtLow/liqLtHigh
-// this bar (liqMsTerm == 'Long Term'), don't process them a second time —
-// liqLtMS.type is already current from that call.
-if liqMsTerm != 'Long Term'
-    liqLtLow.liqRenderStructures(false, liqLtMS, liqMsBearCol, liqMsLineSty, false, false)
-    liqLtHigh.liqRenderStructures(true, liqLtMS, liqMsBullCol, liqMsLineSty, false, false)
+        liqLtLow.liqRenderStructures(false, liqLtMS, liqMsBearCol, liqMsLineSty, liqMsTextOn)
+        liqLtHigh.liqRenderStructures(true, liqLtMS, liqMsBullCol, liqMsLineSty, liqMsTextOn)
 
 // -- Buyside & Sellside Liquidity --
 liqMaxSize = 50
@@ -471,39 +413,19 @@ if liqSwingLow > 0 and liqSwingLow != liqSwingLow[1]
             getLast.ln.delete()
             getLast.lne.delete()
 
-// Buyside liquidity swept (price ran above old highs) -> ICT reads this as a
-// reversal-down (SELL) signal, not a "buy" signal, since it's stop-hunting
-// resting buy-stops before turning down.
-liqSellTouch = false
 for i = 0 to liqBuyZones.size() - 1
     x = liqBuyZones.get(i)
     if not x.brL
         x.lne.set_x2(bar_index)
         if high > x.bx.get_top()
             x.brL := true
-            if globalBearOK
-                liqSellTouch := true
 
-// Sellside liquidity swept (price ran below old lows) -> reversal-up (BUY).
-liqBuyTouch = false
 for i = 0 to liqSellZones.size() - 1
     x = liqSellZones.get(i)
     if not x.brL
         x.lne.set_x2(bar_index)
         if low < x.bx.get_bottom()
             x.brL := true
-            if globalBullOK
-                liqBuyTouch := true
-
-liqShowSignals = input.bool(true, "Show Buy/Sell Signal On Sweep", group = "Liquidity (Buy/Sell Side)")
-liqBuySigCol   = input.color(color.lime, "Buy Signal", group = "Liquidity (Buy/Sell Side)", inline = "liqSig")
-liqSellSigCol  = input.color(color.red,  "Sell Signal", group = "Liquidity (Buy/Sell Side)", inline = "liqSig")
-
-plotshape(liqShowSignals and liqBuyTouch, title = "Liquidity Buy Signal (sellside swept)", location = location.belowbar, style = shape.labelup, color = liqBuySigCol, text = "BUY", textcolor = color.white, size = size.small)
-plotshape(liqShowSignals and liqSellTouch, title = "Liquidity Sell Signal (buyside swept)", location = location.abovebar, style = shape.labeldown, color = liqSellSigCol, text = "SELL", textcolor = color.white, size = size.small)
-
-alertcondition(liqBuyTouch, title = "Liquidity Buy Signal", message = "Sellside liquidity swept — potential BUY (reversal up)")
-alertcondition(liqSellTouch, title = "Liquidity Sell Signal", message = "Buyside liquidity swept — potential SELL (reversal down)")
 
 // ============================================================================
 // SECTION 3 — i-CHoCH/i-BOS + Order Blocks + Auto HH/LH/LL/HL + Areas of
@@ -515,11 +437,12 @@ nxBearCol  = input.color(#F24968, "Bear Color", group = "Internal Structure (i-B
 nxIntSens  = input.int(3, "Sensitivity", options = [3, 5, 8], group = "Internal Structure (i-BOS/i-CHoCH)")
 nxIntStru  = input.string("All", "Structure Type", options = ["All", "BoS", "CHoCH"], group = "Internal Structure (i-BOS/i-CHoCH)")
 
-nxShowOB   = input.bool(true, "Show Order Blocks", group = "Order Blocks & Swings")
-nxExtSens  = input.int(25, "Swing Sensitivity", options = [10, 25, 50], group = "Order Blocks & Swings")
-nxShowLast = input.int(10, "Order Blocks To Keep", minval = 0, group = "Order Blocks & Swings")
-nxShowHHLH = input.bool(true, "Show HH/LH", group = "Order Blocks & Swings")
-nxShowHLLL = input.bool(true, "Show LH/LL", group = "Order Blocks & Swings")
+nxShowOB      = input.bool(true, "Show Order Blocks", group = "Order Blocks & Swings")
+nxExtSens     = input.int(25, "Swing Sensitivity", options = [10, 25, 50], group = "Order Blocks & Swings")
+nxShowLast    = input.int(5, "Order Blocks To Keep", minval = 0, group = "Order Blocks & Swings", tooltip = "Kept small on purpose — only the most recent, most important blocks stay on the chart.")
+nxObPowerMult = input.float(1.1, "Order Block Power Threshold (x avg ATR)", group = "Order Blocks & Swings", minval = 1.0, step = 0.05, tooltip = "Only mark an order block if it formed on an above-average, impulsive move — filters out the minor/noisy ones.")
+nxShowHHLH    = input.bool(true, "Show HH/LH", group = "Order Blocks & Swings")
+nxShowHLLL    = input.bool(true, "Show LH/LL", group = "Order Blocks & Swings")
 
 nxShowAOE  = input.bool(true, "Show Buy/Sell Areas of Interest", group = "Areas of Interest (Buy/Sell Zones)")
 
@@ -568,6 +491,13 @@ nxDrawChar(x, y, str, col, down) =>
     line.new(int(x), y, bar_index, y, color = col, style = line.style_dashed)
     label.new(math.round(math.avg(x, bar_index)), y, str, color = #00000000, textcolor = col, style = style, size = size.small)
 
+// Only mark an order block as "important" if it formed during an
+// above-average (impulsive) move — keeps the count small and meaningful
+// instead of marking every minor swing.
+nxObAtr    = ta.atr(14)
+nxObAtrAvg = ta.sma(nxObAtr, 50)
+nxObStrong = nxObAtr > nxObAtrAvg * nxObPowerMult
+
 // NOTE: this runs directly at script (global) scope, not inside a
 // function — Pine disallows reassigning a global `var` from inside a
 // function body (CE10088), and nxBigUp/nxBigDn are global.
@@ -578,7 +508,7 @@ if nxBigUpper != 0
         => 'LH'
     if nxShowHHLH
         nxUpLabel.set(0, label.new(nxX1, nxBigUpper, nxTxt, color = color.new(color.white, 100), textcolor = nxBearCol, style = label.style_label_down, size = size.small))
-    if nxShowOB
+    if nxShowOB and nxObStrong
         nxHighBlock.push(box.new(nxX1, nxBigUpper, last_bar_index + 5, nxBigUpper * .998, border_color = color.new(color.red, 75), bgcolor = color.new(color.red, 95)))
     nxBigUp := nxBigUpper
 
@@ -589,7 +519,7 @@ if nxBigLower != 0
         => "HL"
     if nxShowHLLL
         nxDnLabel.set(0, label.new(nxX1, nxBigLower, nxTxt, color = #ffffff00, textcolor = nxBullCol, style = label.style_label_up, size = size.small))
-    if nxShowOB
+    if nxShowOB and nxObStrong
         nxLowBlock.push(box.new(nxX1, nxBigLower, last_bar_index + 5, nxBigLower * 1.002, border_color = color.new(color.blue, 75), bgcolor = color.new(color.blue, 95)))
     nxBigDn := nxBigLower
 
@@ -613,23 +543,6 @@ method nxCleanseLevel(box[] id, bool isHighBlock) =>
 nxHighBlock.nxCleanseLevel(true)
 nxLowBlock.nxCleanseLevel(false)
 
-// Read-only touch check against the order blocks, used only as one of the
-// confluence signals for the trade table below — doesn't alter the blocks
-// themselves (nxCleanseLevel above already owns their lifecycle).
-nxOBBuyTouch = false
-if nxLowBlock.size() > 0
-    for i = 0 to nxLowBlock.size() - 1
-        obBox = nxLowBlock.get(i)
-        if low <= box.get_top(obBox) and high >= box.get_bottom(obBox)
-            nxOBBuyTouch := true
-
-nxOBSellTouch = false
-if nxHighBlock.size() > 0
-    for i = 0 to nxHighBlock.size() - 1
-        obBox = nxHighBlock.get(i)
-        if high >= box.get_bottom(obBox) and low <= box.get_top(obBox)
-            nxOBSellTouch := true
-
 if barstate.islast
     nxHighBlock.nxUpdateBox()
     nxLowBlock.nxUpdateBox()
@@ -649,8 +562,6 @@ nxDrawInternal() =>
         nxKV.put("dnaxisSmall", nxSmallLower)
         nxKV.put("dnaxis2Small", bar_index - nxIntSens)
 
-    bullFired = false
-    bearFired = false
     if ta.crossover(close, nxKV.get("upaxisSmall"))
         if nxKV.get("upsideSmall") != 0
             str = switch
@@ -658,7 +569,6 @@ nxDrawInternal() =>
                 => nxIntStru != "CHoCH" ? 'I-BoS' : ""
             if nxIntStru == "All" or str.contains(str, nxIntStru)
                 nxDrawChar(nxKV.get("upaxis2Small"), nxKV.get("upaxisSmall"), str, nxBullCol, true)
-                bullFired := true
             nxKV.put("upsideSmall", 0)
             nxKV.put("movingSmall", 1)
 
@@ -669,12 +579,10 @@ nxDrawInternal() =>
                 => nxIntStru != "CHoCH" ? 'I-BoS' : ""
             if nxIntStru == "All" or str.contains(str, nxIntStru)
                 nxDrawChar(nxKV.get("dnaxis2Small"), nxKV.get("dnaxisSmall"), str, nxBearCol, false)
-                bearFired := true
             nxKV.put("downsideSmall", 0)
             nxKV.put("movingSmall", -1)
-    [bullFired, bearFired]
 
-[nxBullFired, nxBearFired] = nxDrawInternal()
+nxDrawInternal()
 
 nxDrawAOE() =>
     aoeAtr = ta.atr(14)
@@ -724,10 +632,6 @@ smcSupplyOutline  = input.color(color.new(color.white, 75), "Outline", group = "
 smcDemandCol      = input.color(color.new(#00FFFF, 70), "Demand", group = "Supply/Demand Zones (POI)", inline = "smc4")
 smcDemandOutline  = input.color(color.new(color.white, 75), "Outline", group = "Supply/Demand Zones (POI)", inline = "smc4")
 smcPoiLabelCol    = input.color(color.white, "Zone Label", group = "Supply/Demand Zones (POI)", inline = "smc7")
-smcShowSignals    = input.bool(true, "Show Buy/Sell Signal On Touch", group = "Supply/Demand Zones (POI)")
-smcBuyCol         = input.color(color.lime, "Buy Signal", group = "Supply/Demand Zones (POI)", inline = "smcSig")
-smcSellCol        = input.color(color.red,  "Sell Signal", group = "Supply/Demand Zones (POI)", inline = "smcSig")
-smcPowerMult      = input.float(1.1, "Zone Power Threshold (x avg ATR)", group = "Supply/Demand Zones (POI)", minval = 1.0, step = 0.05, tooltip = "A zone only counts as 'high power' (and can fire a signal) if it formed while ATR was at least this many times its own 50-bar average — i.e. an above-average, impulsive move. Weaker zones still draw and still get deleted once filled, they just don't signal.")
 
 smcArrayAddPop(arr, newVal) =>
     array.unshift(arr, newVal)
@@ -749,7 +653,7 @@ smcCheckOverlap(newPoi, boxArr, atrVal) =>
             ok := true
     ok
 
-smcSupplyDemand(valueArr, bnArr, boxArr, strongArr, isStrong, boxType, atrVal) =>
+smcSupplyDemand(valueArr, bnArr, boxArr, boxType, atrVal) =>
     atrBuffer = atrVal * (smcBoxWidth / 10)
     boxLeft   = array.get(bnArr, 0)
     boxRight  = bar_index
@@ -774,13 +678,11 @@ smcSupplyDemand(valueArr, bnArr, boxArr, strongArr, isStrong, boxType, atrVal) =
         box.delete(array.get(boxArr, array.size(boxArr) - 1))
         smcArrayAddPop(boxArr, box.new(left = boxLeft, top = boxTop, right = boxRight, bottom = boxBottom, border_color = smcSupplyOutline,
              bgcolor = smcSupplyCol, extend = extend.right, text = 'SUPPLY', text_halign = text.align_center, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
-        smcArrayAddPop(strongArr, isStrong)
 
     else if boxType == -1 and okToDraw
         box.delete(array.get(boxArr, array.size(boxArr) - 1))
         smcArrayAddPop(boxArr, box.new(left = boxLeft, top = boxTop, right = boxRight, bottom = boxBottom, border_color = smcDemandOutline,
              bgcolor = smcDemandCol, extend = extend.right, text = 'DEMAND', text_halign = text.align_center, text_valign = text.align_center, text_color = smcPoiLabelCol, text_size = size.small, xloc = xloc.bar_index))
-        smcArrayAddPop(strongArr, isStrong)
 
 smcExtendBoxEndpoint(boxArr) =>
     for i = 0 to array.size(boxArr) - 1
@@ -797,40 +699,27 @@ var smcSwingLowBns     = array.new_int(5, 0)
 
 var smcCurrentSupplyBox = array.new_box(smcHistory, na)
 var smcCurrentDemandBox = array.new_box(smcHistory, na)
-var smcSupplyStrong     = array.new_bool(smcHistory, false)
-var smcDemandStrong     = array.new_bool(smcHistory, false)
-
-smcAtrAvg   = ta.sma(smcAtr, 50)
-smcIsStrong = smcAtr > smcAtrAvg * smcPowerMult
 
 if not na(smcSwingHigh)
     smcArrayAddPop(smcSwingHighValues, smcSwingHigh)
     smcArrayAddPop(smcSwingHighBns, bar_index[smcSwingLen])
-    smcSupplyDemand(smcSwingHighValues, smcSwingHighBns, smcCurrentSupplyBox, smcSupplyStrong, smcIsStrong, 1, smcAtr)
+    smcSupplyDemand(smcSwingHighValues, smcSwingHighBns, smcCurrentSupplyBox, 1, smcAtr)
 else if not na(smcSwingLow)
     smcArrayAddPop(smcSwingLowValues, smcSwingLow)
     smcArrayAddPop(smcSwingLowBns, bar_index[smcSwingLen])
-    smcSupplyDemand(smcSwingLowValues, smcSwingLowBns, smcCurrentDemandBox, smcDemandStrong, smcIsStrong, -1, smcAtr)
+    smcSupplyDemand(smcSwingLowValues, smcSwingLowBns, smcCurrentDemandBox, -1, smcAtr)
 
-// -- Buy/Sell signal on touch, then remove the zone entirely (it's "filled") --
-// Slots are cleared to na (box arrays) / false (strong arrays) in place
-// (not array.remove) so the fixed-size ring buffer that smcArrayAddPop
-// relies on never shrinks. Only a "high power" zone actually signals —
-// every touched zone gets deleted either way.
-smcSignalUp = false
-smcSignalDn = false
-
+// -- Remove a zone entirely once price touches it (it's "filled") --
+// Slots are cleared to na in place (not array.remove) so the fixed-size
+// ring buffer that smcArrayAddPop relies on never shrinks.
 for i = 0 to smcCurrentDemandBox.size() - 1
     zBox = smcCurrentDemandBox.get(i)
     if not na(zBox)
         zTop    = box.get_top(zBox)
         zBottom = box.get_bottom(zBox)
         if low <= zTop and high >= zBottom
-            if smcDemandStrong.get(i) and globalBullOK
-                smcSignalUp := true
             box.delete(zBox)
             smcCurrentDemandBox.set(i, na)
-            smcDemandStrong.set(i, false)
 
 for i = 0 to smcCurrentSupplyBox.size() - 1
     zBox = smcCurrentSupplyBox.get(i)
@@ -838,136 +727,8 @@ for i = 0 to smcCurrentSupplyBox.size() - 1
         zTop    = box.get_top(zBox)
         zBottom = box.get_bottom(zBox)
         if high >= zBottom and low <= zTop
-            if smcSupplyStrong.get(i) and globalBearOK
-                smcSignalDn := true
             box.delete(zBox)
             smcCurrentSupplyBox.set(i, na)
-            smcSupplyStrong.set(i, false)
 
 smcExtendBoxEndpoint(smcCurrentSupplyBox)
 smcExtendBoxEndpoint(smcCurrentDemandBox)
-
-plotshape(smcShowSignals and smcSignalUp, title = "Buy Signal (Demand POI touched)", location = location.belowbar, style = shape.labelup, color = smcBuyCol, text = "BUY", textcolor = color.white, size = size.small)
-plotshape(smcShowSignals and smcSignalDn, title = "Sell Signal (Supply POI touched)", location = location.abovebar, style = shape.labeldown, color = smcSellCol, text = "SELL", textcolor = color.white, size = size.small)
-
-alertcondition(smcSignalUp, title = "SMC Buy Signal", message = "Price touched a Demand POI zone — potential BUY")
-alertcondition(smcSignalDn, title = "SMC Sell Signal", message = "Price touched a Supply POI zone — potential SELL")
-
-// ============================================================================
-// SECTION 5 — Order-block trade setup: entry confirmed by CHoCH/BOS +
-// zone confluence, with a small Entry/Stop/4-Target table
-// ============================================================================
-//
-// Entry trigger: a structure break (Market Structure BOS/MSS from Section 2,
-// or internal i-CHoCH/i-BOS from Section 3) in a given direction.
-// Confirmation: that break has to land within tradeConfirmBars of a zone
-// "hit" in the SAME direction — a strong POI touch, a liquidity sweep, or an
-// order-block touch — i.e. multiple independent parts of the indicator have
-// to agree, not just one lone BOS print.
-// Once confirmed: entry = close, stop = ATR-based distance, targets = that
-// same risk distance projected out to 1R/2R/3R/4R. The setup is cleared the
-// moment price hits the stop or the 4th target.
-
-tradeGroup       = "Trade Signal (CHoCH/BOS + Zone Confluence)"
-tradeShow        = input.bool(true, "Show Trade Table", group = tradeGroup)
-tradeAtrLen      = input.int(14, "ATR Length", minval = 1, group = tradeGroup)
-tradeAtrMult     = input.float(1.5, "Stop = ATR x", minval = 0.1, step = 0.1, group = tradeGroup)
-tradeConfirmBars = input.int(20, "Confluence Window (bars)", minval = 1, maxval = 200, group = tradeGroup, tooltip = "How many bars apart a structure break (CHoCH/BOS) and a zone hit (POI/liquidity/order block) can be and still count as one confirmed setup")
-
-// -- bars since the most recent bullish / bearish zone confluence event --
-var int tradeBarsSinceBullZone = 999999
-var int tradeBarsSinceBearZone = 999999
-
-if smcSignalUp or liqBuyTouch or nxOBBuyTouch
-    tradeBarsSinceBullZone := 0
-else
-    tradeBarsSinceBullZone := tradeBarsSinceBullZone + 1
-
-if smcSignalDn or liqSellTouch or nxOBSellTouch
-    tradeBarsSinceBearZone := 0
-else
-    tradeBarsSinceBearZone := tradeBarsSinceBearZone + 1
-
-// Require the long-term structure to actually agree with the trade
-// direction (strict — neutral/never-confirmed blocks trades too), on top of
-// the break + zone confluence. This is what was missing before: a SELL
-// could confirm on nothing more than a short-term BOS near some zone even
-// while the bigger picture was still bullish, which is what was losing.
-tradeBias        = liqLtMS.type
-tradeBuyConfirm  = (liqBullBOS or nxBullFired) and tradeBarsSinceBullZone <= tradeConfirmBars and tradeBias == 1 and globalBullOK
-tradeSellConfirm = (liqBearBOS or nxBearFired) and tradeBarsSinceBearZone <= tradeConfirmBars and tradeBias == -1 and globalBearOK
-
-var string tradeType  = na
-var float  tradeEntry = na
-var float  tradeStop  = na
-var float  tradeTp1   = na
-var float  tradeTp2   = na
-var float  tradeTp3   = na
-var float  tradeTp4   = na
-
-tradeAtr = ta.atr(tradeAtrLen)
-
-// only one setup open at a time — a new one can't start until the active
-// one hits its stop or final target
-if na(tradeType) and tradeBuyConfirm
-    tradeType  := "BUY"
-    tradeEntry := close
-    tradeStop  := close - tradeAtr * tradeAtrMult
-    tradeRisk  = tradeEntry - tradeStop
-    tradeTp1   := tradeEntry + tradeRisk * 1
-    tradeTp2   := tradeEntry + tradeRisk * 2
-    tradeTp3   := tradeEntry + tradeRisk * 3
-    tradeTp4   := tradeEntry + tradeRisk * 4
-
-if na(tradeType) and tradeSellConfirm
-    tradeType  := "SELL"
-    tradeEntry := close
-    tradeStop  := close + tradeAtr * tradeAtrMult
-    tradeRisk  = tradeStop - tradeEntry
-    tradeTp1   := tradeEntry - tradeRisk * 1
-    tradeTp2   := tradeEntry - tradeRisk * 2
-    tradeTp3   := tradeEntry - tradeRisk * 3
-    tradeTp4   := tradeEntry - tradeRisk * 4
-
-if tradeType == "BUY" and (low <= tradeStop or high >= tradeTp4)
-    tradeType  := na
-    tradeEntry := na
-    tradeStop  := na
-    tradeTp1   := na
-    tradeTp2   := na
-    tradeTp3   := na
-    tradeTp4   := na
-
-if tradeType == "SELL" and (high >= tradeStop or low <= tradeTp4)
-    tradeType  := na
-    tradeEntry := na
-    tradeStop  := na
-    tradeTp1   := na
-    tradeTp2   := na
-    tradeTp3   := na
-    tradeTp4   := na
-
-if tradeShow and barstate.islast
-    var table tradeTab = table.new(position.top_left, 2, 8, bgcolor = #20222C, border_color = #363843, frame_color = #363843, border_width = 1, frame_width = 1)
-    tradeCol  = tradeType == "BUY" ? color.lime : tradeType == "SELL" ? color.red : color.gray
-    biasText  = tradeBias == 1 ? "Bullish" : tradeBias == -1 ? "Bearish" : "Neutral"
-    biasCol   = tradeBias == 1 ? color.lime : tradeBias == -1 ? color.red : color.gray
-    tradeTab.cell(0, 0, "Bias", text_color = color.white, bgcolor = #2A2E39)
-    tradeTab.cell(1, 0, biasText, text_color = biasCol, bgcolor = #2A2E39)
-    tradeTab.cell(0, 1, "Setup", text_color = color.white)
-    tradeTab.cell(1, 1, na(tradeType) ? "—" : tradeType, text_color = tradeCol)
-    tradeTab.cell(0, 2, "Entry", text_color = color.white)
-    tradeTab.cell(1, 2, na(tradeEntry) ? "—" : str.tostring(tradeEntry, format.mintick), text_color = color.white)
-    tradeTab.cell(0, 3, "Stop", text_color = color.white)
-    tradeTab.cell(1, 3, na(tradeStop) ? "—" : str.tostring(tradeStop, format.mintick), text_color = color.red)
-    tradeTab.cell(0, 4, "Target 1", text_color = color.white)
-    tradeTab.cell(1, 4, na(tradeTp1) ? "—" : str.tostring(tradeTp1, format.mintick), text_color = color.lime)
-    tradeTab.cell(0, 5, "Target 2", text_color = color.white)
-    tradeTab.cell(1, 5, na(tradeTp2) ? "—" : str.tostring(tradeTp2, format.mintick), text_color = color.lime)
-    tradeTab.cell(0, 6, "Target 3", text_color = color.white)
-    tradeTab.cell(1, 6, na(tradeTp3) ? "—" : str.tostring(tradeTp3, format.mintick), text_color = color.lime)
-    tradeTab.cell(0, 7, "Target 4", text_color = color.white)
-    tradeTab.cell(1, 7, na(tradeTp4) ? "—" : str.tostring(tradeTp4, format.mintick), text_color = color.lime)
-
-alertcondition(tradeType == "BUY" and tradeType != tradeType[1], title = "Trade Setup: BUY", message = "New BUY setup confirmed (CHoCH/BOS + zone confluence)")
-alertcondition(tradeType == "SELL" and tradeType != tradeType[1], title = "Trade Setup: SELL", message = "New SELL setup confirmed (CHoCH/BOS + zone confluence)")
