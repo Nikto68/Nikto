@@ -159,11 +159,11 @@ liqVisible = input.int(3, "  Visible Levels", minval = 1, maxval = 50, group = "
 liqMar     = 10 / liqMarIn
 
 type liqBar
-    float open  = open
-    float high  = high
-    float low   = low
-    float close = close
-    int   index = bar_index
+    float open
+    float high
+    float low
+    float close
+    int   index
 
 type liqICTMS
     float lastPrice
@@ -204,7 +204,7 @@ type liqZone
     line ln
     line lne
 
-liqBarObj = liqBar.new()
+liqBarObj = liqBar.new(open, high, low, close, bar_index)
 
 liqLineStyle(styleInText) =>
     switch styleInText
@@ -252,10 +252,10 @@ method liqInOut(liqZZ aZZ, int _d, int _x, float _y) =>
 var liqICTMS liqStLow  = liqICTMS.new()
 var liqICTMS liqStHigh = liqICTMS.new()
 var liqMS    liqStMS   = liqMS.new()
-if liqQueryRaw(liqBarObj.low, liqBarObj.low[1], liqBarObj.low[2], false)
-    liqStLow.liqUpdatePattern(liqBarObj.low[1], liqBarObj.index[1])
-if liqQueryRaw(liqBarObj.high, liqBarObj.high[1], liqBarObj.high[2], true)
-    liqStHigh.liqUpdatePattern(liqBarObj.high[1], liqBarObj.index[1])
+if liqQueryRaw(liqBarObj.low, (liqBarObj[1]).low, (liqBarObj[2]).low, false)
+    liqStLow.liqUpdatePattern((liqBarObj[1]).low, (liqBarObj[1]).index)
+if liqQueryRaw(liqBarObj.high, (liqBarObj[1]).high, (liqBarObj[2]).high, true)
+    liqStHigh.liqUpdatePattern((liqBarObj[1]).high, (liqBarObj[1]).index)
 
 var liqICTMS liqItLow  = liqICTMS.new()
 var liqICTMS liqItHigh = liqICTMS.new()
