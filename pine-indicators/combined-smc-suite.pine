@@ -86,21 +86,30 @@ method srCondS(float id) => not na(id) and id != 1e8
 method srCondR(float id) => not na(id) and id != 0
 
 // Every S/R line also gets a small LONG/SHORT tag at its right edge — a
-// static description of what the level is (support = long area, resistance
-// = short area), not a trade call. Fixed green/red regardless of the
-// line's own timeframe color, so LONG vs SHORT reads at a glance.
+// static description of the level's CURRENT role, not which variable
+// (support/resistance) it happened to come from: if price is now above the
+// level it's acting as support (LONG), if price is below it it's acting as
+// resistance (SHORT). A level price has broken through flips sides, same as
+// real support/resistance does — tagging it by origin instead of by where
+// price actually is was giving SHORT tags on levels price was already above
+// (i.e. now holding as support), which is exactly backwards.
+srTagLabel(x, y) =>
+    txt = close < y ? "SHORT" : "LONG"
+    col = close < y ? color.red : color.lime
+    label.new(x, y, txt, xloc = xloc.bar_time, style = label.style_label_left, color = color.new(col, 60), textcolor = col, size = size.small)
+
 method srSetSupport(matrix<srObjects> id, int row, int column, line ln, float y) =>
     if not na(id.get(row, column))
         id.get(row, column).support.delete()
         id.get(row, column).supportLabel.delete()
-    lbl = label.new(last_bar_time + (time - time[5]) * 3, y, "LONG", xloc = xloc.bar_time, style = label.style_label_left, color = color.new(color.lime, 60), textcolor = color.lime, size = size.small)
+    lbl = srTagLabel(last_bar_time + (time - time[5]) * 3, y)
     id.set(row, column, srObjects.new(support = ln, supportLabel = lbl))
 
 method srSetResistance(matrix<srObjects> id, int row, int column, line ln, float y) =>
     if not na(srObj.get(row, column))
         srObj.get(row, column).resistance.delete()
         srObj.get(row, column).resistanceLabel.delete()
-    lbl = label.new(last_bar_time + (time - time[5]) * 3, y, "SHORT", xloc = xloc.bar_time, style = label.style_label_left, color = color.new(color.red, 60), textcolor = color.red, size = size.small)
+    lbl = srTagLabel(last_bar_time + (time - time[5]) * 3, y)
     id.set(row, column, srObjects.new(resistance = ln, resistanceLabel = lbl))
 
 if barstate.islast
