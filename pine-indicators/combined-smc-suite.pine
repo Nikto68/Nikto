@@ -9,6 +9,21 @@
 indicator("Combined SMC Suite", shorttitle = "Combined SMC Suite", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 2000)
 
 // ============================================================================
+// TREND FILTER — gates every BUY/SELL signal in this script (S/R touch,
+// liquidity sweep, POI touch, trade table). Added because signals were
+// firing against the prevailing trend (e.g. a SELL right before a strong
+// pump) — no single zone touch or structure break, on its own, should be
+// allowed to fight what price is actually doing on a higher level.
+// ============================================================================
+trendMaLen   = input.int(50, "Trend Filter MA Length", group = "Trend Filter", minval = 1, tooltip = "No BUY signal fires anywhere in this script while close is below this MA; no SELL fires while close is above it.")
+trendShowMa  = input.bool(true, "Show Trend MA Line", group = "Trend Filter")
+trendMa      = ta.sma(close, trendMaLen)
+globalBullOK = close > trendMa
+globalBearOK = close < trendMa
+
+plot(trendShowMa ? trendMa : na, title = "Trend Filter MA", color = color.new(color.yellow, 40), linewidth = 2)
+
+// ============================================================================
 // SECTION 1 — Multi-Timeframe S/R (from "nikto"): 4H / Daily / Weekly only
 // ============================================================================
 
@@ -154,8 +169,8 @@ srDSTouch  = srTouchEdge(srDS)
 srWRTouch  = srTouchEdge(srWR)
 srWSTouch  = srTouchEdge(srWS)
 
-srSellSignal = sr4hRTouch or srDRTouch or srWRTouch
-srBuySignal  = sr4hSTouch or srDSTouch or srWSTouch
+srSellSignal = (sr4hRTouch or srDRTouch or srWRTouch) and globalBearOK
+srBuySignal  = (sr4hSTouch or srDSTouch or srWSTouch) and globalBullOK
 srSellTF     = srWRTouch ? "W" : srDRTouch ? "D" : "4H"
 srBuyTF      = srWSTouch ? "W" : srDSTouch ? "D" : "4H"
 
@@ -466,7 +481,8 @@ for i = 0 to liqBuyZones.size() - 1
         x.lne.set_x2(bar_index)
         if high > x.bx.get_top()
             x.brL := true
-            liqSellTouch := true
+            if globalBearOK
+                liqSellTouch := true
 
 // Sellside liquidity swept (price ran below old lows) -> reversal-up (BUY).
 liqBuyTouch = false
@@ -476,7 +492,8 @@ for i = 0 to liqSellZones.size() - 1
         x.lne.set_x2(bar_index)
         if low < x.bx.get_bottom()
             x.brL := true
-            liqBuyTouch := true
+            if globalBullOK
+                liqBuyTouch := true
 
 liqShowSignals = input.bool(true, "Show Buy/Sell Signal On Sweep", group = "Liquidity (Buy/Sell Side)")
 liqBuySigCol   = input.color(color.lime, "Buy Signal", group = "Liquidity (Buy/Sell Side)", inline = "liqSig")
@@ -809,7 +826,7 @@ for i = 0 to smcCurrentDemandBox.size() - 1
         zTop    = box.get_top(zBox)
         zBottom = box.get_bottom(zBox)
         if low <= zTop and high >= zBottom
-            if smcDemandStrong.get(i)
+            if smcDemandStrong.get(i) and globalBullOK
                 smcSignalUp := true
             box.delete(zBox)
             smcCurrentDemandBox.set(i, na)
@@ -821,7 +838,7 @@ for i = 0 to smcCurrentSupplyBox.size() - 1
         zTop    = box.get_top(zBox)
         zBottom = box.get_bottom(zBox)
         if high >= zBottom and low <= zTop
-            if smcSupplyStrong.get(i)
+            if smcSupplyStrong.get(i) and globalBearOK
                 smcSignalDn := true
             box.delete(zBox)
             smcCurrentSupplyBox.set(i, na)
@@ -877,8 +894,8 @@ else
 // could confirm on nothing more than a short-term BOS near some zone even
 // while the bigger picture was still bullish, which is what was losing.
 tradeBias        = liqLtMS.type
-tradeBuyConfirm  = (liqBullBOS or nxBullFired) and tradeBarsSinceBullZone <= tradeConfirmBars and tradeBias == 1
-tradeSellConfirm = (liqBearBOS or nxBearFired) and tradeBarsSinceBearZone <= tradeConfirmBars and tradeBias == -1
+tradeBuyConfirm  = (liqBullBOS or nxBullFired) and tradeBarsSinceBullZone <= tradeConfirmBars and tradeBias == 1 and globalBullOK
+tradeSellConfirm = (liqBearBOS or nxBearFired) and tradeBarsSinceBearZone <= tradeConfirmBars and tradeBias == -1 and globalBearOK
 
 var string tradeType  = na
 var float  tradeEntry = na
