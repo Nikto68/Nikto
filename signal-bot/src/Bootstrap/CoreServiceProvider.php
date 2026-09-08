@@ -9,6 +9,7 @@ use App\Core\Config;
 use App\Database\Database;
 use App\Database\Repositories\AdminRepository;
 use App\Database\Repositories\ConversationStateRepository;
+use App\Database\Repositories\LogRepository;
 use App\Database\Repositories\SettingsRepository;
 use App\Database\Repositories\TextFormatRepository;
 use App\Logger\LoggerFactory;
@@ -28,7 +29,11 @@ final class CoreServiceProvider
         });
 
         $app->singleton(LoggerFactory::class, static function (Application $app): LoggerFactory {
-            return new LoggerFactory($app->get(Config::class));
+            // Lazy resolver, not $app->get(Database::class) directly:
+            // Database's own factory asks LoggerFactory for a channel, so
+            // resolving Database eagerly here would be circular. See
+            // DatabaseLogHandler for why this is safe.
+            return new LoggerFactory($app->get(Config::class), static fn (): Database => $app->get(Database::class));
         });
 
         // Most classes just want a generic PSR-3 logger; anything needing a
@@ -58,6 +63,10 @@ final class CoreServiceProvider
 
         $app->singleton(ConversationStateRepository::class, static function (Application $app): ConversationStateRepository {
             return new ConversationStateRepository($app->get(Database::class));
+        });
+
+        $app->singleton(LogRepository::class, static function (Application $app): LogRepository {
+            return new LogRepository($app->get(Database::class));
         });
     }
 }

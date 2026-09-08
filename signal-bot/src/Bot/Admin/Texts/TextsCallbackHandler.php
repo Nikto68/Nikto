@@ -70,6 +70,7 @@ final class TextsCallbackHandler implements CallbackHandlerInterface
             $keyboard->button($row['text_key'], "texts:view:{$row['text_key']}");
         }
         $keyboard->button('➕ افزودن متن جدید', 'texts:add');
+        $keyboard->button('⬅️ بازگشت به منو', 'menu:root');
 
         $this->send($context, 'مدیریت متن‌های ربات — یک کلید را انتخاب کنید:', $keyboard);
     }

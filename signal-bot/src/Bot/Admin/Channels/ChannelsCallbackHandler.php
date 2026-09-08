@@ -78,6 +78,7 @@ final class ChannelsCallbackHandler implements CallbackHandlerInterface
         }
 
         $keyboard->button('➕ افزودن کانال', 'channels:add');
+        $keyboard->button('⬅️ بازگشت به منو', 'menu:root');
 
         $text = $channels === []
             ? 'هنوز کانالی اضافه نشده است.'

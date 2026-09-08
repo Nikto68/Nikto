@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Logger;
 
 use App\Core\Config;
+use App\Database\Database;
+use Closure;
 use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\StreamHandler;
 use Monolog\Level;
 use Monolog\Logger;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
 
 /**
  * Produces one Monolog channel per storage/logs/<name>.log file
@@ -28,11 +31,21 @@ final class LoggerFactory
 
     private readonly SecretRedactor $redactor;
 
+    /** @var Closure(): Database */
+    private readonly Closure $databaseResolver;
+
+    /**
+     * @param Closure(): Database $databaseResolver lazy — see DatabaseLogHandler
+     */
     public function __construct(
         private readonly Config $config,
+        ?Closure $databaseResolver = null,
     ) {
         $this->minLevel = $this->resolveLevel((string) $this->config->get('config.log_level', 'debug'));
         $this->redactor = new SecretRedactor($this->collectSecrets());
+        $this->databaseResolver = $databaseResolver ?? static function (): never {
+            throw new RuntimeException('LoggerFactory has no database resolver configured.');
+        };
     }
 
     public function channel(string $name): LoggerInterface
@@ -68,6 +81,8 @@ final class LoggerFactory
             $errorHandler->setFormatter($formatter);
             $logger->pushHandler($errorHandler);
         }
+
+        $logger->pushHandler(new DatabaseLogHandler($this->databaseResolver));
 
         return $logger;
     }

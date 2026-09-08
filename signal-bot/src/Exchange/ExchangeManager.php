@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Exchange;
 
 use App\Core\Config;
+use App\Database\Repositories\ExchangeRepository;
 use App\Exchange\Exceptions\ExchangeException;
 use App\Logger\LoggerFactory;
 use React\Http\Browser;
@@ -16,6 +17,11 @@ use React\Http\Browser;
  * downstream only ever ask ExchangeManager for "all enabled exchanges" or
  * "the exchange called X" (spec #4/#30: a dead exchange never touches the
  * others, because nothing outside this class knows adapters exist).
+ *
+ * config/exchanges.php's `enabled` is the deploy-time default (from
+ * .env); the `exchanges` DB row's `enabled` column is the live,
+ * admin-panel-toggleable switch (spec #22 "Database-driven") and wins
+ * once a row exists — which migration 008 seeds for all three on install.
  */
 final class ExchangeManager
 {
@@ -26,6 +32,7 @@ final class ExchangeManager
         private readonly Config $config,
         private readonly LoggerFactory $loggerFactory,
         private readonly Browser $http,
+        private readonly ExchangeRepository $exchangeRepository,
     ) {
     }
 
@@ -78,6 +85,11 @@ final class ExchangeManager
 
     public function isEnabled(string $code): bool
     {
+        $row = $this->exchangeRepository->findByCode($code);
+        if ($row !== null) {
+            return (int) $row['enabled'] === 1;
+        }
+
         return (bool) $this->config->get("exchanges.{$code}.enabled", false);
     }
 }

@@ -34,6 +34,11 @@ final class ExchangeRepository extends Repository
         return $this->db->select('SELECT * FROM exchanges ORDER BY code ASC');
     }
 
+    public function setEnabled(string $code, bool $enabled): void
+    {
+        $this->db->statement('UPDATE exchanges SET enabled = :enabled WHERE code = :code', ['enabled' => $enabled ? 1 : 0, 'code' => $code]);
+    }
+
     public function markOnline(string $code): void
     {
         $this->db->statement(

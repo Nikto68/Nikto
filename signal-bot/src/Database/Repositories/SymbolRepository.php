@@ -63,6 +63,23 @@ final class SymbolRepository extends Repository
     }
 
     /**
+     * Every exchange's row for a symbol code (Test Signal's lookup, spec
+     * #39, needs to disambiguate when the same symbol trades on more than
+     * one configured exchange).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function findAcrossExchanges(string $symbol): array
+    {
+        return $this->db->select(
+            'SELECT s.*, ex.code AS exchange_code FROM symbols s
+             JOIN exchanges ex ON ex.id = s.exchange_id
+             WHERE s.symbol = :symbol AND s.is_active = 1',
+            ['symbol' => strtoupper($symbol)],
+        );
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     public function findByExchangeAndSymbol(int $exchangeId, string $symbol): ?array

@@ -6,6 +6,7 @@ namespace App\Bootstrap;
 
 use App\Core\Application;
 use App\Core\Config;
+use App\Database\Repositories\ExchangeRepository;
 use App\Exchange\ExchangeManager;
 use App\Exchange\WebSocket\ExchangeWebSocketFactory;
 use App\Logger\LoggerFactory;
@@ -19,11 +20,16 @@ final class ExchangeServiceProvider
             return (new Browser())->withTimeout(15);
         });
 
+        // ExchangeRepository is registered by MarketServiceProvider —
+        // provider registration order doesn't matter since all of this is
+        // lazy factory closures, only resolved once bootstrap.php has run
+        // every provider.
         $app->singleton(ExchangeManager::class, static function (Application $app): ExchangeManager {
             return new ExchangeManager(
                 $app->get(Config::class),
                 $app->get(LoggerFactory::class),
                 $app->get(Browser::class),
+                $app->get(ExchangeRepository::class),
             );
         });
 
