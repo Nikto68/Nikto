@@ -176,14 +176,40 @@ php worker/market_worker.php
 
 ---
 
-## اضافه کردن استراتژی واقعی (مهم)
+## استراتژی فعال: SMC Confluence
 
-طبق درخواست اولیهٔ پروژه، **هیچ قانون معاملاتی در این کدبیس حدس زده
-نشده**. معماری کامل (Indicator Engine، S/R، Order Block، FVG، Confluence
-Engine با وزن‌های Configurable) آماده است، اما `strategies` در دیتابیس
-خالی است و هیچ کلاسی در `StrategyRegistry` ثبت نشده.
+یک استراتژی واقعی فعال است: **`smc_confluence`** (`src/Strategy/SmcStrategy.php`)،
+ترجمهٔ مستقیم اندیکاتور ترکیبی SMC که خودتان دادید (S/R چندتایم‌فریمی +
+Market Structure/BOS-CHoCH + Liquidity خرید/فروش + Order Block/Supply-Demand).
+منطق دقیق:
 
-برای افزودن یک استراتژی واقعی:
+- **جهت معامله**: از آخرین شکست ساختار (BOS/CHoCH) در تایم‌فریم 4H
+  (`src/Strategy/Smc/SwingStructure.php`) — صعودی=LONG، نزولی=SHORT.
+- **ماشهٔ سیگنال**: فقط وقتی قیمت روی یک ناحیهٔ Order Block/Supply-Demand
+  فعال (تشخیص‌داده‌شده در 4H یا 1H، `src/Strategy/Smc/SmcZone.php`) و
+  هم‌جهت با روند باشد.
+- **Entry/SL/TP**: Entry روی لبهٔ نزدیک ناحیه، SL کمی پشت لبهٔ دور (بافر
+  بر اساس ATR)، TP1/2/3 در سطوح بعدی Liquidity (`LiquidityZones.php`) یا
+  S/R چندتایم‌فریمی (1D/1W) در جهت معامله — دقیقاً طبق دستور شما.
+- **Confluence Factorها**: `order_block`، `trend`، `structure_alignment`
+  (هم‌جهتی 1H با 4H)، `liquidity` (Sweep اخیر Liquidity مخالف)، `support`/
+  `resistance` (هم‌پوشانی با سطح 1D/1W) — وزن هرکدام در جدول `strategies`
+  (فیلد `config.weights`) تنظیم شده و از پنل مدیریت قابل تغییر است، نه
+  Hard-Code.
+
+منطق با دادهٔ ساختگی برای هر بخش (تشخیص BOS/CHoCH، خوشه‌بندی Liquidity و
+Sweep، فیلتر ATR روی Order Block، محاسبهٔ Entry/SL/TP و امتیازدهی
+Confluence) تک‌تک تست و تأیید شده است.
+
+⚠️ استراتژی به‌صورت پیش‌فرض **فعال** است ولی چون `APP_MODE` پیش‌فرض
+`DRY_RUN` است، تا وقتی خودتان از پنل مدیریت آن را به `LIVE` نبرید، هیچ
+سیگنالی واقعاً به کانالی ارسال نمی‌شود — فقط در دیتابیس ثبت می‌شود (قابل
+مشاهده در «📜 تاریخچه سیگنال‌ها» و «🧪 تست سیگنال»).
+
+## اضافه کردن یک استراتژی دیگر
+
+برای افزودن یک استراتژی واقعی دیگر (در کنار `smc_confluence`، نه لزوماً
+جایگزین آن):
 
 1. `src/Strategy/ExampleStrategy.php` را کپی کنید و کلاسش را rename کنید.
    این فایل فقط یک Template است و همیشه `null` برمی‌گرداند — هرگز به‌عنوان
@@ -290,8 +316,13 @@ Webhook تلگرام (`public/webhook.php`) زیر nginx + php-fpm سرو می�
 - فیلدهای دقیق پاسخ Wallex (نام‌گذاری JSON) بر اساس مستندات عمومی نوشته
   شده و پیش از استفادهٔ Live باید در برابر API فعلی Wallex Verify شود —
   در کامنت بالای `src/Exchange/Wallex.php` مشخص شده.
-- همان‌طور که در بخش «اضافه کردن استراتژی واقعی» توضیح داده شد، **هیچ
-  استراتژی معاملاتی واقعی وجود ندارد** — این عمدی و طبق درخواست اولیه است.
+- استراتژی `smc_confluence` بر اساس منطق قابل‌استخراج از Pine Script
+  (سوئینگ/BOS/CHoCH، خوشه‌بندی Liquidity، فیلتر ATR روی Order Block) نوشته
+  شده، نه اجرای خط‌به‌خط همان اسکریپت (که کلاً بصری/برای TradingView است).
+  آستانه‌ها (ضریب ATR، حداقل تعداد Touch برای Liquidity Pool، طول Swing و
+  ...) پیش‌فرض‌های مستند و منطقی‌اند اما مثل هر استراتژی جدید باید قبل از
+  فعال کردن حالت LIVE، حتماً با «🧪 تست سیگنال» روی چند نماد/دوره بررسی و
+  در صورت نیاز از طریق `strategies.config` تنظیم شوند.
 - `composer install` در محیط توسعهٔ این نشست به‌خاطر مسدود بودن
   `codeload.github.com` تکمیل نشد؛ باید در سرور واقعی اجرا شود.
 

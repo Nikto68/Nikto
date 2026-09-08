@@ -17,6 +17,7 @@ use App\Market\CandleManager;
 use App\Strategy\ConfluenceEngine;
 use App\Strategy\FVG;
 use App\Strategy\OrderBlock;
+use App\Strategy\SmcStrategy;
 use App\Strategy\StrategyEngine;
 use App\Strategy\StrategyRegistry;
 use App\Strategy\SupportResistance;
@@ -42,12 +43,16 @@ final class StrategyServiceProvider
 
         $app->singleton(ConfluenceEngine::class, static fn (): ConfluenceEngine => new ConfluenceEngine());
 
-        // No StrategyInterface implementations are registered here — none
-        // exist yet (spec #36). Once real strategies are supplied, wire
-        // them up with $registry->register(new RealStrategy()) here and
-        // add a matching row via StrategyRepository::upsert(..., isActive: true).
+        // smc_confluence (src/Strategy/SmcStrategy.php) is the real strategy,
+        // translated from the user's combined SMC Pine Script indicator —
+        // its matching `strategies` row is seeded active by migration 011.
+        // Adding another real strategy later is the same pattern: implement
+        // StrategyInterface, register it here, add/activate its DB row.
         $app->singleton(StrategyRegistry::class, static function (): StrategyRegistry {
-            return new StrategyRegistry();
+            $registry = new StrategyRegistry();
+            $registry->register(new SmcStrategy());
+
+            return $registry;
         });
 
         $app->singleton(StrategyEngine::class, static function (Application $app): StrategyEngine {
