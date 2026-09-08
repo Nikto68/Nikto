@@ -104,6 +104,35 @@ final class Database
     }
 
     /**
+     * INSERT ... ON DUPLICATE KEY UPDATE. $data must include the columns
+     * covered by the table's unique key; every other column in $data is
+     * what gets updated on conflict. Used for the high-frequency
+     * symbol/market_data/candle upserts the scanner does every cycle,
+     * where select-then-insert-or-update would be two round trips instead
+     * of one under a MySQL/MariaDB-native atomic upsert.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function upsert(string $table, array $data): string
+    {
+        $columns = array_keys($data);
+        $placeholders = array_map(static fn (string $c): string => ':' . $c, $columns);
+        $updates = implode(', ', array_map(static fn (string $c): string => "`$c` = VALUES(`$c`)", $columns));
+
+        $sql = sprintf(
+            'INSERT INTO `%s` (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s',
+            $table,
+            implode(', ', array_map(static fn (string $c): string => "`$c`", $columns)),
+            implode(', ', $placeholders),
+            $updates,
+        );
+
+        $this->run($sql, $data);
+
+        return $this->pdo()->lastInsertId();
+    }
+
+    /**
      * @template T
      * @param callable(self): T $callback
      * @return T
