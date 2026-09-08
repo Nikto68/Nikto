@@ -19,6 +19,14 @@ final class ExchangeRepository extends Repository
     }
 
     /**
+     * @return array<string, mixed>|null
+     */
+    public function find(int $id): ?array
+    {
+        return $this->db->selectOne('SELECT * FROM exchanges WHERE id = :id', ['id' => $id]);
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function all(): array

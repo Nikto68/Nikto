@@ -14,6 +14,8 @@ use App\Bootstrap\CoreServiceProvider;
 use App\Bootstrap\ExchangeServiceProvider;
 use App\Bootstrap\IndicatorServiceProvider;
 use App\Bootstrap\MarketServiceProvider;
+use App\Bootstrap\QueueServiceProvider;
+use App\Bootstrap\SignalServiceProvider;
 use App\Bootstrap\StrategyServiceProvider;
 use App\Bootstrap\TelegramServiceProvider;
 use App\Core\Application;
@@ -36,6 +38,8 @@ ExchangeServiceProvider::register($app);
 MarketServiceProvider::register($app);
 IndicatorServiceProvider::register($app);
 StrategyServiceProvider::register($app);
+QueueServiceProvider::register($app);
+SignalServiceProvider::register($app);
 BotServiceProvider::register($app);
 
 return $app;

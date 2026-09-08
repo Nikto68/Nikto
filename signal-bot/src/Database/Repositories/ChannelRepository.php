@@ -143,4 +143,43 @@ final class ChannelRepository extends Repository
             }
         });
     }
+
+    /**
+     * Enabled channels whose filters (minimum_score, direction_filter,
+     * enabled_strategies) let this signal through, and whose bot
+     * permissions were last confirmed OK (spec #16's per-channel routing:
+     * "Channel A -> score > 80", "Channel B -> everything", "Channel C ->
+     * LONG only").
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function matchingChannels(int $score, string $direction, ?int $strategyId): array
+    {
+        $channels = $this->db->select(
+            "SELECT * FROM channels
+             WHERE enabled = 1 AND bot_can_post = 1
+               AND minimum_score <= :score
+               AND (direction_filter = 'ANY' OR direction_filter = :direction)",
+            ['score' => $score, 'direction' => $direction],
+        );
+
+        return array_values(array_filter(
+            $channels,
+            function (array $channel) use ($strategyId): bool {
+                $allowed = $this->allowedStrategyIds((int) $channel['id']);
+
+                return $allowed === [] || $strategyId === null || in_array((string) $strategyId, $allowed, true);
+            },
+        ));
+    }
+
+    /**
+     * @return string[]
+     */
+    private function allowedStrategyIds(int $channelId): array
+    {
+        $rows = $this->db->select('SELECT strategy_id FROM channel_strategies WHERE channel_id = :channel_id', ['channel_id' => $channelId]);
+
+        return array_map(static fn (array $r): string => (string) $r['strategy_id'], $rows);
+    }
 }
