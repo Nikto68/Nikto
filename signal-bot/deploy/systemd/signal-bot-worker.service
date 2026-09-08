@@ -1,0 +1,29 @@
+[Unit]
+Description=Signal Bot - Market Worker (scanner, indicators, strategies, signal dispatch)
+After=network-online.target mysql.service mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/signal-bot
+ExecStart=/usr/bin/php /var/www/signal-bot/worker/market_worker.php
+Restart=always
+RestartSec=5
+# Give graceful shutdown (SIGTERM -> Loop::stop()) a few seconds before
+# systemd escalates to SIGKILL.
+TimeoutStopSec=15
+KillSignal=SIGTERM
+
+# Hardening (adjust ProtectHome/ReadWritePaths if the deploy path differs)
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/www/signal-bot/storage
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=signal-bot-worker
+
+[Install]
+WantedBy=multi-user.target

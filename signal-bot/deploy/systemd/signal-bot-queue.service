@@ -1,0 +1,33 @@
+[Unit]
+Description=Signal Bot - Queue Worker (optional, standalone queue drain)
+After=network-online.target mysql.service mariadb.service
+Wants=network-online.target
+
+# OPTIONAL: market_worker.php already drains the queue itself on its own
+# timer (see src/Worker/MarketWorkerRunner.php), so a single worker is
+# enough for most deployments. Enable this unit only if signal/channel
+# volume grows enough to want queue draining scaled independently of the
+# scanner — running both at once is safe (JobRepository::reserveDue()
+# reserves jobs atomically, so they never double-process one).
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/signal-bot
+ExecStart=/usr/bin/php /var/www/signal-bot/worker/queue_worker.php
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+KillSignal=SIGTERM
+
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/www/signal-bot/storage
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=signal-bot-queue
+
+[Install]
+WantedBy=multi-user.target
