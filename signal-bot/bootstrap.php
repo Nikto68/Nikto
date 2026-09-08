@@ -18,6 +18,7 @@ use App\Bootstrap\QueueServiceProvider;
 use App\Bootstrap\SignalServiceProvider;
 use App\Bootstrap\StrategyServiceProvider;
 use App\Bootstrap\TelegramServiceProvider;
+use App\Bootstrap\WorkerServiceProvider;
 use App\Core\Application;
 use Dotenv\Dotenv;
 
@@ -40,6 +41,7 @@ IndicatorServiceProvider::register($app);
 StrategyServiceProvider::register($app);
 QueueServiceProvider::register($app);
 SignalServiceProvider::register($app);
+WorkerServiceProvider::register($app);
 BotServiceProvider::register($app);
 
 return $app;

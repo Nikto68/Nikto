@@ -12,6 +12,7 @@ declare(strict_types=1);
 use App\Bot\Bot;
 use App\Core\Application;
 use App\Core\Config;
+use App\Database\Repositories\AdminRepository;
 
 if (PHP_SAPI === 'cli') {
     fwrite(STDERR, "webhook.php must be served over HTTP, not run from the CLI.\n");
@@ -56,6 +57,12 @@ if (function_exists('fastcgi_finish_request')) {
 }
 
 try {
+    // Idempotent: inserts any TELEGRAM_ADMIN_IDS not already in the
+    // `admins` table. Cheap (a handful of rows) and keeps a fresh
+    // deployment's first /start from an admin from failing the admin
+    // gate before the worker process has had a chance to run this itself.
+    $app->get(AdminRepository::class)->syncFromConfig((array) $config->get('telegram.admin_ids', []));
+
     /** @var Bot $bot */
     $bot = $app->get(Bot::class);
     $bot->handle($update);

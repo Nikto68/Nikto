@@ -31,6 +31,19 @@ final class MarketDataRepository extends Repository
         ]);
     }
 
+    /**
+     * Cheap partial update for the WebSocket ticker feed (spec #28):
+     * real-time price only, between full REST scan cycles which refresh
+     * volume/spread/rank via VolumeAnalyzer::rank().
+     */
+    public function updatePrice(int $symbolId, float $price): void
+    {
+        $this->db->statement(
+            'UPDATE market_data SET price = :price WHERE symbol_id = :symbol_id',
+            ['price' => $price, 'symbol_id' => $symbolId],
+        );
+    }
+
     public function setUniverseRank(int $symbolId, ?int $rank, bool $isInUniverse): void
     {
         $this->db->statement(
