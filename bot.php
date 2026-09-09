@@ -580,7 +580,7 @@ final class AdminPanel
                 'signal_settings' => $this->renderSignalSettings($chatId, $messageId, $parts),
                 'test_signal' => $this->renderTestSignal($chatId, $messageId, $parts),
                 'history' => $this->renderHistory($chatId, $messageId),
-                'health' => $this->renderHealth($chatId, $messageId),
+                'health' => $this->renderHealth($chatId, $messageId, $parts),
                 default => null,
             };
         } catch (Throwable $e) {
@@ -769,6 +769,11 @@ final class AdminPanel
             return;
         }
 
+        if ($action === 'wallex_raw') {
+            $this->render($chatId, $messageId, $this->wallexRawSample(), ['inline_keyboard' => [$this->backRow('admin:scanner')]]);
+            return;
+        }
+
         if ($action === 'filter_set' && isset($parts[3])) {
             $this->states->set($userId, 'awaiting_scanner_filter', ['setting' => $parts[3]]);
             $labels = [
@@ -796,9 +801,32 @@ final class AdminPanel
             [['text' => '🔍 تست اتصال صرافی‌ها', 'callback_data' => 'admin:scanner:test']],
             [['text' => '▶️ اسکن الان', 'callback_data' => 'admin:scanner:run']],
             [['text' => '⚙️ تنظیمات فیلتر', 'callback_data' => 'admin:scanner:filters']],
+            [['text' => '🔬 نمونه خام Wallex', 'callback_data' => 'admin:scanner:wallex_raw']],
             $this->backRow(),
         ];
         $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
+    }
+
+    /**
+     * Raw JSON of the first Wallex market's `stats` object, straight from
+     * the API — the ground truth needed to fix WallexAdapter's volume/price
+     * field-name guessing precisely instead of trying variants blind
+     * (this sandbox's own network can't reach Wallex to check directly).
+     */
+    private function wallexRawSample(): string
+    {
+        $res = HttpClient::request('GET', Config::wallexRestBase() . '/v1/markets', [], null, 0);
+        if ($res['status'] !== 200 || !is_array($res['json'])) {
+            return "❌ درخواست ناموفق (HTTP {$res['status']}).";
+        }
+        $symbols = $res['json']['result']['symbols'] ?? $res['json']['result'] ?? $res['json'];
+        if (!is_array($symbols) || empty($symbols)) {
+            return "⚠️ ساختار پاسخ غیرمنتظره بود:\n" . mb_strimwidth(json_encode($res['json'], JSON_UNESCAPED_UNICODE), 0, 3800, '…');
+        }
+        $firstKey = array_key_first($symbols);
+        $sample = $symbols[$firstKey];
+        $pretty = json_encode($sample, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return "🔬 نمونه خام Wallex (نماد: $firstKey)\n\n" . mb_strimwidth((string) $pretty, 0, 3800, '…');
     }
 
     private function renderScannerFilters(int $chatId, int $messageId): void
@@ -1135,8 +1163,13 @@ final class AdminPanel
     }
 
     // -- ❤️ System Health --------------------------------------------------
-    private function renderHealth(int $chatId, int $messageId): void
+    private function renderHealth(int $chatId, int $messageId, array $parts): void
     {
+        if (($parts[2] ?? null) === 'errors') {
+            $this->renderRecentErrors($chatId, $messageId);
+            return;
+        }
+
         $exHealth = $this->exchangeManager->healthSnapshot();
         $exLines = [];
         foreach (['binance', 'mexc', 'wallex', 'cryptocompare'] as $ex) {
@@ -1162,7 +1195,41 @@ final class AdminPanel
             . "آخرین اسکن: $lastScan\n"
             . "خطاها (۲۴ ساعت اخیر): $errCount";
 
-        $this->render($chatId, $messageId, $text, ['inline_keyboard' => [$this->backRow()]]);
+        $keyboard = [
+            [['text' => '📋 آخرین خطاها', 'callback_data' => 'admin:health:errors']],
+            $this->backRow(),
+        ];
+        $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
+    }
+
+    /**
+     * Shows the last 10 error/critical log rows directly from Telegram —
+     * added after a masked-error bug (Logger fataling on undefined
+     * STDERR/STDOUT under the web SAPI, inside the webhook's own error
+     * handler) made silent failures very hard to diagnose without raw
+     * server log access.
+     */
+    private function renderRecentErrors(int $chatId, int $messageId): void
+    {
+        $rows = Database::pdo()->query(
+            "SELECT level, channel, message, context, created_at FROM logs WHERE level IN ('error','critical') ORDER BY id DESC LIMIT 10"
+        )->fetchAll();
+
+        if (empty($rows)) {
+            $this->render($chatId, $messageId, "📋 هیچ خطایی ثبت نشده.", ['inline_keyboard' => [$this->backRow('admin:health')]]);
+            return;
+        }
+
+        $lines = ["📋 ۱۰ خطای اخیر:\n"];
+        foreach ($rows as $r) {
+            $ctx = $r['context'] !== null ? (' ' . mb_strimwidth($r['context'], 0, 150, '…')) : '';
+            $lines[] = sprintf("%s [%s/%s] %s%s", $r['created_at'], strtoupper($r['level']), $r['channel'], $r['message'], $ctx);
+        }
+        $text = mb_strimwidth(implode("\n", $lines), 0, 4000, '…');
+        $this->render($chatId, $messageId, $text, ['inline_keyboard' => [
+            [['text' => '🔄 بروزرسانی', 'callback_data' => 'admin:health:errors']],
+            $this->backRow('admin:health'),
+        ]]);
     }
 
     private function workerHeartbeatStatus(): string

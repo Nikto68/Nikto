@@ -894,6 +894,11 @@ final class Logger
 {
     private const SECRET_PATTERNS = ['token', 'secret', 'password', 'api_key', 'apikey'];
 
+    /** @var resource|null */
+    private static $stderr = null;
+    /** @var resource|null */
+    private static $stdout = null;
+
     public static function debug(string $channel, string $message, array $context = []): void
     {
         self::write('debug', $channel, $message, $context);
@@ -925,7 +930,20 @@ final class Logger
         $message = self::redactString($message);
 
         $line = sprintf('[%s] [%s] [%s] %s %s', date('Y-m-d H:i:s'), strtoupper($level), $channel, $message, empty($context) ? '' : json_encode($context, JSON_UNESCAPED_UNICODE));
-        fwrite($level === 'error' || $level === 'critical' ? STDERR : STDOUT, $line . PHP_EOL);
+
+        // STDERR/STDOUT are only predefined under the CLI SAPI (worker.php).
+        // bot.php runs as a web request (webhook, via PHP-FPM/mod_php),
+        // where referencing those constants directly is a fatal "undefined
+        // constant" error -- and since that happened inside this very
+        // logger, called from the webhook's own top-level catch block, it
+        // was masking whatever the real error actually was. php://stderr
+        // and php://stdout streams work identically under both SAPIs.
+        self::$stderr ??= @fopen('php://stderr', 'a') ?: null;
+        self::$stdout ??= @fopen('php://stdout', 'a') ?: null;
+        $stream = ($level === 'error' || $level === 'critical') ? self::$stderr : self::$stdout;
+        if ($stream !== null) {
+            @fwrite($stream, $line . PHP_EOL);
+        }
 
         try {
             $stmt = Database::pdo()->prepare(

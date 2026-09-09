@@ -906,14 +906,32 @@ final class WallexAdapter extends AbstractExchangeAdapter
             $symbol = (string) ($s['symbol'] ?? $key);
             $stats = $s['stats'] ?? [];
             $out[$symbol] = [
-                'volume' => (float) ($stats['24h_quoteVolume'] ?? $stats['24h_volume'] ?? 0),
-                'lastPrice' => (float) ($stats['lastPrice'] ?? $s['price'] ?? 0),
-                'bid' => (float) ($stats['bidPrice'] ?? 0),
-                'ask' => (float) ($stats['askPrice'] ?? 0),
-                'priceChangePercent' => (float) ($stats['24h_ch'] ?? 0),
+                'volume' => self::firstNumeric($stats, ['24h_quoteVolume', '24h_volume', 'quoteVolume24h', 'volume24h', 'quoteVolume', 'volume']),
+                'lastPrice' => self::firstNumeric($stats, ['lastPrice']) ?: self::firstNumeric($s, ['price']),
+                'bid' => self::firstNumeric($stats, ['bidPrice', 'bestBuy']),
+                'ask' => self::firstNumeric($stats, ['askPrice', 'bestSell']),
+                'priceChangePercent' => self::firstNumeric($stats, ['24h_ch', 'priceChangePercent']),
             ];
         }
         return $out;
+    }
+
+    /**
+     * Tries several plausible field-name variants and returns the first
+     * numeric one found -- a defensive best-effort guess where the exact
+     * live schema can't be verified from here (this sandbox's own network
+     * is fully blocked). See AdminPanel::renderWallexRawSample() for the
+     * ground-truth diagnostic this should eventually be replaced with an
+     * exact field name from.
+     */
+    private static function firstNumeric(array $data, array $keys): float
+    {
+        foreach ($keys as $key) {
+            if (isset($data[$key]) && is_numeric($data[$key])) {
+                return (float) $data[$key];
+            }
+        }
+        return 0.0;
     }
 
     public function fetchCandles(string $symbol, string $timeframe, int $limit): array
