@@ -204,6 +204,53 @@ final class TelegramDispatcher
         $this->signalRepo->updateStatus($signal->id, $dryRun ? 'queued' : ($anySent ? 'sent' : 'failed'));
     }
 
+    /**
+     * Announces a resolved trade (SL or TP1 hit) as a reply to the original
+     * signal message, in every channel that actually received it (LIVE
+     * sends only -- a DRY_RUN "queued" row was never really posted, so
+     * there's nothing to reply to and nothing worth announcing there).
+     */
+    public function announceOutcome(array $signalRow, string $outcome, float $price): void
+    {
+        $stmt = Database::pdo()->prepare(
+            "SELECT se.channel_id, se.message_id, c.chat_id
+             FROM signal_events se
+             JOIN channels c ON c.id = se.channel_id
+             WHERE se.signal_id = :sid AND se.event_type = 'sent' AND se.message_id IS NOT NULL"
+        );
+        $stmt->execute([':sid' => $signalRow['id']]);
+        $rows = $stmt->fetchAll();
+        if (empty($rows)) {
+            return;
+        }
+
+        $entry = (float) $signalRow['entry_price'];
+        $direction = (string) $signalRow['direction'];
+        $win = $outcome === 'tp1';
+        $pct = $entry > 0
+            ? (($direction === 'LONG' ? ($price - $entry) : ($entry - $price)) / $entry) * 100
+            : 0.0;
+        $priceStr = rtrim(rtrim(number_format($price, 8, '.', ''), '0'), '.');
+        $text = sprintf(
+            "%s %s %s\n\nنتیجه: %s\nقیمت: %s\n%s: %.2f%%",
+            $win ? '✅' : '❌',
+            $signalRow['symbol'],
+            $direction,
+            $win ? 'تارگت ۱ فعال شد' : 'حد ضرر فعال شد',
+            $priceStr,
+            $win ? 'سود' : 'ضرر',
+            abs($pct)
+        );
+
+        foreach ($rows as $row) {
+            $opts = ['reply_parameters' => $this->quotes->buildReplyParameters([
+                'message_id' => (int) $row['message_id'],
+                'chat_id' => (int) $row['chat_id'],
+            ])];
+            $this->sendWithRetry((int) $row['chat_id'], $text, [], $opts, (int) $signalRow['id'], (int) $row['channel_id']);
+        }
+    }
+
     private function sendWithRetry(int $chatId, string $text, array $entities, array $opts, int $signalId, int $channelId, int $maxAttempts = 3): ?int
     {
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
@@ -275,6 +322,7 @@ final class Worker
     private SignalQueue $queue;
     private TelegramDispatcher $dispatcher;
     private SymbolRepository $symbolRepo;
+    private SignalRepository $signalRepo;
 
     private bool $running = true;
     private int $lastScanAt = 0;
@@ -298,7 +346,8 @@ final class Worker
         $this->queue = new SignalQueue();
         $telegram = new TelegramClient();
         $channels = new ChannelManager($telegram);
-        $this->dispatcher = new TelegramDispatcher($telegram, $channels, new SignalRepository());
+        $this->signalRepo = new SignalRepository();
+        $this->dispatcher = new TelegramDispatcher($telegram, $channels, $this->signalRepo);
         $this->symbolRepo = new SymbolRepository();
         $this->scannerRunRepo = new ScannerRunRepository();
 
@@ -389,6 +438,7 @@ final class Worker
             try {
                 $this->maybeRunScanner();
                 $this->updateMarketData();
+                $this->resolveOpenPositions();
                 $this->scanAndGenerateSignals();
                 $this->processQueue();
                 $this->heartbeat();
@@ -553,6 +603,48 @@ final class Worker
             '1m' => 60, '5m' => 300, '15m' => 900, '1h' => 3600, '4h' => 14400, '1D' => 86400,
             default => 300,
         };
+    }
+
+    /**
+     * Checks every open (dispatched, not-yet-resolved) signal against the
+     * latest known price and closes it out the moment SL or TP1 is
+     * touched -- this is what frees a symbol up for a new signal (see
+     * SignalGenerator::generate()'s hasOpenPosition() gate) instead of
+     * firing a new one on top of a still-running trade. Uses whatever
+     * price updateMarketData() just fetched this tick, no extra API calls.
+     */
+    private function resolveOpenPositions(): void
+    {
+        foreach ($this->signalRepo->openPositions() as $row) {
+            $price = $this->marketData->latestPrice((string) $row['exchange'], (string) $row['symbol']);
+            if ($price <= 0) {
+                continue;
+            }
+
+            $direction = (string) $row['direction'];
+            $stopLoss = (float) $row['stop_loss'];
+            $tp1 = $row['tp1'] !== null ? (float) $row['tp1'] : null;
+
+            $hitSl = $direction === 'LONG' ? $price <= $stopLoss : $price >= $stopLoss;
+            $hitTp1 = $tp1 !== null && ($direction === 'LONG' ? $price >= $tp1 : $price <= $tp1);
+
+            // If both would trigger on the same tick (a big move between
+            // checks, or a very tight stop), SL wins -- resolving a signal
+            // as a win it may never have actually reached intrabar would
+            // be the worse mistake of the two.
+            $outcome = $hitSl ? 'sl' : ($hitTp1 ? 'tp1' : null);
+            if ($outcome === null) {
+                continue;
+            }
+
+            $this->signalRepo->resolve((int) $row['id'], $outcome, $price);
+            Logger::info('worker', 'position resolved', ['symbol' => $row['symbol'], 'outcome' => $outcome, 'price' => $price]);
+            try {
+                $this->dispatcher->announceOutcome($row, $outcome, $price);
+            } catch (Throwable $e) {
+                Logger::error('worker', 'outcome announcement failed', ['symbol' => $row['symbol'], 'error' => $e->getMessage()]);
+            }
+        }
     }
 
     private function scanAndGenerateSignals(): void

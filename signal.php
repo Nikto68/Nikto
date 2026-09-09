@@ -1713,6 +1713,12 @@ final class MarketDataStore
         $this->tickers->upsert($exchange, $symbol, $price, $bid, $ask, $volume24h);
     }
 
+    public function latestPrice(string $exchange, string $symbol): float
+    {
+        $ticker = $this->tickers->get($exchange, $symbol);
+        return (float) ($ticker['price'] ?? 0);
+    }
+
     /** @param string[] $timeframes */
     public function buildSnapshot(string $exchange, string $symbol, array $timeframes, int $candleLimit = 200): MarketSnapshot
     {
@@ -2624,6 +2630,44 @@ final class SignalRepository
         $stmt->execute();
         return $stmt->fetchAll();
     }
+
+    /**
+     * True while this symbol already has a dispatched (or, in DRY_RUN,
+     * queued) signal whose outcome (SL or TP1) hasn't been determined yet
+     * -- used to hold off issuing a new signal for the same symbol until
+     * the previous one's result is known, instead of firing back-to-back.
+     */
+    public function hasOpenPosition(string $exchange, string $symbol): bool
+    {
+        $exchangeId = ExchangeRepository::idForName($exchange);
+        if ($exchangeId === null) {
+            return false;
+        }
+        $stmt = Database::pdo()->prepare(
+            "SELECT COUNT(*) FROM signals
+             WHERE exchange_id = :eid AND symbol = :symbol
+               AND status IN ('sent','queued') AND resolved_at IS NULL"
+        );
+        $stmt->execute([':eid' => $exchangeId, ':symbol' => $symbol]);
+        return ((int) $stmt->fetchColumn()) > 0;
+    }
+
+    /** @return array<int,array<string,mixed>> open positions, joined with their exchange name */
+    public function openPositions(): array
+    {
+        $sql = "SELECT s.*, e.name AS exchange
+                FROM signals s
+                JOIN exchanges e ON e.id = s.exchange_id
+                WHERE s.status IN ('sent','queued') AND s.resolved_at IS NULL";
+        return Database::pdo()->query($sql)->fetchAll();
+    }
+
+    public function resolve(int $id, string $outcome, float $price): void
+    {
+        Database::pdo()->prepare(
+            'UPDATE signals SET outcome = :outcome, resolved_at = :now, resolved_price = :price, updated_at = :now WHERE id = :id'
+        )->execute([':outcome' => $outcome, ':now' => date('Y-m-d H:i:s'), ':price' => $price, ':id' => $id]);
+    }
 }
 
 final class ZoneRepository
@@ -3051,6 +3095,14 @@ final class SignalGenerator
     {
         $candles = $snapshot->candlesFor($timeframe);
         if (count($candles) < 30) {
+            return null;
+        }
+
+        // Don't stack a new signal on a symbol that already has one out
+        // whose result (SL or TP1) isn't known yet -- checked before the
+        // detection pipeline runs so a symbol under an open position also
+        // skips the wasted computation, not just the dispatch.
+        if ($this->signalRepo->hasOpenPosition($snapshot->exchange, $snapshot->symbol)) {
             return null;
         }
 

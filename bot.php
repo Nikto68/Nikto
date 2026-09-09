@@ -1249,7 +1249,14 @@ final class AdminPanel
         }
         $lines = ["📜 ۱۰ سیگنال اخیر:\n"];
         foreach ($rows as $r) {
-            $lines[] = sprintf('#%d %s %s [%s] امتیاز:%.1f وضعیت:%s', $r['id'], $r['symbol'], $r['direction'], $r['timeframe'], (float) $r['score'], $r['status']);
+            $outcome = $r['outcome'] ?? null;
+            $resultMark = match (true) {
+                $outcome === 'tp1' => '✅ سود',
+                $outcome === 'sl' => '❌ ضرر',
+                in_array($r['status'], ['sent', 'queued'], true) => '⏳ باز',
+                default => $r['status'],
+            };
+            $lines[] = sprintf('#%d %s %s [%s] امتیاز:%.1f %s', $r['id'], $r['symbol'], $r['direction'], $r['timeframe'], (float) $r['score'], $resultMark);
         }
         $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => [$this->backRow()]]);
     }

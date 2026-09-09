@@ -831,7 +831,25 @@ final class Database
             $pdo->exec($sql);
         }
 
+        // Added after the initial release -- ensureColumn() is idempotent
+        // (checks PRAGMA table_info first) so this is safe to run on every
+        // request against a database that already has these columns.
+        self::ensureColumn($pdo, 'signals', 'outcome', "TEXT NULL CHECK (outcome IS NULL OR outcome IN ('tp1','sl'))");
+        self::ensureColumn($pdo, 'signals', 'resolved_at', 'TEXT NULL');
+        self::ensureColumn($pdo, 'signals', 'resolved_price', 'REAL NULL');
+
         self::seedDefaults($pdo);
+    }
+
+    private static function ensureColumn(PDO $pdo, string $table, string $column, string $definition): void
+    {
+        $stmt = $pdo->query("PRAGMA table_info($table)");
+        foreach ($stmt->fetchAll() as $col) {
+            if (strcasecmp((string) $col['name'], $column) === 0) {
+                return;
+            }
+        }
+        $pdo->exec("ALTER TABLE $table ADD COLUMN $column $definition");
     }
 
     private static function seedDefaults(PDO $pdo): void
