@@ -8,7 +8,7 @@ declare(strict_types=1);
  * shared low-level Telegram entity/text utilities.
  *
  * No trading/business logic lives here. This file only:
- *   - loads environment variables (.env)
+ *   - loads environment variables (env.php, or classic .env text file)
  *   - exposes typed configuration via Config::
  *   - owns the single PDO connection + schema migration via Database::
  *   - provides a minimal structured Logger:: (never logs secrets)
@@ -45,15 +45,43 @@ final class Env
     private static array $vars = [];
     private static bool $loaded = false;
 
-    public static function load(string $path): void
+    /**
+     * $dir is the project root. Two supported sources, both optional and
+     * mergeable (env.php values win on conflict):
+     *
+     *   env.php  — `<?php return ['KEY' => 'value', ...];`. Preferred: it
+     *              has no leading-dot filename (some cPanel File Manager
+     *              builds cannot create/rename to a dotfile correctly —
+     *              they turn ".env" into "env." instead) and, being a
+     *              .php file, the webserver always executes it rather
+     *              than ever serving it as a downloadable text file, so
+     *              it needs no extra .htaccess protection to stay safe.
+     *   .env     — classic KEY=value text file, for hosts where a
+     *              leading-dot filename works fine.
+     */
+    public static function load(string $dir): void
     {
         if (self::$loaded) {
             return;
         }
         self::$loaded = true;
 
-        if (is_file($path)) {
-            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $phpFile = $dir . '/env.php';
+        if (is_file($phpFile)) {
+            $data = require $phpFile;
+            if (is_array($data)) {
+                foreach ($data as $key => $value) {
+                    self::$vars[(string) $key] = (string) $value;
+                    if (getenv((string) $key) === false) {
+                        putenv($key . '=' . $value);
+                    }
+                }
+            }
+        }
+
+        $envFile = $dir . '/.env';
+        if (is_file($envFile)) {
+            $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
             if ($lines !== false) {
                 foreach ($lines as $line) {
                     $line = trim($line);
@@ -126,7 +154,7 @@ final class Env
     }
 }
 
-Env::load(__DIR__ . '/.env');
+Env::load(__DIR__);
 
 // ============================================================================
 // SECTION 2 — APP CONFIG
