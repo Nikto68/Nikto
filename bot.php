@@ -689,6 +689,12 @@ final class AdminPanel
             return;
         }
 
+        if ($action === 'minscore_set' && isset($parts[3])) {
+            $this->states->set($userId, 'awaiting_channel_min_score', ['channel_id' => (int) $parts[3]]);
+            $this->render($chatId, $messageId, sprintf("✏️ حداقل امتیاز این کانال\n\nمقدار فعلی کلی سیستم: %.1f\nیک عدد جدید فقط برای همین کانال بفرستید (مثلاً 15).", Config::minSignalScore()), ['inline_keyboard' => [$this->backRow("admin:channels:view:{$parts[3]}")]]);
+            return;
+        }
+
         $channels = $this->channels->listAll();
         $keyboard = [[['text' => '➕ افزودن کانال', 'callback_data' => 'admin:channels:add']]];
         foreach ($channels as $c) {
@@ -731,6 +737,7 @@ final class AdminPanel
             [['text' => '🔄 بررسی دسترسی ربات', 'callback_data' => "admin:channels:recheck:$channelId"]],
             [['text' => $quoteEnabled ? '⚪️ غیرفعال‌سازی Quote' : '🟢 فعال‌سازی Quote', 'callback_data' => "admin:channels:quote_toggle:$channelId"]],
             [['text' => '💬 تنظیم پیام Quote', 'callback_data' => "admin:channels:quote_set:$channelId"]],
+            [['text' => '✏️ حداقل امتیاز کانال', 'callback_data' => "admin:channels:minscore_set:$channelId"]],
             [['text' => '🗑 حذف کانال', 'callback_data' => "admin:channels:remove:$channelId"]],
             $this->backRow('admin:channels'),
         ];
@@ -885,6 +892,9 @@ final class AdminPanel
             'binance' => Config::binanceRestBase() . '/api/v3/exchangeInfo',
             'mexc' => Config::mexcRestBase() . '/api/v3/exchangeInfo',
             'wallex' => Config::wallexRestBase() . '/v1/markets',
+            'bybit' => Config::bybitRestBase() . '/v5/market/instruments-info?category=spot',
+            'okx' => Config::okxRestBase() . '/api/v5/public/instruments?instType=SPOT',
+            'kucoin' => Config::kucoinRestBase() . '/api/v1/symbols',
             'cryptocompare' => Config::cryptocompareRestBase() . '/data/top/totalvolfull?limit=5&tsym=USDT',
         ];
 
@@ -1254,7 +1264,7 @@ final class AdminPanel
 
         $exHealth = $this->exchangeManager->healthSnapshot();
         $exLines = [];
-        foreach (['binance', 'mexc', 'wallex', 'cryptocompare'] as $ex) {
+        foreach (['binance', 'mexc', 'wallex', 'bybit', 'okx', 'kucoin', 'cryptocompare'] as $ex) {
             $exLines[] = ($exHealth[$ex] ?? '⚪️') . ' ' . ucfirst($ex);
         }
 
@@ -1410,6 +1420,19 @@ final class AdminPanel
             $settingKey = strtoupper($exchange) . '_API_' . ($field === 'secret' ? 'SECRET' : 'KEY');
             $this->setSetting($settingKey, $value);
             $this->telegram->sendMessage($chatId, $value === '' ? '✅ مقدار پاک شد.' : '✅ ذخیره شد.');
+            return true;
+        }
+
+        if ($state['state'] === 'awaiting_channel_min_score') {
+            $this->states->clear($userId);
+            $channelId = (int) ($state['payload']['channel_id'] ?? 0);
+            $value = trim($text);
+            if ($channelId === 0 || !is_numeric($value)) {
+                $this->telegram->sendMessage($chatId, "این مقدار باید عدد باشه.");
+                return true;
+            }
+            $this->channels->updateSettings($channelId, ['min_signal_score' => (float) $value]);
+            $this->telegram->sendMessage($chatId, "✅ حداقل امتیاز این کانال روی {$value} تنظیم شد.");
             return true;
         }
 

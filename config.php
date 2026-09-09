@@ -298,10 +298,34 @@ final class Config
         return Env::get('CRYPTOCOMPARE_REST_BASE', 'https://min-api.cryptocompare.com') ?? 'https://min-api.cryptocompare.com';
     }
 
+    /**
+     * Bybit / OKX / KuCoin: large, high-volume exchanges whose public spot
+     * market-data endpoints need no API key. Added alongside Wallex because
+     * Wallex's own volume is too thin for reliable signals on its own, and
+     * because unlike Binance/MEXC they are not (as of writing) known to
+     * geo-block this host -- each is still isolated via ExchangeManager, so
+     * if one turns out to be blocked too it just contributes 0 symbols
+     * instead of breaking anything else.
+     */
+    public static function bybitRestBase(): string
+    {
+        return Env::get('BYBIT_REST_BASE', 'https://api.bybit.com') ?? 'https://api.bybit.com';
+    }
+
+    public static function okxRestBase(): string
+    {
+        return Env::get('OKX_REST_BASE', 'https://www.okx.com') ?? 'https://www.okx.com';
+    }
+
+    public static function kucoinRestBase(): string
+    {
+        return Env::get('KUCOIN_REST_BASE', 'https://api.kucoin.com') ?? 'https://api.kucoin.com';
+    }
+
     /** @return string[] enabled exchange names, in priority order */
     public static function enabledExchanges(): array
     {
-        return Env::getList('ENABLED_EXCHANGES', 'binance,mexc,wallex');
+        return Env::getList('ENABLED_EXCHANGES', 'binance,mexc,wallex,bybit,okx,kucoin,cryptocompare');
     }
 
     // -- Scanner -------------------------------------------------------
@@ -815,7 +839,7 @@ final class Database
         $now = date('Y-m-d H:i:s');
 
         // Exchanges
-        $exchangeNames = ['binance' => 'Binance', 'mexc' => 'MEXC', 'wallex' => 'Wallex', 'cryptocompare' => 'CryptoCompare'];
+        $exchangeNames = ['binance' => 'Binance', 'mexc' => 'MEXC', 'wallex' => 'Wallex', 'bybit' => 'Bybit', 'okx' => 'OKX', 'kucoin' => 'KuCoin', 'cryptocompare' => 'CryptoCompare'];
         $stmt = $pdo->prepare(
             'INSERT INTO exchanges (name, display_name, is_enabled, priority)
              VALUES (:name, :display_name, :enabled, :priority)

@@ -1115,6 +1115,291 @@ final class CryptoCompareAdapter extends AbstractExchangeAdapter
 }
 
 // ============================================================================
+// SECTION 6b — BYBIT ADAPTER (public spot market data, no API key needed;
+// not one of the exchanges known to geo-block this host)
+// ============================================================================
+
+final class BybitAdapter extends AbstractExchangeAdapter
+{
+    protected array $timeframeMap = [
+        '1m' => '1', '5m' => '5', '15m' => '15', '1h' => '60', '4h' => '240', '1D' => 'D',
+    ];
+
+    public function name(): string
+    {
+        return 'bybit';
+    }
+
+    public function fetchExchangeSymbols(): array
+    {
+        RateLimiter::acquire('bybit', 600);
+        $res = HttpClient::request('GET', Config::bybitRestBase() . '/v5/market/instruments-info?category=spot');
+        $out = [];
+        foreach ($res['json']['result']['list'] ?? [] as $s) {
+            if (($s['status'] ?? '') !== 'Trading') {
+                continue;
+            }
+            $base = (string) ($s['baseCoin'] ?? '');
+            $quote = (string) ($s['quoteCoin'] ?? '');
+            if ($base === '' || $quote === '') {
+                continue;
+            }
+            $out[] = ['symbol' => (string) ($s['symbol'] ?? ''), 'base' => $base, 'quote' => $quote, 'status' => 'TRADING'];
+        }
+        return $out;
+    }
+
+    public function fetchTicker24h(): array
+    {
+        RateLimiter::acquire('bybit', 600);
+        $res = HttpClient::request('GET', Config::bybitRestBase() . '/v5/market/tickers?category=spot');
+        $out = [];
+        foreach ($res['json']['result']['list'] ?? [] as $t) {
+            $symbol = (string) ($t['symbol'] ?? '');
+            if ($symbol === '') {
+                continue;
+            }
+            $last = (float) ($t['lastPrice'] ?? 0);
+            $bid = (float) ($t['bid1Price'] ?? 0);
+            $ask = (float) ($t['ask1Price'] ?? 0);
+            $out[$symbol] = [
+                'volume' => (float) ($t['turnover24h'] ?? 0),
+                'lastPrice' => $last,
+                'bid' => $bid > 0 ? $bid : $last,
+                'ask' => $ask > 0 ? $ask : $last,
+                'priceChangePercent' => ((float) ($t['price24hPcnt'] ?? 0)) * 100,
+            ];
+        }
+        return $out;
+    }
+
+    public function fetchCandles(string $symbol, string $timeframe, int $limit): array
+    {
+        RateLimiter::acquire('bybit', 600);
+        $url = Config::bybitRestBase() . '/v5/market/kline?' . http_build_query([
+            'category' => 'spot', 'symbol' => $symbol, 'interval' => $this->mapTimeframe($timeframe), 'limit' => $limit,
+        ]);
+        $res = HttpClient::request('GET', $url);
+        $out = [];
+        // Bybit returns newest-first; reverse to chronological order like every other adapter.
+        foreach (array_reverse($res['json']['result']['list'] ?? []) as $row) {
+            if (!is_array($row) || count($row) < 6) {
+                continue;
+            }
+            $out[] = new Candle(
+                openTime: (int) $row[0], open: (float) $row[1], high: (float) $row[2],
+                low: (float) $row[3], close: (float) $row[4], volume: (float) $row[5], timeframe: $timeframe,
+            );
+        }
+        return $out;
+    }
+
+    public function fetchOrderBook(string $symbol, int $depth): array
+    {
+        RateLimiter::acquire('bybit', 600);
+        $url = Config::bybitRestBase() . '/v5/market/orderbook?' . http_build_query([
+            'category' => 'spot', 'symbol' => $symbol, 'limit' => min($depth, 50),
+        ]);
+        $res = HttpClient::request('GET', $url);
+        return [
+            'bids' => array_map(static fn($b) => [(float) $b[0], (float) $b[1]], $res['json']['result']['b'] ?? []),
+            'asks' => array_map(static fn($a) => [(float) $a[0], (float) $a[1]], $res['json']['result']['a'] ?? []),
+        ];
+    }
+}
+
+// ============================================================================
+// SECTION 6c — OKX ADAPTER (public spot market data, no API key needed)
+// ============================================================================
+
+final class OkxAdapter extends AbstractExchangeAdapter
+{
+    protected array $timeframeMap = [
+        '1m' => '1m', '5m' => '5m', '15m' => '15m', '1h' => '1H', '4h' => '4H', '1D' => '1D',
+    ];
+
+    public function name(): string
+    {
+        return 'okx';
+    }
+
+    public function fetchExchangeSymbols(): array
+    {
+        RateLimiter::acquire('okx', 600);
+        $res = HttpClient::request('GET', Config::okxRestBase() . '/api/v5/public/instruments?instType=SPOT');
+        $out = [];
+        foreach ($res['json']['data'] ?? [] as $s) {
+            if (($s['state'] ?? '') !== 'live') {
+                continue;
+            }
+            $base = (string) ($s['baseCcy'] ?? '');
+            $quote = (string) ($s['quoteCcy'] ?? '');
+            if ($base === '' || $quote === '') {
+                continue;
+            }
+            $out[] = ['symbol' => (string) ($s['instId'] ?? ''), 'base' => $base, 'quote' => $quote, 'status' => 'TRADING'];
+        }
+        return $out;
+    }
+
+    public function fetchTicker24h(): array
+    {
+        RateLimiter::acquire('okx', 600);
+        $res = HttpClient::request('GET', Config::okxRestBase() . '/api/v5/market/tickers?instType=SPOT');
+        $out = [];
+        foreach ($res['json']['data'] ?? [] as $t) {
+            $symbol = (string) ($t['instId'] ?? '');
+            if ($symbol === '') {
+                continue;
+            }
+            $last = (float) ($t['last'] ?? 0);
+            $open24h = (float) ($t['open24h'] ?? 0);
+            $bid = (float) ($t['bidPx'] ?? 0);
+            $ask = (float) ($t['askPx'] ?? 0);
+            $out[$symbol] = [
+                'volume' => (float) ($t['volCcy24h'] ?? 0),
+                'lastPrice' => $last,
+                'bid' => $bid > 0 ? $bid : $last,
+                'ask' => $ask > 0 ? $ask : $last,
+                'priceChangePercent' => $open24h > 0 ? (($last - $open24h) / $open24h) * 100 : 0.0,
+            ];
+        }
+        return $out;
+    }
+
+    public function fetchCandles(string $symbol, string $timeframe, int $limit): array
+    {
+        RateLimiter::acquire('okx', 600);
+        $url = Config::okxRestBase() . '/api/v5/market/candles?' . http_build_query([
+            'instId' => $symbol, 'bar' => $this->mapTimeframe($timeframe), 'limit' => $limit,
+        ]);
+        $res = HttpClient::request('GET', $url);
+        $out = [];
+        // OKX returns newest-first; reverse to chronological order like every other adapter.
+        foreach (array_reverse($res['json']['data'] ?? []) as $row) {
+            if (!is_array($row) || count($row) < 6) {
+                continue;
+            }
+            $out[] = new Candle(
+                openTime: (int) $row[0], open: (float) $row[1], high: (float) $row[2],
+                low: (float) $row[3], close: (float) $row[4], volume: (float) $row[5], timeframe: $timeframe,
+            );
+        }
+        return $out;
+    }
+
+    public function fetchOrderBook(string $symbol, int $depth): array
+    {
+        RateLimiter::acquire('okx', 600);
+        $url = Config::okxRestBase() . '/api/v5/market/books?' . http_build_query(['instId' => $symbol, 'sz' => min($depth, 400)]);
+        $res = HttpClient::request('GET', $url);
+        $book = $res['json']['data'][0] ?? [];
+        return [
+            'bids' => array_map(static fn($b) => [(float) $b[0], (float) $b[1]], $book['bids'] ?? []),
+            'asks' => array_map(static fn($a) => [(float) $a[0], (float) $a[1]], $book['asks'] ?? []),
+        ];
+    }
+}
+
+// ============================================================================
+// SECTION 6d — KUCOIN ADAPTER (public spot market data, no API key needed)
+// ============================================================================
+
+final class KucoinAdapter extends AbstractExchangeAdapter
+{
+    protected array $timeframeMap = [
+        '1m' => '1min', '5m' => '5min', '15m' => '15min', '1h' => '1hour', '4h' => '4hour', '1D' => '1day',
+    ];
+
+    private const INTERVAL_SECONDS = [
+        '1m' => 60, '5m' => 300, '15m' => 900, '1h' => 3600, '4h' => 14400, '1D' => 86400,
+    ];
+
+    public function name(): string
+    {
+        return 'kucoin';
+    }
+
+    public function fetchExchangeSymbols(): array
+    {
+        RateLimiter::acquire('kucoin', 600);
+        $res = HttpClient::request('GET', Config::kucoinRestBase() . '/api/v1/symbols');
+        $out = [];
+        foreach ($res['json']['data'] ?? [] as $s) {
+            if (($s['enableTrading'] ?? false) !== true) {
+                continue;
+            }
+            $base = (string) ($s['baseCurrency'] ?? '');
+            $quote = (string) ($s['quoteCurrency'] ?? '');
+            if ($base === '' || $quote === '') {
+                continue;
+            }
+            $out[] = ['symbol' => (string) ($s['symbol'] ?? ''), 'base' => $base, 'quote' => $quote, 'status' => 'TRADING'];
+        }
+        return $out;
+    }
+
+    public function fetchTicker24h(): array
+    {
+        RateLimiter::acquire('kucoin', 600);
+        $res = HttpClient::request('GET', Config::kucoinRestBase() . '/api/v1/market/allTickers');
+        $out = [];
+        foreach ($res['json']['data']['ticker'] ?? [] as $t) {
+            $symbol = (string) ($t['symbol'] ?? '');
+            if ($symbol === '') {
+                continue;
+            }
+            $last = (float) ($t['last'] ?? 0);
+            $bid = (float) ($t['buy'] ?? 0);
+            $ask = (float) ($t['sell'] ?? 0);
+            $out[$symbol] = [
+                'volume' => (float) ($t['volValue'] ?? 0),
+                'lastPrice' => $last,
+                'bid' => $bid > 0 ? $bid : $last,
+                'ask' => $ask > 0 ? $ask : $last,
+                'priceChangePercent' => ((float) ($t['changeRate'] ?? 0)) * 100,
+            ];
+        }
+        return $out;
+    }
+
+    public function fetchCandles(string $symbol, string $timeframe, int $limit): array
+    {
+        RateLimiter::acquire('kucoin', 600);
+        $intervalSeconds = self::INTERVAL_SECONDS[$timeframe] ?? 3600;
+        $endAt = time();
+        $startAt = $endAt - ($limit * $intervalSeconds);
+        $url = Config::kucoinRestBase() . '/api/v1/market/candles?' . http_build_query([
+            'symbol' => $symbol, 'type' => $this->mapTimeframe($timeframe), 'startAt' => $startAt, 'endAt' => $endAt,
+        ]);
+        $res = HttpClient::request('GET', $url);
+        $out = [];
+        // KuCoin returns newest-first rows shaped [time, open, close, high, low, volume, turnover].
+        foreach (array_reverse($res['json']['data'] ?? []) as $row) {
+            if (!is_array($row) || count($row) < 6) {
+                continue;
+            }
+            $out[] = new Candle(
+                openTime: ((int) $row[0]) * 1000, open: (float) $row[1], high: (float) $row[3],
+                low: (float) $row[4], close: (float) $row[2], volume: (float) $row[5], timeframe: $timeframe,
+            );
+        }
+        return $out;
+    }
+
+    public function fetchOrderBook(string $symbol, int $depth): array
+    {
+        RateLimiter::acquire('kucoin', 600);
+        $url = Config::kucoinRestBase() . '/api/v1/market/orderbook/level2_20?' . http_build_query(['symbol' => $symbol]);
+        $res = HttpClient::request('GET', $url);
+        return [
+            'bids' => array_map(static fn($b) => [(float) $b[0], (float) $b[1]], $res['json']['data']['bids'] ?? []),
+            'asks' => array_map(static fn($a) => [(float) $a[0], (float) $a[1]], $res['json']['data']['asks'] ?? []),
+        ];
+    }
+}
+
+// ============================================================================
 // SECTION 7 — EXCHANGE MANAGER (isolation + circuit breaker)
 // ============================================================================
 
@@ -1144,6 +1429,15 @@ final class ExchangeManager
         }
         if (in_array('cryptocompare', $enabled, true)) {
             $this->register(new CryptoCompareAdapter());
+        }
+        if (in_array('bybit', $enabled, true)) {
+            $this->register(new BybitAdapter());
+        }
+        if (in_array('okx', $enabled, true)) {
+            $this->register(new OkxAdapter());
+        }
+        if (in_array('kucoin', $enabled, true)) {
+            $this->register(new KucoinAdapter());
         }
     }
 
@@ -2035,16 +2329,22 @@ final class DefaultStructureStrategy implements Strategy
                 return null;
             }
 
+            $resistances = array_values(array_filter($zones, static fn(Zone $z) => $z->type === ZoneType::RESISTANCE && $z->low > $price));
+            $bearishObs = array_values(array_filter($orderBlocks, static fn(OrderBlock $ob) => $ob->type === OrderBlockType::BEARISH && !$ob->mitigated && $ob->low > $price));
+            $targets = self::structuralTargets($price, $risk, $resistances, $bearishObs, true);
+
             return [
                 'direction' => $direction,
                 'entry' => $entry,
                 'stop_loss' => $stopLoss,
-                'tp1' => $entry + $risk * 1.5,
-                'tp2' => $entry + $risk * 2.5,
-                'tp3' => $entry + $risk * 4.0,
+                'tp1' => $targets[0],
+                'tp2' => $targets[1],
+                'tp3' => $targets[2],
             ];
         }
 
+        $supportsBelow = array_values(array_filter($zones, static fn(Zone $z) => $z->type === ZoneType::SUPPORT && $z->high < $price));
+        $bullishObsBelow = array_values(array_filter($orderBlocks, static fn(OrderBlock $ob) => $ob->type === OrderBlockType::BULLISH && !$ob->mitigated && $ob->high < $price));
         $resistances = array_values(array_filter($zones, static fn(Zone $z) => $z->type === ZoneType::RESISTANCE && $z->mid() >= $price));
         $bearishObs = array_values(array_filter($orderBlocks, static fn(OrderBlock $ob) => $ob->type === OrderBlockType::BEARISH && !$ob->mitigated));
 
@@ -2064,14 +2364,79 @@ final class DefaultStructureStrategy implements Strategy
             return null;
         }
 
+        $targets = self::structuralTargets($price, $risk, $supportsBelow, $bullishObsBelow, false);
+
         return [
             'direction' => $direction,
             'entry' => $entry,
             'stop_loss' => $stopLoss,
-            'tp1' => $entry - $risk * 1.5,
-            'tp2' => $entry - $risk * 2.5,
-            'tp3' => $entry - $risk * 4.0,
+            'tp1' => $targets[0],
+            'tp2' => $targets[1],
+            'tp3' => $targets[2],
         ];
+    }
+
+    /**
+     * Targets come from real opposing structure (the next S/R zones and
+     * unmitigated order blocks in the trade's direction) when available --
+     * the same thing a trader eyeballs on a chart with a manual RR tool --
+     * instead of a fixed risk multiple. That's why realised RR now varies
+     * signal to signal rather than always landing on the same number.
+     * Falls back to fixed multiples (2R/3.5R/5R) only when structure gives
+     * nothing usable, so a thin market never blocks a signal outright.
+     *
+     * @param Zone[] $zones
+     * @param OrderBlock[] $obs
+     * @return array{0:float,1:float,2:float}
+     */
+    private static function structuralTargets(float $price, float $risk, array $zones, array $obs, bool $ascending): array
+    {
+        $levels = [];
+        foreach ($zones as $z) {
+            $levels[] = $ascending ? $z->low : $z->high;
+        }
+        foreach ($obs as $ob) {
+            $levels[] = $ascending ? $ob->low : $ob->high;
+        }
+        if ($ascending) {
+            sort($levels);
+        } else {
+            rsort($levels);
+        }
+
+        $minGap = $risk * 0.5;
+        $kept = [];
+        $last = $price;
+        foreach ($levels as $lvl) {
+            $dist = $ascending ? $lvl - $last : $last - $lvl;
+            if ($dist < $minGap) {
+                continue;
+            }
+            $kept[] = $lvl;
+            $last = $lvl;
+            if (count($kept) >= 3) {
+                break;
+            }
+        }
+
+        $fallback = [2.0, 3.5, 5.0];
+        $sign = $ascending ? 1 : -1;
+        for ($i = 0; $i < 3; $i++) {
+            if (isset($kept[$i])) {
+                continue;
+            }
+            $candidate = $price + $sign * $risk * $fallback[$i];
+            $prevLevel = $i > 0 ? $kept[$i - 1] : $price;
+            // A structural level already claiming tp1/tp2 can sit closer or
+            // farther than the fixed-multiple fallback would -- always push
+            // the fallback past whatever came before it so tp1<tp2<tp3 (or
+            // the mirror for SHORT) holds even when the two are mixed.
+            $kept[$i] = $ascending
+                ? max($candidate, $prevLevel + $minGap)
+                : min($candidate, $prevLevel - $minGap);
+        }
+
+        return [$kept[0], $kept[1], $kept[2]];
     }
 }
 
