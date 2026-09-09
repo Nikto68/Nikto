@@ -2372,7 +2372,7 @@ final class MarketScanner
                 }
 
                 [$symbols, $tickers] = $result;
-                $ranked = $this->rank($symbols, $tickers);
+                ['candidates' => $ranked] = $this->rank($symbols, $tickers);
                 $totalScanned += count($symbols);
                 $selected = array_slice($ranked, 0, Config::scannerTopN());
                 $totalSelected += count($selected);
@@ -2391,28 +2391,45 @@ final class MarketScanner
     /**
      * @param array<int,array{symbol:string,base:string,quote:string,status:string}> $symbols
      * @param array<string,array{volume:float,lastPrice:float,bid:float,ask:float,priceChangePercent:float}> $tickers
-     * @return array<int,array{symbol:string,base:string,quote:string,volume:float,liquidity:float,spread:float,volatility:float,rank:int}>
+     * @return array{candidates:array<int,array{symbol:string,base:string,quote:string,volume:float,liquidity:float,spread:float,volatility:float,rank:int}>, funnel:array<string,int>}
      */
     private function rank(array $symbols, array $tickers): array
     {
-        $allowedQuotes = Config::allowedQuoteAssets();
+        // Compared case-insensitively -- an exchange returning "usdt"
+        // while ALLOWED_QUOTE_ASSETS says "USDT" must still match; a
+        // strict-case mismatch here silently filters out every symbol.
+        $allowedQuotes = array_map('strtoupper', Config::allowedQuoteAssets());
         $minVolume = Config::minVolumeUsdt();
         $maxSpread = Config::maxSpreadPercent();
         $includeStable = Config::includeStablecoinPairs();
         $stableAssets = ['USDT', 'USDC', 'BUSD', 'TUSD', 'DAI', 'FDUSD'];
 
+        $funnel = [
+            'total' => count($symbols), 'quote_ok' => 0, 'stable_ok' => 0,
+            'has_ticker' => 0, 'volume_ok' => 0, 'spread_ok' => 0,
+        ];
+
         $candidates = [];
         foreach ($symbols as $s) {
-            if (!empty($allowedQuotes) && !in_array($s['quote'], $allowedQuotes, true)) {
+            $quote = strtoupper($s['quote']);
+            $base = strtoupper($s['base']);
+            if (!empty($allowedQuotes) && !in_array($quote, $allowedQuotes, true)) {
                 continue;
             }
-            if (!$includeStable && in_array($s['base'], $stableAssets, true)) {
+            $funnel['quote_ok']++;
+            if (!$includeStable && in_array($base, $stableAssets, true)) {
                 continue;
             }
+            $funnel['stable_ok']++;
             $ticker = $tickers[$s['symbol']] ?? null;
-            if ($ticker === null || $ticker['volume'] < $minVolume) {
+            if ($ticker === null) {
                 continue;
             }
+            $funnel['has_ticker']++;
+            if ($ticker['volume'] < $minVolume) {
+                continue;
+            }
+            $funnel['volume_ok']++;
             $price = $ticker['lastPrice'];
             $spread = ($ticker['bid'] > 0 && $ticker['ask'] > 0 && $price > 0)
                 ? (($ticker['ask'] - $ticker['bid']) / $price) * 100
@@ -2420,6 +2437,7 @@ final class MarketScanner
             if ($spread > $maxSpread) {
                 continue;
             }
+            $funnel['spread_ok']++;
             $volatility = abs($ticker['priceChangePercent']);
             // Liquidity proxy: volume normalized against spread (tighter spread + higher volume = more liquid).
             $liquidity = $spread > 0 ? $ticker['volume'] / $spread : $ticker['volume'];
@@ -2444,7 +2462,35 @@ final class MarketScanner
         }
         unset($c);
 
-        return $candidates;
+        return ['candidates' => $candidates, 'funnel' => $funnel];
+    }
+
+    /**
+     * Fresh, direct (circuit-breaker-bypassing) fetch + rank for ONE
+     * exchange, returning the funnel counts at every filter stage instead
+     * of just the final result — pinpoints exactly which filter
+     * (quote asset, stablecoin exclusion, missing ticker match, min
+     * volume, max spread) is eliminating every candidate, for the admin
+     * panel's scanner diagnostic.
+     * @return array{ok:bool, error?:string, funnel?:array<string,int>, sample?:array<int,array<string,mixed>>}
+     */
+    public function diagnoseExchange(string $exchangeName, ExchangeAdapter $adapter): array
+    {
+        try {
+            $symbols = $adapter->fetchExchangeSymbols();
+            $tickers = $adapter->fetchTicker24h();
+        } catch (Throwable $e) {
+            return ['ok' => false, 'error' => $e->getMessage()];
+        }
+        if (empty($symbols)) {
+            return ['ok' => false, 'error' => 'fetchExchangeSymbols returned 0 symbols'];
+        }
+        ['candidates' => $candidates, 'funnel' => $funnel] = $this->rank($symbols, $tickers);
+        $sample = array_map(
+            static fn($s) => ['symbol' => $s['symbol'], 'base' => $s['base'], 'quote' => $s['quote']],
+            array_slice($symbols, 0, 3)
+        );
+        return ['ok' => true, 'funnel' => $funnel, 'sample' => $sample, 'ticker_count' => count($tickers)];
     }
 }
 

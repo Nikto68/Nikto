@@ -822,11 +822,33 @@ final class AdminPanel
                     $lines[] = "پاسخ: $bodySnippet";
                 }
                 if ($res['status'] === 451 || $res['status'] === 403) {
-                    $lines[] = "(این کد معمولاً یعنی IP هاست شما از سمت صرافی مسدود/محدود شده — خیلی رایج برای هاست‌های اشتراکی)";
+                    $lines[] = "(این کد معمولاً یعنی IP هاست شما از سمت صرافی مسدود/محدود شده — خیلی رایج برای هاست‌های اشتراکی، مخصوصاً هاست‌های ایرانی روی Binance/MEXC)";
                 }
             } else {
                 $count = is_array($res['json']) ? (count($res['json']['symbols'] ?? $res['json']['result']['symbols'] ?? $res['json']) ) : 0;
                 $lines[] = "✅ HTTP {$res['status']} ({$elapsed}ms), آیتم‌ها: $count";
+
+                // Connection is fine -- run the real filter funnel to see
+                // exactly which stage (quote asset / stablecoin / ticker
+                // match / min volume / max spread) eliminates candidates.
+                $diag = (new MarketScanner())->diagnoseExchange($name, $adapter);
+                if ($diag['ok'] ?? false) {
+                    $f = $diag['funnel'];
+                    $lines[] = sprintf(
+                        "فیلتر: %d کل → %d ارز مجاز → %d غیراستیبل‌کوین → %d با تیکر → %d حجم کافی → %d اسپرد مناسب",
+                        $f['total'], $f['quote_ok'], $f['stable_ok'], $f['has_ticker'], $f['volume_ok'], $f['spread_ok']
+                    );
+                    if ($f['total'] > 0 && $f['quote_ok'] === 0) {
+                        $sampleQuotes = implode(', ', array_unique(array_column($diag['sample'], 'quote')));
+                        $lines[] = "⚠️ هیچ نمادی از ارزهای مجاز (" . implode(',', Config::allowedQuoteAssets()) . ") پیدا نشد. نمونه quote واقعی این صرافی: $sampleQuotes";
+                    } elseif ($f['quote_ok'] > 0 && $f['has_ticker'] === 0) {
+                        $lines[] = "⚠️ نماد با ارز مجاز پیدا شد ولی هیچ‌کدوم قیمت/تیکر نداشتن — یعنی احتمالاً ساختار پاسخ fetchTicker24h با انتظار کد فرق داره.";
+                    } elseif ($f['has_ticker'] > 0 && $f['volume_ok'] === 0) {
+                        $lines[] = "⚠️ تیکر پیدا شد ولی حجمی به‌اندازه MIN_VOLUME_USDT نبود — یا واحد حجم گزارش‌شده با فرض ما (USDT) فرق داره، یا واقعاً حجم پایینه.";
+                    }
+                } elseif (isset($diag['error'])) {
+                    $lines[] = "⚠️ خطا در محاسبه فیلتر: {$diag['error']}";
+                }
             }
             $lines[] = '';
         }
