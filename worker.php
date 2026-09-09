@@ -14,22 +14,65 @@ require_once __DIR__ . '/bot.php';
 
 /**
  * ============================================================================
- * worker.php — the one and only long-running process. No cron, ever.
+ * worker.php — runs the whole Load Symbols -> Market Data -> Scan ->
+ * Indicators -> S/R -> OB -> FVG -> Strategy -> Confluence -> Validate ->
+ * Queue -> Send Telegram cycle. Two execution modes, chosen by WORKER_MODE:
  *
- *   php worker.php
+ *   daemon  php worker.php   loops forever until SIGTERM/SIGINT — the
+ *           original "no cron, ever" model. Needs a host that allows a
+ *           persistent background process (SSH + nohup/screen, a VPS, ...).
  *
- * START -> Load Config -> Load Symbols -> Fetch Initial Market Data ->
- * Connect WebSocket where available -> loop { Update Market Data -> Scan
- * Symbols -> Indicators -> S/R -> OB -> FVG -> Strategy -> Confluence ->
- * Validate -> Queue -> Send Telegram -> Wait } -> Repeat, forever.
+ *   cron    php worker.php   runs ONE bounded pass (up to
+ *           WORKER_MAX_RUNTIME_SECONDS, default 50s) and exits cleanly.
+ *           A cPanel Cron Job re-invokes it (every 1 minute — cPanel's
+ *           minimum granularity) to approximate continuous operation. This
+ *           is the default: it's the only mode plain shared hosting with
+ *           just File Manager + Cron Jobs (no SSH, no persistent process)
+ *           can actually run. A lock file prevents two invocations
+ *           overlapping if one runs long; scanner/timeframe due-times are
+ *           persisted to the database (not kept in memory) so scheduling
+ *           survives across the process restarting every single minute.
+ *           In this mode there is no persistent WebSocket connection (a
+ *           connection that lives ~50s and dies is pointless) — market
+ *           data is REST-polled, same as the fallback path in daemon mode.
  *
  * One exchange failing (rate limit, outage, bad response) never stops the
  * others — every exchange call goes through ExchangeManager::withIsolation
- * (signal.php), which owns per-exchange circuit breaking. This file adds
- * the outer scheduling/backoff loop, the Telegram send queue, and graceful
- * shutdown.
+ * (signal.php), which owns per-exchange circuit breaking.
  * ============================================================================
  */
+
+// ============================================================================
+// SECTION 0 — LOCK FILE
+// Stops two overlapping invocations (a slow cron run still finishing when
+// the next minute's cron fires) from touching market data / the signal
+// queue at the same time.
+// ============================================================================
+
+final class LockFile
+{
+    /** @var resource|null */
+    private $handle = null;
+
+    public function acquire(string $path): bool
+    {
+        $this->handle = @fopen($path, 'c');
+        if ($this->handle === false) {
+            $this->handle = null;
+            return false;
+        }
+        return flock($this->handle, LOCK_EX | LOCK_NB);
+    }
+
+    public function release(): void
+    {
+        if ($this->handle !== null) {
+            flock($this->handle, LOCK_UN);
+            fclose($this->handle);
+            $this->handle = null;
+        }
+    }
+}
 
 // ============================================================================
 // SECTION 1 — BACKOFF HELPER
@@ -242,6 +285,8 @@ final class Worker
     /** @var array<string,Backoff> per-exchange backoff state for the outer loop */
     private array $exchangeBackoff = [];
 
+    private ScannerRunRepository $scannerRunRepo;
+
     public function __construct()
     {
         Database::migrate();
@@ -255,13 +300,21 @@ final class Worker
         $channels = new ChannelManager($telegram);
         $this->dispatcher = new TelegramDispatcher($telegram, $channels, new SignalRepository());
         $this->symbolRepo = new SymbolRepository();
+        $this->scannerRunRepo = new ScannerRunRepository();
 
         foreach ($this->exchangeManager->adapters() as $name => $adapter) {
             $this->exchangeBackoff[$name] = new Backoff();
         }
-        foreach (Config::timeframes() as $tf) {
-            $this->nextTimeframeRun[$tf] = 0;
-        }
+
+        // Cron mode restarts this whole process every ~1 minute, so "last
+        // run" state can't live in memory (it would reset every restart and
+        // make every symbol/timeframe look due on every single invocation,
+        // hammering exchange APIs). Load it from the database instead;
+        // daemon mode reads the same state once and then keeps it in memory
+        // for the life of the process, same as before.
+        $lastScan = $this->scannerRunRepo->lastRunAt();
+        $this->lastScanAt = $lastScan !== null ? (int) strtotime($lastScan) : 0;
+        $this->nextTimeframeRun = array_merge(array_fill_keys(Config::timeframes(), 0), $this->loadTimeframeSchedule());
 
         $this->installSignalHandlers();
     }
@@ -279,18 +332,58 @@ final class Worker
         };
         pcntl_signal(SIGTERM, $handler);
         pcntl_signal(SIGINT, $handler);
+        // SIGALRM drives the cron-mode hard deadline below (pcntl_alarm) —
+        // same handler as SIGTERM/SIGINT, so it interrupts an in-flight
+        // HTTP retry storm exactly the same way (ShutdownFlag is what
+        // HttpClient actually polls; a deadline check in the tick loop
+        // alone would NOT catch a retry storm stuck inside the very first,
+        // pre-loop scanner/priming calls — confirmed by testing).
+        pcntl_signal(SIGALRM, $handler);
     }
 
     public function run(): void
     {
-        Logger::info('worker', 'worker starting', ['run_mode' => Config::runMode()->value]);
+        $mode = Config::workerMode();
+        Logger::info('worker', 'worker starting', ['run_mode' => Config::runMode()->value, 'worker_mode' => $mode]);
+
+        $lock = new LockFile();
+        if (!$lock->acquire(Config::storageDir() . '/worker.lock')) {
+            Logger::info('worker', 'another worker invocation is still running — skipping this one');
+            return;
+        }
+
+        if ($mode === 'cron' && function_exists('pcntl_alarm')) {
+            pcntl_alarm(Config::workerMaxRuntimeSeconds());
+        }
+
+        try {
+            $this->runLoop($mode);
+        } finally {
+            if (function_exists('pcntl_alarm')) {
+                pcntl_alarm(0); // cancel any pending alarm — we're exiting on our own
+            }
+            $lock->release();
+        }
+    }
+
+    private function runLoop(string $mode): void
+    {
+        // daemon: no deadline, runs until SIGTERM/SIGINT flips $this->running.
+        // cron: exit on our own before the host's cron/process limits would
+        // kill us anyway, so the next minute's invocation starts clean. The
+        // real enforcement is the SIGALRM set in run(); this time-based
+        // check is just what keeps the *tick loop itself* from starting
+        // another full cycle once the budget is spent.
+        $deadline = $mode === 'daemon' ? PHP_INT_MAX : (time() + Config::workerMaxRuntimeSeconds());
 
         // Load Symbols (whatever the last scan produced) + Fetch Initial
-        // Market Data before entering the steady-state loop.
-        $this->runScanner();
+        // Market Data before entering the steady-state loop. Gated the same
+        // way as every later tick, so a cron invocation doesn't re-scan or
+        // re-prime data that's already fresh from the previous minute.
+        $this->maybeRunScanner();
         $this->primeMarketData();
 
-        while ($this->running) {
+        while ($this->running && time() < $deadline) {
             $tickStart = microtime(true);
 
             try {
@@ -305,11 +398,15 @@ final class Worker
             }
 
             $elapsed = microtime(true) - $tickStart;
-            $sleepFor = max(1, Config::workerTickSeconds() - (int) $elapsed);
+            $remaining = $deadline - time();
+            if ($remaining <= 0) {
+                break;
+            }
+            $sleepFor = max(1, min(Config::workerTickSeconds(), $remaining) - (int) $elapsed);
             $this->sleepInterruptible($sleepFor);
         }
 
-        Logger::info('worker', 'worker stopped gracefully');
+        Logger::info('worker', $mode === 'daemon' ? 'worker stopped gracefully' : 'worker run finished (cron invocation)');
     }
 
     private function sleepInterruptible(int $seconds): void
@@ -325,9 +422,28 @@ final class Worker
     private function heartbeat(): void
     {
         Database::pdo()->prepare(
-            'INSERT INTO bot_settings (setting_key, setting_value, updated_at) VALUES ("worker_heartbeat", :v, :now)
-             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at)'
+            'INSERT INTO bot_settings (setting_key, setting_value, updated_at) VALUES (\'worker_heartbeat\', :v, :now)
+             ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = excluded.updated_at'
         )->execute([':v' => (string) time(), ':now' => date('Y-m-d H:i:s')]);
+    }
+
+    /** @return array<string,int> timeframe => unix timestamp of next due run, as of the last saved state */
+    private function loadTimeframeSchedule(): array
+    {
+        $stmt = Database::pdo()->prepare('SELECT setting_value FROM bot_settings WHERE setting_key = \'tf_schedule\'');
+        $stmt->execute();
+        $v = $stmt->fetchColumn();
+        $data = $v !== false && $v !== '' ? json_decode((string) $v, true) : null;
+        return is_array($data) ? array_map('intval', $data) : [];
+    }
+
+    /** @param array<string,int> $schedule */
+    private function saveTimeframeSchedule(array $schedule): void
+    {
+        Database::pdo()->prepare(
+            'INSERT INTO bot_settings (setting_key, setting_value, updated_at) VALUES (\'tf_schedule\', :v, :now)
+             ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = excluded.updated_at'
+        )->execute([':v' => json_encode($schedule), ':now' => date('Y-m-d H:i:s')]);
     }
 
     private function maybeRunScanner(): void
@@ -346,14 +462,29 @@ final class Worker
         Logger::info('worker', 'scanner completed', ['symbols_selected' => $selected]);
     }
 
+    /**
+     * Fetches history only for symbol/timeframe pairs that have none yet.
+     * In daemon mode this only ever matters once, right after start. In
+     * cron mode this method runs at the top of every single invocation
+     * (every ~1 minute) — the hasAny() check is what stops that from
+     * re-fetching all candles for every symbol on every invocation once
+     * the database is actually populated.
+     */
     private function primeMarketData(): void
     {
         $symbols = $this->symbolRepo->listActive();
+        $candleManager = $this->marketData->candleManager();
         foreach ($symbols as $row) {
             if (!$this->running) {
                 break;
             }
-            $this->syncSymbolCandles($row['exchange'], $row['symbol'], Config::timeframes(), 200);
+            $missing = array_values(array_filter(
+                Config::timeframes(),
+                static fn(string $tf) => !$candleManager->hasAny($row['exchange'], $row['symbol'], $tf)
+            ));
+            if (!empty($missing)) {
+                $this->syncSymbolCandles($row['exchange'], $row['symbol'], $missing, 200);
+            }
         }
     }
 
@@ -377,6 +508,10 @@ final class Worker
         if (empty($dueTimeframes)) {
             return;
         }
+        // Persist immediately (not just kept in memory) — cron mode restarts
+        // this whole process on the next minute's invocation, so this is
+        // the only place "when is each timeframe next due" survives.
+        $this->saveTimeframeSchedule($this->nextTimeframeRun);
 
         $symbols = $this->symbolRepo->listActive();
         foreach ($symbols as $row) {

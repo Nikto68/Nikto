@@ -184,8 +184,8 @@ final class TextFormatManager
         $stmt = Database::pdo()->prepare(
             'INSERT INTO text_formats (text_key, text_value, entities, updated_at, updated_by)
              VALUES (:k, :v, :e, :now, :by)
-             ON DUPLICATE KEY UPDATE text_value = VALUES(text_value), entities = VALUES(entities),
-                updated_at = VALUES(updated_at), updated_by = VALUES(updated_by)'
+             ON CONFLICT(text_key) DO UPDATE SET text_value = excluded.text_value, entities = excluded.entities,
+                updated_at = excluded.updated_at, updated_by = excluded.updated_by'
         );
         $stmt->execute([
             ':k' => $key, ':v' => $text, ':e' => json_encode($entities, JSON_UNESCAPED_UNICODE),
@@ -231,8 +231,8 @@ final class ChannelManager
         $now = date('Y-m-d H:i:s');
         $stmt = Database::pdo()->prepare(
             'INSERT INTO channels (chat_id, title, type, is_active, bot_status, can_post, added_by, created_at, updated_at)
-             VALUES (:cid, NULL, "channel", 0, "unknown", 0, :by, :now1, :now2)
-             ON DUPLICATE KEY UPDATE updated_at = VALUES(updated_at)'
+             VALUES (:cid, NULL, \'channel\', 0, \'unknown\', 0, :by, :now1, :now2)
+             ON CONFLICT(chat_id) DO UPDATE SET updated_at = excluded.updated_at'
         );
         $stmt->execute([':cid' => $chatId, ':by' => $addedBy, ':now1' => $now, ':now2' => $now]);
 
@@ -366,8 +366,8 @@ final class ChannelManager
     {
         $now = date('Y-m-d H:i:s');
         Database::pdo()->prepare(
-            'INSERT IGNORE INTO channel_settings (channel_id, template_key, min_signal_score, enabled, pin_signal, quote_enabled, created_at, updated_at)
-             VALUES (:cid, "signal_template", :minscore, 1, 0, 0, :now1, :now2)'
+            'INSERT OR IGNORE INTO channel_settings (channel_id, template_key, min_signal_score, enabled, pin_signal, quote_enabled, created_at, updated_at)
+             VALUES (:cid, \'signal_template\', :minscore, 1, 0, 0, :now1, :now2)'
         )->execute([':cid' => $channelId, ':minscore' => Config::minSignalScore(), ':now1' => $now, ':now2' => $now]);
     }
 
@@ -479,7 +479,7 @@ final class AdminStateStore
     {
         Database::pdo()->prepare(
             'INSERT INTO admin_states (telegram_user_id, state, payload, updated_at) VALUES (:id, :state, :payload, :now)
-             ON DUPLICATE KEY UPDATE state = VALUES(state), payload = VALUES(payload), updated_at = VALUES(updated_at)'
+             ON CONFLICT(telegram_user_id) DO UPDATE SET state = excluded.state, payload = excluded.payload, updated_at = excluded.updated_at'
         )->execute([':id' => $userId, ':state' => $state, ':payload' => json_encode($payload, JSON_UNESCAPED_UNICODE), ':now' => date('Y-m-d H:i:s')]);
     }
 
@@ -718,8 +718,8 @@ final class AdminPanel
         $engine = new StrategyEngine();
         foreach ($engine->names() as $name) {
             Database::pdo()->prepare(
-                'INSERT IGNORE INTO strategies (name, display_name, is_enabled) VALUES (:n, :n, 1)'
-            )->execute([':n' => $name]);
+                'INSERT OR IGNORE INTO strategies (name, display_name, is_enabled) VALUES (:n1, :n2, 1)'
+            )->execute([':n1' => $name, ':n2' => $name]);
         }
 
         $rows = Database::pdo()->query('SELECT * FROM strategies ORDER BY id ASC')->fetchAll();
@@ -819,7 +819,7 @@ final class AdminPanel
     {
         Database::pdo()->prepare(
             'INSERT INTO bot_settings (setting_key, setting_value, updated_at) VALUES (:k, :v, :now)
-             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at)'
+             ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = excluded.updated_at'
         )->execute([':k' => $key, ':v' => $value, ':now' => date('Y-m-d H:i:s')]);
     }
 
@@ -913,7 +913,8 @@ final class AdminPanel
         $signalsToday = $this->signalRepo->countToday();
         $activeSignals = $this->signalRepo->countActive();
         $lastScan = (new ScannerRunRepository())->lastRunAt() ?? '-';
-        $errCountStmt = Database::pdo()->query("SELECT COUNT(*) FROM logs WHERE level IN ('error','critical') AND created_at >= NOW() - INTERVAL 24 HOUR");
+        $errCountStmt = Database::pdo()->prepare("SELECT COUNT(*) FROM logs WHERE level IN ('error','critical') AND created_at >= :since");
+        $errCountStmt->execute([':since' => date('Y-m-d H:i:s', time() - 86400)]);
         $errCount = (int) $errCountStmt->fetchColumn();
 
         $text = "❤️ وضعیت سیستم\n\n"
@@ -1092,8 +1093,8 @@ final class BotApplication
         Database::pdo()->prepare(
             'INSERT INTO users (telegram_user_id, username, first_name, last_name, language_code, is_bot, first_seen_at, last_seen_at)
              VALUES (:id, :u, :f, :l, :lang, 0, :now1, :now2)
-             ON DUPLICATE KEY UPDATE username = VALUES(username), first_name = VALUES(first_name),
-                last_name = VALUES(last_name), language_code = VALUES(language_code), last_seen_at = VALUES(last_seen_at)'
+             ON CONFLICT(telegram_user_id) DO UPDATE SET username = excluded.username, first_name = excluded.first_name,
+                last_name = excluded.last_name, language_code = excluded.language_code, last_seen_at = excluded.last_seen_at'
         )->execute([
             ':id' => $tgId, ':u' => $from['username'] ?? null, ':f' => $from['first_name'] ?? null,
             ':l' => $from['last_name'] ?? null, ':lang' => $from['language_code'] ?? null, ':now1' => $now, ':now2' => $now,

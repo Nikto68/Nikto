@@ -1099,8 +1099,9 @@ final class CandleManager
         $stmt = $pdo->prepare(
             'INSERT INTO candles (exchange_id, symbol, timeframe, open_time, open_price, high_price, low_price, close_price, volume)
              VALUES (:eid, :symbol, :tf, :ot, :o, :h, :l, :c, :v)
-             ON DUPLICATE KEY UPDATE open_price = VALUES(open_price), high_price = VALUES(high_price),
-                low_price = VALUES(low_price), close_price = VALUES(close_price), volume = VALUES(volume)'
+             ON CONFLICT(exchange_id, symbol, timeframe, open_time) DO UPDATE SET
+                open_price = excluded.open_price, high_price = excluded.high_price,
+                low_price = excluded.low_price, close_price = excluded.close_price, volume = excluded.volume'
         );
         $pdo->beginTransaction();
         try {
@@ -1140,6 +1141,24 @@ final class CandleManager
             (float) $r['low_price'], (float) $r['close_price'], (float) $r['volume'], $timeframe
         ), $rows);
     }
+
+    /**
+     * Cheap existence check (no row hydration) — lets a cron-bounded worker
+     * invocation skip re-priming a symbol/timeframe that already has history,
+     * instead of re-fetching everything on every single invocation.
+     */
+    public function hasAny(string $exchange, string $symbol, string $timeframe): bool
+    {
+        $exchangeId = ExchangeRepository::idForName($exchange);
+        if ($exchangeId === null) {
+            return false;
+        }
+        $stmt = Database::pdo()->prepare(
+            'SELECT 1 FROM candles WHERE exchange_id = :eid AND symbol = :symbol AND timeframe = :tf LIMIT 1'
+        );
+        $stmt->execute([':eid' => $exchangeId, ':symbol' => $symbol, ':tf' => $timeframe]);
+        return $stmt->fetchColumn() !== false;
+    }
 }
 
 final class TickerManager
@@ -1154,8 +1173,9 @@ final class TickerManager
         $stmt = Database::pdo()->prepare(
             'INSERT INTO market_data (exchange_id, symbol, price, bid, ask, spread_pct, volume_24h, updated_at)
              VALUES (:eid, :symbol, :price, :bid, :ask, :spread, :vol, :now)
-             ON DUPLICATE KEY UPDATE price = VALUES(price), bid = VALUES(bid), ask = VALUES(ask),
-                spread_pct = VALUES(spread_pct), volume_24h = VALUES(volume_24h), updated_at = VALUES(updated_at)'
+             ON CONFLICT(exchange_id, symbol) DO UPDATE SET
+                price = excluded.price, bid = excluded.bid, ask = excluded.ask,
+                spread_pct = excluded.spread_pct, volume_24h = excluded.volume_24h, updated_at = excluded.updated_at'
         );
         $stmt->execute([
             ':eid' => $exchangeId, ':symbol' => $symbol, ':price' => $price, ':bid' => $bid,
@@ -2069,7 +2089,10 @@ final class SignalRepository
 
     public function countToday(): int
     {
-        $stmt = Database::pdo()->query("SELECT COUNT(*) FROM signals WHERE DATE(created_at) = CURDATE()");
+        // Bind PHP-computed day bounds instead of relying on SQL date
+        // functions, which differ between MySQL and SQLite.
+        $stmt = Database::pdo()->prepare('SELECT COUNT(*) FROM signals WHERE created_at >= :start AND created_at < :end');
+        $stmt->execute([':start' => date('Y-m-d 00:00:00'), ':end' => date('Y-m-d 00:00:00', strtotime('+1 day'))]);
         return (int) $stmt->fetchColumn();
     }
 
@@ -2243,9 +2266,10 @@ final class SymbolRepository
         $stmt = $pdo->prepare(
             'INSERT INTO symbols (exchange_id, symbol, base_asset, quote_asset, volume_24h, liquidity_score, spread_pct, volatility, rank_position, is_active, last_scanned_at)
              VALUES (:eid, :symbol, :base, :quote, :vol, :liq, :spread, :volat, :rank, 1, :now)
-             ON DUPLICATE KEY UPDATE base_asset = VALUES(base_asset), quote_asset = VALUES(quote_asset), volume_24h = VALUES(volume_24h),
-                liquidity_score = VALUES(liquidity_score), spread_pct = VALUES(spread_pct), volatility = VALUES(volatility),
-                rank_position = VALUES(rank_position), is_active = 1, last_scanned_at = VALUES(last_scanned_at)'
+             ON CONFLICT(exchange_id, symbol) DO UPDATE SET
+                base_asset = excluded.base_asset, quote_asset = excluded.quote_asset, volume_24h = excluded.volume_24h,
+                liquidity_score = excluded.liquidity_score, spread_pct = excluded.spread_pct, volatility = excluded.volatility,
+                rank_position = excluded.rank_position, is_active = 1, last_scanned_at = excluded.last_scanned_at'
         );
         $now = date('Y-m-d H:i:s');
         foreach ($rows as $row) {

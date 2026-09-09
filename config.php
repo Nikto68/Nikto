@@ -167,29 +167,20 @@ final class Config
     }
 
     // -- Database --------------------------------------------------------
-    public static function dbHost(): string
+    /**
+     * SQLite storage. Everything lives in one file inside a self-created,
+     * self-protected "storage/" directory next to the 4 project files —
+     * no separate database server/credentials needed (this is what makes
+     * the project deployable on plain cPanel shared hosting with no SSH).
+     */
+    public static function storageDir(): string
     {
-        return Env::get('DB_HOST', '127.0.0.1') ?? '127.0.0.1';
+        return rtrim(Env::get('STORAGE_DIR', __DIR__ . '/storage') ?? (__DIR__ . '/storage'), '/');
     }
 
-    public static function dbPort(): int
+    public static function dbPath(): string
     {
-        return Env::getInt('DB_PORT', 3306);
-    }
-
-    public static function dbName(): string
-    {
-        return Env::get('DB_NAME', 'nikto_signals') ?? 'nikto_signals';
-    }
-
-    public static function dbUser(): string
-    {
-        return Env::get('DB_USER', 'root') ?? 'root';
-    }
-
-    public static function dbPass(): string
-    {
-        return Env::get('DB_PASS', '') ?? '';
+        return self::storageDir() . '/' . (Env::get('DB_FILE', 'database.sqlite') ?? 'database.sqlite');
     }
 
     // -- Exchanges ---------------------------------------------------------
@@ -331,6 +322,26 @@ final class Config
         return Env::getInt('WORKER_TICK_SECONDS', 15);
     }
 
+    /**
+     * 'daemon' — worker.php loops forever until SIGTERM/SIGINT (needs a
+     * host that allows a persistent background process: SSH + nohup/screen,
+     * a VPS, "Setup Node.js App"-style always-on process, etc).
+     * 'cron'   — worker.php runs one bounded pass (Config::workerMaxRuntimeSeconds())
+     * and exits cleanly; a cPanel Cron Job re-invokes it every minute. This
+     * is the default because it's the only mode plain shared hosting with
+     * just File Manager + Cron Jobs can actually run.
+     */
+    public static function workerMode(): string
+    {
+        $v = strtolower(Env::get('WORKER_MODE', 'cron') ?? 'cron');
+        return $v === 'daemon' ? 'daemon' : 'cron';
+    }
+
+    public static function workerMaxRuntimeSeconds(): int
+    {
+        return Env::getInt('WORKER_MAX_RUNTIME_SECONDS', 50);
+    }
+
     public static function httpTimeoutSeconds(): int
     {
         return Env::getInt('HTTP_TIMEOUT_SECONDS', 10);
@@ -363,26 +374,48 @@ final class Database
             return self::$pdo;
         }
 
-        $dsn = sprintf(
-            'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
-            Config::dbHost(),
-            Config::dbPort(),
-            Config::dbName()
-        );
+        self::ensureStorageDir();
+        $dsn = 'sqlite:' . Config::dbPath();
 
         try {
-            self::$pdo = new PDO($dsn, Config::dbUser(), Config::dbPass(), [
+            $pdo = new PDO($dsn, null, null, [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES   => false,
-                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4, sql_mode='STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'",
+                PDO::ATTR_TIMEOUT            => 10, // seconds to wait on a locked db before throwing
             ]);
+            // WAL lets worker.php (writer) and bot.php's webhook (occasional
+            // reader/writer) touch the database concurrently without
+            // "database is locked" errors on every overlap.
+            $pdo->exec('PRAGMA journal_mode = WAL');
+            $pdo->exec('PRAGMA synchronous = NORMAL');
+            $pdo->exec('PRAGMA foreign_keys = ON');
+            $pdo->exec('PRAGMA busy_timeout = 8000');
         } catch (PDOException $e) {
-            // Never leak DSN credentials into logs/exception chains.
             throw new DatabaseException('Database connection failed: ' . $e->getCode());
         }
 
-        return self::$pdo;
+        return self::$pdo = $pdo;
+    }
+
+    private static function ensureStorageDir(): void
+    {
+        $dir = Config::storageDir();
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        if (!is_dir($dir) || !is_writable($dir)) {
+            throw new DatabaseException("storage directory is missing or not writable: $dir");
+        }
+
+        // Self-heal: keep the sqlite file (and WAL/journal siblings) and
+        // logs out of the public web root even if someone points STORAGE_DIR
+        // inside it. Harmless no-op on nginx/php-fpm setups that don't read
+        // .htaccess; this is aimed squarely at the Apache/LiteSpeed shared
+        // hosting (cPanel) this project is meant to run on.
+        $htaccess = $dir . '/.htaccess';
+        if (!is_file($htaccess)) {
+            @file_put_contents($htaccess, "Require all denied\nDeny from all\n");
+        }
     }
 
     /**
@@ -391,296 +424,305 @@ final class Database
     public static function migrate(): void
     {
         $pdo = self::pdo();
-        $engine = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
-        $statements = [
+        // SQLite DDL: INTEGER PRIMARY KEY is the rowid alias (= AUTO_INCREMENT),
+        // ENUM becomes TEXT + CHECK, DATETIME columns are TEXT ('Y-m-d H:i:s',
+        // which sorts correctly as a string), JSON columns are TEXT holding
+        // json_encode() output (same as how PHP already reads/writes them).
+        $tables = [
             "CREATE TABLE IF NOT EXISTS users (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                telegram_user_id BIGINT NOT NULL,
-                username VARCHAR(64) NULL,
-                first_name VARCHAR(128) NULL,
-                last_name VARCHAR(128) NULL,
-                language_code VARCHAR(16) NULL,
-                is_bot TINYINT(1) NOT NULL DEFAULT 0,
-                first_seen_at DATETIME NOT NULL,
-                last_seen_at DATETIME NOT NULL,
-                UNIQUE KEY uq_users_tgid (telegram_user_id)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_user_id INTEGER NOT NULL,
+                username TEXT NULL,
+                first_name TEXT NULL,
+                last_name TEXT NULL,
+                language_code TEXT NULL,
+                is_bot INTEGER NOT NULL DEFAULT 0,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                UNIQUE (telegram_user_id)
+            )",
 
             "CREATE TABLE IF NOT EXISTS admins (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                telegram_user_id BIGINT NOT NULL,
-                role ENUM('owner','admin') NOT NULL DEFAULT 'admin',
-                added_by BIGINT NULL,
-                created_at DATETIME NOT NULL,
-                UNIQUE KEY uq_admins_tgid (telegram_user_id)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_user_id INTEGER NOT NULL,
+                role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('owner','admin')),
+                added_by INTEGER NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (telegram_user_id)
+            )",
 
             "CREATE TABLE IF NOT EXISTS channels (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                chat_id BIGINT NOT NULL,
-                title VARCHAR(255) NULL,
-                username VARCHAR(64) NULL,
-                type VARCHAR(32) NOT NULL DEFAULT 'channel',
-                is_active TINYINT(1) NOT NULL DEFAULT 0,
-                bot_status ENUM('unknown','member','administrator','left','kicked') NOT NULL DEFAULT 'unknown',
-                can_post TINYINT(1) NOT NULL DEFAULT 0,
-                added_by BIGINT NULL,
-                created_at DATETIME NOT NULL,
-                updated_at DATETIME NOT NULL,
-                UNIQUE KEY uq_channels_chatid (chat_id)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                title TEXT NULL,
+                username TEXT NULL,
+                type TEXT NOT NULL DEFAULT 'channel',
+                is_active INTEGER NOT NULL DEFAULT 0,
+                bot_status TEXT NOT NULL DEFAULT 'unknown' CHECK (bot_status IN ('unknown','member','administrator','left','kicked')),
+                can_post INTEGER NOT NULL DEFAULT 0,
+                added_by INTEGER NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (chat_id)
+            )",
 
             "CREATE TABLE IF NOT EXISTS channel_settings (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                channel_id BIGINT UNSIGNED NOT NULL,
-                template_key VARCHAR(64) NOT NULL DEFAULT 'signal_template',
-                min_signal_score DECIMAL(5,2) NOT NULL DEFAULT 75.00,
-                allowed_strategies JSON NULL,
-                allowed_exchanges JSON NULL,
-                enabled TINYINT(1) NOT NULL DEFAULT 1,
-                pin_signal TINYINT(1) NOT NULL DEFAULT 0,
-                quote_enabled TINYINT(1) NOT NULL DEFAULT 0,
-                created_at DATETIME NOT NULL,
-                updated_at DATETIME NOT NULL,
-                UNIQUE KEY uq_channel_settings_channel (channel_id),
-                CONSTRAINT fk_channel_settings_channel FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_id INTEGER NOT NULL,
+                template_key TEXT NOT NULL DEFAULT 'signal_template',
+                min_signal_score REAL NOT NULL DEFAULT 75.00,
+                allowed_strategies TEXT NULL,
+                allowed_exchanges TEXT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                pin_signal INTEGER NOT NULL DEFAULT 0,
+                quote_enabled INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (channel_id),
+                FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+            )",
 
             "CREATE TABLE IF NOT EXISTS bot_settings (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                setting_key VARCHAR(128) NOT NULL,
-                setting_value MEDIUMTEXT NULL,
-                updated_at DATETIME NOT NULL,
-                UNIQUE KEY uq_bot_settings_key (setting_key)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key TEXT NOT NULL,
+                setting_value TEXT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (setting_key)
+            )",
 
             "CREATE TABLE IF NOT EXISTS text_formats (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                text_key VARCHAR(128) NOT NULL,
-                text_value MEDIUMTEXT NOT NULL,
-                entities JSON NULL,
-                updated_at DATETIME NOT NULL,
-                updated_by BIGINT NULL,
-                UNIQUE KEY uq_text_formats_key (text_key)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text_key TEXT NOT NULL,
+                text_value TEXT NOT NULL,
+                entities TEXT NULL,
+                updated_at TEXT NOT NULL,
+                updated_by INTEGER NULL,
+                UNIQUE (text_key)
+            )",
 
             "CREATE TABLE IF NOT EXISTS exchanges (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(32) NOT NULL,
-                display_name VARCHAR(64) NOT NULL,
-                is_enabled TINYINT(1) NOT NULL DEFAULT 1,
-                priority INT NOT NULL DEFAULT 0,
-                UNIQUE KEY uq_exchanges_name (name)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                priority INTEGER NOT NULL DEFAULT 0,
+                UNIQUE (name)
+            )",
 
             "CREATE TABLE IF NOT EXISTS exchange_settings (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                exchange_id BIGINT UNSIGNED NOT NULL,
-                rate_limit_per_min INT NOT NULL DEFAULT 1200,
-                ws_enabled TINYINT(1) NOT NULL DEFAULT 0,
-                extra JSON NULL,
-                updated_at DATETIME NOT NULL,
-                UNIQUE KEY uq_exchange_settings_exchange (exchange_id),
-                CONSTRAINT fk_exchange_settings_exchange FOREIGN KEY (exchange_id) REFERENCES exchanges(id) ON DELETE CASCADE
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id INTEGER NOT NULL,
+                rate_limit_per_min INTEGER NOT NULL DEFAULT 1200,
+                ws_enabled INTEGER NOT NULL DEFAULT 0,
+                extra TEXT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (exchange_id),
+                FOREIGN KEY (exchange_id) REFERENCES exchanges(id) ON DELETE CASCADE
+            )",
 
             "CREATE TABLE IF NOT EXISTS symbols (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                exchange_id BIGINT UNSIGNED NOT NULL,
-                symbol VARCHAR(32) NOT NULL,
-                base_asset VARCHAR(16) NOT NULL,
-                quote_asset VARCHAR(16) NOT NULL,
-                volume_24h DECIMAL(24,8) NOT NULL DEFAULT 0,
-                liquidity_score DECIMAL(10,4) NOT NULL DEFAULT 0,
-                spread_pct DECIMAL(10,6) NOT NULL DEFAULT 0,
-                volatility DECIMAL(10,6) NOT NULL DEFAULT 0,
-                rank_position INT NOT NULL DEFAULT 0,
-                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                last_scanned_at DATETIME NULL,
-                UNIQUE KEY uq_symbols_exchange_symbol (exchange_id, symbol),
-                KEY idx_symbols_active_rank (is_active, rank_position),
-                CONSTRAINT fk_symbols_exchange FOREIGN KEY (exchange_id) REFERENCES exchanges(id) ON DELETE CASCADE
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                base_asset TEXT NOT NULL,
+                quote_asset TEXT NOT NULL,
+                volume_24h REAL NOT NULL DEFAULT 0,
+                liquidity_score REAL NOT NULL DEFAULT 0,
+                spread_pct REAL NOT NULL DEFAULT 0,
+                volatility REAL NOT NULL DEFAULT 0,
+                rank_position INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                last_scanned_at TEXT NULL,
+                UNIQUE (exchange_id, symbol),
+                FOREIGN KEY (exchange_id) REFERENCES exchanges(id) ON DELETE CASCADE
+            )",
 
             "CREATE TABLE IF NOT EXISTS candles (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                exchange_id BIGINT UNSIGNED NOT NULL,
-                symbol VARCHAR(32) NOT NULL,
-                timeframe VARCHAR(8) NOT NULL,
-                open_time BIGINT NOT NULL,
-                open_price DECIMAL(24,10) NOT NULL,
-                high_price DECIMAL(24,10) NOT NULL,
-                low_price DECIMAL(24,10) NOT NULL,
-                close_price DECIMAL(24,10) NOT NULL,
-                volume DECIMAL(24,8) NOT NULL,
-                UNIQUE KEY uq_candles_unique (exchange_id, symbol, timeframe, open_time),
-                KEY idx_candles_lookup (exchange_id, symbol, timeframe, open_time DESC)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                timeframe TEXT NOT NULL,
+                open_time INTEGER NOT NULL,
+                open_price REAL NOT NULL,
+                high_price REAL NOT NULL,
+                low_price REAL NOT NULL,
+                close_price REAL NOT NULL,
+                volume REAL NOT NULL,
+                UNIQUE (exchange_id, symbol, timeframe, open_time)
+            )",
 
             "CREATE TABLE IF NOT EXISTS market_data (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                exchange_id BIGINT UNSIGNED NOT NULL,
-                symbol VARCHAR(32) NOT NULL,
-                price DECIMAL(24,10) NOT NULL,
-                bid DECIMAL(24,10) NOT NULL DEFAULT 0,
-                ask DECIMAL(24,10) NOT NULL DEFAULT 0,
-                spread_pct DECIMAL(10,6) NOT NULL DEFAULT 0,
-                volume_24h DECIMAL(24,8) NOT NULL DEFAULT 0,
-                updated_at DATETIME NOT NULL,
-                UNIQUE KEY uq_market_data (exchange_id, symbol)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                price REAL NOT NULL,
+                bid REAL NOT NULL DEFAULT 0,
+                ask REAL NOT NULL DEFAULT 0,
+                spread_pct REAL NOT NULL DEFAULT 0,
+                volume_24h REAL NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                UNIQUE (exchange_id, symbol)
+            )",
 
             "CREATE TABLE IF NOT EXISTS zones (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                exchange_id BIGINT UNSIGNED NOT NULL,
-                symbol VARCHAR(32) NOT NULL,
-                zone_type ENUM('support','resistance') NOT NULL,
-                high_price DECIMAL(24,10) NOT NULL,
-                low_price DECIMAL(24,10) NOT NULL,
-                timeframe VARCHAR(8) NOT NULL,
-                strength DECIMAL(6,2) NOT NULL DEFAULT 0,
-                volume DECIMAL(24,8) NOT NULL DEFAULT 0,
-                touches INT NOT NULL DEFAULT 1,
-                source VARCHAR(32) NOT NULL DEFAULT 'swing',
-                created_at DATETIME NOT NULL,
-                updated_at DATETIME NOT NULL,
-                KEY idx_zones_lookup (exchange_id, symbol, timeframe, zone_type)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                zone_type TEXT NOT NULL CHECK (zone_type IN ('support','resistance')),
+                high_price REAL NOT NULL,
+                low_price REAL NOT NULL,
+                timeframe TEXT NOT NULL,
+                strength REAL NOT NULL DEFAULT 0,
+                volume REAL NOT NULL DEFAULT 0,
+                touches INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL DEFAULT 'swing',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
 
             "CREATE TABLE IF NOT EXISTS order_blocks (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                exchange_id BIGINT UNSIGNED NOT NULL,
-                symbol VARCHAR(32) NOT NULL,
-                ob_type ENUM('bullish','bearish') NOT NULL,
-                high_price DECIMAL(24,10) NOT NULL,
-                low_price DECIMAL(24,10) NOT NULL,
-                timeframe VARCHAR(8) NOT NULL,
-                strength DECIMAL(6,2) NOT NULL DEFAULT 0,
-                volume DECIMAL(24,8) NOT NULL DEFAULT 0,
-                mitigated TINYINT(1) NOT NULL DEFAULT 0,
-                created_at DATETIME NOT NULL,
-                KEY idx_ob_lookup (exchange_id, symbol, timeframe, mitigated)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                ob_type TEXT NOT NULL CHECK (ob_type IN ('bullish','bearish')),
+                high_price REAL NOT NULL,
+                low_price REAL NOT NULL,
+                timeframe TEXT NOT NULL,
+                strength REAL NOT NULL DEFAULT 0,
+                volume REAL NOT NULL DEFAULT 0,
+                mitigated INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )",
 
             "CREATE TABLE IF NOT EXISTS fvgs (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                exchange_id BIGINT UNSIGNED NOT NULL,
-                symbol VARCHAR(32) NOT NULL,
-                fvg_type ENUM('bullish','bearish') NOT NULL,
-                high_price DECIMAL(24,10) NOT NULL,
-                low_price DECIMAL(24,10) NOT NULL,
-                midpoint DECIMAL(24,10) NOT NULL,
-                timeframe VARCHAR(8) NOT NULL,
-                size DECIMAL(24,10) NOT NULL DEFAULT 0,
-                filled TINYINT(1) NOT NULL DEFAULT 0,
-                created_at DATETIME NOT NULL,
-                KEY idx_fvg_lookup (exchange_id, symbol, timeframe, filled)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                fvg_type TEXT NOT NULL CHECK (fvg_type IN ('bullish','bearish')),
+                high_price REAL NOT NULL,
+                low_price REAL NOT NULL,
+                midpoint REAL NOT NULL,
+                timeframe TEXT NOT NULL,
+                size REAL NOT NULL DEFAULT 0,
+                filled INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )",
 
             "CREATE TABLE IF NOT EXISTS strategies (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(64) NOT NULL,
-                display_name VARCHAR(128) NOT NULL,
-                is_enabled TINYINT(1) NOT NULL DEFAULT 1,
-                description VARCHAR(255) NULL,
-                UNIQUE KEY uq_strategies_name (name)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                description TEXT NULL,
+                UNIQUE (name)
+            )",
 
             "CREATE TABLE IF NOT EXISTS strategy_settings (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                strategy_id BIGINT UNSIGNED NOT NULL,
-                weights JSON NULL,
-                params JSON NULL,
-                updated_at DATETIME NOT NULL,
-                UNIQUE KEY uq_strategy_settings_strategy (strategy_id),
-                CONSTRAINT fk_strategy_settings_strategy FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                strategy_id INTEGER NOT NULL,
+                weights TEXT NULL,
+                params TEXT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (strategy_id),
+                FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE
+            )",
 
             "CREATE TABLE IF NOT EXISTS signals (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                uuid VARCHAR(36) NOT NULL,
-                exchange_id BIGINT UNSIGNED NOT NULL,
-                symbol VARCHAR(32) NOT NULL,
-                direction ENUM('LONG','SHORT') NOT NULL,
-                timeframe VARCHAR(8) NOT NULL,
-                entry_price DECIMAL(24,10) NOT NULL,
-                stop_loss DECIMAL(24,10) NOT NULL,
-                tp1 DECIMAL(24,10) NULL,
-                tp2 DECIMAL(24,10) NULL,
-                tp3 DECIMAL(24,10) NULL,
-                risk_reward DECIMAL(10,4) NOT NULL DEFAULT 0,
-                score DECIMAL(6,2) NOT NULL DEFAULT 0,
-                confidence VARCHAR(16) NOT NULL DEFAULT 'medium',
-                strategy VARCHAR(64) NOT NULL,
-                reasons JSON NULL,
-                fingerprint VARCHAR(64) NOT NULL,
-                status ENUM('pending','queued','sent','failed','expired','invalidated','test') NOT NULL DEFAULT 'pending',
-                created_at DATETIME NOT NULL,
-                updated_at DATETIME NOT NULL,
-                UNIQUE KEY uq_signals_uuid (uuid),
-                KEY idx_signals_fingerprint (fingerprint, created_at),
-                KEY idx_signals_symbol (exchange_id, symbol, created_at)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL,
+                exchange_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                direction TEXT NOT NULL CHECK (direction IN ('LONG','SHORT')),
+                timeframe TEXT NOT NULL,
+                entry_price REAL NOT NULL,
+                stop_loss REAL NOT NULL,
+                tp1 REAL NULL,
+                tp2 REAL NULL,
+                tp3 REAL NULL,
+                risk_reward REAL NOT NULL DEFAULT 0,
+                score REAL NOT NULL DEFAULT 0,
+                confidence TEXT NOT NULL DEFAULT 'medium',
+                strategy TEXT NOT NULL,
+                reasons TEXT NULL,
+                fingerprint TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','queued','sent','failed','expired','invalidated','test')),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (uuid)
+            )",
 
             "CREATE TABLE IF NOT EXISTS signal_events (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                signal_id BIGINT UNSIGNED NOT NULL,
-                channel_id BIGINT UNSIGNED NULL,
-                event_type ENUM('queued','sent','failed','retry','test') NOT NULL,
-                message_id BIGINT NULL,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_id INTEGER NOT NULL,
+                channel_id INTEGER NULL,
+                event_type TEXT NOT NULL CHECK (event_type IN ('queued','sent','failed','retry','test')),
+                message_id INTEGER NULL,
                 error TEXT NULL,
-                attempt INT NOT NULL DEFAULT 0,
-                created_at DATETIME NOT NULL,
-                KEY idx_signal_events_signal (signal_id),
-                CONSTRAINT fk_signal_events_signal FOREIGN KEY (signal_id) REFERENCES signals(id) ON DELETE CASCADE
-            ) $engine",
+                attempt INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (signal_id) REFERENCES signals(id) ON DELETE CASCADE
+            )",
 
             "CREATE TABLE IF NOT EXISTS scanner_runs (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                exchange_id BIGINT UNSIGNED NULL,
-                started_at DATETIME NOT NULL,
-                finished_at DATETIME NULL,
-                symbols_scanned INT NOT NULL DEFAULT 0,
-                symbols_selected INT NOT NULL DEFAULT 0,
-                status VARCHAR(16) NOT NULL DEFAULT 'running',
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id INTEGER NULL,
+                started_at TEXT NOT NULL,
+                finished_at TEXT NULL,
+                symbols_scanned INTEGER NOT NULL DEFAULT 0,
+                symbols_selected INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'running',
                 error TEXT NULL
-            ) $engine",
+            )",
 
             "CREATE TABLE IF NOT EXISTS logs (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                level ENUM('debug','info','warning','error','critical') NOT NULL DEFAULT 'info',
-                channel VARCHAR(32) NOT NULL DEFAULT 'app',
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                level TEXT NOT NULL DEFAULT 'info' CHECK (level IN ('debug','info','warning','error','critical')),
+                channel TEXT NOT NULL DEFAULT 'app',
                 message TEXT NOT NULL,
-                context JSON NULL,
-                created_at DATETIME NOT NULL,
-                KEY idx_logs_created (created_at),
-                KEY idx_logs_level (level)
-            ) $engine",
+                context TEXT NULL,
+                created_at TEXT NOT NULL
+            )",
 
             "CREATE TABLE IF NOT EXISTS admin_states (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                telegram_user_id BIGINT NOT NULL,
-                state VARCHAR(64) NOT NULL,
-                payload JSON NULL,
-                updated_at DATETIME NOT NULL,
-                UNIQUE KEY uq_admin_states_user (telegram_user_id)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_user_id INTEGER NOT NULL,
+                state TEXT NOT NULL,
+                payload TEXT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (telegram_user_id)
+            )",
 
             "CREATE TABLE IF NOT EXISTS message_refs (
-                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                ref_type VARCHAR(32) NOT NULL,
-                ref_id VARCHAR(64) NOT NULL,
-                chat_id BIGINT NOT NULL,
-                message_id BIGINT NOT NULL,
-                quote_text MEDIUMTEXT NULL,
-                quote_entities JSON NULL,
-                created_at DATETIME NOT NULL,
-                KEY idx_message_refs_ref (ref_type, ref_id)
-            ) $engine",
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ref_type TEXT NOT NULL,
+                ref_id TEXT NOT NULL,
+                chat_id INTEGER NOT NULL,
+                message_id INTEGER NOT NULL,
+                quote_text TEXT NULL,
+                quote_entities TEXT NULL,
+                created_at TEXT NOT NULL
+            )",
         ];
 
-        foreach ($statements as $sql) {
+        $indexes = [
+            'CREATE INDEX IF NOT EXISTS idx_symbols_active_rank ON symbols (is_active, rank_position)',
+            'CREATE INDEX IF NOT EXISTS idx_candles_lookup ON candles (exchange_id, symbol, timeframe, open_time DESC)',
+            'CREATE INDEX IF NOT EXISTS idx_zones_lookup ON zones (exchange_id, symbol, timeframe, zone_type)',
+            'CREATE INDEX IF NOT EXISTS idx_ob_lookup ON order_blocks (exchange_id, symbol, timeframe, mitigated)',
+            'CREATE INDEX IF NOT EXISTS idx_fvg_lookup ON fvgs (exchange_id, symbol, timeframe, filled)',
+            'CREATE INDEX IF NOT EXISTS idx_signals_fingerprint ON signals (fingerprint, created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals (exchange_id, symbol, created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_signal_events_signal ON signal_events (signal_id)',
+            'CREATE INDEX IF NOT EXISTS idx_logs_created ON logs (created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_logs_level ON logs (level)',
+            'CREATE INDEX IF NOT EXISTS idx_message_refs_ref ON message_refs (ref_type, ref_id)',
+        ];
+
+        foreach ($tables as $sql) {
+            $pdo->exec($sql);
+        }
+        foreach ($indexes as $sql) {
             $pdo->exec($sql);
         }
 
@@ -696,7 +738,7 @@ final class Database
         $stmt = $pdo->prepare(
             'INSERT INTO exchanges (name, display_name, is_enabled, priority)
              VALUES (:name, :display_name, :enabled, :priority)
-             ON DUPLICATE KEY UPDATE display_name = VALUES(display_name)'
+             ON CONFLICT(name) DO UPDATE SET display_name = excluded.display_name'
         );
         $priority = 0;
         $enabled = Config::enabledExchanges();
@@ -721,7 +763,7 @@ final class Database
             'scanner_status' => "وضعیت اسکنر: {status}",
         ];
         $stmt = $pdo->prepare(
-            'INSERT IGNORE INTO text_formats (text_key, text_value, entities, updated_at) VALUES (:k, :v, :e, :u)'
+            'INSERT OR IGNORE INTO text_formats (text_key, text_value, entities, updated_at) VALUES (:k, :v, :e, :u)'
         );
         foreach ($defaults as $key => $value) {
             $stmt->execute([':k' => $key, ':v' => $value, ':e' => json_encode([]), ':u' => $now]);
@@ -730,8 +772,8 @@ final class Database
         // Seed admin from env (owner)
         foreach (Config::adminIds() as $adminId) {
             $ins = $pdo->prepare(
-                'INSERT INTO admins (telegram_user_id, role, created_at) VALUES (:id, "owner", :now)
-                 ON DUPLICATE KEY UPDATE telegram_user_id = telegram_user_id'
+                "INSERT INTO admins (telegram_user_id, role, created_at) VALUES (:id, 'owner', :now)
+                 ON CONFLICT(telegram_user_id) DO NOTHING"
             );
             $ins->execute([':id' => $adminId, ':now' => $now]);
         }
