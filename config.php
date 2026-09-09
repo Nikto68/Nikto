@@ -212,14 +212,33 @@ final class Config
     }
 
     // -- Exchanges ---------------------------------------------------------
+    /**
+     * Admin-panel-set credentials (stored in bot_settings, editable via
+     * 📡 صرافی‌ها → 🔑 API without touching env.php) take precedence over
+     * whatever env.php/.env has, falling back to it when nothing was set
+     * through the panel. Never throws — DB may not be migrated yet the
+     * very first time Config is touched.
+     */
+    private static function dbOverride(string $key): ?string
+    {
+        try {
+            $stmt = Database::pdo()->prepare('SELECT setting_value FROM bot_settings WHERE setting_key = :k');
+            $stmt->execute([':k' => $key]);
+            $v = $stmt->fetchColumn();
+            return $v !== false && $v !== '' ? (string) $v : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     public static function binanceApiKey(): string
     {
-        return Env::get('BINANCE_API_KEY', '') ?? '';
+        return self::dbOverride('BINANCE_API_KEY') ?? (Env::get('BINANCE_API_KEY', '') ?? '');
     }
 
     public static function binanceApiSecret(): string
     {
-        return Env::get('BINANCE_API_SECRET', '') ?? '';
+        return self::dbOverride('BINANCE_API_SECRET') ?? (Env::get('BINANCE_API_SECRET', '') ?? '');
     }
 
     public static function binanceRestBase(): string
@@ -234,12 +253,12 @@ final class Config
 
     public static function mexcApiKey(): string
     {
-        return Env::get('MEXC_API_KEY', '') ?? '';
+        return self::dbOverride('MEXC_API_KEY') ?? (Env::get('MEXC_API_KEY', '') ?? '');
     }
 
     public static function mexcApiSecret(): string
     {
-        return Env::get('MEXC_API_SECRET', '') ?? '';
+        return self::dbOverride('MEXC_API_SECRET') ?? (Env::get('MEXC_API_SECRET', '') ?? '');
     }
 
     public static function mexcRestBase(): string
@@ -254,7 +273,7 @@ final class Config
 
     public static function wallexApiKey(): string
     {
-        return Env::get('WALLEX_API_KEY', '') ?? '';
+        return self::dbOverride('WALLEX_API_KEY') ?? (Env::get('WALLEX_API_KEY', '') ?? '');
     }
 
     public static function wallexRestBase(): string

@@ -511,6 +511,7 @@ final class AdminPanel
     private ChannelManager $channels;
     private AdminStateStore $states;
     private SignalRepository $signalRepo;
+    private QuoteManager $quotes;
 
     public function __construct(private TelegramClient $telegram, private ExchangeManager $exchangeManager)
     {
@@ -518,6 +519,7 @@ final class AdminPanel
         $this->channels = new ChannelManager($telegram);
         $this->states = new AdminStateStore();
         $this->signalRepo = new SignalRepository();
+        $this->quotes = new QuoteManager();
     }
 
     public function sendMainMenu(int $chatId): void
@@ -568,7 +570,7 @@ final class AdminPanel
         try {
             match ($section) {
                 'main' => $this->render($chatId, $messageId, "⚙️ پنل مدیریت", $this->mainMenuKeyboard()),
-                'exchanges' => $this->renderExchanges($chatId, $messageId, $parts),
+                'exchanges' => $this->renderExchanges($chatId, $messageId, $parts, $userId),
                 'channels' => $this->renderChannels($chatId, $messageId, $parts, $userId),
                 'scanner' => $this->renderScanner($chatId, $messageId, $parts),
                 'strategies' => $this->renderStrategies($chatId, $messageId, $parts),
@@ -592,7 +594,7 @@ final class AdminPanel
     }
 
     // -- 📡 Exchanges ------------------------------------------------------
-    private function renderExchanges(int $chatId, int $messageId, array $parts): void
+    private function renderExchanges(int $chatId, int $messageId, array $parts, int $userId): void
     {
         $action = $parts[2] ?? null;
         $rows = Database::pdo()->query('SELECT * FROM exchanges ORDER BY priority ASC')->fetchAll();
@@ -603,13 +605,43 @@ final class AdminPanel
             $rows = Database::pdo()->query('SELECT * FROM exchanges ORDER BY priority ASC')->fetchAll();
         }
 
+        if ($action === 'apikey' && isset($parts[3])) {
+            $this->renderExchangeApiKey($chatId, $messageId, (string) $parts[3]);
+            return;
+        }
+
+        if ($action === 'apikey_set' && isset($parts[3]) && isset($parts[4])) {
+            $this->states->set($userId, 'awaiting_api_credential', ['exchange' => $parts[3], 'field' => $parts[4]]);
+            $fieldLabel = $parts[4] === 'secret' ? 'Secret' : 'API Key';
+            $this->render($chatId, $messageId, "🔑 مقدار جدید {$fieldLabel} برای " . ucfirst($parts[3]) . " رو ارسال کنید.\n(برای پاک کردن، کلمه «حذف» رو بفرستید.)", ['inline_keyboard' => [$this->backRow("admin:exchanges:apikey:{$parts[3]}")]]);
+            return;
+        }
+
         $keyboard = [];
         foreach ($rows as $r) {
             $status = $r['is_enabled'] ? '🟢' : '🔴';
-            $keyboard[] = [['text' => "$status {$r['display_name']}", 'callback_data' => "admin:exchanges:toggle:{$r['id']}"]];
+            $keyboard[] = [
+                ['text' => "$status {$r['display_name']}", 'callback_data' => "admin:exchanges:toggle:{$r['id']}"],
+                ['text' => '🔑 API', 'callback_data' => "admin:exchanges:apikey:{$r['name']}"],
+            ];
         }
         $keyboard[] = $this->backRow();
-        $this->render($chatId, $messageId, "📡 صرافی‌ها\n\nبرای فعال/غیرفعال کردن روی هرکدام بزنید.", ['inline_keyboard' => $keyboard]);
+        $this->render($chatId, $messageId, "📡 صرافی‌ها\n\nبرای فعال/غیرفعال کردن روی نامش بزنید. برای تنظیم API Key دکمه 🔑 رو بزنید (فعلاً فقط Wallex واقعاً ازش استفاده می‌کنه — Binance/MEXC برای داده بازار نیازی به کلید ندارن، ذخیره می‌شه برای استفاده‌های بعدی).", ['inline_keyboard' => $keyboard]);
+    }
+
+    private function renderExchangeApiKey(int $chatId, int $messageId, string $exchange): void
+    {
+        $key = $this->getSetting(strtoupper($exchange) . '_API_KEY', '');
+        $secret = $this->getSetting(strtoupper($exchange) . '_API_SECRET', '');
+        $mask = static fn(string $v): string => $v === '' ? '(تنظیم نشده)' : (mb_substr($v, 0, 4) . str_repeat('•', max(0, mb_strlen($v) - 4)));
+
+        $text = sprintf("🔑 API - %s\n\nAPI Key: %s\nSecret: %s", ucfirst($exchange), $mask($key), $mask($secret));
+        $keyboard = [
+            [['text' => '✏️ تنظیم API Key', 'callback_data' => "admin:exchanges:apikey_set:{$exchange}:key"]],
+            [['text' => '✏️ تنظیم Secret', 'callback_data' => "admin:exchanges:apikey_set:{$exchange}:secret"]],
+            $this->backRow('admin:exchanges'),
+        ];
+        $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
     }
 
     // -- 📺 Channels ---------------------------------------------------------
@@ -643,6 +675,20 @@ final class AdminPanel
             return;
         }
 
+        if ($action === 'quote_toggle' && isset($parts[3])) {
+            $channelId = (int) $parts[3];
+            $settings = $this->channels->getSettings($channelId);
+            $this->channels->updateSettings($channelId, ['quote_enabled' => (int) $settings['quote_enabled'] === 1 ? 0 : 1]);
+            $this->renderChannelDetail($chatId, $messageId, $channelId);
+            return;
+        }
+
+        if ($action === 'quote_set' && isset($parts[3])) {
+            $this->states->set($userId, 'awaiting_quote_forward', ['channel_id' => (int) $parts[3]]);
+            $this->render($chatId, $messageId, "💬 تنظیم Quote\n\nپیامی که می‌خواید سیگنال‌ها روش Reply/Quote بشن رو از همون کانال Forward کنید (نه کپی — باید واقعاً Forward باشه تا ربات چت و آیدی پیام اصلی رو تشخیص بده).", ['inline_keyboard' => [$this->backRow("admin:channels:view:{$parts[3]}")]]);
+            return;
+        }
+
         $channels = $this->channels->listAll();
         $keyboard = [[['text' => '➕ افزودن کانال', 'callback_data' => 'admin:channels:add']]];
         foreach ($channels as $c) {
@@ -663,22 +709,28 @@ final class AdminPanel
         }
         $settings = $this->channels->getSettings($channelId);
         $accessOk = in_array($c['bot_status'], ['administrator', 'creator'], true) && $c['can_post'];
+        $quoteEnabled = (int) ($settings['quote_enabled'] ?? 0) === 1;
+        $quoteRef = $this->quotes->latest('channel_pin', (string) $channelId);
 
         $text = sprintf(
-            "📺 %s\n\nChat ID: %s\nوضعیت ربات: %s\nمجاز به ارسال: %s\nفعال: %s\nحداقل امتیاز: %s\nقالب: %s",
+            "📺 %s\n\nChat ID: %s\nوضعیت ربات: %s\nمجاز به ارسال: %s\nفعال: %s\nحداقل امتیاز: %s\nقالب: %s\nQuote: %s%s",
             $c['title'] ?: '-',
             $c['chat_id'],
             $c['bot_status'],
             $accessOk ? '✅' : '❌',
             $c['is_active'] ? '🟢' : '🔴',
             $settings['min_signal_score'] ?? Config::minSignalScore(),
-            $settings['template_key'] ?? 'signal_template'
+            $settings['template_key'] ?? 'signal_template',
+            $quoteEnabled ? '🟢 فعال' : '⚪️ غیرفعال',
+            $quoteRef !== null ? '' : "\n⚠️ هنوز پیام مرجعی برای Quote تنظیم نشده"
         );
 
         $toggleLabel = $c['is_active'] ? '🔴 غیرفعال‌سازی' : '🟢 فعال‌سازی';
         $keyboard = [
             [['text' => $toggleLabel, 'callback_data' => "admin:channels:toggle:$channelId"]],
             [['text' => '🔄 بررسی دسترسی ربات', 'callback_data' => "admin:channels:recheck:$channelId"]],
+            [['text' => $quoteEnabled ? '⚪️ غیرفعال‌سازی Quote' : '🟢 فعال‌سازی Quote', 'callback_data' => "admin:channels:quote_toggle:$channelId"]],
+            [['text' => '💬 تنظیم پیام Quote', 'callback_data' => "admin:channels:quote_set:$channelId"]],
             [['text' => '🗑 حذف کانال', 'callback_data' => "admin:channels:remove:$channelId"]],
             $this->backRow('admin:channels'),
         ];
@@ -693,6 +745,25 @@ final class AdminPanel
     // -- 📊 Scanner ------------------------------------------------------
     private function renderScanner(int $chatId, int $messageId, array $parts): void
     {
+        $action = $parts[2] ?? null;
+
+        if ($action === 'test') {
+            $this->render($chatId, $messageId, "🔍 در حال تست اتصال به صرافی‌ها... چند ثانیه صبر کنید.", ['inline_keyboard' => []]);
+            $report = $this->testExchangeConnections();
+            $this->render($chatId, $messageId, $report, ['inline_keyboard' => [
+                [['text' => '🔄 تست دوباره', 'callback_data' => 'admin:scanner:test']],
+                $this->backRow('admin:scanner'),
+            ]]);
+            return;
+        }
+
+        if ($action === 'run') {
+            $this->render($chatId, $messageId, "▶️ در حال اجرای Scanner... چند ثانیه صبر کنید.", ['inline_keyboard' => []]);
+            $selected = (new MarketScanner())->scan($this->exchangeManager);
+            $this->render($chatId, $messageId, "✅ اسکن تمام شد.\n\nنمادهای انتخاب‌شده: $selected\n\nاگر صفر بود، از «🔍 تست اتصال صرافی‌ها» برای دیدن دلیل دقیق استفاده کنید.", ['inline_keyboard' => [$this->backRow('admin:scanner')]]);
+            return;
+        }
+
         $activeSymbols = (new SymbolRepository())->countActive();
         $lastRun = (new ScannerRunRepository())->lastRunAt();
         $text = sprintf(
@@ -703,7 +774,63 @@ final class AdminPanel
             Config::maxSpreadPercent(),
             $lastRun ?? 'هنوز اجرا نشده'
         );
-        $this->render($chatId, $messageId, $text, ['inline_keyboard' => [$this->backRow()]]);
+        $keyboard = [
+            [['text' => '🔍 تست اتصال صرافی‌ها', 'callback_data' => 'admin:scanner:test']],
+            [['text' => '▶️ اسکن الان', 'callback_data' => 'admin:scanner:run']],
+            $this->backRow(),
+        ];
+        $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
+    }
+
+    /**
+     * Raw one-shot pings against each exchange's REST base (bypassing both
+     * the circuit breaker and the adapters' own error-swallowing parse
+     * logic — `?? []` on a malformed/error response silently looks like
+     * "zero symbols", hiding the actual HTTP status and error body). This
+     * surfaces the real reason a scan finds nothing: a blocked/rate-limited
+     * host IP (very common — exchanges frequently reject shared-hosting
+     * datacenter IP ranges), an auth error, or a genuinely empty response.
+     */
+    private function testExchangeConnections(): string
+    {
+        $pingUrls = [
+            'binance' => Config::binanceRestBase() . '/api/v3/exchangeInfo',
+            'mexc' => Config::mexcRestBase() . '/api/v3/exchangeInfo',
+            'wallex' => Config::wallexRestBase() . '/v1/markets',
+        ];
+
+        $lines = ["🔍 نتیجه تست اتصال صرافی‌ها:\n"];
+        foreach ($this->exchangeManager->adapters() as $name => $adapter) {
+            $url = $pingUrls[$name] ?? null;
+            $lines[] = "— " . ucfirst($name) . " —";
+            if ($url === null) {
+                $lines[] = "⚪️ آدرس تست تعریف نشده";
+                $lines[] = '';
+                continue;
+            }
+
+            $start = microtime(true);
+            $res = HttpClient::request('GET', $url, [], null, 0); // 0 retries: one honest attempt
+            $elapsed = round((microtime(true) - $start) * 1000);
+
+            if ($res['status'] === 0) {
+                $lines[] = "❌ اتصال برقرار نشد ({$elapsed}ms) — شبکه/DNS/فایروال هاست، یا IP این سرور توسط صرافی بلاک شده.";
+            } elseif ($res['status'] >= 400) {
+                $bodySnippet = mb_strimwidth(trim($res['body']), 0, 200, '…');
+                $lines[] = "❌ HTTP {$res['status']} ({$elapsed}ms)";
+                if ($bodySnippet !== '') {
+                    $lines[] = "پاسخ: $bodySnippet";
+                }
+                if ($res['status'] === 451 || $res['status'] === 403) {
+                    $lines[] = "(این کد معمولاً یعنی IP هاست شما از سمت صرافی مسدود/محدود شده — خیلی رایج برای هاست‌های اشتراکی)";
+                }
+            } else {
+                $count = is_array($res['json']) ? (count($res['json']['symbols'] ?? $res['json']['result']['symbols'] ?? $res['json']) ) : 0;
+                $lines[] = "✅ HTTP {$res['status']} ({$elapsed}ms), آیتم‌ها: $count";
+            }
+            $lines[] = '';
+        }
+        return implode("\n", $lines);
     }
 
     // -- 🧠 Strategies ---------------------------------------------------
@@ -831,9 +958,56 @@ final class AdminPanel
             $this->runTestSignal($chatId);
             return;
         }
-        $this->render($chatId, $messageId, "🧪 Test Signal\n\nیک سیگنال آزمایشی (بدون ارسال به کانال‌های واقعی مگر در LIVE) تولید و برای شما نمایش داده می‌شود.", [
-            'inline_keyboard' => [[['text' => '▶️ اجرای تست', 'callback_data' => 'admin:test_signal:run']], $this->backRow()],
+        if ($action === 'preview') {
+            $this->runTemplatePreview($chatId);
+            return;
+        }
+        $this->render($chatId, $messageId, "🧪 Test Signal\n\n▶️ اجرای تست: یک سیگنال واقعی از روی بازار تولید می‌کنه (نیاز به نماد فعال داره).\n🎨 پیش‌نمایش قالب: بدون نیاز به داده بازار، بلافاصله قالب فعلی رو با داده فرضی ارسال می‌کنه — برای چک کردن سریع ایموجی پرمیوم/فرمت.", [
+            'inline_keyboard' => [
+                [['text' => '▶️ اجرای تست (با بازار)', 'callback_data' => 'admin:test_signal:run']],
+                [['text' => '🎨 پیش‌نمایش قالب (فوری)', 'callback_data' => 'admin:test_signal:preview']],
+                $this->backRow(),
+            ],
         ]);
+    }
+
+    /**
+     * Sends the current signal_template through the exact same
+     * SignalFormatter/TelegramEntityUtils pipeline a real signal would use,
+     * with made-up values — so premium emoji/entity survival can be
+     * checked immediately, without depending on the scanner having found
+     * any symbols yet.
+     */
+    private function runTemplatePreview(int $chatId): void
+    {
+        $dummy = new Signal(
+            uuid: SignalGenerator::uuid4(),
+            exchange: 'binance',
+            symbol: 'BTCUSDT',
+            direction: Direction::LONG,
+            timeframe: '4h',
+            entry: 65000.5,
+            stopLoss: 63500.0,
+            tp1: 66500.0,
+            tp2: 68000.0,
+            tp3: 71000.0,
+            riskReward: 2.3,
+            score: 82.5,
+            confidence: 'high',
+            strategy: 'default_structure',
+            reasons: ['این یک پیش‌نمایش با داده فرضی است', 'روند ساختاری: صعودی', 'نزدیک به Order Block صعودی'],
+            fingerprint: 'preview',
+            status: 'test',
+        );
+
+        $template = $this->texts->get('signal_template');
+        if ($template['text'] === '') {
+            $this->telegram->sendMessage($chatId, "قالب signal_template هنوز تنظیم نشده.");
+            return;
+        }
+        $formatter = new SignalFormatter();
+        $rendered = $formatter->format($dummy, $template['text'], $template['entities']);
+        $this->telegram->sendMessage($chatId, $rendered['text'], $rendered['entities']);
     }
 
     private function runTestSignal(int $chatId): void
@@ -988,7 +1162,50 @@ final class AdminPanel
             return true;
         }
 
+        if ($state['state'] === 'awaiting_api_credential') {
+            $this->states->clear($userId);
+            $exchange = (string) ($state['payload']['exchange'] ?? '');
+            $field = (string) ($state['payload']['field'] ?? '');
+            if ($exchange === '' || $field === '') {
+                return true;
+            }
+            $value = trim($text) === 'حذف' ? '' : trim($text);
+            $settingKey = strtoupper($exchange) . '_API_' . ($field === 'secret' ? 'SECRET' : 'KEY');
+            $this->setSetting($settingKey, $value);
+            $this->telegram->sendMessage($chatId, $value === '' ? '✅ مقدار پاک شد.' : '✅ ذخیره شد.');
+            return true;
+        }
+
+        if ($state['state'] === 'awaiting_quote_forward') {
+            $this->states->clear($userId);
+            $channelId = (int) ($state['payload']['channel_id'] ?? 0);
+            if ($channelId === 0) {
+                return true;
+            }
+            $origin = $this->extractForwardOrigin($message);
+            if ($origin === null) {
+                $this->telegram->sendMessage($chatId, "این پیام Forward نبود. لطفاً پیام مورد نظر رو مستقیماً از کانال Forward کنید (از منوی پیام گزینه Forward، نه کپی/پیست متن).");
+                return true;
+            }
+            $this->quotes->store('channel_pin', (string) $channelId, $origin['chat_id'], $origin['message_id'], $text, is_array($entities) ? $entities : []);
+            $this->channels->updateSettings($channelId, ['quote_enabled' => 1]);
+            $this->telegram->sendMessage($chatId, "✅ پیام مرجع ذخیره شد و Quote برای این کانال فعال شد. سیگنال‌های بعدی این کانال به این پیام Reply می‌کنن.");
+            return true;
+        }
+
         return false;
+    }
+
+    /** @return array{chat_id:int, message_id:int}|null */
+    private function extractForwardOrigin(array $message): ?array
+    {
+        if (isset($message['forward_origin']['chat']['id'], $message['forward_origin']['message_id'])) {
+            return ['chat_id' => (int) $message['forward_origin']['chat']['id'], 'message_id' => (int) $message['forward_origin']['message_id']];
+        }
+        if (isset($message['forward_from_chat']['id'], $message['forward_from_message_id'])) {
+            return ['chat_id' => (int) $message['forward_from_chat']['id'], 'message_id' => (int) $message['forward_from_message_id']];
+        }
+        return null;
     }
 }
 
