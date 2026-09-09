@@ -765,7 +765,7 @@ final class AdminPanel
         }
 
         if ($action === 'filters') {
-            $this->renderScannerFilters($chatId, $messageId);
+            $this->renderScannerFilters($chatId, $messageId, $parts);
             return;
         }
 
@@ -781,6 +781,7 @@ final class AdminPanel
                 'MAX_SPREAD_PERCENT' => 'حداکثر اسپرد مجاز (عدد، درصد — مثلاً 2 یعنی ۲٪)',
                 'ALLOWED_QUOTE_ASSETS' => 'ارزهای مجاز quote (با کاما، مثلاً USDT,USDC — یا خالی برای حذف کامل این فیلتر)',
                 'SCANNER_TOP_N' => 'حداکثر تعداد نماد (عدد صحیح)',
+                'MIN_SIGNAL_SCORE' => 'حداقل امتیاز لازم برای صدور سیگنال (عدد ۰ تا ۱۰۰)',
             ];
             $label = $labels[$parts[3]] ?? $parts[3];
             $this->render($chatId, $messageId, "✏️ $label رو ارسال کنید.", ['inline_keyboard' => [$this->backRow('admin:scanner:filters')]]);
@@ -829,20 +830,41 @@ final class AdminPanel
         return "🔬 نمونه خام Wallex (نماد: $firstKey)\n\n" . mb_strimwidth((string) $pretty, 0, 3800, '…');
     }
 
-    private function renderScannerFilters(int $chatId, int $messageId): void
+    /** Scanner/signal settings that can be overridden live via the panel — used by both display and reset. */
+    private const OVERRIDABLE_SETTINGS = ['MIN_VOLUME_USDT', 'MAX_SPREAD_PERCENT', 'ALLOWED_QUOTE_ASSETS', 'SCANNER_TOP_N', 'MIN_SIGNAL_SCORE'];
+
+    private function renderScannerFilters(int $chatId, int $messageId, array $parts = []): void
     {
+        if (($parts[3] ?? null) === 'reset') {
+            $pdo = Database::pdo();
+            $stmt = $pdo->prepare('DELETE FROM bot_settings WHERE setting_key = :k');
+            foreach (self::OVERRIDABLE_SETTINGS as $key) {
+                $stmt->execute([':k' => $key]);
+            }
+        }
+
+        $hasOverride = static function (string $key): bool {
+            $stmt = Database::pdo()->prepare('SELECT 1 FROM bot_settings WHERE setting_key = :k');
+            $stmt->execute([':k' => $key]);
+            return $stmt->fetchColumn() !== false;
+        };
+        $overrideNote = static fn(string $key) => $hasOverride($key) ? ' (override فعال از پنل)' : ' (از env.php)';
+
         $text = sprintf(
-            "⚙️ تنظیمات فیلتر Scanner\n\nحداقل حجم: %s USDT\nحداکثر اسپرد: %s%%\nارزهای مجاز: %s\nحداکثر تعداد نماد: %d\n\nاین مقادیر بلافاصله بعد ذخیره، توی «▶️ اسکن الان» اعمال می‌شن.",
-            number_format(Config::minVolumeUsdt()),
-            Config::maxSpreadPercent(),
-            implode(',', Config::allowedQuoteAssets()) ?: '(بدون فیلتر)',
-            Config::scannerTopN()
+            "⚙️ تنظیمات فیلتر Scanner\n\nحداقل حجم: %s USDT%s\nحداکثر اسپرد: %s%%%s\nارزهای مجاز: %s%s\nحداکثر تعداد نماد: %d%s\nحداقل امتیاز سیگنال: %.1f%s\n\nاین مقادیر بلافاصله بعد ذخیره، توی «▶️ اسکن الان» اعمال می‌شن. اگه یه مقدار از پنل ست بشه، همیشه روی env.php اولویت داره — برای پاک کردن همه override ها و برگشت به env.php از دکمه پایین استفاده کنید.",
+            number_format(Config::minVolumeUsdt()), $overrideNote('MIN_VOLUME_USDT'),
+            Config::maxSpreadPercent(), $overrideNote('MAX_SPREAD_PERCENT'),
+            implode(',', Config::allowedQuoteAssets()) ?: '(بدون فیلتر)', $overrideNote('ALLOWED_QUOTE_ASSETS'),
+            Config::scannerTopN(), $overrideNote('SCANNER_TOP_N'),
+            Config::minSignalScore(), $overrideNote('MIN_SIGNAL_SCORE')
         );
         $keyboard = [
             [['text' => '✏️ حداقل حجم', 'callback_data' => 'admin:scanner:filter_set:MIN_VOLUME_USDT']],
             [['text' => '✏️ حداکثر اسپرد', 'callback_data' => 'admin:scanner:filter_set:MAX_SPREAD_PERCENT']],
             [['text' => '✏️ ارزهای مجاز', 'callback_data' => 'admin:scanner:filter_set:ALLOWED_QUOTE_ASSETS']],
             [['text' => '✏️ حداکثر تعداد نماد', 'callback_data' => 'admin:scanner:filter_set:SCANNER_TOP_N']],
+            [['text' => '✏️ حداقل امتیاز سیگنال', 'callback_data' => 'admin:scanner:filter_set:MIN_SIGNAL_SCORE']],
+            [['text' => '🔄 پاک کردن همه override ها', 'callback_data' => 'admin:scanner:filters:reset']],
             $this->backRow('admin:scanner'),
         ];
         $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
@@ -1128,13 +1150,73 @@ final class AdminPanel
         }
 
         $snapshot = $store->buildSnapshot($target['exchange'], $target['symbol'], $timeframes);
-        $generator = new SignalGenerator(new IndicatorEngine());
-
         $mainTf = $timeframes[array_key_last($timeframes)] ?? '1h';
+        $candles = $snapshot->candlesFor($mainTf);
+
+        // Walk the exact same pipeline SignalGenerator uses, stage by
+        // stage, with a diagnostic line at each point -- so "no signal"
+        // says WHY instead of leaving it a mystery every single time.
+        $diag = [];
+        $diag[] = "🧪 تست تشخیصی: {$target['symbol']} ({$target['exchange']}, {$mainTf})";
+        $diag[] = "قیمت: {$snapshot->price} | کندل: " . count($candles);
+
+        if (count($candles) < 30) {
+            $diag[] = "❌ کندل کافی نیست (حداقل ۳۰ لازمه) — این دلیل اصلی نبود سیگنال است.";
+            $this->telegram->sendMessage($chatId, implode("\n", $diag));
+            return;
+        }
+
+        $zones = (new SupportResistanceEngine())->detect($candles, $mainTf);
+        $orderBlocks = (new OrderBlockEngine())->detect($candles, $mainTf);
+        $fvgs = (new FvgEngine())->detect($candles, $mainTf);
+        $trend = SwingPivots::structuralTrend($candles);
+        $confluence = (new ConfluenceEngine())->score($snapshot, $mainTf, $zones, $orderBlocks, $fvgs, [], $trend);
+
+        $diag[] = "روند ساختاری: $trend";
+        $diag[] = sprintf("امتیاز Confluence: %.1f (بایاس: %s, حداقل لازم: %.1f)", $confluence['score'], $confluence['bias'], Config::minSignalScore());
+        $breakdown = [];
+        foreach ($confluence['breakdown'] as $factor => $value) {
+            $breakdown[] = "$factor=" . round($value, 1);
+        }
+        $diag[] = 'تفکیک: ' . implode(', ', $breakdown);
+
+        if ($confluence['bias'] === 'neutral') {
+            $diag[] = "❌ بایاس خنثی — استراتژی فعلی فقط وقتی بازار واضح صعودی یا نزولی باشه پلن می‌سازه.";
+            $this->telegram->sendMessage($chatId, implode("\n", $diag));
+            return;
+        }
+
+        $strategy = (new StrategyEngine())->get('default_structure');
+        $plan = $strategy?->evaluate($snapshot, $mainTf, $zones, $orderBlocks, $fvgs, $confluence);
+
+        if ($plan === null) {
+            $diag[] = "❌ استراتژی نتوانست پلن معامله بسازد (معمولاً یعنی ATR صفر یا داده قیمت ناقص است).";
+            $this->telegram->sendMessage($chatId, implode("\n", $diag));
+            return;
+        }
+
+        $risk = abs($plan['entry'] - $plan['stop_loss']);
+        $reward = $plan['tp1'] !== null ? abs($plan['tp1'] - $plan['entry']) : 0.0;
+        $rr = $risk > 0 ? round($reward / $risk, 2) : 0.0;
+        $diag[] = sprintf("پلن: %s | RR=%.2f (حداقل لازم: %.2f)", $plan['direction']->value, $rr, Config::minRiskReward());
+
+        if ($confluence['score'] < Config::minSignalScore()) {
+            $diag[] = sprintf("❌ امتیاز (%.1f) کمتر از حداقل (%.1f) است — این دلیل رد شدن سیگنال است.", $confluence['score'], Config::minSignalScore());
+            $this->telegram->sendMessage($chatId, implode("\n", $diag));
+            return;
+        }
+        if ($rr < Config::minRiskReward()) {
+            $diag[] = sprintf("❌ نسبت ریسک/ریوارد (%.2f) کمتر از حداقل (%.2f) است — این دلیل رد شدن سیگنال است.", $rr, Config::minRiskReward());
+            $this->telegram->sendMessage($chatId, implode("\n", $diag));
+            return;
+        }
+
+        $generator = new SignalGenerator(new IndicatorEngine());
         $signal = $generator->generate($snapshot, $mainTf);
 
         if ($signal === null) {
-            $this->telegram->sendMessage($chatId, "با شرایط فعلی بازار برای {$target['symbol']} سیگنالی معتبر تولید نشد (این طبیعی است — به معنای خرابی نیست).");
+            $diag[] = "⚠️ طبق این محاسبه باید سیگنال صادر می‌شد اما SignalGenerator چیزی برنگرداند — احتمالاً به‌خاطر Cooldown/Deduplication (سیگنال مشابه اخیراً صادر شده).";
+            $this->telegram->sendMessage($chatId, implode("\n", $diag));
             return;
         }
 
@@ -1297,7 +1379,7 @@ final class AdminPanel
             if ($setting === '') {
                 return true;
             }
-            if (in_array($setting, ['MIN_VOLUME_USDT', 'MAX_SPREAD_PERCENT'], true) && $value !== '' && !is_numeric($value)) {
+            if (in_array($setting, ['MIN_VOLUME_USDT', 'MAX_SPREAD_PERCENT', 'MIN_SIGNAL_SCORE'], true) && $value !== '' && !is_numeric($value)) {
                 $this->telegram->sendMessage($chatId, "این مقدار باید عدد باشه.");
                 return true;
             }
