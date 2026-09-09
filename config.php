@@ -281,6 +281,23 @@ final class Config
         return Env::get('WALLEX_REST_BASE', 'https://api.wallex.ir') ?? 'https://api.wallex.ir';
     }
 
+    /**
+     * CryptoCompare is a market-data aggregator, not an exchange with its
+     * own trading/compliance obligations -- unlike Binance/MEXC it's a
+     * realistic route around a host IP being geo-blocked by an exchange
+     * directly. Free tier works without a key at low volume; set one for
+     * higher rate limits.
+     */
+    public static function cryptocompareApiKey(): string
+    {
+        return self::dbOverride('CRYPTOCOMPARE_API_KEY') ?? (Env::get('CRYPTOCOMPARE_API_KEY', '') ?? '');
+    }
+
+    public static function cryptocompareRestBase(): string
+    {
+        return Env::get('CRYPTOCOMPARE_REST_BASE', 'https://min-api.cryptocompare.com') ?? 'https://min-api.cryptocompare.com';
+    }
+
     /** @return string[] enabled exchange names, in priority order */
     public static function enabledExchanges(): array
     {
@@ -288,9 +305,16 @@ final class Config
     }
 
     // -- Scanner -------------------------------------------------------
+    // Every scanner filter below is admin-panel-editable (📊 Scanner →
+    // ⚙️ تنظیمات فیلتر), stored via the same DB-override mechanism as the
+    // exchange API keys, so they can be tuned live from Telegram without
+    // touching env.php — deliberately, since the "right" threshold depends
+    // on which exchange/market is actually reachable and varies a lot
+    // (Binance-scale liquidity vs. a smaller regional exchange).
     public static function scannerTopN(): int
     {
-        return Env::getInt('SCANNER_TOP_N', 200);
+        $override = self::dbOverride('SCANNER_TOP_N');
+        return $override !== null ? (int) $override : Env::getInt('SCANNER_TOP_N', 200);
     }
 
     public static function scannerIntervalSeconds(): int
@@ -300,17 +324,26 @@ final class Config
 
     public static function minVolumeUsdt(): float
     {
-        return Env::getFloat('MIN_VOLUME_USDT', 1_000_000.0);
+        $override = self::dbOverride('MIN_VOLUME_USDT');
+        return $override !== null ? (float) $override : Env::getFloat('MIN_VOLUME_USDT', 20_000.0);
     }
 
     public static function maxSpreadPercent(): float
     {
-        return Env::getFloat('MAX_SPREAD_PERCENT', 0.5);
+        $override = self::dbOverride('MAX_SPREAD_PERCENT');
+        return $override !== null ? (float) $override : Env::getFloat('MAX_SPREAD_PERCENT', 0.5);
     }
 
-    /** @return string[] allowed quote assets, e.g. ["USDT","USDC"] */
+    /** @return string[] allowed quote assets, e.g. ["USDT","USDC"] — empty means no filter (all quote assets allowed) */
     public static function allowedQuoteAssets(): array
     {
+        $override = self::dbOverride('ALLOWED_QUOTE_ASSETS');
+        if ($override !== null) {
+            if ($override === '*') {
+                return [];
+            }
+            return array_values(array_filter(array_map('trim', explode(',', $override)), static fn($x) => $x !== ''));
+        }
         return Env::getList('ALLOWED_QUOTE_ASSETS', 'USDT');
     }
 
@@ -329,7 +362,8 @@ final class Config
     // -- Signal thresholds -------------------------------------------------
     public static function minSignalScore(): float
     {
-        return Env::getFloat('MIN_SIGNAL_SCORE', 75.0);
+        $override = self::dbOverride('MIN_SIGNAL_SCORE');
+        return $override !== null ? (float) $override : Env::getFloat('MIN_SIGNAL_SCORE', 75.0);
     }
 
     public static function cooldownSeconds(): int
@@ -781,7 +815,7 @@ final class Database
         $now = date('Y-m-d H:i:s');
 
         // Exchanges
-        $exchangeNames = ['binance' => 'Binance', 'mexc' => 'MEXC', 'wallex' => 'Wallex'];
+        $exchangeNames = ['binance' => 'Binance', 'mexc' => 'MEXC', 'wallex' => 'Wallex', 'cryptocompare' => 'CryptoCompare'];
         $stmt = $pdo->prepare(
             'INSERT INTO exchanges (name, display_name, is_enabled, priority)
              VALUES (:name, :display_name, :enabled, :priority)

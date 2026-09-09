@@ -572,7 +572,7 @@ final class AdminPanel
                 'main' => $this->render($chatId, $messageId, "⚙️ پنل مدیریت", $this->mainMenuKeyboard()),
                 'exchanges' => $this->renderExchanges($chatId, $messageId, $parts, $userId),
                 'channels' => $this->renderChannels($chatId, $messageId, $parts, $userId),
-                'scanner' => $this->renderScanner($chatId, $messageId, $parts),
+                'scanner' => $this->renderScanner($chatId, $messageId, $parts, $userId),
                 'strategies' => $this->renderStrategies($chatId, $messageId, $parts),
                 'indicators' => $this->renderIndicators($chatId, $messageId),
                 'template' => $this->renderTemplate($chatId, $messageId, $parts, $userId),
@@ -743,7 +743,7 @@ final class AdminPanel
     }
 
     // -- 📊 Scanner ------------------------------------------------------
-    private function renderScanner(int $chatId, int $messageId, array $parts): void
+    private function renderScanner(int $chatId, int $messageId, array $parts, int $userId): void
     {
         $action = $parts[2] ?? null;
 
@@ -764,6 +764,24 @@ final class AdminPanel
             return;
         }
 
+        if ($action === 'filters') {
+            $this->renderScannerFilters($chatId, $messageId);
+            return;
+        }
+
+        if ($action === 'filter_set' && isset($parts[3])) {
+            $this->states->set($userId, 'awaiting_scanner_filter', ['setting' => $parts[3]]);
+            $labels = [
+                'MIN_VOLUME_USDT' => 'حداقل حجم ۲۴ ساعته (عدد، به USDT)',
+                'MAX_SPREAD_PERCENT' => 'حداکثر اسپرد مجاز (عدد، درصد — مثلاً 2 یعنی ۲٪)',
+                'ALLOWED_QUOTE_ASSETS' => 'ارزهای مجاز quote (با کاما، مثلاً USDT,USDC — یا خالی برای حذف کامل این فیلتر)',
+                'SCANNER_TOP_N' => 'حداکثر تعداد نماد (عدد صحیح)',
+            ];
+            $label = $labels[$parts[3]] ?? $parts[3];
+            $this->render($chatId, $messageId, "✏️ $label رو ارسال کنید.", ['inline_keyboard' => [$this->backRow('admin:scanner:filters')]]);
+            return;
+        }
+
         $activeSymbols = (new SymbolRepository())->countActive();
         $lastRun = (new ScannerRunRepository())->lastRunAt();
         $text = sprintf(
@@ -777,7 +795,27 @@ final class AdminPanel
         $keyboard = [
             [['text' => '🔍 تست اتصال صرافی‌ها', 'callback_data' => 'admin:scanner:test']],
             [['text' => '▶️ اسکن الان', 'callback_data' => 'admin:scanner:run']],
+            [['text' => '⚙️ تنظیمات فیلتر', 'callback_data' => 'admin:scanner:filters']],
             $this->backRow(),
+        ];
+        $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
+    }
+
+    private function renderScannerFilters(int $chatId, int $messageId): void
+    {
+        $text = sprintf(
+            "⚙️ تنظیمات فیلتر Scanner\n\nحداقل حجم: %s USDT\nحداکثر اسپرد: %s%%\nارزهای مجاز: %s\nحداکثر تعداد نماد: %d\n\nاین مقادیر بلافاصله بعد ذخیره، توی «▶️ اسکن الان» اعمال می‌شن.",
+            number_format(Config::minVolumeUsdt()),
+            Config::maxSpreadPercent(),
+            implode(',', Config::allowedQuoteAssets()) ?: '(بدون فیلتر)',
+            Config::scannerTopN()
+        );
+        $keyboard = [
+            [['text' => '✏️ حداقل حجم', 'callback_data' => 'admin:scanner:filter_set:MIN_VOLUME_USDT']],
+            [['text' => '✏️ حداکثر اسپرد', 'callback_data' => 'admin:scanner:filter_set:MAX_SPREAD_PERCENT']],
+            [['text' => '✏️ ارزهای مجاز', 'callback_data' => 'admin:scanner:filter_set:ALLOWED_QUOTE_ASSETS']],
+            [['text' => '✏️ حداکثر تعداد نماد', 'callback_data' => 'admin:scanner:filter_set:SCANNER_TOP_N']],
+            $this->backRow('admin:scanner'),
         ];
         $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
     }
@@ -797,6 +835,7 @@ final class AdminPanel
             'binance' => Config::binanceRestBase() . '/api/v3/exchangeInfo',
             'mexc' => Config::mexcRestBase() . '/api/v3/exchangeInfo',
             'wallex' => Config::wallexRestBase() . '/v1/markets',
+            'cryptocompare' => Config::cryptocompareRestBase() . '/data/top/totalvolfull?limit=5&tsym=USDT',
         ];
 
         $lines = ["🔍 نتیجه تست اتصال صرافی‌ها:\n"];
@@ -825,7 +864,7 @@ final class AdminPanel
                     $lines[] = "(این کد معمولاً یعنی IP هاست شما از سمت صرافی مسدود/محدود شده — خیلی رایج برای هاست‌های اشتراکی، مخصوصاً هاست‌های ایرانی روی Binance/MEXC)";
                 }
             } else {
-                $count = is_array($res['json']) ? (count($res['json']['symbols'] ?? $res['json']['result']['symbols'] ?? $res['json']) ) : 0;
+                $count = is_array($res['json']) ? (count($res['json']['symbols'] ?? $res['json']['result']['symbols'] ?? $res['json']['Data'] ?? $res['json']) ) : 0;
                 $lines[] = "✅ HTTP {$res['status']} ({$elapsed}ms), آیتم‌ها: $count";
 
                 // Connection is fine -- run the real filter funnel to see
@@ -1100,7 +1139,7 @@ final class AdminPanel
     {
         $exHealth = $this->exchangeManager->healthSnapshot();
         $exLines = [];
-        foreach (['binance', 'mexc', 'wallex'] as $ex) {
+        foreach (['binance', 'mexc', 'wallex', 'cryptocompare'] as $ex) {
             $exLines[] = ($exHealth[$ex] ?? '⚪️') . ' ' . ucfirst($ex);
         }
 
@@ -1181,6 +1220,33 @@ final class AdminPanel
             }
             $this->texts->set($key, $text, is_array($entities) ? $entities : [], $userId);
             $this->telegram->sendMessage($chatId, "✅ متن «$key» با حفظ کامل فرمت و ایموجی‌های اختصاصی ذخیره شد.");
+            return true;
+        }
+
+        if ($state['state'] === 'awaiting_scanner_filter') {
+            $this->states->clear($userId);
+            $setting = (string) ($state['payload']['setting'] ?? '');
+            $value = trim($text);
+            if ($setting === '') {
+                return true;
+            }
+            if (in_array($setting, ['MIN_VOLUME_USDT', 'MAX_SPREAD_PERCENT'], true) && $value !== '' && !is_numeric($value)) {
+                $this->telegram->sendMessage($chatId, "این مقدار باید عدد باشه.");
+                return true;
+            }
+            if ($setting === 'SCANNER_TOP_N' && $value !== '' && !ctype_digit($value)) {
+                $this->telegram->sendMessage($chatId, "این مقدار باید عدد صحیح باشه.");
+                return true;
+            }
+            // An empty ALLOWED_QUOTE_ASSETS means "no filter at all" -- but
+            // the DB-override lookup treats a stored empty string as "not
+            // set" (falls back to env's default), so that intent needs a
+            // sentinel instead of a literal empty value.
+            if ($setting === 'ALLOWED_QUOTE_ASSETS' && $value === '') {
+                $value = '*';
+            }
+            $this->setSetting($setting, $value);
+            $this->telegram->sendMessage($chatId, "✅ ذخیره شد. برای اعمال، «▶️ اسکن الان» رو بزنید.");
             return true;
         }
 

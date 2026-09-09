@@ -969,6 +969,134 @@ final class WallexAdapter extends AbstractExchangeAdapter
 }
 
 // ============================================================================
+// SECTION 6.5 — CRYPTOCOMPARE ADAPTER
+// A market-data aggregator, not an exchange with its own trading/compliance
+// obligations -- a realistic route around a host's IP being blocked by an
+// exchange directly (see WallexAdapter above for the same REST-only
+// reasoning; CryptoCompare additionally has no per-exchange WS to plug in).
+// Symbols are synthesized as "{coin}USDT" since CryptoCompare is coin-
+// centric (fsym/tsym pairs against its aggregated feed) rather than
+// organized around one exchange's own tradeable pairs.
+// ============================================================================
+
+final class CryptoCompareAdapter extends AbstractExchangeAdapter
+{
+    protected array $timeframeMap = [
+        '1m' => 'minute', '5m' => 'minute', '15m' => 'minute',
+        '1h' => 'hour', '4h' => 'hour', '1D' => 'day', '1W' => 'day',
+    ];
+
+    public function name(): string
+    {
+        return 'cryptocompare';
+    }
+
+    private function headers(): array
+    {
+        $key = Config::cryptocompareApiKey();
+        return $key !== '' ? ['authorization' => 'Apikey ' . $key] : [];
+    }
+
+    public function fetchExchangeSymbols(): array
+    {
+        RateLimiter::acquire('cryptocompare', 60);
+        $url = Config::cryptocompareRestBase() . '/data/top/totalvolfull?' . http_build_query(['limit' => 100, 'tsym' => 'USDT']);
+        $res = HttpClient::request('GET', $url, $this->headers());
+        $out = [];
+        foreach ($res['json']['Data'] ?? [] as $row) {
+            $base = (string) ($row['CoinInfo']['Name'] ?? '');
+            if ($base === '') {
+                continue;
+            }
+            $out[] = ['symbol' => $base . 'USDT', 'base' => $base, 'quote' => 'USDT', 'status' => 'TRADING'];
+        }
+        return $out;
+    }
+
+    public function fetchTicker24h(): array
+    {
+        $symbols = $this->fetchExchangeSymbols();
+        if (empty($symbols)) {
+            return [];
+        }
+        $bases = array_column($symbols, 'base');
+        RateLimiter::acquire('cryptocompare', 60);
+        $url = Config::cryptocompareRestBase() . '/data/pricemultifull?' . http_build_query(['fsyms' => implode(',', $bases), 'tsyms' => 'USDT']);
+        $res = HttpClient::request('GET', $url, $this->headers());
+        $out = [];
+        foreach ($res['json']['RAW'] ?? [] as $base => $quotes) {
+            $d = $quotes['USDT'] ?? null;
+            if ($d === null) {
+                continue;
+            }
+            $price = (float) ($d['PRICE'] ?? 0);
+            $out[$base . 'USDT'] = [
+                'volume' => (float) ($d['VOLUME24HOURTO'] ?? 0),
+                'lastPrice' => $price,
+                // CryptoCompare's aggregated feed has no real bid/ask
+                // (it's not one order book) -- collapsing both to price
+                // gives a 0% spread rather than fabricating a number.
+                'bid' => $price,
+                'ask' => $price,
+                'priceChangePercent' => (float) ($d['CHANGEPCT24HOUR'] ?? 0),
+            ];
+        }
+        return $out;
+    }
+
+    public function fetchCandles(string $symbol, string $timeframe, int $limit): array
+    {
+        [$base, $quote] = $this->splitSymbol($symbol);
+        $endpoint = match ($this->mapTimeframe($timeframe)) {
+            'minute' => '/data/v2/histominute',
+            'day' => '/data/v2/histoday',
+            default => '/data/v2/histohour',
+        };
+        RateLimiter::acquire('cryptocompare', 60);
+        $url = Config::cryptocompareRestBase() . $endpoint . '?' . http_build_query([
+            'fsym' => $base, 'tsym' => $quote, 'limit' => $limit, 'aggregate' => $this->aggregateFor($timeframe),
+        ]);
+        $res = HttpClient::request('GET', $url, $this->headers());
+        $out = [];
+        foreach ($res['json']['Data']['Data'] ?? [] as $row) {
+            $out[] = new Candle(
+                openTime: ((int) ($row['time'] ?? 0)) * 1000,
+                open: (float) ($row['open'] ?? 0),
+                high: (float) ($row['high'] ?? 0),
+                low: (float) ($row['low'] ?? 0),
+                close: (float) ($row['close'] ?? 0),
+                volume: (float) ($row['volumeto'] ?? 0),
+                timeframe: $timeframe,
+            );
+        }
+        return $out;
+    }
+
+    public function fetchOrderBook(string $symbol, int $depth): array
+    {
+        // The free aggregation API doesn't expose real order-book depth;
+        // an empty book is the honest answer, not a fabricated one.
+        return ['bids' => [], 'asks' => []];
+    }
+
+    private function aggregateFor(string $timeframe): int
+    {
+        return match ($timeframe) {
+            '5m' => 5, '15m' => 15, '4h' => 4, '1W' => 7,
+            default => 1,
+        };
+    }
+
+    private function splitSymbol(string $symbol): array
+    {
+        if (str_ends_with($symbol, 'USDT')) {
+            return [substr($symbol, 0, -4), 'USDT'];
+        }
+        return [$symbol, 'USDT'];
+    }
+}
+
+// ============================================================================
 // SECTION 7 — EXCHANGE MANAGER (isolation + circuit breaker)
 // ============================================================================
 
@@ -995,6 +1123,9 @@ final class ExchangeManager
         }
         if (in_array('wallex', $enabled, true)) {
             $this->register(new WallexAdapter());
+        }
+        if (in_array('cryptocompare', $enabled, true)) {
+            $this->register(new CryptoCompareAdapter());
         }
     }
 
