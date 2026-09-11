@@ -750,7 +750,7 @@ plot(maShort, color = #FF6D00, title = "Short MA")
 plot(maLong, color = #43A047, title = "Long MA")
 plot(ta.cross(maShort, maLong) ? maShort : na, color = #2962FF, style = plot.style_cross, linewidth = 4, title = "Cross")
 
-poi_history       = input.int(20, title = 'POI History To Keep', group = 'GBH POI', minval = 5, maxval = 50)
+poi_history       = input.int(1, title = 'POI History To Keep', group = 'GBH POI', minval = 1, maxval = 50)
 poi_swing_len     = input.int(10, title = 'Swing Length', group = 'GBH POI', minval = 1, maxval = 50)
 poi_supply_color  = input.color(color.new(#EDEDED, 70), title = 'POI (Ceiling)', group = 'GBH POI', inline = 'poicol')
 poi_demand_color  = input.color(color.new(#00FFFF, 70), title = 'POI (Floor)', group = 'GBH POI', inline = 'poicol')
