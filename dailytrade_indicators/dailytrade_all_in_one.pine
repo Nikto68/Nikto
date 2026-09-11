@@ -750,7 +750,7 @@ plot(maShort, color = #FF6D00, title = "Short MA")
 plot(maLong, color = #43A047, title = "Long MA")
 plot(ta.cross(maShort, maLong) ? maShort : na, color = #2962FF, style = plot.style_cross, linewidth = 4, title = "Cross")
 
-poi_history       = input.int(1, title = 'POI History To Keep', group = 'GBH POI', minval = 1, maxval = 50)
+poi_history       = input.int(10, title = 'POI Safety Cap', group = 'GBH POI', minval = 1, maxval = 50)
 poi_swing_len     = input.int(10, title = 'Swing Length', group = 'GBH POI', minval = 1, maxval = 50)
 poi_supply_color  = input.color(color.new(#EDEDED, 70), title = 'POI (Ceiling)', group = 'GBH POI', inline = 'poicol')
 poi_demand_color  = input.color(color.new(#00FFFF, 70), title = 'POI (Floor)', group = 'GBH POI', inline = 'poicol')
@@ -792,6 +792,16 @@ if not na(poi_swingLow)
         demandPOI.unshift(box.new(bar_index - poi_swing_len, poiTopL, bar_index, poiBotL, border_color = color.new(poi_demand_color, 40), bgcolor = poi_demand_color, extend = extend.right, text = 'POI', text_halign = text.align_center, text_valign = text.align_center, text_color = poi_text_color, text_size = size.small))
         if demandPOI.size() > poi_history
             demandPOI.pop().delete()
+
+if supplyPOI.size() > 0
+    for i = supplyPOI.size() - 1 to 0
+        if close >= supplyPOI.get(i).get_bottom()
+            supplyPOI.remove(i).delete()
+
+if demandPOI.size() > 0
+    for i = demandPOI.size() - 1 to 0
+        if close <= demandPOI.get(i).get_top()
+            demandPOI.remove(i).delete()
 
 var table dtTag = table.new(position.top_right, 1, 1)
 if barstate.islast
