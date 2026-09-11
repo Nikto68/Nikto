@@ -750,7 +750,6 @@ plot(maShort, color = #FF6D00, title = "Short MA")
 plot(maLong, color = #43A047, title = "Long MA")
 plot(ta.cross(maShort, maLong) ? maShort : na, color = #2962FF, style = plot.style_cross, linewidth = 4, title = "Cross")
 
-poi_box_width     = input.float(2.5, title = 'POI Width', group = 'GBH POI', minval = 1, maxval = 10, step = 0.5)
 poi_history       = input.int(20, title = 'POI History To Keep', group = 'GBH POI', minval = 5, maxval = 50)
 poi_swing_len     = input.int(10, title = 'Swing Length', group = 'GBH POI', minval = 1, maxval = 50)
 poi_supply_color  = input.color(color.new(#EDEDED, 70), title = 'POI (Ceiling)', group = 'GBH POI', inline = 'poicol')
@@ -765,11 +764,10 @@ var box[] supplyPOI = array.new_box()
 var box[] demandPOI = array.new_box()
 
 if not na(poi_swingHigh)
-    poiBufferH = poi_atr * (poi_box_width / 10)
-    poiTopH    = poi_swingHigh
-    poiBotH    = poiTopH - poiBufferH
-    poiMidH    = (poiTopH + poiBotH) / 2
-    okToDrawH  = true
+    poiTopH   = poi_swingHigh
+    poiBotH   = poiTopH * 0.9985
+    poiMidH   = (poiTopH + poiBotH) / 2
+    okToDrawH = true
     if supplyPOI.size() > 0
         for i = 0 to supplyPOI.size() - 1
             existingMidH = math.avg(supplyPOI.get(i).get_top(), supplyPOI.get(i).get_bottom())
@@ -781,11 +779,10 @@ if not na(poi_swingHigh)
             supplyPOI.pop().delete()
 
 if not na(poi_swingLow)
-    poiBufferL = poi_atr * (poi_box_width / 10)
-    poiBotL    = poi_swingLow
-    poiTopL    = poiBotL + poiBufferL
-    poiMidL    = (poiTopL + poiBotL) / 2
-    okToDrawL  = true
+    poiBotL   = poi_swingLow
+    poiTopL   = poiBotL * 1.0015
+    poiMidL   = (poiTopL + poiBotL) / 2
+    okToDrawL = true
     if demandPOI.size() > 0
         for i = 0 to demandPOI.size() - 1
             existingMidL = math.avg(demandPOI.get(i).get_top(), demandPOI.get(i).get_bottom())
