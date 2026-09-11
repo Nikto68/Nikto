@@ -30,6 +30,8 @@ define('AD_REDEEM_MIN', 100.0);      // حداقل کریستال برای تب�
 define('AD_BOOST_PRICE', 100.0);     // تومان — هزینه‌ی هر پله‌ی «افزایش سرعت»
 define('AD_BOOST_STEP', 0.20);       // هر پله ۲۰٪ به نرخِ استخراج اضافه می‌کند
 define('AD_BOOST_MAX', 25);          // سقفِ پله‌ها (نرخ حداکثر ۶ برابرِ پایه)
+define('AD_TAP_SECONDS', 20);        // هر تپِ فعال معادلِ همین‌قدر ثانیه از نرخِ ساعتیِ استخراج پاداش می‌دهد
+define('AD_TAP_MAX_PER_MIN', 30);    // سقفِ تپ در دقیقه — جلویِ اسکریپت/کلیکِ خودکار
 
 function adDbPath() { return DATA_DIR . '/airdrop.sqlite'; }
 
@@ -191,6 +193,28 @@ function adTick($uid, $name = '', $username = '') {
 }
 
 /**
+ * ⛏️ ماینِ فعال — با هر کلیکِ کاربر روی حلقه، علاوه بر استخراجِ خودکارِ
+ * پس‌زمینه، یک پاداشِ فوری هم می‌گیرد (معادلِ چند ثانیه از نرخِ ساعتی‌اش).
+ * اول adTick معمولی تسویه می‌شود (مثلِ همیشه)، بعد پاداشِ تپ رویش اضافه.
+ * برگشت: [reward, state-برایِ-فرانت] یا null اگر نرخ محدود/خطا بود.
+ */
+function adMineTap($uid, $name = '', $username = '') {
+    $u = adTick($uid, $name, $username);
+    if (!$u) return null;
+    $reward = round(adRate($u['level'], adBoostN($u)) / 3600 * AD_TAP_SECONDS, 4);
+    $after = adUserSet($uid, function (&$x) use ($reward) {
+        $x['crystals'] = round($x['crystals'] + $reward, 4);
+        $x['xp'] = round($x['xp'] + $reward, 4);
+        while ($x['level'] < AD_MAX_LEVEL && $x['xp'] >= adXpForLevel($x['level'])) {
+            $x['xp'] -= adXpForLevel($x['level']); $x['level']++;
+        }
+        return $x;
+    });
+    if (!$after) return null;
+    return ['reward' => $reward, 'user' => $after];
+}
+
+/**
  * استریکِ روزانه — بر پایه‌ی تاریخِ UTC، دقیقا همان قاعده‌ای که ماموریتِ
  * «حضور روزانه» استفاده می‌کند: امروز = بدونِ تغییر، فردا (نسبت به آخرین
  * بازدید) = +۱، هر فاصله‌ی بیشتر = ریست به ۱. چون adTick() با هر خواندنِ
@@ -274,10 +298,10 @@ function adLeaderboard($limit = 50) {
 }
 
 /**
- * برترین معرف‌ها — از رویِ ref_count که در بدنه‌ی users.sqlite (پروژه‌ی
- * اصلی) کش شده. هیچ ستونِ ایندکس‌شده‌ای برایش نیست، پس با یک کوئری
- * json_extract روی همه‌ی کاربران — قابل قبول چون کش می‌شود و فقط وقتی
- * کسی تبِ رفرالِ ایردراپ را باز می‌کند اجرا می‌شود، نه هر بارگذاری.
+ * برترین معرف‌ها — کاملا از رویِ خودِ جدولِ airdrop_users (فیلدِ
+ * referrer در data)، مستقل از سیستمِ رفرالِ قدیمیِ ربات. کش می‌شود چون
+ * یک GROUP BY رویِ کلِ جدول است؛ فقط وقتی کسی تبِ رفرال را باز می‌کند
+ * اجرا می‌شود، نه هر بارگذاری.
  */
 function adTopReferrers($limit = 50) {
     $limit = max(1, min(100, (int)$limit));
@@ -285,41 +309,69 @@ function adTopReferrers($limit = 50) {
     $cached = maCacheGet($ck, 45);
     if (is_array($cached)) return $cached;
 
-    if (!function_exists('usersDb')) return [];
-    $db = usersDb();
+    $db = adDb();
     if (!$db) return [];
     $stmt = $db->prepare(
-        "SELECT id, json_extract(data,'$.ref_count') AS rc, data FROM users " .
-        "WHERE json_extract(data,'$.ref_count') > 0 ORDER BY rc DESC LIMIT :n"
+        "SELECT json_extract(data,'$.referrer') AS ref, COUNT(*) AS n FROM airdrop_users " .
+        "WHERE ref IS NOT NULL AND ref > 0 GROUP BY ref ORDER BY n DESC LIMIT :n"
     );
     $stmt->bindValue(':n', $limit, SQLITE3_INTEGER);
     $res = $stmt->execute();
-    $out = [];
-    $rank = 1;
-    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-        $d = json_decode((string)($row['data'] ?? ''), true);
-        $d = is_array($d) ? $d : [];
-        $name = trim((string)($d['first_name'] ?? '') . ' ' . (string)($d['last_name'] ?? ''));
+    $counts = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) $counts[(int)$row['ref']] = (int)$row['n'];
+    if (!$counts) return [];
+
+    $out = []; $rank = 1;
+    foreach ($counts as $refUid => $n) {
+        $ru = adUser($refUid);
+        $d = $ru['data'] ?? [];
         $out[] = [
-            'rank'     => $rank++,
-            'uid'      => (int)$row['id'],
-            'count'    => (int)$row['rc'],
-            'name'     => $name,
-            'username' => (string)($d['username'] ?? ''),
+            'rank' => $rank++, 'uid' => $refUid, 'count' => $n,
+            'name' => (string)($d['name'] ?? ''), 'username' => (string)($d['username'] ?? ''),
         ];
     }
     maCachePut($ck, $out);
     return $out;
 }
 
-/** داده‌ی تب رفرالِ ایردراپ — بر پایه‌ی سیستمِ رفرالِ موجودِ ربات، نه چیزِ تازه. */
+/**
+ * 🔗 رفرالِ خودِ ایردراپ — کاملا جدا از سیستمِ رفرال/پورسانتِ قدیمیِ
+ * ربات که حذف شد؛ اینجا فقط برای گیمیفیکیشن (ماموریت‌ها/لیدربورد) است،
+ * نه پورسانتِ نقدی. زیرِ referrer در data خودِ همین جدولِ airdrop_users
+ * نگه داشته می‌شود تا کاملا مستقل بماند.
+ */
+function adInviteLink($uid) {
+    $un = function_exists('botUsername') ? botUsername() : '';
+    return $un !== '' ? "https://t.me/{$un}?start={$uid}" : '';
+}
+
+/** اولین‌بار که کاربرِ تازه با لینکِ دعوت می‌آید، معرفش ثبت می‌شود — فقط یک‌بار، نه دوباره. */
+function adSetReferrerOnce($uid, $refUid) {
+    $uid = (int)$uid; $refUid = (int)$refUid;
+    if ($uid <= 0 || $refUid <= 0 || $uid === $refUid) return;
+    adUserSet($uid, function (&$u) use ($refUid) {
+        if (empty($u['data']['referrer'])) $u['data']['referrer'] = $refUid;
+        return $u;
+    });
+}
+
+/** چندنفر با لینکِ این کاربر آمده‌اند — مستقیم از جدولِ airdrop_users. */
+function adCountReferrals($uid) {
+    $db = adDb();
+    if (!$db) return 0;
+    $stmt = $db->prepare("SELECT COUNT(*) AS n FROM airdrop_users WHERE json_extract(data,'$.referrer') = :r");
+    $stmt->bindValue(':r', (int)$uid, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    return (int)($row['n'] ?? 0);
+}
+
+/** داده‌ی تب رفرالِ ایردراپ — مستقلِ کاملِ خودِ ایردراپ. */
 function adReferralInfo($uid) {
-    $u = function_exists('getUser') ? getUser($uid) : null;
     return [
-        'link'       => function_exists('refInviteLink') ? refInviteLink($uid) : '',
-        'ref_count'  => (int)($u['ref_count'] ?? 0),
-        'ref_earned' => (float)($u['ref_earned'] ?? 0),
-        'ref_pending'=> (float)($u['ref_pending'] ?? 0),
+        'link'       => adInviteLink($uid),
+        'ref_count'  => adCountReferrals($uid),
+        'ref_earned' => 0,
+        'ref_pending'=> 0,
         'top'        => adTopReferrers(20),
     ];
 }
@@ -337,13 +389,28 @@ function adMissionDefs() {
     ];
 }
 
+/**
+ * تعدادِ خریدِ این کاربر — هم از کاتالوگِ یکپارچه (MaOrder) هم از
+ * محصولاتِ کلاسیک (Order، مسیرِ «ثبت سفارش»)؛ هرکدام اول جواب داد کافی
+ * است، نیازی به شمردنِ دقیق نیست، فقط «حداقل یکی» می‌خواهیم.
+ */
+function adOrderCount($uid) {
+    if (class_exists('MaOrder') && count(MaOrder::forUser($uid, 1)) > 0) return 1;
+    if (class_exists('Order')) {
+        foreach (Order::forUser($uid) as $o) {
+            if (($o['type'] ?? '') === 'product' && ($o['status'] ?? '') === Order::APPROVED) return 1;
+        }
+    }
+    return 0;
+}
+
 /** وضعیتِ هر ماموریت برای این کاربر: پیشرفت، آماده‌ی claim، claim‌شده. */
 function adMissions($uid, $u = null) {
     if ($u === null) $u = adUser($uid) ?: ['data' => []];
     $data = $u['data'] ?? [];
     $claimed = (array)($data['claimed'] ?? []);
-    $refCount = function_exists('countReferrals') ? countReferrals($uid) : 0;
-    $orderCount = class_exists('MaOrder') ? count(MaOrder::forUser($uid, 1)) : 0;
+    $refCount = adCountReferrals($uid);
+    $orderCount = adOrderCount($uid);
     $today = gmdate('Y-m-d');
 
     $out = [];
@@ -385,8 +452,8 @@ function adClaimMission($uid, $missionId) {
 
         $done = false;
         if ($m['kind'] === 'daily') $done = true;
-        elseif ($m['kind'] === 'ref') $done = (function_exists('countReferrals') ? countReferrals($uid) : 0) >= (int)$m['need'];
-        elseif ($m['kind'] === 'order') $done = (class_exists('MaOrder') ? count(MaOrder::forUser($uid, 1)) : 0) >= (int)$m['need'];
+        elseif ($m['kind'] === 'ref') $done = adCountReferrals($uid) >= (int)$m['need'];
+        elseif ($m['kind'] === 'order') $done = adOrderCount($uid) >= (int)$m['need'];
         if (!$done) { $msg = 'هنوز شرایطش کامل نشده.'; return; }
 
         $reward = (float)$m['reward'];

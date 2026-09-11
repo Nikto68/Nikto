@@ -117,7 +117,7 @@ __SKIN__
 
     <!-- معدن -->
     <div class="airpg on" id="airMine">
-      <div class="ringwrap">
+      <div class="ringwrap" id="mineOrb" role="button" aria-label="ماین کن">
         <svg viewBox="0 0 140 140" class="ring">
           <defs>
             <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
@@ -1386,6 +1386,32 @@ function toggleMinePanel(id){
 }
 $('mineGuideBtn').onclick = function(){ tap(); toggleMinePanel('mineGuidePanel'); };
 $('mineHistBtn').onclick  = function(){ tap(); toggleMinePanel('mineHistPanel'); };
+
+// ⛏ ماینِ فعال — با کلیک/تپ رویِ حلقه، علاوه بر استخراجِ خودکار، فوری یک پاداش می‌گیرد.
+var mineOrbBusy = false;
+$('mineOrb').addEventListener('click', function(){
+  if (mineOrbBusy) return;
+  mineOrbBusy = true;
+  tap('medium');
+  var orb = $('mineOrb');
+  orb.classList.remove('tapped'); void orb.offsetWidth; orb.classList.add('tapped');
+  var f = document.createElement('i');
+  f.className = 'tapfloat';
+  f.style.left = (46 + Math.random() * 8) + '%';
+  orb.appendChild(f);
+  api('unified', 'airdrop_mine_tap', {}, function(j){
+    mineOrbBusy = false;
+    f.textContent = '+' + fa(j.reward) + ' 💎';
+    void f.offsetWidth; f.classList.add('go');
+    setTimeout(function(){ f.remove(); }, 1100);
+    AD.state = Object.assign(AD.state || {}, j.state || {});
+    airDrawMine();
+  }, function(j){
+    mineOrbBusy = false;
+    f.remove();
+    if (j && j.error !== 'rate_limited') buzz('error');
+  });
+});
 function loadMineHistory(){
   var box = $('histList');
   box.innerHTML = '<div class="void"><div>🧾</div>در حال خواندن…</div>';
@@ -1799,7 +1825,18 @@ img{max-width:100%}
 .airhead b{font-size:14px;font-weight:900}
 .airpg{display:none;padding-bottom:70px}
 .airpg.on{display:block;animation:pgIn .3s cubic-bezier(.2,.9,.3,1)}
-.ringwrap{position:relative;width:220px;height:220px;margin:20px auto 0;display:grid;place-items:center}
+.ringwrap{position:relative;width:220px;height:220px;margin:20px auto 0;display:grid;place-items:center;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
+.ringwrap:active{transform:scale(.96)}
+.ringwrap.tapped{animation:orbTap .32s ease}
+@keyframes orbTap{0%{transform:scale(1)}35%{transform:scale(.93)}100%{transform:scale(1)}}
+.tapfloat{position:absolute;pointer-events:none;font-size:15px;font-weight:900;color:#F2B705;
+  left:50%;top:50%;opacity:0;white-space:nowrap;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+.tapfloat.go{animation:tapFloat 1s cubic-bezier(.2,.9,.3,1) forwards}
+@keyframes tapFloat{0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}
+  15%{opacity:1;transform:translate(-50%,-70%) scale(1.08)}
+  100%{opacity:0;transform:translate(-50%,-140%) scale(1)}}
+@media (prefers-reduced-motion:reduce){ .ringwrap.tapped{animation:none} .tapfloat.go{animation:none;opacity:0} }
 .ring{width:100%;height:100%;transform:rotate(-90deg)}
 .ringbg{fill:none;stroke:var(--pane2);stroke-width:9}
 .ringfg{fill:none;stroke:url(#ringGrad);stroke-width:9;stroke-linecap:round;

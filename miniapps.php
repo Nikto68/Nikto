@@ -3398,6 +3398,15 @@ function maApi() {
     if ($action === 'airdrop_history') {
         maApiOut(['ok' => true, 'list' => adRedeemLog($uid, 20)]);
     }
+    // ⛏ ماینِ فعال — کلیکِ کاربر روی حلقه؛ سقفِ نرخ جلویِ کلیکِ خودکار را می‌گیرد
+    if ($action === 'airdrop_mine_tap') {
+        if (!maRateOk('adtap', $uid, (int)(defined('AD_TAP_MAX_PER_MIN') ? AD_TAP_MAX_PER_MIN : 30), 60))
+            maApiOut(['ok' => false, 'error' => 'rate_limited', 'message' => 'کمی آروم‌تر بزن.'], 429);
+        if (!function_exists('adMineTap')) maApiOut(['ok' => false, 'error' => 'unavailable'], 503);
+        $r = adMineTap($uid, (string)($user['first_name'] ?? ''), $uname);
+        if (!$r) maApiOut(['ok' => false, 'error' => 'tap_failed'], 500);
+        maApiOut(['ok' => true, 'reward' => $r['reward'], 'state' => adState($uid)]);
+    }
 
     // ---- 🏷 پیش‌نمایشِ کد تخفیف — قبل از ثبتِ سفارش، در ویزاردِ پرداخت ----
     if ($action === 'coupon_check') {

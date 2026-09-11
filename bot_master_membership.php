@@ -8252,6 +8252,12 @@ function masterHandle($update) {
     // /start
     if (str_starts_with($text, '/start')) {
         touchUser($uid, $uname, $fname);
+        // 🔗 لینکِ دعوتِ ایردراپ («/start 12345») — فقط برایِ گیمیفیکیشنِ
+        // مینی‌اپ (ماموریت/لیدربورد)، بدونِ هیچ پورسانتِ نقدی.
+        $refArg = trim(substr($text, 6));
+        if ($refArg !== '' && ctype_digit($refArg) && function_exists('adSetReferrerOnce')) {
+            adSetReferrerOnce($uid, (int)$refArg);
+        }
         clearState($uid);
         slotClear($uid);   // منوی تازه، پیام‌های قدیمی رها می‌شوند
         if ($miss = masterJoinMissing($uid)) { masterJoinGate($uid, $chatId, $miss); return; }
