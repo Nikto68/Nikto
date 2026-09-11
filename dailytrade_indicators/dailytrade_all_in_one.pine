@@ -608,12 +608,10 @@ rsiSourceInput = input.source(close, "Source", group = "RSI Settings")
 highPivotLen = input.int(21, "High Pivot Length", minval = 1, group = "RSI Pivots", display = display.none)
 lowPivotLen  = input.int(21, "Low Pivot Length", minval = 1, group = "RSI Pivots", display = display.none)
 
-activationThresholdStr = input.string("Medium", "Activation Threshold", options = ["High", "Medium", "Low"], group = "RSI KDE", tooltip = "Determines the amount of arrows shown. Higher options will result in more arrows being rendered.")
 string KDEKernel = input.string("Gaussian", "Kernel", options = ['Uniform', 'Gaussian', 'Sigmoid'], group = "RSI KDE", tooltip = "The kernel function for KDE calculation. Gaussian is a commonly used kernel and is based on normal distribution.")
 float KDEBandwidth = input.float(2.71828, "Bandwidth", group = "RSI KDE", tooltip = "This setting sets the smoothness of the KDE function output.")
 int KDEStep = input.int(100, "Nº Bins", minval = 1, group = "RSI KDE", tooltip = "The number of elements the KDE Probability array will have. Higher settings will result in greater precision.")
 
-activationThreshold = activationThresholdStr == "High" ? 0.4 : activationThresholdStr == "Medium" ? 0.25 : 0.15
 minPadding = false
 
 tableEnabled = input.bool(true, "RSI Dashboard", group = "RSI Dashboard", display = display.none)
@@ -625,9 +623,6 @@ textColorDB = input.color(color.white, 'Text', group = 'RSI Dashboard', display 
 
 bearishColor = input.color(#f23646, "High Pivots", group = "RSI Style", inline = "col", display = display.none)
 bullishColor = input.color(#089981, "Low Pivots", group = "RSI Style", inline = "col", display = display.none)
-textColor = input.color(color.white, 'Text', group = "RSI Style", inline = "col", display = display.none)
-RSILabelsEnabled = input.bool(true, "RSI Labels", group = "RSI Style")
-KDELabelsEnabled = input.bool(true, "KDE Labels", group = "RSI Style")
 
 rsi = ta.rsi(rsiSourceInput, rsiLengthInput)
 
@@ -735,44 +730,6 @@ if last_bar_index - 5000 < bar_index
         lowXIndexR = math.min(array.binary_search_rightmost(KDELowX, rsi), KDELowX.size() - 1)
         nearestIndexL = (math.abs(rsi - KDELowX.get(lowXIndexL)) < math.abs(rsi - KDELowX.get(lowXIndexR))) ? lowXIndexL : lowXIndexR
         lowProb := prefixSum(KDELowYSum, nearestIndexL, KDELowYSum.size() - 1)
-
-color curColor = na
-if (not na(KDELowY)) and (not na(KDEHighY))
-    if lowProb > KDELowY.sum() * (1.0 - activationThreshold)
-        curColor := bullishColor
-    else if highProb > KDEHighY.sum() * (1.0 - activationThreshold)
-        curColor := bearishColor
-
-plotarrow((na(curColor) and curColor[1] == bullishColor and barstate.isconfirmed) ? 1 : na, "Bullish Arrow", bullishColor, bullishColor, minheight = 20, maxheight = 20)
-plotarrow((na(curColor) and curColor[1] == bearishColor and barstate.isconfirmed) ? -1 : na, "Bearish Arrow", bearishColor, bearishColor, minheight = 20, maxheight = 20)
-
-alertcondition(na(curColor) and curColor[1] == bullishColor and barstate.isconfirmed, "Bullish Arrow")
-alertcondition(na(curColor) and curColor[1] == bearishColor and barstate.isconfirmed, "Bearish Arrow")
-
-if KDELabelsEnabled or RSILabelsEnabled
-    var lastBullishLabel = 0
-    if (na(curColor) and curColor[1] == bullishColor and barstate.isconfirmed) and (bar_index - lastBullishLabel) > 8
-        lastBullishLabel := bar_index
-        txt = ""
-        if RSILabelsEnabled and KDELabelsEnabled
-            txt := "RSI | " + str.tostring(rsi, "#") + " | " + str.tostring(lowProb * 100, "#.##") + "%"
-        else if RSILabelsEnabled
-            txt := "RSI | " + str.tostring(rsi, "#")
-        else
-            txt := str.tostring(rsi, "#") + "%"
-        label.new(bar_index, low, txt, yloc = yloc.belowbar, color = na, style = label.style_label_up, textcolor = textColor, force_overlay = true)
-
-    var lastBearishLabel = 0
-    if (na(curColor) and curColor[1] == bearishColor and barstate.isconfirmed) and (bar_index - lastBearishLabel) > 8
-        lastBearishLabel := bar_index
-        txt = ""
-        if RSILabelsEnabled and KDELabelsEnabled
-            txt := "RSI | " + str.tostring(rsi, "#") + " | " + str.tostring(highProb * 100, "#.##") + "%"
-        else if RSILabelsEnabled
-            txt := "RSI | " + str.tostring(rsi, "#")
-        else
-            txt := str.tostring(rsi, "#") + "%"
-        label.new(bar_index, low, txt, yloc = yloc.abovebar, color = na, style = label.style_label_down, textcolor = textColor, force_overlay = true)
 
 if tableEnabled
     var table realtimeTable = table.new(getPosition(tableLocation), 2, 10, bgcolor = screenerColor, frame_width = 2, frame_color = frameColor, border_width = 1, border_color = borderColor)
