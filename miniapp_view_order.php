@@ -330,12 +330,12 @@ if (P.closed) {
 
 if (F.on) {
   if (F.ask_link) {
-    html += '<div class="card"><h2>🔗 لینک کانال/گروه</h2>' +
+    html += '<div class="card"><h2>' + ic('link') + ' لینک کانال/گروه</h2>' +
       '<div class="field"><input type="text" id="fLink" placeholder="https://t.me/YourChannel یا لینک دعوتِ خصوصی" dir="ltr"></div>' +
       '<div class="hint">لینکِ خصوصی هم می‌پذیرد؛ فقط باید با https://t.me/ شروع شود.</div></div>';
   }
   if (F.ask_qty) {
-    html += '<div class="card"><h2>👥 تعداد <i>بینِ ' + fa(F.min) + ' تا ' + fa(F.max) + '</i></h2>' +
+    html += '<div class="card"><h2>' + ic('users') + ' تعداد <i>بینِ ' + fa(F.min) + ' تا ' + fa(F.max) + '</i></h2>' +
       '<div class="qtyrow">' +
         '<button class="qtybtn" id="qMinus" type="button">−</button>' +
         '<input type="text" inputmode="numeric" id="fQty" value="' + fa(S.qty) + '">' +
@@ -343,10 +343,14 @@ if (F.on) {
       '</div></div>';
   }
   if ((F.speeds || []).length > 1) {
-    html += '<div class="card"><h2>⚡️ سرعت</h2><div class="speedgrid" id="spGrid">';
+    html += '<div class="card"><h2>' + ic('bolt') + ' سرعت</h2><div class="speedgrid" id="spGrid">';
+    var nSp = F.speeds.length;
     F.speeds.forEach(function(sp, i){
+      var dots = '<div class="dots">';
+      for (var d = 0; d < nSp; d++) dots += '<i class="' + (d <= i ? 'on' : '') + '"></i>';
+      dots += '</div>';
       html += '<div class="spcard' + (i===0?' on':'') + '" data-id="' + esc(sp.id) + '">' +
-        '<div class="e">' + esc(sp.emoji || '⚡️') + '</div>' +
+        dots +
         '<div class="t">' + esc(sp.text) + '</div>' +
         (sp.per_day ? '<div class="d">' + fa(sp.per_day) + '/روز</div>' : '') +
         '</div>';
@@ -354,18 +358,18 @@ if (F.on) {
     html += '</div></div>';
   }
   if (F.ask_admin) {
-    html += '<div class="card"><h2>🤖 ادمینِ کانال</h2>' +
+    html += '<div class="card"><h2>' + ic('bot') + ' ادمینِ کانال</h2>' +
       '<div class="admbox" id="admBox"><p>ربات باید ادمینِ کامل کانال/گروه باشد تا سفارش پردازش شود.</p>' +
       '<div class="btnrow">' +
-        '<a class="btn" id="addBotBtn" href="#" target="_blank">➕ افزودنِ ربات</a>' +
-        '<button class="btn solid" id="checkAdmBtn" type="button">🔄 بررسیِ دوباره</button>' +
+        '<a class="btn" id="addBotBtn" href="#" target="_blank">' + ic('plus') + ' افزودنِ ربات</a>' +
+        '<button class="btn solid" id="checkAdmBtn" type="button">' + ic('refresh') + ' بررسیِ دوباره</button>' +
       '</div>' +
-      '<div class="admst" id="admStatus">⏳ هنوز تایید نشده</div>' +
+      '<div class="admst" id="admStatus">' + ic('clock') + ' هنوز تایید نشده</div>' +
       '</div></div>';
   }
 }
 
-html += '<div class="card"><h2>💳 روشِ پرداخت</h2><div class="paypick" id="payPick">' +
+html += '<div class="card"><h2>' + ic('card') + ' روشِ پرداخت</h2><div class="paypick" id="payPick">' +
   '<div class="paycard' + (B.wallet_ok ? (S.pay==='wallet'?' on':'') : ' dis') + '" id="walletCard" data-pay="wallet">' +
     '<div class="r"></div><div class="m"><b>کیف پول</b><span>موجودی: <span id="balSpan">…</span> تومان</span></div></div>' +
   '<div class="paycard' + (S.pay==='manual'?' on':'') + '" data-pay="manual">' +
@@ -416,14 +420,14 @@ if ($('addBotBtn') && B.bot) {
 if ($('checkAdmBtn')) {
   $('checkAdmBtn').onclick = function(){
     tap();
-    $('admStatus').textContent = '⏳ در حال بررسی…';
+    $('admStatus').innerHTML = ic('clock') + ' در حال بررسی…';
     api('order_check_admin', { link: S.link }, function(j){
       S.adminOk = !!j.admin_ok;
-      if (j.admin_ok) $('admStatus').textContent = '✅ تایید شد — ' + (j.title || '');
-      else if (j.pending) $('admStatus').textContent = '⏳ منتظرِ افزودنِ ربات — بعد از ادمین‌کردن دوباره بزنید';
-      else $('admStatus').textContent = '❌ هنوز ادمین نشده';
+      if (j.admin_ok) $('admStatus').innerHTML = ic('check') + ' تایید شد — ' + esc(j.title || '');
+      else if (j.pending) $('admStatus').innerHTML = ic('clock') + ' منتظرِ افزودنِ ربات — بعد از ادمین‌کردن دوباره بزنید';
+      else $('admStatus').innerHTML = ic('xmark') + ' هنوز ادمین نشده';
     }, function(j){
-      $('admStatus').textContent = '❌ ' + (j.message || 'لینک را اول وارد کنید');
+      $('admStatus').innerHTML = ic('xmark') + ' ' + esc(j.message || 'لینک را اول وارد کنید');
     });
   };
 }
@@ -452,11 +456,11 @@ $('submitBtn').onclick = function(){
   api('order_submit', { link: S.link, qty: S.qty, speed_id: S.speed, pay: S.pay }, function(j){
     S.busy = false;
     if (j.manual) {
-      showState('🧾', 'در انتظارِ پرداخت', 'سفارش ثبت شد. برای دیدنِ اطلاعاتِ پرداخت و ارسالِ رسید، به چتِ خصوصیِ ربات برگردید.', true);
+      showState('receipt', 'در انتظارِ پرداخت', 'سفارش ثبت شد. برای دیدنِ اطلاعاتِ پرداخت و ارسالِ رسید، به چتِ خصوصیِ ربات برگردید.', true);
     } else if (j.needs_topup) {
-      showState('💳', 'نیاز به شارژ', 'موجودیِ کیف‌پول کافی نبود؛ درخواستِ شارژ در چتِ خصوصیِ ربات برایتان ارسال شد.', true);
+      showState('wallet', 'نیاز به شارژ', 'موجودیِ کیف‌پول کافی نبود؛ درخواستِ شارژ در چتِ خصوصیِ ربات برایتان ارسال شد.', true);
     } else {
-      showState('✅', 'سفارش ثبت شد', 'خریدتان با موفقیت ثبت شد. جزئیات در چتِ خصوصیِ ربات برایتان ارسال شده.', true);
+      showState('check', 'سفارش ثبت شد', 'خریدتان با موفقیت ثبت شد. جزئیات در چتِ خصوصیِ ربات برایتان ارسال شده.', true);
     }
   }, function(j){
     S.busy = false;
