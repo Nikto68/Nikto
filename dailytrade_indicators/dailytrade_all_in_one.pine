@@ -831,6 +831,6 @@ plot(maShort, color = #FF6D00, title = "Short MA")
 plot(maLong, color = #43A047, title = "Long MA")
 plot(ta.cross(maShort, maLong) ? maShort : na, color = #2962FF, style = plot.style_cross, linewidth = 4, title = "Cross")
 
-var table dtTag = table.new(position.bottom_left, 1, 1)
+var table dtTag = table.new(position.top_right, 1, 1)
 if barstate.islast
-    table.cell(dtTag, 0, 0, "@dailytrade", text_color = color.new(color.gray, 15), text_size = size.tiny, bgcolor = color.new(color.black, 100))
+    table.cell(dtTag, 0, 0, "@dailytrade", text_color = color.white, text_size = size.small, bgcolor = color.new(color.blue, 25))
