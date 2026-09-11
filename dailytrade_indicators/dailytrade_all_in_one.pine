@@ -1,4 +1,4 @@
-//@version=5
+//@version=6
 indicator("Daily Trade | All-In-One", shorttitle = "DailyTrade", overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500, max_bars_back = 3000)
 
 bullC = input.color(defval = #14D990, title = "Bull Color", group = "Structure", inline = "1")
@@ -59,16 +59,16 @@ drawChar(x, y, str, col, down) =>
     line.new(int(x), y, bar_index, y, color = col, style = line.style_dashed)
     label.new(math.round(math.avg(x, bar_index)), y, str, color = #00000000, textcolor = col, style = style, size = size.small)
 
-var float extUpAxis   = 0.0
-var int   extUpAxis2  = 0
-var int   extUpside   = 1
-var float extDnAxis   = 0.0
-var int   extDnAxis2  = 0
-var int   extDownside = 1
-var int   extMoving   = 0
-
 drawStructureExt() =>
     var int counter = 0
+
+    var float extUpAxis   = 0.0
+    var int   extUpAxis2  = 0
+    var int   extUpside   = 1
+    var float extDnAxis   = 0.0
+    var int   extDnAxis2  = 0
+    var int   extDownside = 1
+    var int   extMoving   = 0
 
     if bigUpper != 0
         extUpside := 1
@@ -155,15 +155,15 @@ if barstate.islast
     highBlock.updateBox()
     lowBlock.updateBox()
 
-var float intUpAxis   = 0.0
-var int   intUpAxis2  = 0
-var int   intUpside   = 1
-var float intDnAxis   = 0.0
-var int   intDnAxis2  = 0
-var int   intDownside = 1
-var int   intMoving   = 0
-
 drawStructureInternals() =>
+    var float intUpAxis   = 0.0
+    var int   intUpAxis2  = 0
+    var int   intUpside   = 1
+    var float intDnAxis   = 0.0
+    var int   intDnAxis2  = 0
+    var int   intDownside = 1
+    var int   intMoving   = 0
+
     if showInt
 
         if smallUpper != 0
