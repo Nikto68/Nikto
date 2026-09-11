@@ -12,9 +12,6 @@ showExt = input.bool(defval = true, title = "Show External Structure", group = "
 extSens = input.int(25, "External Sensitivity", options = [10, 25, 50], group = "Structure")
 extStru = input.string(defval = "All", title = "External Structure Type", options = ["All", "BoS", "CHoCH"], group = "Structure")
 
-showOB_Structure = input.bool(defval = true, title = "Show Order Blocks", group = "Swing Order Blocks")
-showLast          = input.int(defval = 10, title = "Order Blocks Count", minval = 0, group = "Swing Order Blocks")
-
 showHHLH = input.bool(defval = true, title = "Show HH / LH", group = "Swing Labels")
 showHLLL = input.bool(defval = true, title = "Show HL / LL", group = "Swing Labels")
 
@@ -51,9 +48,6 @@ calculatePivots(length) =>
 [bigUpper, bigLower]     = calculatePivots(extSens)
 [smallUpper, smallLower] = calculatePivots(intSens)
 
-var box[] highBlock = array.new_box()
-var box[] lowBlock  = array.new_box()
-
 drawChar(x, y, str, col, down) =>
     style = down ? label.style_label_down : label.style_label_up
     line.new(int(x), y, bar_index, y, color = col, style = line.style_dashed)
@@ -79,9 +73,6 @@ drawStructureExt() =>
         if showHHLH
             label.new(x1, bigUpper, txt, color = color.new(color.white, 100), textcolor = bearC, style = label.style_label_down, size = size.small)
 
-        if showOB_Structure
-            highBlock.push(box.new(x1, bigUpper, last_bar_index + 5, bigUpper * .998, border_color = color.new(color.red, 75), bgcolor = color.new(color.red, 95)))
-
         extUpAxis  := bigUpper
         extUpAxis2 := x1
 
@@ -95,9 +86,6 @@ drawStructureExt() =>
 
         if showHLLL
             label.new(x1, bigLower, txt, color = #ffffff00, textcolor = bullC, style = label.style_label_up, size = size.small)
-
-        if showOB_Structure
-            lowBlock.push(box.new(x1, bigLower, last_bar_index + 5, bigLower * 1.002, border_color = color.new(color.blue, 75), bgcolor = color.new(color.blue, 95)))
 
         extDnAxis  := bigLower
         extDnAxis2 := x1
@@ -128,32 +116,6 @@ drawStructureExt() =>
     counter
 
 drawStructureExt()
-
-method updateBox(array<box> id) =>
-    if id.size() > 0
-        for i = 0 to id.size() - 1
-            id.get(i).set_right(last_bar_index + 5)
-
-method cleanseLevel(array<box> id, bool isHighBlock) =>
-    if id.size() > 0
-
-        for i = id.size() - 1 to 0
-
-            condition = isHighBlock ? close >= id.get(i).get_top() : close <= id.get(i).get_bottom()
-
-            if condition
-                id.remove(i).delete()
-
-        if id.size() > showLast and showLast != 0
-            for i = id.size() - showLast to 0
-                id.remove(i).delete()
-
-highBlock.cleanseLevel(true)
-lowBlock.cleanseLevel(false)
-
-if barstate.islast
-    highBlock.updateBox()
-    lowBlock.updateBox()
 
 drawStructureInternals() =>
     var float intUpAxis   = 0.0
@@ -831,52 +793,43 @@ plot(maShort, color = #FF6D00, title = "Short MA")
 plot(maLong, color = #43A047, title = "Long MA")
 plot(ta.cross(maShort, maLong) ? maShort : na, color = #2962FF, style = plot.style_cross, linewidth = 4, title = "Cross")
 
-swing_length             = input.int(10, title = 'Swing High/Low Length', group = 'Swing Structure (BOS)', minval = 1, maxval = 50)
-show_price_action_labels = input.bool(true, title = 'Show Swing High/Low Labels', group = 'Swing Structure (BOS)')
-show_bos                 = input.bool(true, title = 'Show BOS', group = 'Swing Structure (BOS)')
-swing_type_color         = input.color(color.white, title = 'Swing Label Color', group = 'Swing Structure (BOS)')
-bos_label_color          = input.color(color.yellow, title = 'BOS Color', group = 'Swing Structure (BOS)')
+poi_box_width  = input.float(2.5, title = 'POI Width', group = 'GBH POI', minval = 1, maxval = 10, step = 0.5)
+poi_history    = input.int(20, title = 'POI History To Keep', group = 'GBH POI', minval = 5, maxval = 50)
+poi_swing_len  = input.int(10, title = 'Swing Length', group = 'GBH POI', minval = 1, maxval = 50)
+poi_label_color = input.color(color.white, title = 'POI Color', group = 'GBH POI')
 
-swing_high = ta.pivothigh(high, swing_length, swing_length)
-swing_low  = ta.pivotlow(low, swing_length, swing_length)
+poi_atr       = ta.atr(50)
+poi_swingHigh = ta.pivothigh(high, poi_swing_len, poi_swing_len)
+poi_swingLow  = ta.pivotlow(low, poi_swing_len, poi_swing_len)
 
-var float prevSwingHigh   = na
-var float lastSwingHigh   = na
-var int   lastSwingHighBar = na
-var bool  bosUpDone       = true
+var box[] supplyPOI = array.new_box()
+var box[] demandPOI = array.new_box()
 
-var float prevSwingLow    = na
-var float lastSwingLow    = na
-var int   lastSwingLowBar  = na
-var bool  bosDownDone     = true
+if not na(poi_swingHigh)
+    poiBufferH = poi_atr * (poi_box_width / 10)
+    poiLevelH  = poi_swingHigh - poiBufferH / 2
+    okToDrawH  = true
+    if supplyPOI.size() > 0
+        for i = 0 to supplyPOI.size() - 1
+            if math.abs(poiLevelH - supplyPOI.get(i).get_top()) <= poi_atr * 2
+                okToDrawH := false
+    if okToDrawH
+        supplyPOI.unshift(box.new(bar_index - poi_swing_len, poiLevelH, bar_index, poiLevelH, border_color = color.new(poi_label_color, 90), bgcolor = color.new(poi_label_color, 90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small))
+        if supplyPOI.size() > poi_history
+            supplyPOI.pop().delete()
 
-if not na(swing_high)
-    swingHighTxt = na(prevSwingHigh) or swing_high >= prevSwingHigh ? 'HH' : 'LH'
-    if show_price_action_labels
-        label.new(bar_index - swing_length, swing_high, text = swingHighTxt, style = label.style_label_down, textcolor = swing_type_color, color = color.new(swing_type_color, 100), size = size.tiny)
-    prevSwingHigh    := swing_high
-    lastSwingHigh    := swing_high
-    lastSwingHighBar := bar_index - swing_length
-    bosUpDone        := false
-
-if not na(swing_low)
-    swingLowTxt = na(prevSwingLow) or swing_low >= prevSwingLow ? 'HL' : 'LL'
-    if show_price_action_labels
-        label.new(bar_index - swing_length, swing_low, text = swingLowTxt, style = label.style_label_up, textcolor = swing_type_color, color = color.new(swing_type_color, 100), size = size.tiny)
-    prevSwingLow    := swing_low
-    lastSwingLow    := swing_low
-    lastSwingLowBar := bar_index - swing_length
-    bosDownDone     := false
-
-if show_bos and not bosUpDone and not na(lastSwingHigh) and close > lastSwingHigh
-    bosUpDone := true
-    line.new(lastSwingHighBar, lastSwingHigh, bar_index, lastSwingHigh, color = bos_label_color, style = line.style_dashed)
-    label.new(math.round(math.avg(lastSwingHighBar, bar_index)), lastSwingHigh, text = 'BOS', style = label.style_label_down, textcolor = bos_label_color, color = color.new(bos_label_color, 100), size = size.small)
-
-if show_bos and not bosDownDone and not na(lastSwingLow) and close < lastSwingLow
-    bosDownDone := true
-    line.new(lastSwingLowBar, lastSwingLow, bar_index, lastSwingLow, color = bos_label_color, style = line.style_dashed)
-    label.new(math.round(math.avg(lastSwingLowBar, bar_index)), lastSwingLow, text = 'BOS', style = label.style_label_up, textcolor = bos_label_color, color = color.new(bos_label_color, 100), size = size.small)
+if not na(poi_swingLow)
+    poiBufferL = poi_atr * (poi_box_width / 10)
+    poiLevelL  = poi_swingLow + poiBufferL / 2
+    okToDrawL  = true
+    if demandPOI.size() > 0
+        for i = 0 to demandPOI.size() - 1
+            if math.abs(poiLevelL - demandPOI.get(i).get_top()) <= poi_atr * 2
+                okToDrawL := false
+    if okToDrawL
+        demandPOI.unshift(box.new(bar_index - poi_swing_len, poiLevelL, bar_index, poiLevelL, border_color = color.new(poi_label_color, 90), bgcolor = color.new(poi_label_color, 90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small))
+        if demandPOI.size() > poi_history
+            demandPOI.pop().delete()
 
 var table dtTag = table.new(position.top_right, 1, 1)
 if barstate.islast
