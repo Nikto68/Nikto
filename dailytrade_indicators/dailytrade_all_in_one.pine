@@ -1,0 +1,836 @@
+//@version=5
+indicator("Daily Trade | All-In-One", shorttitle = "DailyTrade", overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500, max_bars_back = 3000)
+
+bullC = input.color(defval = #14D990, title = "Bull Color", group = "Structure", inline = "1")
+bearC = input.color(defval = #F24968, title = "Bear Color", group = "Structure", inline = "1")
+
+showInt = input.bool(defval = true, title = "Show Internal Structure", group = "Structure")
+intSens = input.int(3, "Internal Sensitivity", options = [3, 5, 8], group = "Structure")
+intStru = input.string(defval = "All", title = "Internal Structure Type", options = ["All", "BoS", "CHoCH"], group = "Structure")
+
+showExt = input.bool(defval = true, title = "Show External Structure", group = "Structure")
+extSens = input.int(25, "External Sensitivity", options = [10, 25, 50], group = "Structure")
+extStru = input.string(defval = "All", title = "External Structure Type", options = ["All", "BoS", "CHoCH"], group = "Structure")
+
+showOB_Structure = input.bool(defval = true, title = "Show Order Blocks", group = "Swing Order Blocks")
+showLast          = input.int(defval = 10, title = "Order Blocks Count", minval = 0, group = "Swing Order Blocks")
+
+showHHLH = input.bool(defval = true, title = "Show HH / LH", group = "Swing Labels")
+showHLLL = input.bool(defval = true, title = "Show HL / LL", group = "Swing Labels")
+
+var highArr = array.new_float()
+var lowArr  = array.new_float()
+
+highArr.unshift(high)
+lowArr.unshift(low)
+
+calculatePivots(length) =>
+    var int intraCalc = 0
+    float topSwing = 0.0
+    float botSwing = 0.0
+
+    if bar_index > length + 1
+
+        up = highArr.slice(0, length).max()
+        dn = lowArr.slice(0, length).min()
+
+        cHi = highArr.get(length)
+        cLo = lowArr.get(length)
+
+        intraCalc := switch
+
+            cHi > up => 0
+            cLo < dn => 1
+            =>          intraCalc[1]
+
+        topSwing := intraCalc == 0 and intraCalc[1] != 0 ? cHi : 0.0
+        botSwing := intraCalc == 1 and intraCalc[1] != 1 ? cLo : 0.0
+
+    [topSwing, botSwing]
+
+[bigUpper, bigLower]     = calculatePivots(extSens)
+[smallUpper, smallLower] = calculatePivots(intSens)
+
+var box[] highBlock = array.new_box()
+var box[] lowBlock  = array.new_box()
+
+drawChar(x, y, str, col, down) =>
+    style = down ? label.style_label_down : label.style_label_up
+    line.new(int(x), y, bar_index, y, color = col, style = line.style_dashed)
+    label.new(math.round(math.avg(x, bar_index)), y, str, color = #00000000, textcolor = col, style = style, size = size.small)
+
+var float extUpAxis   = 0.0
+var int   extUpAxis2  = 0
+var int   extUpside   = 1
+var float extDnAxis   = 0.0
+var int   extDnAxis2  = 0
+var int   extDownside = 1
+var int   extMoving   = 0
+
+drawStructureExt() =>
+    var int counter = 0
+
+    if bigUpper != 0
+        extUpside := 1
+        x1 = bar_index - extSens
+
+        txt = bigUpper > extUpAxis ? 'HH' : 'LH'
+
+        if showHHLH
+            label.new(x1, bigUpper, txt, color = color.new(color.white, 100), textcolor = bearC, style = label.style_label_down, size = size.small)
+
+        if showOB_Structure
+            highBlock.push(box.new(x1, bigUpper, last_bar_index + 5, bigUpper * .998, border_color = color.new(color.red, 75), bgcolor = color.new(color.red, 95)))
+
+        extUpAxis  := bigUpper
+        extUpAxis2 := x1
+
+        counter := 1
+
+    if bigLower != 0
+        extDownside := 1
+        x1 = bar_index - extSens
+
+        txt = bigLower < extDnAxis ? "LL" : "HL"
+
+        if showHLLL
+            label.new(x1, bigLower, txt, color = #ffffff00, textcolor = bullC, style = label.style_label_up, size = size.small)
+
+        if showOB_Structure
+            lowBlock.push(box.new(x1, bigLower, last_bar_index + 5, bigLower * 1.002, border_color = color.new(color.blue, 75), bgcolor = color.new(color.blue, 95)))
+
+        extDnAxis  := bigLower
+        extDnAxis2 := x1
+
+        counter := -1
+
+    if showExt
+        if ta.crossover(close, extUpAxis)
+            if extUpside != 0
+                str = extMoving < 0 ? (extStru != "BoS" ? 'CHoCH' : "") : (extStru != 'CHoCH' ? 'BoS' : "")
+
+                if extStru == "All" or str.contains(extStru, str)
+                    drawChar(extUpAxis2, extUpAxis, str, bullC, true)
+
+                extUpside := 0
+                extMoving := 1
+
+        if ta.crossunder(close, extDnAxis)
+            if extDownside != 0
+                str = extMoving > 0 ? (extStru != "BoS" ? 'CHoCH' : "") : (extStru != 'CHoCH' ? 'BoS' : "")
+
+                if extStru == "All" or str.contains(extStru, str)
+                    drawChar(extDnAxis2, extDnAxis, str, bearC, false)
+
+                extDownside := 0
+                extMoving   := -1
+
+    counter
+
+drawStructureExt()
+
+method updateBox(array<box> id) =>
+    if id.size() > 0
+        for i = 0 to id.size() - 1
+            id.get(i).set_right(last_bar_index + 5)
+
+method cleanseLevel(array<box> id, bool isHighBlock) =>
+    if id.size() > 0
+
+        for i = id.size() - 1 to 0
+
+            condition = isHighBlock ? close >= id.get(i).get_top() : close <= id.get(i).get_bottom()
+
+            if condition
+                id.remove(i).delete()
+
+        if id.size() > showLast and showLast != 0
+            for i = id.size() - showLast to 0
+                id.remove(i).delete()
+
+highBlock.cleanseLevel(true)
+lowBlock.cleanseLevel(false)
+
+if barstate.islast
+    highBlock.updateBox()
+    lowBlock.updateBox()
+
+var float intUpAxis   = 0.0
+var int   intUpAxis2  = 0
+var int   intUpside   = 1
+var float intDnAxis   = 0.0
+var int   intDnAxis2  = 0
+var int   intDownside = 1
+var int   intMoving   = 0
+
+drawStructureInternals() =>
+    if showInt
+
+        if smallUpper != 0
+            intUpside  := 1
+            intUpAxis  := smallUpper
+            intUpAxis2 := bar_index - intSens
+
+        if smallLower != 0
+            intDownside := 1
+            intDnAxis   := smallLower
+            intDnAxis2  := bar_index - intSens
+
+        if ta.crossover(close, intUpAxis)
+            if intUpside != 0
+                str = intMoving < 0 ? (intStru != "BoS" ? 'I-CHoCH' : "") : (intStru != "CHoCH" ? 'I-BoS' : "")
+
+                if intStru == "All" or str.contains(str, intStru)
+                    drawChar(intUpAxis2, intUpAxis, str, bullC, true)
+
+                intUpside := 0
+                intMoving := 1
+
+        if ta.crossunder(close, intDnAxis)
+            if intDownside != 0
+                str = intMoving > 0 ? (intStru != "BoS" ? 'I-CHoCH' : "") : (intStru != "CHoCH" ? 'I-BoS' : "")
+
+                if intStru == "All" or str.contains(str, intStru)
+                    drawChar(intDnAxis2, intDnAxis, str, bearC, false)
+
+                intDownside := 0
+                intMoving   := -1
+
+drawStructureInternals()
+
+extend = input.string(defval = "Both", options = ["Left", "Right", "Both", "None"], title = "Extend Lines", group = "S/R Levels")
+style  = input.string(defval = "Dotted", title = "Line Style", options = ["Dotted", "Solid", "Dashed"], group = "S/R Levels")
+
+min240Show  = input.bool (title = "4 Hour Levels", defval = true, group = "S/R Levels", inline = "1")
+min240col   = input.color(title = "",              defval = color.white,  group = "S/R Levels", inline = "1")
+min1440Show = input.bool (title = "Daily Levels",  defval = true, group = "S/R Levels", inline = "2")
+min1440col  = input.color(title = "",              defval = color.purple, group = "S/R Levels", inline = "2")
+minWShow    = input.bool (title = "Weekly Levels", defval = true, group = "S/R Levels", inline = "3")
+minWcol     = input.color(title = "",              defval = color.aqua,   group = "S/R Levels", inline = "3")
+
+finStyle = switch style
+
+    "Dotted" => line.style_dotted
+    "Dashed" => line.style_dashed
+    =>          line.style_solid
+
+type priceValues
+
+    float higH
+    float loW
+    int   hiIndex
+    int   loIndex
+
+var pv = matrix.new<priceValues>(3, 4)
+
+if barstate.isfirst
+
+    for x = 0 to 2
+        for i = 0 to 3
+
+            value = switch
+
+                i == 0 => priceValues.new(higH    =  0 )
+                i == 1 => priceValues.new(loW     = 1e8)
+                i == 2 => priceValues.new(hiIndex =  0 )
+                i == 3 => priceValues.new(loIndex =  0 )
+
+            pv.set(x, i, value)
+
+method determine(float id, int A, int B, float C) =>
+    id == C ? A : B
+
+method append(matrix<priceValues> id, int length, int row) =>
+
+    if barstate.islastconfirmedhistory
+
+        for i = 0 to length
+
+            id.set(row, 0, priceValues.new(higH    = math.max(math.avg(close[i], high[i]), nz(id.get(row, 0).higH, 0))))
+            id.set(row, 2, priceValues.new(hiIndex = math.avg(close[i], high[i]).determine(math.round(time[i]), nz(id.get(row, 2).hiIndex, 0), id.get(row, 0).higH)))
+
+            id.set(row, 1, priceValues.new(loW     = math.min(math.avg(close[i], low[i]), nz(id.get(row, 1).loW, 1e8))))
+            id.set(row, 3, priceValues.new(loIndex = math.avg(close[i], low[i]).determine(math.round(time[i]), nz(id.get(row, 3).loIndex, 0), id.get(row, 1).loW)))
+
+req(int length, int row) =>
+
+    pv.append(length, row)
+    loW     = pv.get(row, 1).loW
+    higH    = pv.get(row, 0).higH
+    hiIndex = pv.get(row, 2).hiIndex
+    loIndex = pv.get(row, 3).loIndex
+
+    [loW, higH, hiIndex, loIndex]
+
+[min240S, min240R, min240Rtime, min240Stime]     = request.security(syminfo.tickerid, "240",  req(30, 0), lookahead = barmerge.lookahead_on)
+[min1440S, min1440R, min1440Rtime, min1440Stime] = request.security(syminfo.tickerid, "1440", req(30, 1), lookahead = barmerge.lookahead_on)
+[minWS, minWR, minWRtime, minWStime]             = request.security(syminfo.tickerid, "W",    req(15, 2), lookahead = barmerge.lookahead_on)
+
+ex = switch extend
+
+    "None"  => extend.none
+    "Left"  => extend.left
+    "Right" => extend.right
+    "Both"  => extend.both
+
+type objects
+
+    line support
+    line resistance
+
+var obj = matrix.new<objects>(3, 2)
+
+method condS(float id) => not na(id) and id != 1e8
+method condR(float id) => not na(id) and id != 0
+
+method lineSetSupport(matrix<objects> id, int row, int column, line ln) =>
+
+    if not na(id.get(row, column))
+        id.get(row, column).support.delete()
+
+    id.set(row, column, objects.new(support = ln))
+
+method lineSetResistance(matrix<objects> id, int row, int column, line ln) =>
+
+    if not na(obj.get(row, column))
+        obj.get(row, column).resistance.delete()
+
+    id.set(row, column, objects.new(resistance = ln))
+
+if barstate.islast
+
+    if min240Show
+
+        if min240S.condS()
+            obj.lineSetSupport(0, 0, line.new(min240Stime, min240S, last_bar_time + (time - time[5]), min240S, extend = ex, xloc = xloc.bar_time, width = 1, style = finStyle, color = min240col))
+
+        if min240R.condR()
+            obj.lineSetResistance(0, 1, line.new(min240Rtime, min240R, last_bar_time + (time - time[5]), min240R, extend = ex, xloc = xloc.bar_time, width = 1, style = finStyle, color = min240col))
+
+    if min1440Show
+
+        if min1440S.condS()
+            obj.lineSetSupport(1, 0, line.new(min1440Stime, min1440S, last_bar_time + (time - time[5]), min1440S, extend = ex, xloc = xloc.bar_time, width = 1, style = finStyle, color = min1440col))
+
+        if min1440R.condR()
+            obj.lineSetResistance(1, 1, line.new(min1440Rtime, min1440R, last_bar_time + (time - time[5]), min1440R, extend = ex, xloc = xloc.bar_time, width = 1, style = finStyle, color = min1440col))
+
+    if minWShow
+
+        if minWS.condS()
+            obj.lineSetSupport(2, 0, line.new(minWStime, minWS, last_bar_time + (time - time[5]), minWS, extend = ex, xloc = xloc.bar_time, width = 1, style = finStyle, color = minWcol))
+
+        if minWR.condR()
+            obj.lineSetResistance(2, 1, line.new(minWRtime, minWR, last_bar_time + (time - time[5]), minWR, extend = ex, xloc = xloc.bar_time, width = 1, style = finStyle, color = minWcol))
+
+    res    = array.from("4 Hour: ♦", "Daily: ♦", "Weekly: ♦")
+    resCol = array.from(min240col, min1440col, minWcol)
+
+    valS = array.from(min240S, min1440S, minWS)
+    valR = array.from(min240R, min1440R, minWR)
+
+    var table tab = table.new(position.bottom_right, 10, 10, bgcolor = #20222C, border_color = #363843, frame_color = #363843, border_width = 1, frame_width = 1)
+
+    tab.cell(1, 0, "Resolution", text_color = color.white), tab.cell(2, 0, "Support", text_color = color.white), tab.cell(3, 0, "Resistance", text_color = color.white)
+
+    for i = 0 to 2
+
+        tab.cell(1, i + 1, text = res.get(i), text_halign = text.align_right, text_size = size.small, text_color = resCol.get(i))
+
+        finS = valS.get(i).condS() ? str.tostring(valS.get(i), format.mintick) : "Calculating"
+        finR = valR.get(i).condR() ? str.tostring(valR.get(i), format.mintick) : "Calculating"
+
+        tab.cell(2, i + 1, text = finS, text_size = size.small, text_color = resCol.get(i))
+        tab.cell(3, i + 1, text = finR, text_size = size.small, text_color = resCol.get(i))
+
+alertcondition(ta.crossover(high, min240R), "4-Hour Resistance Crossover", "4-Hour Resistance Crossover")
+alertcondition(ta.crossunder(low, min240S), "4-Hour Support Crossunder", "4-Hour Support Crossunder")
+
+alertcondition(ta.crossover(high, min1440R), "1-Day Resistance Crossover", "1-Day Resistance Crossover")
+alertcondition(ta.crossunder(low, min1440S), "1-Day Support Crossunder", "1-Day Support Crossunder")
+
+alertcondition(ta.crossover(high, minWR), "1-Week Resistance Crossover", "1-Week Resistance Crossover")
+alertcondition(ta.crossunder(low, minWS), "1-Week Support Crossunder", "1-Week Support Crossunder")
+
+i_mode = input.string('Present', title = 'Mode', group = 'ICT Order Blocks', options = ['Present', 'Historical'])
+
+showOB_ICT = input.bool(true, title = 'Show Order Blocks', group = 'ICT Order Blocks')
+length     = input.int(10, title = 'Swing Lookback', group = 'ICT Order Blocks', minval = 3)
+showBull   = input.int(1, title = 'Show Last Bullish OB', group = 'ICT Order Blocks', minval = 0)
+showBear   = input.int(1, title = 'Show Last Bearish OB', group = 'ICT Order Blocks', minval = 0)
+useBody    = input.bool(true, title = 'Use Candle Body', group = 'ICT Order Blocks')
+
+bullCss    = input.color(color.new(#3e89fa, 0), title = 'Bullish OB', group = 'ICT Order Blocks', inline = 'bullcss')
+bullBrkCss = input.color(color.new(#4785f9, 85), title = 'Bullish Break', group = 'ICT Order Blocks', inline = 'bullcss')
+
+bearCss    = input.color(color.new(#FF3131, 0), title = 'Bearish OB', group = 'ICT Order Blocks', inline = 'bearcss')
+bearBrkCss = input.color(color.new(#f9ff57, 85), title = 'Bearish Break', group = 'ICT Order Blocks', inline = 'bearcss')
+
+showLabels = input.bool(false, title = 'Show Historical Polarity Changes', group = 'ICT Order Blocks')
+
+shwFVG = input.bool(true, title = 'Show FVGs', group = 'Fair Value Gaps')
+i_FVG  = input.string('FVG', title = 'Options', group = 'Fair Value Gaps', options = ['FVG', 'IFVG'])
+visBxs = input.int(2, title = "# Visible FVG's", group = 'Fair Value Gaps', minval = 1, maxval = 20)
+
+cFVGbl   = input.color(color.new(#00e676, 0), title = 'Bullish FVG', group = 'Fair Value Gaps', inline = 'FVGbl')
+cFVGblBR = input.color(color.new(#808000, 0), title = 'Break', group = 'Fair Value Gaps', inline = 'FVGbl')
+cFVGbr   = input.color(color.new(#ff5252, 0), title = 'Bearish FVG', group = 'Fair Value Gaps', inline = 'FVGbr')
+cFVGbrBR = input.color(color.new(#FF0000, 0), title = 'Break', group = 'Fair Value Gaps', inline = 'FVGbr')
+
+n       = bar_index
+tf_msec = timeframe.in_seconds(timeframe.period) * 1000
+per     = i_mode == 'Present' ? last_bar_index - bar_index <= 500 : true
+
+mx   = math.max(close, open)
+mn   = math.min(close, open)
+body = math.abs(close - open)
+
+bodyAvgLen = 5
+meanBody   = ta.sma(body, bodyAvgLen)
+
+max = useBody ? mx : high
+min = useBody ? mn : low
+
+perc_Body = 0.36
+bxBack    = 10
+
+blBrkConf = 0
+brBrkConf = 0
+
+type bx_ln_lb
+    box   bx
+    line  ln
+    label lb
+
+type ob
+    float top       = na
+    float btm       = na
+    int   loc       = bar_index
+    bool  breaker   = false
+    int   break_loc = na
+
+type swing
+    float y = na
+    int   x = na
+    bool  crossed = false
+
+type FVG
+    box  box
+    bool active
+    int  pos
+
+var ob[] bullish_ob = array.new<ob>()
+var ob[] bearish_ob = array.new<ob>()
+
+var bx_ln_lb[] a_bx_ln_lb = array.new<bx_ln_lb>()
+
+var FVG[] bFVG_UP = array.new<FVG>()
+var FVG[] bFVG_DN = array.new<FVG>()
+
+method notransp(color css) => color.rgb(color.r(css), color.g(css), color.b(css))
+
+method display(ob id, css, break_css, str) =>
+    if showOB_ICT
+        if id.breaker
+            a_bx_ln_lb.unshift(
+             bx_ln_lb.new(
+               box.new(id.loc, id.top, timenow + (tf_msec * 10), id.btm, na
+             , bgcolor = break_css
+             , extend  = extend.none
+             , xloc    = xloc.bar_time)
+             , line(na)
+             , label(na))
+             )
+        else
+            y = str == 'bl' ? id.btm : id.top
+            s = str == 'bl' ? label.style_label_up : label.style_label_down
+            a_bx_ln_lb.unshift(
+             bx_ln_lb.new(
+               box(na)
+             , line.new(id.loc, y, id.loc + (tf_msec * 10), y
+             , xloc = xloc.bar_time, color = css, width = 2)
+             , label.new(id.loc + (tf_msec * 10), y
+             , text  = str == 'bl' ? '+OB' : '-OB'
+             , xloc  = xloc.bar_time
+             , style = s, color = color(na)
+             , textcolor = css, size = size.small))
+             )
+
+swings(len) =>
+    var os = 0
+    var swing top = swing.new(na, na)
+    var swing btm = swing.new(na, na)
+
+    upper = ta.highest(len)
+    lower = ta.lowest(len)
+
+    os := high[len] > upper ? 0 : low[len] < lower ? 1 : os
+
+    if os == 0 and os[1] != 0
+        top := swing.new(high[length], bar_index[length])
+
+    if os == 1 and os[1] != 1
+        btm := swing.new(low[length], bar_index[length])
+
+    [top, btm]
+
+L_body   = high - mx < body * perc_Body and mn - low < body * perc_Body
+L_bodyUP = body > meanBody and L_body and close > open
+L_bodyDN = body > meanBody and L_body and close < open
+
+imbalanceUP = L_bodyUP[1] and (i_FVG == 'FVG' ? low  > high[2] : low  < high[2])
+imbalanceDN = L_bodyDN[1] and (i_FVG == 'FVG' ? high < low[2]  : high > low[2])
+
+if barstate.isfirst
+    for i = 0 to visBxs - 1
+        bFVG_UP.unshift(FVG.new(box(na), false))
+        bFVG_DN.unshift(FVG.new(box(na), false))
+
+if imbalanceUP and per and shwFVG
+    if imbalanceUP[1]
+        bFVG_UP.get(0).box.set_lefttop(n - 2, low)
+        bFVG_UP.get(0).box.set_rightbottom(n + 8, high[2])
+    else
+        bFVG_UP.unshift(FVG.new(
+          box.new(
+           n - 2
+         ,    i_FVG == 'FVG' ? low : high[2]
+         , n, i_FVG == 'FVG' ? high[2] : low
+         , bgcolor      = color.new(cFVGbl, 90)
+         , border_color = color.new(cFVGbl, 65)
+         , text_color   = color.new(cFVGbl, 65)
+         , text_size = size.small
+         , text = i_FVG
+         )
+         , true)
+         )
+        bFVG_UP.pop().box.delete()
+
+if imbalanceDN and per and shwFVG
+    if imbalanceDN[1]
+        bFVG_DN.get(0).box.set_lefttop(n - 2, low[2])
+        bFVG_DN.get(0).box.set_rightbottom(n + 8, high)
+    else
+        bFVG_DN.unshift(FVG.new(
+         box.new(
+           n - 2
+         ,    i_FVG == 'FVG' ? low[2] : high
+         , n, i_FVG == 'FVG' ? high    : low[2]
+         , bgcolor      = color.new(cFVGbr, 90)
+         , border_color = color.new(cFVGbr, 65)
+         , text_color   = color.new(cFVGbr, 65)
+         , text_size = size.small
+         , text = i_FVG
+         )
+         , true)
+         )
+        bFVG_DN.pop().box.delete()
+
+for i = 0 to math.min(bxBack, bFVG_UP.size() - 1)
+    getUPi = bFVG_UP.get(i)
+    if getUPi.active
+        getUPi.box.set_right(bar_index + 8)
+        if low < getUPi.box.get_top()
+            getUPi.box.set_border_style(line.style_dashed)
+        if low < getUPi.box.get_bottom()
+            getUPi.box.set_bgcolor(color.new(cFVGblBR, 95))
+            getUPi.box.set_border_style(line.style_dotted)
+            getUPi.box.set_right(bar_index)
+            getUPi.active := false
+
+for i = 0 to math.min(bxBack, bFVG_DN.size() - 1)
+    getDNi = bFVG_DN.get(i)
+    if getDNi.active
+        getDNi.box.set_right(bar_index + 8)
+        if high > getDNi.box.get_bottom()
+            getDNi.box.set_border_style(line.style_dashed)
+        if high > getDNi.box.get_top()
+            getDNi.box.set_bgcolor(color.new(cFVGbrBR, 95))
+            getDNi.box.set_border_style(line.style_dotted)
+            getDNi.box.set_right(bar_index)
+            getDNi.active := false
+
+[top, btm] = swings(length)
+
+if showOB_ICT and per
+    if close > top.y and not top.crossed
+        top.crossed := true
+
+        minima = max[1]
+        maxima = min[1]
+        loc = time[1]
+
+        for i = 1 to (n - top.x) - 1
+            minima := math.min(min[i], minima)
+            maxima := minima == min[i] ? max[i] : maxima
+            loc := minima == min[i] ? time[i] : loc
+        bullish_ob.unshift(ob.new(maxima, minima, loc))
+
+    if bullish_ob.size() > 0
+        for i = bullish_ob.size() - 1 to 0
+            element = bullish_ob.get(i)
+
+            if not element.breaker
+                if math.min(close, open) < element.btm
+                    element.breaker := true
+                    element.break_loc := time
+            else
+                if close > element.top
+                    bullish_ob.remove(i)
+                else if i < showBull and top.y < element.top and top.y > element.btm
+                    blBrkConf := 1
+
+    if blBrkConf > blBrkConf[1] and showLabels
+        label.new(top.x, top.y, '▼', color = na
+          , textcolor = bearCss.notransp()
+          , style = label.style_label_down
+          , size = size.tiny)
+
+if showOB_ICT and per
+    if close < btm.y and not btm.crossed
+        btm.crossed := true
+
+        minima = min[1]
+        maxima = max[1]
+        loc = time[1]
+
+        for i = 1 to (n - btm.x) - 1
+            maxima := math.max(max[i], maxima)
+            minima := maxima == max[i] ? min[i] : minima
+            loc := maxima == max[i] ? time[i] : loc
+        bearish_ob.unshift(ob.new(maxima, minima, loc))
+
+    if bearish_ob.size() > 0
+        for i = bearish_ob.size() - 1 to 0
+            element = bearish_ob.get(i)
+
+            if not element.breaker
+                if math.max(close, open) > element.top
+                    element.breaker := true
+                    element.break_loc := time
+            else
+                if close < element.btm
+                    bearish_ob.remove(i)
+                else if i < showBear and btm.y > element.btm and btm.y < element.top
+                    brBrkConf := 1
+
+    if brBrkConf > brBrkConf[1] and showLabels
+        label.new(btm.x, btm.y, '▲', color = na
+          , textcolor = bullCss.notransp()
+          , style = label.style_label_up
+          , size = size.tiny)
+
+if barstate.islast and showOB_ICT
+    if a_bx_ln_lb.size() > 0
+        for i = a_bx_ln_lb.size() - 1 to 0
+            item = a_bx_ln_lb.remove(i)
+            item.bx.delete()
+            item.ln.delete()
+            item.lb.delete()
+
+    if showBull > 0
+        if bullish_ob.size() > 0
+            for i = 0 to math.min(showBull, bullish_ob.size()) - 1
+                get_ob = bullish_ob.get(i)
+                get_ob.display(bullCss, bullBrkCss, 'bl')
+
+    if showBear > 0
+        if bearish_ob.size() > 0
+            for i = 0 to math.min(showBear, bearish_ob.size()) - 1
+                get_ob = bearish_ob.get(i)
+                get_ob.display(bearCss, bearBrkCss, 'br')
+
+rsiLengthInput = input.int(14, minval = 1, title = "RSI Length", group = "RSI Settings")
+rsiSourceInput = input.source(close, "Source", group = "RSI Settings")
+
+highPivotLen = input.int(21, "High Pivot Length", minval = 1, group = "RSI Pivots", display = display.none)
+lowPivotLen  = input.int(21, "Low Pivot Length", minval = 1, group = "RSI Pivots", display = display.none)
+
+activationThresholdStr = input.string("Medium", "Activation Threshold", options = ["High", "Medium", "Low"], group = "RSI KDE", tooltip = "Determines the amount of arrows shown. Higher options will result in more arrows being rendered.")
+string KDEKernel = input.string("Gaussian", "Kernel", options = ['Uniform', 'Gaussian', 'Sigmoid'], group = "RSI KDE", tooltip = "The kernel function for KDE calculation. Gaussian is a commonly used kernel and is based on normal distribution.")
+float KDEBandwidth = input.float(2.71828, "Bandwidth", group = "RSI KDE", tooltip = "This setting sets the smoothness of the KDE function output.")
+int KDEStep = input.int(100, "Nº Bins", minval = 1, group = "RSI KDE", tooltip = "The number of elements the KDE Probability array will have. Higher settings will result in greater precision.")
+
+activationThreshold = activationThresholdStr == "High" ? 0.4 : activationThresholdStr == "Medium" ? 0.25 : 0.15
+minPadding = false
+
+tableEnabled = input.bool(true, "RSI Dashboard", group = "RSI Dashboard", display = display.none)
+tableLocation = input.string("Top Right", "Position", options = ["Top Right", "Top Center", "Right Center", "Middle Center", "Left Center", "Bottom Center"], group = "RSI Dashboard", display = display.none)
+screenerColor = input.color(#1B1F2B, 'Background', group = 'RSI Dashboard', display = display.none)
+frameColor = input.color(color.rgb(255, 255, 255), 'Frame', group = 'RSI Dashboard', display = display.none)
+borderColor = input.color(color.rgb(255, 255, 255), 'Border', group = 'RSI Dashboard', display = display.none)
+textColorDB = input.color(color.white, 'Text', group = 'RSI Dashboard', display = display.none)
+
+bearishColor = input.color(#f23646, "High Pivots", group = "RSI Style", inline = "col", display = display.none)
+bullishColor = input.color(#089981, "Low Pivots", group = "RSI Style", inline = "col", display = display.none)
+textColor = input.color(color.white, 'Text', group = "RSI Style", inline = "col", display = display.none)
+RSILabelsEnabled = input.bool(true, "RSI Labels", group = "RSI Style")
+KDELabelsEnabled = input.bool(true, "KDE Labels", group = "RSI Style")
+
+rsi = ta.rsi(rsiSourceInput, rsiLengthInput)
+
+getPosition(positionText) =>
+    if positionText == "Top Right"
+        position.top_right
+    else if positionText == "Top Center"
+        position.top_center
+    else if positionText == "Right Center"
+        position.middle_right
+    else if positionText == "Left Center"
+        position.middle_left
+    else if positionText == "Bottom Center"
+        position.bottom_center
+    else if positionText == "Middle Center"
+        position.middle_center
+
+gaussian(float distance, float bandwidth = 1.0) => 1.0 / math.sqrt(2.0 * math.pi) * math.pow(math.e, -0.5 * math.pow(distance / bandwidth, 2.0))
+uniform(float distance, float bandwidth = 1.0)  => (math.abs(distance) > bandwidth) ? 0.0 : 0.5
+sigmoid(float distance, float bandwidth = 1.0)  => 2.0 / math.pi * (1.0 / (math.pow(math.e, (distance / bandwidth)) + math.pow(math.e, -(distance / bandwidth))))
+
+kde(array<float> arr, string kernel, float bandwidth, int steps) =>
+    arrSize = arr.size()
+    arrRange = arr.range()
+    arrMin = arr.min() - (minPadding ? (arrRange / 2.0) : 0)
+    stepCount = arrRange / steps
+
+    densityRange = array.new<float>(steps * 2)
+    for i = 0 to (steps * 2) - 1
+        densityRange.set(i, arrMin + i * stepCount)
+
+    xArr = array.new<float>()
+    yArr = array.new<float>()
+    for i = 0 to densityRange.size() - 1
+        float temp = 0
+        for j = 0 to arr.size() - 1
+            switch KDEKernel
+                "Gaussian" => temp += gaussian(densityRange.get(i) - arr.get(j), 1.0 / bandwidth)
+                "Uniform"  => temp += uniform(densityRange.get(i) - arr.get(j), 1.0 / bandwidth)
+                "Sigmoid"  => temp += sigmoid(densityRange.get(i) - arr.get(j), 1.0 / bandwidth)
+
+        xArr.push(densityRange.get(i))
+        yArr.push(1.0 / arrSize * temp)
+    [xArr, yArr]
+
+prefixSum(array<float> arr, int l, int r) =>
+    arr.get(r) - (l == 0 ? 0 : arr.get(l - 1))
+
+var array<float> KDEHighX = na
+var array<float> KDEHighY = na
+var array<float> KDEHighYSum = array.new<float>()
+
+var array<float> KDELowX = na
+var array<float> KDELowY = na
+var array<float> KDELowYSum = array.new<float>()
+
+highPivot = ta.pivothigh(highPivotLen, highPivotLen)
+lowPivot  = ta.pivotlow(lowPivotLen, lowPivotLen)
+
+var highPivotRSIs = array.new<float>()
+var lowPivotRSIs  = array.new<float>()
+
+if not na(highPivot)
+    if highPivotRSIs.size() > 300
+        highPivotRSIs.remove(0)
+    highPivotRSIs.push(rsi[highPivotLen])
+
+    [KDEHighX1, KDEHighY1] = kde(highPivotRSIs, KDEKernel, KDEBandwidth, KDEStep)
+    KDEHighX := KDEHighX1
+    KDEHighY := KDEHighY1
+
+    KDEHighYSum.clear()
+    tempH = 0.0
+    for i = 0 to KDEHighY.size() - 1
+        tempH += KDEHighY.get(i)
+        KDEHighYSum.push(tempH)
+
+if not na(lowPivot)
+    if lowPivotRSIs.size() > 300
+        lowPivotRSIs.remove(0)
+    lowPivotRSIs.push(rsi[lowPivotLen])
+
+    [KDELowX1, KDELowY1] = kde(lowPivotRSIs, KDEKernel, KDEBandwidth, KDEStep)
+    KDELowX := KDELowX1
+    KDELowY := KDELowY1
+
+    KDELowYSum.clear()
+    tempL = 0.0
+    for i = 0 to KDELowY.size() - 1
+        tempL += KDELowY.get(i)
+        KDELowYSum.push(tempL)
+
+float lowProb = na
+float highProb = na
+
+if last_bar_index - 5000 < bar_index
+    if highPivotRSIs.size() > 0
+        highXIndexL = array.binary_search_leftmost(KDEHighX, rsi)
+        highXIndexR = math.min(array.binary_search_rightmost(KDEHighX, rsi), KDEHighX.size() - 1)
+        nearestIndexH = (math.abs(rsi - KDEHighX.get(highXIndexL)) < math.abs(rsi - KDEHighX.get(highXIndexR))) ? highXIndexL : highXIndexR
+        highProb := prefixSum(KDEHighYSum, 0, nearestIndexH)
+
+    if lowPivotRSIs.size() > 0
+        lowXIndexL = array.binary_search_leftmost(KDELowX, rsi)
+        lowXIndexR = math.min(array.binary_search_rightmost(KDELowX, rsi), KDELowX.size() - 1)
+        nearestIndexL = (math.abs(rsi - KDELowX.get(lowXIndexL)) < math.abs(rsi - KDELowX.get(lowXIndexR))) ? lowXIndexL : lowXIndexR
+        lowProb := prefixSum(KDELowYSum, nearestIndexL, KDELowYSum.size() - 1)
+
+color curColor = na
+if (not na(KDELowY)) and (not na(KDEHighY))
+    if lowProb > KDELowY.sum() * (1.0 - activationThreshold)
+        curColor := bullishColor
+    else if highProb > KDEHighY.sum() * (1.0 - activationThreshold)
+        curColor := bearishColor
+
+plotarrow((na(curColor) and curColor[1] == bullishColor and barstate.isconfirmed) ? 1 : na, "Bullish Arrow", bullishColor, bullishColor, minheight = 20, maxheight = 20)
+plotarrow((na(curColor) and curColor[1] == bearishColor and barstate.isconfirmed) ? -1 : na, "Bearish Arrow", bearishColor, bearishColor, minheight = 20, maxheight = 20)
+
+alertcondition(na(curColor) and curColor[1] == bullishColor and barstate.isconfirmed, "Bullish Arrow")
+alertcondition(na(curColor) and curColor[1] == bearishColor and barstate.isconfirmed, "Bearish Arrow")
+
+if KDELabelsEnabled or RSILabelsEnabled
+    var lastBullishLabel = 0
+    if (na(curColor) and curColor[1] == bullishColor and barstate.isconfirmed) and (bar_index - lastBullishLabel) > 8
+        lastBullishLabel := bar_index
+        txt = ""
+        if RSILabelsEnabled and KDELabelsEnabled
+            txt := "RSI | " + str.tostring(rsi, "#") + " | " + str.tostring(lowProb * 100, "#.##") + "%"
+        else if RSILabelsEnabled
+            txt := "RSI | " + str.tostring(rsi, "#")
+        else
+            txt := str.tostring(rsi, "#") + "%"
+        label.new(bar_index, low, txt, yloc = yloc.belowbar, color = na, style = label.style_label_up, textcolor = textColor, force_overlay = true)
+
+    var lastBearishLabel = 0
+    if (na(curColor) and curColor[1] == bearishColor and barstate.isconfirmed) and (bar_index - lastBearishLabel) > 8
+        lastBearishLabel := bar_index
+        txt = ""
+        if RSILabelsEnabled and KDELabelsEnabled
+            txt := "RSI | " + str.tostring(rsi, "#") + " | " + str.tostring(highProb * 100, "#.##") + "%"
+        else if RSILabelsEnabled
+            txt := "RSI | " + str.tostring(rsi, "#")
+        else
+            txt := str.tostring(rsi, "#") + "%"
+        label.new(bar_index, low, txt, yloc = yloc.abovebar, color = na, style = label.style_label_down, textcolor = textColor, force_overlay = true)
+
+if tableEnabled
+    var table realtimeTable = table.new(getPosition(tableLocation), 2, 10, bgcolor = screenerColor, frame_width = 2, frame_color = frameColor, border_width = 1, border_color = borderColor)
+    table.merge_cells(realtimeTable, 0, 0, 1, 0)
+    table.cell(realtimeTable, 0, 0, "Smart RSI", text_color = textColorDB, bgcolor = screenerColor)
+
+    table.cell(realtimeTable, 0, 1, "RSI", text_color = textColorDB, bgcolor = screenerColor)
+    table.cell(realtimeTable, 1, 1, str.tostring(rsi, "#"), text_color = textColorDB, bgcolor = screenerColor)
+
+    table.cell(realtimeTable, 0, 2, (lowProb > highProb) ? "Bullish KDE" : "Bearish KDE", text_color = (lowProb > highProb) ? bullishColor : bearishColor, bgcolor = screenerColor)
+    table.cell(realtimeTable, 1, 2, str.tostring(nz(math.max(highProb, lowProb), 0) * 100, "#.##") + "%", text_color = textColorDB, bgcolor = screenerColor)
+
+shortlen = input.int(9, "Short MA Length", minval = 1, group = "MA Cross")
+longlen  = input.int(21, "Long MA Length", minval = 1, group = "MA Cross")
+maShort = ta.sma(close, shortlen)
+maLong  = ta.sma(close, longlen)
+plot(maShort, color = #FF6D00, title = "Short MA")
+plot(maLong, color = #43A047, title = "Long MA")
+plot(ta.cross(maShort, maLong) ? maShort : na, color = #2962FF, style = plot.style_cross, linewidth = 4, title = "Cross")
+
+var table dtTag = table.new(position.bottom_left, 1, 1)
+if barstate.islast
+    table.cell(dtTag, 0, 0, "@dailytrade", text_color = color.new(color.gray, 15), text_size = size.tiny, bgcolor = color.new(color.black, 100))
