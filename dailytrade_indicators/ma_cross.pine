@@ -1,0 +1,13 @@
+//@version=6
+indicator(title = "Daily Trade | MA Cross", shorttitle = "DT MA Cross", overlay = true, timeframe = "", timeframe_gaps = true)
+shortlen = input.int(9, "Short MA Length", minval = 1)
+longlen = input.int(21, "Long MA Length", minval = 1)
+short = ta.sma(close, shortlen)
+long = ta.sma(close, longlen)
+plot(short, color = #FF6D00, title = "Short MA")
+plot(long, color = #43A047, title = "Long MA")
+plot(ta.cross(short, long) ? short : na, color = #2962FF, style = plot.style_cross, linewidth = 4, title = "Cross")
+
+var table dtTag = table.new(position.top_right, 1, 1)
+if barstate.islast
+    table.cell(dtTag, 0, 0, "@dailytrade", text_color = color.new(color.gray, 15), text_size = size.tiny, bgcolor = color.new(color.black, 100))

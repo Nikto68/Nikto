@@ -1,0 +1,294 @@
+//@version=5
+indicator("Daily Trade | Order Blocks & FVG", shorttitle = "DT OB/FVG", max_lines_count = 500, max_boxes_count = 500, max_labels_count = 500, max_bars_back = 3000, overlay = true)
+
+i_mode = input.string('Present', title = 'Mode', options = ['Present', 'Historical'])
+
+showOB   = input.bool(true, title = 'Show Order Blocks', group = 'Order Blocks')
+length   = input.int(10, title = 'Swing Lookback', group = 'Order Blocks', minval = 3)
+showBull = input.int(1, title = 'Show Last Bullish OB', group = 'Order Blocks', minval = 0)
+showBear = input.int(1, title = 'Show Last Bearish OB', group = 'Order Blocks', minval = 0)
+useBody  = input.bool(true, title = 'Use Candle Body')
+
+bullCss    = input.color(color.new(#3e89fa, 0), title = 'Bullish OB', group = 'Order Blocks', inline = 'bullcss')
+bullBrkCss = input.color(color.new(#4785f9, 85), title = 'Bullish Break', group = 'Order Blocks', inline = 'bullcss')
+
+bearCss    = input.color(color.new(#FF3131, 0), title = 'Bearish OB', group = 'Order Blocks', inline = 'bearcss')
+bearBrkCss = input.color(color.new(#f9ff57, 85), title = 'Bearish Break', group = 'Order Blocks', inline = 'bearcss')
+
+showLabels = input.bool(false, title = 'Show Historical Polarity Changes', group = 'Order Blocks')
+
+shwFVG = input.bool(true, title = 'Show FVGs', group = 'Fair Value Gaps')
+i_FVG  = input.string('FVG', title = 'Options', group = 'Fair Value Gaps', options = ['FVG', 'IFVG'])
+visBxs = input.int(2, title = "# Visible FVG's", group = 'Fair Value Gaps', minval = 1, maxval = 20)
+
+cFVGbl   = input.color(color.new(#00e676, 0), title = 'Bullish FVG', group = 'Fair Value Gaps', inline = 'FVGbl')
+cFVGblBR = input.color(color.new(#808000, 0), title = 'Break', group = 'Fair Value Gaps', inline = 'FVGbl')
+cFVGbr   = input.color(color.new(#ff5252, 0), title = 'Bearish FVG', group = 'Fair Value Gaps', inline = 'FVGbr')
+cFVGbrBR = input.color(color.new(#FF0000, 0), title = 'Break', group = 'Fair Value Gaps', inline = 'FVGbr')
+
+n       = bar_index
+tf_msec = timeframe.in_seconds(timeframe.period) * 1000
+per     = i_mode == 'Present' ? last_bar_index - bar_index <= 500 : true
+
+mx   = math.max(close, open)
+mn   = math.min(close, open)
+body = math.abs(close - open)
+
+bodyAvgLen = 5
+meanBody   = ta.sma(body, bodyAvgLen)
+
+max = useBody ? mx : high
+min = useBody ? mn : low
+
+perc_Body = 0.36
+bxBack    = 10
+
+blBrkConf = 0
+brBrkConf = 0
+
+type bx_ln_lb
+    box   bx
+    line  ln
+    label lb
+
+type ob
+    float top       = na
+    float btm       = na
+    int   loc       = bar_index
+    bool  breaker   = false
+    int   break_loc = na
+
+type swing
+    float y = na
+    int   x = na
+    bool  crossed = false
+
+type FVG
+    box  box
+    bool active
+    int  pos
+
+var ob[] bullish_ob = array.new<ob>()
+var ob[] bearish_ob = array.new<ob>()
+
+var bx_ln_lb[] a_bx_ln_lb = array.new<bx_ln_lb>()
+
+var FVG[] bFVG_UP = array.new<FVG>()
+var FVG[] bFVG_DN = array.new<FVG>()
+
+method notransp(color css) => color.rgb(color.r(css), color.g(css), color.b(css))
+
+method display(ob id, css, break_css, str) =>
+    if showOB
+        if id.breaker
+            a_bx_ln_lb.unshift(
+             bx_ln_lb.new(
+               box.new(id.loc, id.top, timenow + (tf_msec * 10), id.btm, na
+             , bgcolor = break_css
+             , extend  = extend.none
+             , xloc    = xloc.bar_time)
+             , line(na)
+             , label(na))
+             )
+        else
+            y = str == 'bl' ? id.btm : id.top
+            s = str == 'bl' ? label.style_label_up : label.style_label_down
+            a_bx_ln_lb.unshift(
+             bx_ln_lb.new(
+               box(na)
+             , line.new(id.loc, y, id.loc + (tf_msec * 10), y
+             , xloc = xloc.bar_time, color = css, width = 2)
+             , label.new(id.loc + (tf_msec * 10), y
+             , text  = str == 'bl' ? '+OB' : '-OB'
+             , xloc  = xloc.bar_time
+             , style = s, color = color(na)
+             , textcolor = css, size = size.small))
+             )
+
+swings(len) =>
+    var os = 0
+    var swing top = swing.new(na, na)
+    var swing btm = swing.new(na, na)
+
+    upper = ta.highest(len)
+    lower = ta.lowest(len)
+
+    os := high[len] > upper ? 0 : low[len] < lower ? 1 : os
+
+    if os == 0 and os[1] != 0
+        top := swing.new(high[length], bar_index[length])
+
+    if os == 1 and os[1] != 1
+        btm := swing.new(low[length], bar_index[length])
+
+    [top, btm]
+
+L_body   = high - mx < body * perc_Body and mn - low < body * perc_Body
+L_bodyUP = body > meanBody and L_body and close > open
+L_bodyDN = body > meanBody and L_body and close < open
+
+imbalanceUP = L_bodyUP[1] and (i_FVG == 'FVG' ? low  > high[2] : low  < high[2])
+imbalanceDN = L_bodyDN[1] and (i_FVG == 'FVG' ? high < low[2]  : high > low[2])
+
+if barstate.isfirst
+    for i = 0 to visBxs - 1
+        bFVG_UP.unshift(FVG.new(box(na), false))
+        bFVG_DN.unshift(FVG.new(box(na), false))
+
+if imbalanceUP and per and shwFVG
+    if imbalanceUP[1]
+        bFVG_UP.get(0).box.set_lefttop(n - 2, low)
+        bFVG_UP.get(0).box.set_rightbottom(n + 8, high[2])
+    else
+        bFVG_UP.unshift(FVG.new(
+          box.new(
+           n - 2
+         ,    i_FVG == 'FVG' ? low : high[2]
+         , n, i_FVG == 'FVG' ? high[2] : low
+         , bgcolor      = color.new(cFVGbl, 90)
+         , border_color = color.new(cFVGbl, 65)
+         , text_color   = color.new(cFVGbl, 65)
+         , text_size = size.small
+         , text = i_FVG
+         )
+         , true)
+         )
+        bFVG_UP.pop().box.delete()
+
+if imbalanceDN and per and shwFVG
+    if imbalanceDN[1]
+        bFVG_DN.get(0).box.set_lefttop(n - 2, low[2])
+        bFVG_DN.get(0).box.set_rightbottom(n + 8, high)
+    else
+        bFVG_DN.unshift(FVG.new(
+         box.new(
+           n - 2
+         ,    i_FVG == 'FVG' ? low[2] : high
+         , n, i_FVG == 'FVG' ? high    : low[2]
+         , bgcolor      = color.new(cFVGbr, 90)
+         , border_color = color.new(cFVGbr, 65)
+         , text_color   = color.new(cFVGbr, 65)
+         , text_size = size.small
+         , text = i_FVG
+         )
+         , true)
+         )
+        bFVG_DN.pop().box.delete()
+
+for i = 0 to math.min(bxBack, bFVG_UP.size() - 1)
+    getUPi = bFVG_UP.get(i)
+    if getUPi.active
+        getUPi.box.set_right(bar_index + 8)
+        if low < getUPi.box.get_top()
+            getUPi.box.set_border_style(line.style_dashed)
+        if low < getUPi.box.get_bottom()
+            getUPi.box.set_bgcolor(color.new(cFVGblBR, 95))
+            getUPi.box.set_border_style(line.style_dotted)
+            getUPi.box.set_right(bar_index)
+            getUPi.active := false
+
+for i = 0 to math.min(bxBack, bFVG_DN.size() - 1)
+    getDNi = bFVG_DN.get(i)
+    if getDNi.active
+        getDNi.box.set_right(bar_index + 8)
+        if high > getDNi.box.get_bottom()
+            getDNi.box.set_border_style(line.style_dashed)
+        if high > getDNi.box.get_top()
+            getDNi.box.set_bgcolor(color.new(cFVGbrBR, 95))
+            getDNi.box.set_border_style(line.style_dotted)
+            getDNi.box.set_right(bar_index)
+            getDNi.active := false
+
+[top, btm] = swings(length)
+
+if showOB and per
+    if close > top.y and not top.crossed
+        top.crossed := true
+
+        minima = max[1]
+        maxima = min[1]
+        loc = time[1]
+
+        for i = 1 to (n - top.x) - 1
+            minima := math.min(min[i], minima)
+            maxima := minima == min[i] ? max[i] : maxima
+            loc := minima == min[i] ? time[i] : loc
+        bullish_ob.unshift(ob.new(maxima, minima, loc))
+
+    if bullish_ob.size() > 0
+        for i = bullish_ob.size() - 1 to 0
+            element = bullish_ob.get(i)
+
+            if not element.breaker
+                if math.min(close, open) < element.btm
+                    element.breaker := true
+                    element.break_loc := time
+            else
+                if close > element.top
+                    bullish_ob.remove(i)
+                else if i < showBull and top.y < element.top and top.y > element.btm
+                    blBrkConf := 1
+
+    if blBrkConf > blBrkConf[1] and showLabels
+        label.new(top.x, top.y, '▼', color = na
+          , textcolor = bearCss.notransp()
+          , style = label.style_label_down
+          , size = size.tiny)
+
+if showOB and per
+    if close < btm.y and not btm.crossed
+        btm.crossed := true
+
+        minima = min[1]
+        maxima = max[1]
+        loc = time[1]
+
+        for i = 1 to (n - btm.x) - 1
+            maxima := math.max(max[i], maxima)
+            minima := maxima == max[i] ? min[i] : minima
+            loc := maxima == max[i] ? time[i] : loc
+        bearish_ob.unshift(ob.new(maxima, minima, loc))
+
+    if bearish_ob.size() > 0
+        for i = bearish_ob.size() - 1 to 0
+            element = bearish_ob.get(i)
+
+            if not element.breaker
+                if math.max(close, open) > element.top
+                    element.breaker := true
+                    element.break_loc := time
+            else
+                if close < element.btm
+                    bearish_ob.remove(i)
+                else if i < showBear and btm.y > element.btm and btm.y < element.top
+                    brBrkConf := 1
+
+    if brBrkConf > brBrkConf[1] and showLabels
+        label.new(btm.x, btm.y, '▲', color = na
+          , textcolor = bullCss.notransp()
+          , style = label.style_label_up
+          , size = size.tiny)
+
+if barstate.islast and showOB
+    if a_bx_ln_lb.size() > 0
+        for i = a_bx_ln_lb.size() - 1 to 0
+            item = a_bx_ln_lb.remove(i)
+            item.bx.delete()
+            item.ln.delete()
+            item.lb.delete()
+
+    if showBull > 0
+        if bullish_ob.size() > 0
+            for i = 0 to math.min(showBull, bullish_ob.size()) - 1
+                get_ob = bullish_ob.get(i)
+                get_ob.display(bullCss, bullBrkCss, 'bl')
+
+    if showBear > 0
+        if bearish_ob.size() > 0
+            for i = 0 to math.min(showBear, bearish_ob.size()) - 1
+                get_ob = bearish_ob.get(i)
+                get_ob.display(bearCss, bearBrkCss, 'br')
+
+var table dtTag = table.new(position.top_right, 1, 1)
+if barstate.islast
+    table.cell(dtTag, 0, 0, "@dailytrade", text_color = color.new(color.gray, 15), text_size = size.tiny, bgcolor = color.new(color.black, 100))
