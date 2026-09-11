@@ -793,10 +793,12 @@ plot(maShort, color = #FF6D00, title = "Short MA")
 plot(maLong, color = #43A047, title = "Long MA")
 plot(ta.cross(maShort, maLong) ? maShort : na, color = #2962FF, style = plot.style_cross, linewidth = 4, title = "Cross")
 
-poi_box_width  = input.float(2.5, title = 'POI Width', group = 'GBH POI', minval = 1, maxval = 10, step = 0.5)
-poi_history    = input.int(20, title = 'POI History To Keep', group = 'GBH POI', minval = 5, maxval = 50)
-poi_swing_len  = input.int(10, title = 'Swing Length', group = 'GBH POI', minval = 1, maxval = 50)
-poi_label_color = input.color(color.white, title = 'POI Color', group = 'GBH POI')
+poi_box_width     = input.float(2.5, title = 'POI Width', group = 'GBH POI', minval = 1, maxval = 10, step = 0.5)
+poi_history       = input.int(20, title = 'POI History To Keep', group = 'GBH POI', minval = 5, maxval = 50)
+poi_swing_len     = input.int(10, title = 'Swing Length', group = 'GBH POI', minval = 1, maxval = 50)
+poi_supply_color  = input.color(color.new(#EDEDED, 70), title = 'POI (Ceiling)', group = 'GBH POI', inline = 'poicol')
+poi_demand_color  = input.color(color.new(#00FFFF, 70), title = 'POI (Floor)', group = 'GBH POI', inline = 'poicol')
+poi_text_color    = input.color(color.white, title = 'POI Text', group = 'GBH POI')
 
 poi_atr       = ta.atr(50)
 poi_swingHigh = ta.pivothigh(high, poi_swing_len, poi_swing_len)
@@ -807,27 +809,33 @@ var box[] demandPOI = array.new_box()
 
 if not na(poi_swingHigh)
     poiBufferH = poi_atr * (poi_box_width / 10)
-    poiLevelH  = poi_swingHigh - poiBufferH / 2
+    poiTopH    = poi_swingHigh
+    poiBotH    = poiTopH - poiBufferH
+    poiMidH    = (poiTopH + poiBotH) / 2
     okToDrawH  = true
     if supplyPOI.size() > 0
         for i = 0 to supplyPOI.size() - 1
-            if math.abs(poiLevelH - supplyPOI.get(i).get_top()) <= poi_atr * 2
+            existingMidH = math.avg(supplyPOI.get(i).get_top(), supplyPOI.get(i).get_bottom())
+            if math.abs(poiMidH - existingMidH) <= poi_atr * 2
                 okToDrawH := false
     if okToDrawH
-        supplyPOI.unshift(box.new(bar_index - poi_swing_len, poiLevelH, bar_index, poiLevelH, border_color = color.new(poi_label_color, 90), bgcolor = color.new(poi_label_color, 90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small))
+        supplyPOI.unshift(box.new(bar_index - poi_swing_len, poiTopH, bar_index, poiBotH, border_color = color.new(poi_supply_color, 40), bgcolor = poi_supply_color, extend = extend.right, text = 'POI', text_halign = text.align_center, text_valign = text.align_center, text_color = poi_text_color, text_size = size.small))
         if supplyPOI.size() > poi_history
             supplyPOI.pop().delete()
 
 if not na(poi_swingLow)
     poiBufferL = poi_atr * (poi_box_width / 10)
-    poiLevelL  = poi_swingLow + poiBufferL / 2
+    poiBotL    = poi_swingLow
+    poiTopL    = poiBotL + poiBufferL
+    poiMidL    = (poiTopL + poiBotL) / 2
     okToDrawL  = true
     if demandPOI.size() > 0
         for i = 0 to demandPOI.size() - 1
-            if math.abs(poiLevelL - demandPOI.get(i).get_top()) <= poi_atr * 2
+            existingMidL = math.avg(demandPOI.get(i).get_top(), demandPOI.get(i).get_bottom())
+            if math.abs(poiMidL - existingMidL) <= poi_atr * 2
                 okToDrawL := false
     if okToDrawL
-        demandPOI.unshift(box.new(bar_index - poi_swing_len, poiLevelL, bar_index, poiLevelL, border_color = color.new(poi_label_color, 90), bgcolor = color.new(poi_label_color, 90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small))
+        demandPOI.unshift(box.new(bar_index - poi_swing_len, poiTopL, bar_index, poiBotL, border_color = color.new(poi_demand_color, 40), bgcolor = poi_demand_color, extend = extend.right, text = 'POI', text_halign = text.align_center, text_valign = text.align_center, text_color = poi_text_color, text_size = size.small))
         if demandPOI.size() > poi_history
             demandPOI.pop().delete()
 
