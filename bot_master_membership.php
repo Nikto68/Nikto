@@ -3569,6 +3569,25 @@ function showTariff($uid, $chatId, $replyTo = null) {
     panelShow($uid, $chatId, 'shop', $text, inlineKb([[$b]]), $replyTo);
 }
 
+/**
+ * 🚀 ثبت سفارش — به‌جای گفتگوی متنی (لینک/تعداد/سرعت)، یک دکمه‌ی
+ * تمام‌صفحه‌ی مینی‌اپ باز می‌شود که همان اطلاعات را با فرم می‌گیرد.
+ * محصولِ ساده (بدون flow) هم از همین مسیر می‌رود — مینی‌اپ خودش
+ * تشخیص می‌دهد فرمی لازم است یا فقط انتخابِ روشِ پرداخت.
+ */
+function openProductOrder($uid, $chatId, $p) {
+    $url = maOrderUrl($p['id']);
+    if ($url === '') {
+        sendMsg(BOT_TOKEN, $chatId, "⚠️ فروشگاه هنوز راه‌اندازی نشده. لطفا با پشتیبانی تماس بگیرید.");
+        chTechAlert("🔴 <b>مینی‌اپِ سفارش آدرس ندارد!</b>\n\n/panel ← 🚀 مینی‌اپ‌ها ← آدرسِ پایه را تنظیم کنید.");
+        return;
+    }
+    sendMsg(BOT_TOKEN, $chatId,
+        ($p['emoji'] ?? '💠') . ' <b>' . h($p['name']) . "</b>\n💰 " . fmtNum($p['price']) . ' ' . h($p['currency']) .
+        "\n\nبرای ثبت سفارش روی دکمه‌ی زیر بزنید 👇",
+        inlineKb([[['text' => '🚀 ثبت سفارش', 'web_app' => ['url' => $url]]]]));
+}
+
 /** نمایش یک محصول تکی — برای دکمه‌های سفارشی «محصول» */
 function showOneProduct($uid, $chatId, $p) {
     $cnt = count($p['buyers']);
@@ -4224,139 +4243,6 @@ function gwInvoiceKb($order) {
     return inlineKb($rows);
 }
 
-/** جریان سفارش: شروع */
-function flowStart($uid, $chatId, $p) {
-    $f = $p['flow'] ?? [];
-    setState($uid, 'flow', ['pid' => $p['id'], 'step' => 'link', 'data' => []]);
-    if (!empty($f['ask_link'])) {
-        panelShow($uid, $chatId, 'shop', flowT('flow_link', $p), inlineKb([[btnUI('cancel', 'cancel', 'cancel')]]));
-        return;
-    }
-    flowNext($uid, $chatId, 'qty');
-}
-
-function flowNext($uid, $chatId, $step) {
-    $st = getState($uid);
-    if (!$st || $st['action'] !== 'flow') return;
-    $sd = $st['data'];
-    $p  = Product::get($sd['pid']);
-    if (!$p) { clearState($uid); return; }
-    $f  = $p['flow'] ?? [];
-    $sd['step'] = $step;
-    setState($uid, 'flow', $sd);
-
-    if ($step === 'qty') {
-        if (empty($f['ask_qty'])) { flowNext($uid, $chatId, 'speed'); return; }
-        panelShow($uid, $chatId, 'shop',
-            flowT('flow_qty', $p, ['min' => number_format((int)$f['min']), 'max' => number_format((int)$f['max'])]),
-            inlineKb([[btnUI('cancel', 'cancel', 'cancel')]]));
-        return;
-    }
-
-    if ($step === 'speed') {
-        $speeds = [];
-        foreach ($f['speeds'] ?? [] as $sp) if (!isset($sp['on']) || !empty($sp['on'])) $speeds[] = $sp;
-
-        if (count($speeds) < 2) {
-            $one = $speeds[0] ?? [];
-            $sd['data']['speed']       = speedLabel($one);
-            $sd['data']['mult']        = (float)($one['mult'] ?? 1);
-            $sd['data']['per_day']     = (int)($one['per_day'] ?? 0);
-            $sd['data']['eta']         = speedEta($one, (int)($sd['data']['qty'] ?? 0));
-            $sd['data']['smm_service'] = trim((string)($one['smm_service'] ?? ''));
-            $sd['data']['rate']        = speedRate($p, $one);
-            $fx = speedFxInfo($p, $one);
-            $sd['data']['usd_rate']    = $fx['usd_rate'];
-            $sd['data']['usdt_irt']    = $fx['usdt_irt'];
-            setState($uid, 'flow', $sd);
-            flowNext($uid, $chatId, 'admin');
-            return;
-        }
-
-        $qtyNow = (int)($sd['data']['qty'] ?? 0);
-        // نرخِ هرکدام از پلن‌ها ممکن است فرق کند (هرکدام سرویسِ جدای خودش
-        // را دارد) — پس یک عدد ثابت برای همه‌شان درست نیست
-        $rates = array_map(fn($sp) => speedRate($p, $sp), $speeds);
-        $uniformRate = count(array_unique($rates)) <= 1;
-
-        // 🎠 حالتِ اسلایدر — یک دکمه‌ی بالا (خودِ انتخاب) + قبلی/بعدی برای
-        // ورق‌زدن بینِ پلن‌ها؛ برای وقتی پلن‌ها زیادند و چیدمانِ توری شلوغه
-        if (($f['speed_mode'] ?? 'grid') === 'carousel') {
-            $n = count($speeds);
-            $idx = (int)($sd['data']['speed_idx'] ?? 0);
-            $idx = (($idx % $n) + $n) % $n;
-            $sd['data']['speed_idx'] = $idx;
-            setState($uid, 'flow', $sd);
-            $cur = $speeds[$idx];
-
-            $top = ['text' => speedBtnLabel($cur), 'callback_data' => 'fsp_' . $cur['id']];
-            if (isStyle($cur['color'] ?? '')) $top['style'] = $cur['color'];
-            elseif (gs('buy')) $top['style'] = gs('buy');
-            if (!empty($cur['icon'])) $top['icon_custom_emoji_id'] = (string)$cur['icon'];
-
-            $prevLabel = trim((string)($f['speed_prev_label'] ?? '')) ?: '◀️ قبلی';
-            $nextLabel = trim((string)($f['speed_next_label'] ?? '')) ?: 'بعدی ▶️';
-            $rows = [
-                [$top],
-                [btnCb($prevLabel, 'fspnav_prev', 'nav'), btnCb($nextLabel, 'fspnav_next', 'nav')],
-                [btnUI('cancel', 'cancel', 'cancel')],
-            ];
-
-            // نرخِ همینِ پلنی که الان رو صفحه‌ست — نه یک عددِ ثابتِ کلی
-            $head = flowT('flow_rate', $p, ['rate' => fmtNum($rates[$idx])]) . "\n\n";
-
-            $notes = '';
-            $d = trim((string)($cur['desc'] ?? ''));
-            if ($d !== '') {
-                $notes = "\n" . h(speedLabel($cur)) . ' — ' . $d;
-                if ($qtyNow > 0) $notes .= ' (' . h(speedEta($cur, $qtyNow)) . ')';
-                $notes = "\n" . $notes . "\n";
-            }
-            $pos = "\n\n" . number_format($idx + 1) . ' از ' . number_format($n);
-            panelShow($uid, $chatId, 'shop', $head . flowT('flow_speed', $p) . $notes . $pos, inlineKb($rows));
-            return;
-        }
-
-        // حالتِ توری (پیش‌فرض): وقتی پلن‌ها نرخِ یکسان ندارند، نمایشِ یک
-        // «هزینه‌ی هر عدد» ثابت روی همه گمراه‌کننده است — نشانش نده
-        $head = ($uniformRate && ($sd['data']['rate_note'] ?? '') !== '') ? $sd['data']['rate_note'] . "\n\n" : '';
-
-        $items = [];
-        foreach ($speeds as $sp) {
-            $b = ['text' => speedBtnLabel($sp), 'callback_data' => 'fsp_' . $sp['id']];
-            if (isStyle($sp['color'] ?? '')) $b['style'] = $sp['color'];
-            elseif (gs('buy')) $b['style'] = gs('buy');
-            if (!empty($sp['icon'])) $b['icon_custom_emoji_id'] = (string)$sp['icon'];
-            $items[] = $b;
-        }
-        $rows = layoutRows($items, $f['speed_layout'] ?? '1');
-        $rows[] = [btnUI('cancel', 'cancel', 'cancel')];
-
-        // توضیح هر سرعت، اگر ادمین نوشته باشد
-        $notes = '';
-        foreach ($speeds as $sp) {
-            $d = trim((string)($sp['desc'] ?? ''));
-            if ($d === '') continue;
-            $notes .= "\n" . h(speedLabel($sp)) . " — " . $d;
-            if ($qtyNow > 0) $notes .= " (" . h(speedEta($sp, $qtyNow)) . ")";
-        }
-        if ($notes !== '') $notes = "\n" . $notes . "\n";
-
-        panelShow($uid, $chatId, 'shop', $head . flowT('flow_speed', $p) . $notes, inlineKb($rows));
-        return;
-    }
-
-    if ($step === 'admin') {
-        if (empty($f['ask_admin'])) { flowInvoice($uid, $chatId); return; }
-        $rows = [];
-        $un = botUsername();
-        if ($un) $rows[] = [btnUrl('➕ افزودن ربات به کانال', "https://t.me/{$un}?startchannel&admin=invite_users+promote_members", 'buy')];
-        $rows[] = [btnUI('did_admin', 'fadm', 'confirm')];
-        $rows[] = [btnUI('cancel', 'cancel', 'cancel')];
-        panelShow($uid, $chatId, 'shop', T('flow_addbot'), inlineKb($rows));
-        return;
-    }
-}
 
 /** نام کاربری ربات مادر — یک بار گرفته و کش می‌شود */
 function botUsername() {
@@ -4372,44 +4258,48 @@ function botUsername() {
 }
 
 /**
- * بررسی ادمین بودن ربات در کانال کاربر.
- * لینک عمومی را مستقیم چک می‌کند؛ لینک خصوصی از راه my_chat_member
- * تایید می‌شود (وقتی کاربر ربات را اضافه کرد، همان‌جا ثبت می‌شود).
+ * 🚀 بررسیِ ادمین‌بودنِ ربات در کانال — نسخه‌ی مینی‌اپ.
+ *
+ * لینک عمومی را همین‌جا مستقیم چک می‌کند. لینکِ خصوصی (پیوندِ دعوت)
+ * را نمی‌شود مستقیم چک کرد — فقط وقتی کاربر ربات را واقعا ادمینِ آن
+ * کانال کند، وبهوکِ my_chat_member خبر می‌دهد (handleMasterChatMember).
+ * برای همین یک استیتِ سبک («flow»/«admin») نگه می‌داریم — همان کلیدی
+ * که آن وبهوک از قبل بلد است — تا وقتی مینی‌اپ دوباره سر می‌زند
+ * («بررسی دوباره») ببینیم آیا در همین فاصله تایید شده یا نه.
  */
-function flowCheckAdmin($uid) {
+function channelAdminCheck($uid, $pid, $link) {
+    $link = trim((string)$link);
+
+    // اگر پیش‌تر (از راه وبهوک) تایید شده — همان را برگردان
     $st = getState($uid);
-    if (!$st || $st['action'] !== 'flow') return [false, ''];
-    $sd = $st['data'];
-
-    // اگر با افزودن ربات قبلا تایید شده
-    if (!empty($sd['data']['admin_ok'])) return [true, $sd['data']['chat_title'] ?? ''];
-
-    $link = $sd['data']['link'] ?? '';
-    if (!preg_match('#^https?://t\.me/([A-Za-z0-9_]{4,})/?$#', $link, $m)) {
-        return [false, ''];   // لینک خصوصی — فقط از راه افزودن ربات تایید می‌شود
+    if ($st && $st['action'] === 'flow' && ($st['data']['pid'] ?? '') === $pid
+        && !empty($st['data']['data']['admin_ok'])) {
+        return [true, $st['data']['data']['chat_title'] ?? '', $st['data']['data']['chat_id'] ?? '', false];
     }
-    $chat = '@' . $m[1];
-    $info = tg(BOT_TOKEN, 'getChat', ['chat_id' => $chat], 8);
-    if (empty($info['ok'])) return [false, ''];
 
-    $me = tg(BOT_TOKEN, 'getMe', [], 8);
-    $botId = $me['result']['id'] ?? 0;
-    if (!$botId) return [false, ''];
+    if (preg_match('#^https?://t\.me/([A-Za-z0-9_]{4,})/?$#', $link, $m)) {
+        $chat = '@' . $m[1];
+        $info = tg(BOT_TOKEN, 'getChat', ['chat_id' => $chat], 8);
+        if (!empty($info['ok'])) {
+            $me = tg(BOT_TOKEN, 'getMe', [], 8);
+            $botId = $me['result']['id'] ?? 0;
+            if ($botId) {
+                $mem = tg(BOT_TOKEN, 'getChatMember', ['chat_id' => $chat, 'user_id' => $botId], 8);
+                $ok = !empty($mem['ok']) && in_array($mem['result']['status'] ?? '', ['administrator', 'creator'], true);
+                if ($ok) {
+                    $title = $info['result']['title'] ?? $chat;
+                    return [true, $title, $chat, false];
+                }
+            }
+        }
+        return [false, '', '', false];   // لینکِ عمومی، ولی هنوز ادمین نشده
+    }
 
-    $mem = tg(BOT_TOKEN, 'getChatMember', ['chat_id' => $chat, 'user_id' => $botId], 8);
-    if (empty($mem['ok'])) return [false, ''];
-    $ok = in_array($mem['result']['status'] ?? '', ['administrator', 'creator'], true);
-    if (!$ok) return [false, ''];
-
-    $title = $info['result']['title'] ?? $chat;
-    mutate('states', function (&$x) use ($uid, $chat, $title) {
-        $k = (string)$uid;
-        if (!isset($x[$k])) return;
-        $x[$k]['data']['data']['admin_ok']   = true;
-        $x[$k]['data']['data']['chat_id']    = $chat;
-        $x[$k]['data']['data']['chat_title'] = $title;
-    });
-    return [true, $title];
+    // لینکِ خصوصی — منتظرِ وبهوکِ my_chat_member؛ استیت را (اگر نبود) بساز
+    if (!$st || $st['action'] !== 'flow' || ($st['data']['pid'] ?? '') !== $pid) {
+        setState($uid, 'flow', ['pid' => $pid, 'step' => 'admin', 'data' => []]);
+    }
+    return [false, '', '', true];
 }
 
 function speedLabel($sp) {
@@ -4464,110 +4354,77 @@ function flowTotal($p, $qty, $rate) {
     return round((float)$rate * ($qty / $per), 2);
 }
 
-function flowInvoice($uid, $chatId) {
-    $st = getState($uid);
-    if (!$st || $st['action'] !== 'flow') return;
-    $sd = $st['data'];
-    $p  = Product::get($sd['pid']);
-    if (!$p) { clearState($uid); return; }
+/**
+ * 🚀 ثبت سفارش از مینی‌اپ — همان اعتبارسنجی/محاسبه‌ی قبلی (لینک، بازه‌ی
+ * تعداد، نرخِ سرعت) ولی به‌جای گفتگوی متنیِ پشتِ‌هم، یک‌جا از فرم
+ * می‌آید؛ ثبتِ نهایی از همان توابعِ آزموده‌ی تسویه (settlePurchase/
+ * createOrderAndAsk) رد می‌شود — هیچ منطقِ پرداختی دوباره‌نویسی نشده.
+ */
+function maOrderSubmit($uid, $uname, $pid, $link, $qty, $speedId, $pay) {
+    $p = Product::get($pid);
+    if (!$p || empty($p['active'])) return ['ok' => false, 'error' => 'این محصول در دسترس نیست.'];
+    if (Product::hasBought($pid, $uid)) return ['ok' => false, 'error' => 'این محصول قبلا خریداری شده.'];
+    if (Product::isFull($p)) return ['ok' => false, 'error' => 'ظرفیت این محصول تکمیل شده است.'];
 
-    $qty  = (int)($sd['data']['qty'] ?? 0);
-    // «rate» از روی همان ردیفِ سرعتی که کاربر انتخاب کرد قفل شده — اگر
-    // به هر دلیلی نبود (حالتِ قدیمیِ میانِ‌راه)، مثلِ قبل با ضرب حساب کن
-    $rate  = isset($sd['data']['rate'])
-           ? (float)$sd['data']['rate']
-           : round((float)$p['price'] * (float)($sd['data']['mult'] ?? 1), 2);
-    $total = $qty > 0 ? flowTotal($p, $qty, $rate) : $rate;
+    $f = $p['flow'] ?? [];
+    $meta = [];
+    $total = (float)$p['price'];
 
-    $sd['data']['total'] = $total;
-    setState($uid, 'flow', $sd);
+    if (!empty($f['on'])) {
+        $link = !empty($f['ask_link']) ? trim((string)$link) : '';
+        if (!empty($f['ask_link']) && !preg_match('#^https?://t\.me/[A-Za-z0-9_+\-]{3,}#', $link)) {
+            return ['ok' => false, 'error' => 'لینک معتبر نیست. باید با https://t.me/ شروع شود.'];
+        }
 
-    $okLine = !empty($sd['data']['admin_ok'])
-        ? T('flow_admin_ok', ['title' => h($sd['data']['chat_title'] ?? '—')]) . "\n\n"
-        : '';
+        $qty = !empty($f['ask_qty']) ? (int)$qty : (int)($f['min'] ?? 1);
+        if (!empty($f['ask_qty'])) {
+            $min = (int)($f['min'] ?? 1); $max = (int)($f['max'] ?? 0);
+            if ($qty < $min || ($max > 0 && $qty > $max)) {
+                return ['ok' => false, 'error' => 'تعداد باید بین ' . number_format($min) . ' و ' . number_format($max) . ' باشد.'];
+            }
+        }
 
-    $usdRate = $sd['data']['usd_rate'] ?? null;
-    $usdtIrt = $sd['data']['usdt_irt'] ?? null;
-    $text = $okLine . flowT('flow_invoice', $p, [
-        'link'     => h($sd['data']['link'] ?? '—'),
-        'qty'      => number_format($qty),
-        'product'  => h($p['name']),
-        'speed'    => h($sd['data']['speed'] ?? '—'),
-        'per_day'  => number_format((int)($sd['data']['per_day'] ?? 0)),
-        'eta'      => h($sd['data']['eta'] ?? '—'),
-        'per'      => number_format((int)($p['flow']['per'] ?? 1000)),
-        'rate'     => fmtNum($rate),
-        'total'    => fmtNum($total),
-        'currency' => h($p['currency']),
-        // نرخِ زنده‌ی همان لحظه — فقط وقتی قیمتِ خودکار از پنل روشن است
-        'usd_rate' => $usdRate !== null ? ('$' . rtrim(rtrim(number_format($usdRate, 4), '0'), '.')) : '—',
-        'usdt_irt' => $usdtIrt !== null ? (number_format($usdtIrt) . ' تومان') : '—',
-    ]);
-    panelShow($uid, $chatId, 'shop', $text, inlineKb([
-        [btnCb('✅ موافقم، نهایی سازی سفارش', 'fok', 'confirm')],
-        [btnUI('cancel', 'cancel', 'cancel')],
-    ]));
-}
+        $speeds = [];
+        foreach ($f['speeds'] ?? [] as $sp) if (!isset($sp['on']) || !empty($sp['on'])) $speeds[] = $sp;
+        $chosen = null;
+        if (count($speeds) < 2) $chosen = $speeds[0] ?? null;
+        else foreach ($speeds as $sp) if (($sp['id'] ?? '') === $speedId) $chosen = $sp;
+        if (!$chosen) return ['ok' => false, 'error' => 'سرعتِ انتخاب‌شده نامعتبر است.'];
 
-/** ثبت نهایی سفارش جریان‌دار */
-function flowFinish($uid, $chatId, $uname) {
-    $st = getState($uid);
+        $rate  = speedRate($p, $chosen);
+        $total = flowTotal($p, $qty, $rate);
 
-    // دوباره زدن همان دکمه — پیام قبلی هنوز روی صفحه است
-    if ($st && $st['action'] === 'flow_meta') {
-        sendMsg(BOT_TOKEN, $chatId, "ℹ️ سفارش شما ثبت شده؛ روش پرداخت را از پیام بالا انتخاب کنید.");
-        return false;
+        $chatTitle = ''; $chatIdSaved = ''; $adminOk = false;
+        if (!empty($f['ask_admin'])) {
+            [$adminOk, $chatTitle, $chatIdSaved] = channelAdminCheck($uid, $pid, $link);
+            if (!$adminOk) return ['ok' => false, 'error' => 'ربات هنوز ادمینِ کانال/گروه نشده.', 'need_admin' => true];
+        }
+
+        $meta = [
+            'link' => $link, 'qty' => $qty, 'speed' => speedLabel($chosen),
+            'per_day' => (int)($chosen['per_day'] ?? 0), 'eta' => speedEta($chosen, $qty),
+            'chat_id' => $chatIdSaved, 'chat_title' => $chatTitle, 'admin_ok' => $adminOk,
+            'smm_service' => trim((string)($chosen['smm_service'] ?? '')),
+        ];
+        clearState($uid);   // استیتِ سبکِ ادمین‌چک (اگر ساخته شده بود) دیگر لازم نیست
     }
-    if (!$st || $st['action'] !== 'flow') {
-        // حالت گم شده (ربات ری‌استارت شده یا خیلی وقت گذشته) — از اول، نه سکوت
-        sendMsg(BOT_TOKEN, $chatId,
-            "⚠️ این سفارش منقضی شده است.\n\nلطفا دوباره از «🛒 خرید محصول» شروع کنید.",
-            mainKeyboard());
-        return false;
-    }
-
-    $sd = $st['data'];
-    $p  = Product::get($sd['pid']);
-    if (!$p) {
-        clearState($uid);
-        sendMsg(BOT_TOKEN, $chatId, "⚠️ این محصول دیگر در دسترس نیست.", mainKeyboard());
-        if (!isAdmin($uid)) chTechAlert(
-            "⚠️ کاربر <code>{$uid}</code> روی محصولی سفارش داد که دیگر وجود ندارد: <code>" .
-            h((string)($sd['pid'] ?? '')) . "</code>");
-        return false;
-    }
-
-    $total = (float)($sd['data']['total'] ?? 0);
 
     // 🧪 حالت تست — سفارش با مبلغ صفر تا آخر می‌رود
     if ($total <= 0 && !empty(cfg()['test_mode'])) {
-        $meta = [
-            'link'       => $sd['data']['link'] ?? '',
-            'qty'        => (int)($sd['data']['qty'] ?? 0),
-            'speed'      => $sd['data']['speed'] ?? '',
-            'per_day'    => (int)($sd['data']['per_day'] ?? 0),
-            'eta'        => $sd['data']['eta'] ?? '',
-            'chat_id'    => $sd['data']['chat_id'] ?? '',
-            'chat_title' => $sd['data']['chat_title'] ?? '',
-            'admin_ok'   => !empty($sd['data']['admin_ok']),
-            'smm_service'=> $sd['data']['smm_service'] ?? '',
-            'test'       => true,
-        ];
-        clearState($uid);
+        $meta['test'] = true;
         $oid = Order::create($uid, $uname, 'product', $p['id'], 0, $p['currency'], $meta);
         Order::attachReceipt($oid, 'text', '🧪 سفارش تستی — بدون پرداخت');
         Order::approve($oid, ADMIN_ID);
         $od = Order::get($oid);
-        panelShow($uid, $chatId, 'shop', orderDoneText($od), orderDoneKb($od));
+        sendMsg(BOT_TOKEN, $uid, orderDoneText($od), orderDoneKb($od));
         if (orderReadyToReport($od)) { announceSale($od); reportSale($od); }
-        return true;
+        return ['ok' => true, 'settled' => true];
     }
 
     if ($total <= 0) {
         // تقریبا همیشه یعنی: قیمت این دکمه هنوز تنظیم نشده
-        clearState($uid);
         if (isAdmin($uid)) {
-            sendMsg(BOT_TOKEN, $chatId,
+            sendMsg(BOT_TOKEN, $uid,
                 "⚠️ <b>قیمت این محصول صفر است، پس فاکتور ساخته نمی‌شود.</b>\n\n" .
                 "محصول: <b>" . h($p['name']) . "</b>\n\n" .
                 "قیمتش را بگذارید:\n" .
@@ -4577,9 +4434,6 @@ function flowFinish($uid, $chatId, $uname) {
                     ? [[btnCb('💰 تنظیم قیمت همین حالا', 'sbpr_' . implode('|', $p['btn']), 'buy')]]
                     : [[btnCb('💰 تنظیم قیمت همین حالا', 'epp_' . $p['id'], 'buy')]]));
         } else {
-            sendMsg(BOT_TOKEN, $chatId,
-                "⚠️ قیمت این محصول هنوز تنظیم نشده است.\nلطفا با پشتیبانی تماس بگیرید.",
-                mainKeyboard());
             chTechAlert(
                 "🔴 <b>فروش از دست رفت!</b>\n\n" .
                 "کاربر <code>{$uid}</code> خواست «<b>" . h($p['name']) . "</b>» بخرد " .
@@ -4588,32 +4442,19 @@ function flowFinish($uid, $chatId, $uname) {
                     ? [[btnCb('💰 تنظیم قیمت', 'sbpr_' . implode('|', $p['btn']), 'buy')]]
                     : [[btnCb('💰 تنظیم قیمت', 'epp_' . $p['id'], 'buy')]]));
         }
-        return false;
+        return ['ok' => false, 'error' => 'قیمت این محصول هنوز تنظیم نشده. با پشتیبانی تماس بگیرید.'];
     }
 
-    $meta = [
-        'link'       => $sd['data']['link'] ?? '',
-        'qty'        => (int)($sd['data']['qty'] ?? 0),
-        'speed'      => $sd['data']['speed'] ?? '',
-        'per_day'    => (int)($sd['data']['per_day'] ?? 0),
-        'eta'        => $sd['data']['eta'] ?? '',
-        'chat_id'    => $sd['data']['chat_id'] ?? '',
-        'chat_title' => $sd['data']['chat_title'] ?? '',
-        'admin_ok'   => !empty($sd['data']['admin_ok']),
-        'smm_service'=> $sd['data']['smm_service'] ?? '',
-    ];
-    $note = trim($meta['link'] . ' · ' . number_format($meta['qty']) . ' نفر · ' . $meta['speed'] .
-                 ($meta['eta'] ? ' · ' . $meta['eta'] : ''));
-    setState($uid, 'flow_meta', $meta);
-    // نسخه ماندگار — اگر کاربر وسط کار رفت شارژ کند، مشخصات سفارش گم نشود
-    mutateUser($uid, function (&$user) use ($meta, $p, $total) {
-        if ($user === null) return;
-        $user['pending'] = ['pid' => $p['id'], 'amount' => $total,
-                             'currency' => $p['currency'], 'meta' => $meta, 'at' => nowStr()];
-    });
+    if ($pay === 'wallet') {
+        $bal = (float)(getUser($uid)['balance'] ?? 0);
+        $needsTopup = $bal < $total;
+        settlePurchase($uid, $uid, $uname, $p, $total, $meta);   // پیام نتیجه/درخواستِ شارژ خودش در چت می‌رود
+        return ['ok' => true, 'settled' => !$needsTopup, 'needs_topup' => $needsTopup];
+    }
 
-    settlePurchase($uid, $chatId, $uname, $p, $total, $meta);
-    return true;
+    $oid = createOrderAndAsk($uid, $uid, $uname, 'product', $p['id'], $total, $p['currency'], '🛒 ' . h($p['name']), $meta);
+    if (!$oid) return ['ok' => false, 'error' => 'روشِ پرداخت هنوز تنظیم نشده. با پشتیبانی تماس بگیرید.'];
+    return ['ok' => true, 'settled' => false, 'manual' => true];
 }
 
 function deliverProduct($uid, $chatId, $productId) {
@@ -6962,7 +6803,7 @@ function masterHandle($update) {
 
             if ($p) {
                 if (empty($p['active'])) { sendMsg(BOT_TOKEN, $chatId, T('buy_empty')); return; }
-                if (!empty($p['flow']['on'])) { flowStart($uid, $chatId, $p); return; }
+                if (!empty($p['flow']['on'])) { openProductOrder($uid, $chatId, $p); return; }
                 showOneProduct($uid, $chatId, $p);
                 return;
             }
@@ -7008,84 +6849,7 @@ function masterHandle($update) {
             if (Product::hasBought($pid, $uid)) { deliverProduct($uid, $chatId, $pid); return; }
             if (Product::isFull($p)) { sendMsg(BOT_TOKEN, $chatId, "🔴 ظرفیت این محصول تکمیل شده است."); return; }
 
-            if (!empty($p['flow']['on'])) { flowStart($uid, $chatId, $p); return; }
-
-            $bal = (float)(getUser($uid)['balance'] ?? 0);
-            $rows = [];
-            if (strtoupper($p['currency']) === 'تومان' || $p['currency'] === 'تومان') {
-                $rows[] = [['text' => UT('wallet_pay') . ' (' . fmtNum($bal) . ')', 'callback_data' => 'wpay_' . $pid, 'style' => gs('buy') ?: null]];
-            }
-            $rows[] = [['text' => UT('direct_pay'), 'callback_data' => 'dpay_' . $pid, 'style' => gs('buy') ?: null]];
-            $rows[] = [['text' => UT('cancel'), 'callback_data' => 'cancel', 'style' => gs('cancel') ?: null]];
-
-            sendMsg(BOT_TOKEN, $chatId,
-                "🛒 <b>" . h($p['name']) . "</b>\n💰 " . fmtNum($p['price']) . ' ' . h($p['currency']) .
-                "\n\nروش پرداخت را انتخاب کنید:", inlineKb($rows));
-            return;
-        }
-
-        // --- جریان سفارش ---
-        if (str_starts_with($data, 'fsp_')) {
-            $sid = substr($data, 4);
-            $st = getState($uid);
-            if (!$st || $st['action'] !== 'flow') { answerCb(BOT_TOKEN, $cbId, 'منقضی شد', true); return; }
-            $sd = $st['data'];
-            $p = Product::get($sd['pid']);
-            $chosen = null;
-            foreach (($p['flow']['speeds'] ?? []) as $sp) if ($sp['id'] === $sid) $chosen = $sp;
-            if (!$chosen) { answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return; }
-            $sd['data']['speed']       = speedLabel($chosen);
-            $sd['data']['mult']        = (float)$chosen['mult'];
-            $sd['data']['per_day']     = (int)($chosen['per_day'] ?? 0);
-            $sd['data']['eta']         = speedEta($chosen, (int)($sd['data']['qty'] ?? 0));
-            $sd['data']['smm_service'] = trim((string)($chosen['smm_service'] ?? ''));
-            $sd['data']['rate']        = speedRate($p, $chosen);
-            $fx = speedFxInfo($p, $chosen);
-            $sd['data']['usd_rate']    = $fx['usd_rate'];
-            $sd['data']['usdt_irt']    = $fx['usdt_irt'];
-            setState($uid, 'flow', $sd);
-            answerCb(BOT_TOKEN, $cbId);
-            flowNext($uid, $chatId, 'admin');
-            return;
-        }
-        // 🎠 ورق‌زدنِ اسلایدرِ سرعت/پلن — فقط شماره‌ی نشان‌داده‌شده را عوض
-        // می‌کند، چیزی را نهایی نمی‌کند (انتخاب با خودِ دکمه‌ی fsp_ است)
-        if (str_starts_with($data, 'fspnav_')) {
-            $dir = substr($data, 7);
-            $st = getState($uid);
-            if (!$st || $st['action'] !== 'flow' || ($st['data']['step'] ?? '') !== 'speed') {
-                answerCb(BOT_TOKEN, $cbId); return;
-            }
-            $sd = $st['data'];
-            $p = Product::get($sd['pid']);
-            $speeds = [];
-            foreach (($p['flow']['speeds'] ?? []) as $sp) if (!isset($sp['on']) || !empty($sp['on'])) $speeds[] = $sp;
-            $n = count($speeds);
-            if (!$p || $n < 1) { answerCb(BOT_TOKEN, $cbId); return; }
-            $idx = (int)($sd['data']['speed_idx'] ?? 0);
-            $idx = ((($idx + ($dir === 'next' ? 1 : -1)) % $n) + $n) % $n;
-            $sd['data']['speed_idx'] = $idx;
-            setState($uid, 'flow', $sd);
-            answerCb(BOT_TOKEN, $cbId);
-            flowNext($uid, $chatId, 'speed');
-            return;
-        }
-        if ($data === 'fadm') {
-            [$ok, $title] = flowCheckAdmin($uid);
-            if (!$ok) {
-                answerCb(BOT_TOKEN, $cbId, '❌ هنوز ادمین نشده', true);
-                $un = botUsername();
-                $rows = [];
-                if ($un) $rows[] = [btnUrl('➕ افزودن ربات به کانال', "https://t.me/{$un}?startchannel&admin=invite_users+promote_members", 'buy')];
-                $rows[] = [btnUI('did_admin', 'fadm', 'confirm')];
-                $rows[] = [btnUI('cancel', 'cancel', 'cancel')];
-                panelShow($uid, $chatId, 'shop',
-                    T('flow_addbot') . "\n\n" . T('flow_admin_no', ['bot' => '@' . h($un)]),
-                    inlineKb($rows));
-                return;
-            }
-            answerCb(BOT_TOKEN, $cbId, '✅ تایید شد');
-            flowInvoice($uid, $chatId);
+            openProductOrder($uid, $chatId, $p);
             return;
         }
 
@@ -7155,68 +6919,6 @@ function masterHandle($update) {
                 "🔍 <b>کد پیگیری</b> سفارش را بفرستید.\n\n" .
                 "نمونه: <code>or_tjwodm15a1a3</code>",
                 inlineKb([[btnUI('cancel', 'cancel', 'cancel')]]));
-            return;
-        }
-
-        if ($data === 'fok') {
-            answerCb(BOT_TOKEN, $cbId);
-            flowFinish($uid, $chatId, $uname);
-            return;
-        }
-        // دکمه‌های قدیمی پرداخت (پیام‌های قبلی) — همان مسیر تازه را می‌روند
-        if (str_starts_with($data, 'fwpay_') || str_starts_with($data, 'fdpay_')) {
-            $rest = substr($data, 6);
-            $pos  = strrpos($rest, '|');
-            if ($pos === false) { answerCb(BOT_TOKEN, $cbId); return; }
-            $pid = substr($rest, 0, $pos);
-            $amt = (float)substr($rest, $pos + 1);
-            $p = Product::get($pid);
-            if (!$p || $amt <= 0) { answerCb(BOT_TOKEN, $cbId, 'نامعتبر', true); return; }
-
-            $meta = [];
-            $mst = getState($uid);
-            if ($mst && $mst['action'] === 'flow_meta') $meta = $mst['data'];
-            if (!$meta) {
-                $pend = getUser($uid)['pending'] ?? null;
-                if ($pend && ($pend['pid'] ?? '') === $pid) $meta = $pend['meta'] ?? [];
-            }
-            answerCb(BOT_TOKEN, $cbId);
-            settlePurchase($uid, $chatId, $uname, $p, $amt, $meta);
-            return;
-        }
-
-        if (str_starts_with($data, 'wpay_')) {
-            $pid = substr($data, 5);
-            $p = Product::get($pid);
-            if (!$p) { answerCb(BOT_TOKEN, $cbId, 'محصول پیدا نشد', true); return; }
-            $bal = (float)(getUser($uid)['balance'] ?? 0);
-            if ($bal < (float)$p['price']) {
-                answerCb(BOT_TOKEN, $cbId, '❌ موجودی کافی نیست', true);
-                sendMsg(BOT_TOKEN, $chatId, T('no_balance', ['balance' => fmtNum($bal)]),
-                    inlineKb([[['text' => UT('topup'), 'callback_data' => 'menu_topup', 'style' => gs('buy') ?: null]]]));
-                return;
-            }
-            if (Product::isFull($p)) { answerCb(BOT_TOKEN, $cbId, 'ظرفیت تکمیل است', true); return; }
-
-            [$ok, $r] = walletSettle($uid, $uname, $p, (float)$p['price']);
-            if (!$ok) {
-                $why = $r === 'insufficient' ? '❌ موجودی کافی نیست' : ('❌ ' . $r);
-                answerCb(BOT_TOKEN, $cbId, $why, true);
-                return;
-            }
-            answerCb(BOT_TOKEN, $cbId, '✅ خرید انجام شد');
-            $od = $r;
-            sendMsg(BOT_TOKEN, $chatId, orderDoneText($od), orderDoneKb($od));
-            if (orderReadyToReport($od)) { announceSale($od); reportSale($od); }
-            return;
-        }
-
-        if (str_starts_with($data, 'dpay_')) {
-            answerCb(BOT_TOKEN, $cbId);
-            $pid = substr($data, 5);
-            $p = Product::get($pid);
-            if (!$p) return;
-            createOrderAndAsk($uid, $chatId, $uname, 'product', $pid, $p['price'], $p['currency'], '🛒 ' . h($p['name']));
             return;
         }
 
@@ -9211,42 +8913,6 @@ function masterHandle($update) {
         return;
     }
 
-    if ($action === 'flow') {
-        $sd = $st['data'];
-        $p  = Product::get($sd['pid'] ?? '');
-        if (!$p) { clearState($uid); return; }
-        $step = $sd['step'] ?? 'link';
-
-        if ($step === 'link') {
-            if (!preg_match('#^https?://t\.me/[A-Za-z0-9_+\-]{3,}#', $text)) {
-                sendMsg(BOT_TOKEN, $chatId, flowT('flow_link_bad', $p));
-                return;
-            }
-            $sd['data']['link'] = $text;
-            setState($uid, 'flow', $sd);
-            flowNext($uid, $chatId, 'qty');
-            return;
-        }
-
-        if ($step === 'qty') {
-            $f = $p['flow'];
-            $q = (int)preg_replace('/[^0-9]/', '', $text);
-            $min = (int)$f['min']; $max = (int)$f['max'];
-            if ($q < $min || ($max > 0 && $q > $max)) {
-                sendMsg(BOT_TOKEN, $chatId, flowT('flow_qty_bad', $p,
-                    ['min' => number_format($min), 'max' => number_format($max)]));
-                return;
-            }
-            $sd['data']['qty'] = $q;
-            setState($uid, 'flow', $sd);
-
-            $sd['data']['rate_note'] = flowT('flow_rate', $p, ['rate' => fmtNum($p['price'])]);
-            setState($uid, 'flow', $sd);
-            flowNext($uid, $chatId, 'speed');
-            return;
-        }
-        return;
-    }
 
     if ($action === 'topup_amount') {
         $amt = (float)str_replace(',', '', $text);
@@ -10003,7 +9669,10 @@ function handleMasterChatMember($ev) {
                 $x[$k]['data']['data']['chat_id']    = $chatId;
                 $x[$k]['data']['data']['chat_title'] = $title;
             });
-            flowInvoice($byUser, $byUser);   // پیام در چت خصوصی خود مشتری
+            // مینی‌اپِ سفارش خودش با «بررسی دوباره» این تاییدیه را می‌بیند
+            sendMsg(BOT_TOKEN, $byUser,
+                "✅ ربات با موفقیت در <b>" . h($title) . "</b> ادمین شد.\n\n" .
+                "به مینی‌اپِ سفارش برگردید و «بررسی دوباره» را بزنید.");
             return;
         }
     }
@@ -10220,7 +9889,7 @@ function runMenuAction($act, $uid, $chatId, $uname, $fname, $replyTo = null) {
                 if (isPlaceholder($b['value'] ?? '')) {
                     $mp = productByName($b['text'] ?? '');
                     if ($mp) {
-                        if (!empty($mp['flow']['on'])) { flowStart($uid, $chatId, $mp); return; }
+                        if (!empty($mp['flow']['on'])) { openProductOrder($uid, $chatId, $mp); return; }
                         showOneProduct($uid, $chatId, $mp);
                         return;
                     }

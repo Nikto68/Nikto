@@ -21,6 +21,7 @@ require_once __DIR__ . '/miniapp_view_tg.php';
 require_once __DIR__ . '/miniapp_view_num.php';
 require_once __DIR__ . '/miniapp_view_react.php';
 require_once __DIR__ . '/miniapp_view_unified.php';
+require_once __DIR__ . '/miniapp_view_order.php';
 
 // ============================================================
 // ⚙️ پیکربندی پیش‌فرض
@@ -1495,7 +1496,7 @@ function maViewVer() {
     // این لیست قبلا react/unified/airdrop/coupons را نداشت — تغییر در آن‌ها نسخه را عوض نمی‌کرد و وب‌ویو همان کپیِ کش‌شده را نشان می‌داد.
     foreach ([
         'miniapp_view_tg.php', 'miniapp_view_num.php', 'miniapp_view_react.php',
-        'miniapp_view_unified.php', 'miniapps.php', 'airdrop.php', 'coupons.php',
+        'miniapp_view_unified.php', 'miniapp_view_order.php', 'miniapps.php', 'airdrop.php', 'coupons.php',
     ] as $f) {
         $m = @filemtime(__DIR__ . '/' . $f);
         if ($m && $m > $t) $t = $m;
@@ -1515,6 +1516,15 @@ function maUrl($key) {
 function maReady($key) {
     $a = maGet($key);
     return !empty($a['on']) && maUrl($key) !== '';
+}
+
+/**
+ * 🚀 آدرسِ مینی‌اپِ «ثبت سفارش» برایِ یک محصولِ مشخص — تنها مینی‌اپِ
+ * باقی‌مانده برای خریدِ محصول؛ جایگزینِ گفتگویِ متنیِ قدیمی.
+ */
+function maOrderUrl($pid) {
+    $u = maUrl('order');
+    return $u === '' ? '' : $u . '&pid=' . urlencode((string)$pid);
 }
 
 /** آیا اپِ یکپارچه چیزی برای نشان‌دادن دارد؟ — یعنی آدرس ثبت شده و حداقل یکی از سه اپ روشن است. */
@@ -2757,6 +2767,12 @@ function maServe($key) {
         echo maViewUnified(maBootUnified());
         exit;
     }
+    // 🚀 مینی‌اپِ «ثبت سفارش» — تنها مسیرِ خریدِ محصول؛ شیشه‌ای، سیاه‌وسفید، تمام‌صفحه.
+    if ($key === 'order') {
+        maSecurityHeaders();
+        echo maViewOrder(maBootOrder((string)($_GET['pid'] ?? '')));
+        exit;
+    }
     if (!in_array($key, maKeys(), true)) { http_response_code(404); echo 'not found'; exit; }
 
     $a = maGet($key);
@@ -2870,6 +2886,52 @@ function maBootUnified() {
         'best'     => maBestSellers(8),
         'topup'    => maTopupInfo(),
         'api'      => maApiUrl(),
+    ];
+}
+
+/**
+ * 🚀 بوتِ مینی‌اپِ «ثبت سفارش» — یک محصولِ خاص، از کاتالوگِ فروشگاهِ
+ * اصلیِ ربات (Product::)، نه از کاتالوگِ tg/num/react. فقط اطلاعاتِ
+ * غیرِ حساس (نام/قیمت/تنظیماتِ فرم) این‌جا می‌رود؛ موجودیِ کیف‌پول و
+ * اعتبارسنجیِ نهایی با initData از راهِ order_boot/order_submit می‌آید.
+ */
+function maBootOrder($pid) {
+    $p = class_exists('Product') ? Product::get($pid) : null;
+    if (!$p) return ['ok' => false, 'error' => 'این محصول پیدا نشد.', 'api' => maApiUrl()];
+
+    $closed = '';
+    if (empty($p['active'])) $closed = 'inactive';
+    elseif (Product::isFull($p)) $closed = 'full';
+
+    $f = $p['flow'] ?? [];
+    $speeds = [];
+    if (!empty($f['on'])) {
+        foreach ($f['speeds'] ?? [] as $sp) {
+            if (isset($sp['on']) && empty($sp['on'])) continue;
+            $speeds[] = [
+                'id' => (string)($sp['id'] ?? ''), 'text' => (string)($sp['text'] ?? ''),
+                'emoji' => (string)($sp['emoji'] ?? ''), 'desc' => (string)($sp['desc'] ?? ''),
+                'per_day' => (int)($sp['per_day'] ?? 0), 'rate' => function_exists('speedRate') ? speedRate($p, $sp) : (float)$p['price'],
+            ];
+        }
+    }
+
+    return [
+        'ok'      => true,
+        'api'     => maApiUrl(),
+        'title'   => 'ثبت سفارش',
+        'bot'     => function_exists('botUsername') ? botUsername() : '',
+        'product' => [
+            'id' => (string)$p['id'], 'name' => (string)$p['name'], 'emoji' => (string)($p['emoji'] ?? '💠'),
+            'desc' => (string)($p['desc'] ?? ''), 'price' => (float)$p['price'], 'currency' => (string)$p['currency'],
+            'closed' => $closed,
+        ],
+        'flow' => [
+            'on' => !empty($f['on']), 'ask_link' => !empty($f['ask_link']), 'ask_qty' => !empty($f['ask_qty']),
+            'ask_admin' => !empty($f['ask_admin']), 'min' => (int)($f['min'] ?? 1), 'max' => (int)($f['max'] ?? 0),
+            'per' => (int)($f['per'] ?? 1000), 'speeds' => $speeds,
+        ],
+        'wallet_ok' => (strtoupper((string)$p['currency']) === 'تومان' || $p['currency'] === 'تومان'),
     ];
 }
 
@@ -3194,7 +3256,9 @@ function maApi() {
     // کنار هم نشان می‌دهد، پس کاتالوگ/تنظیماتِ خودش ($a) ندارد. اکشن‌های
     // زیرِ همین کلید (me_all، airdrop_*) هیچ‌کدام به $a نیاز ندارند.
     $isUnified = ($key === 'unified');
-    if (!$isUnified && !in_array($key, maKeys(), true)) maApiOut(['ok' => false, 'error' => 'bad_app'], 400);
+    // 🚀 «order» هم مینی‌اپِ خودش نیست — کاتالوگش Product:: است، نه maGet()
+    $isOrder   = ($key === 'order');
+    if (!$isUnified && !$isOrder && !in_array($key, maKeys(), true)) maApiOut(['ok' => false, 'error' => 'bad_app'], 400);
 
     $initData = (string)($body['initData'] ?? '');
     $reason = '';
@@ -3216,8 +3280,45 @@ function maApi() {
     $u = getUser($uid);
     if ($u && !empty($u['banned'])) maApiOut(['ok' => false, 'error' => 'banned', 'message' => 'دسترسی شما مسدود است.'], 403);
 
-    $a = $isUnified ? null : maGet($key);
-    if (!$isUnified && empty($a['on'])) maApiOut(['ok' => false, 'error' => 'closed', 'message' => 'این بخش موقتا بسته است.'], 403);
+    $a = ($isUnified || $isOrder) ? null : maGet($key);
+    if (!$isUnified && !$isOrder && empty($a['on'])) maApiOut(['ok' => false, 'error' => 'closed', 'message' => 'این بخش موقتا بسته است.'], 403);
+
+    // ============================================================
+    // 🚀 مینی‌اپِ «ثبت سفارش» — بوت/بررسیِ ادمین/ثبتِ نهایی
+    // ============================================================
+    if ($isOrder) {
+        $pid = (string)($body['pid'] ?? '');
+
+        if ($action === 'order_boot') {
+            $p = class_exists('Product') ? Product::get($pid) : null;
+            if (!$p) maApiOut(['ok' => false, 'error' => 'not_found', 'message' => 'این محصول پیدا نشد.'], 404);
+            $reasonClosed = '';
+            if (empty($p['active'])) $reasonClosed = 'inactive';
+            elseif (Product::hasBought($pid, $uid)) $reasonClosed = 'bought';
+            elseif (Product::isFull($p)) $reasonClosed = 'full';
+            maApiOut(['ok' => true, 'closed' => $reasonClosed, 'balance' => (float)($u['balance'] ?? 0)]);
+        }
+
+        if ($action === 'order_check_admin') {
+            if (!function_exists('channelAdminCheck')) maApiOut(['ok' => false, 'error' => 'unavailable'], 500);
+            [$ok, $title, $chatIdSaved, $pending] = channelAdminCheck($uid, $pid, (string)($body['link'] ?? ''));
+            $un = function_exists('botUsername') ? botUsername() : '';
+            maApiOut(['ok' => true, 'admin_ok' => $ok, 'pending' => $pending, 'title' => $title,
+                       'bot' => $un]);
+        }
+
+        if ($action === 'order_submit') {
+            if (!maRateOk('ordsub', $uid, 20, 60))
+                maApiOut(['ok' => false, 'error' => 'rate_limited', 'message' => 'کمی صبر کنید.'], 429);
+            if (!function_exists('maOrderSubmit')) maApiOut(['ok' => false, 'error' => 'unavailable'], 500);
+            $pay = ((string)($body['pay'] ?? '')) === 'wallet' ? 'wallet' : 'manual';
+            $r = maOrderSubmit($uid, $uname, $pid, (string)($body['link'] ?? ''),
+                                (int)($body['qty'] ?? 0), (string)($body['speed_id'] ?? ''), $pay);
+            maApiOut($r, !empty($r['ok']) ? 200 : 400);
+        }
+
+        maApiOut(['ok' => false, 'error' => 'bad_action'], 400);
+    }
 
     // ---- 🔔 صندوقِ اعلان‌های همین مینی‌اپ ----
     if ($action === 'notes') {
