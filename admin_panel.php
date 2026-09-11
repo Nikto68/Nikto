@@ -510,8 +510,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c['wallets']['trx']       = trim($post['trx'] ?? '');
             $c['wallets']['card']      = trim($post['card'] ?? '');
             $c['wallets']['card_name'] = trim($post['card_name'] ?? '');
-            $c['referral']['on']       = !empty($post['ref_on']);
-            $c['referral']['percent']  = max(0, min(100, (float)($post['ref_percent'] ?? 0)));
             $c['uploader']['delete_seconds']  = max(5, (int)($post['del_sec'] ?? 30));
             $c['uploader']['force_join']      = !empty($post['force_join']);
             $c['uploader']['protect_content'] = !empty($post['protect']);
@@ -619,159 +617,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         });
         go('✅ سرویس‌ها ذخیره شد.');
-    }
-
-    // ---- 💎 الماس ----
-    if ($a === 'save_diamond') {
-        $post = $_POST;
-        dmSet(function (&$c) use ($post) {
-            $c['on']         = !empty($post['dm_on']);
-            $c['group_only'] = !empty($post['group_only']);
-            $c['word']       = trim((string)($post['word'] ?? 'الماس')) ?: 'الماس';
-            $c['aliases']    = trim((string)($post['aliases'] ?? ''));
-            $c['cooldown']   = max(0, (int)($post['cooldown'] ?? 300));
-            $c['base']       = max(0, (float)str_replace([',', '،'], '', $post['base'] ?? 0));
-            $c['ratio']      = max(1, (float)str_replace([',', '،'], '', $post['ratio'] ?? 1));
-            $c['min']        = max(0, (float)str_replace([',', '،'], '', $post['min_reward'] ?? 0));
-            $c['cap']        = max(0, (float)str_replace([',', '،'], '', $post['cap'] ?? 0));
-            $c['top_n']      = max(1, (int)($post['top_n'] ?? 10));
-            $c['level_step'] = max(1, (int)($post['level_step'] ?? 10000));
-            $c['to_wallet']  = max(0, (float)str_replace([',', '،'], '', $post['to_wallet'] ?? 0));
-            $c['min_swap']   = max(0, (float)str_replace([',', '،'], '', $post['min_swap'] ?? 0));
-            if (!is_array($c['gift'] ?? null)) $c['gift'] = [];
-            $c['gift']['on']    = !empty($post['gift_on']);
-            $c['gift']['cost']  = max(0, (float)str_replace([',', '،'], '', $post['gift_cost'] ?? 0));
-            $c['gift']['app']   = ($post['gift_app'] ?? 'tg') === 'num' ? 'num' : 'tg';
-            $c['gift']['item']  = trim((string)($post['gift_item'] ?? ''));
-            $c['gift']['word']  = trim((string)($post['gift_word'] ?? 'هدیه')) ?: 'هدیه';
-            $c['gift']['limit'] = max(0, (int)($post['gift_limit'] ?? 0));
-            if (!is_array($c['jail'] ?? null)) $c['jail'] = [];
-            $c['jail']['words'] = trim((string)($post['jail_words'] ?? ''));
-            $c['jail']['need']  = max(1, (int)($post['jail_need'] ?? 3));
-            $c['jail']['secs']  = max(0, (int)($post['jail_secs'] ?? 3600));
-            $c['jail']['color'] = isStyle($post['jail_color'] ?? '') ? $post['jail_color'] : 'danger';
-        });
-        go('✅ تنظیماتِ الماس ذخیره شد.');
-    }
-
-    // ---- 🎮 بازی‌ها ----
-    if ($a === 'save_games') {
-        $post = $_POST;
-        gmSet(function (&$c) use ($post) {
-            $c['on']         = !empty($post['gm_on']);
-            $c['duel_board'] = !empty($post['duel_board']);
-            $c['open_max']   = max(1, (int)($post['open_max'] ?? 2));
-            $c['expire']     = max(10, (int)($post['expire'] ?? 180));
-            $c['wait']       = max(1, (int)($post['wait'] ?? 8));
-            $c['join_max']   = max(2, (int)($post['join_max'] ?? 50));
-            $c['word_duel']  = trim((string)($post['word_duel'] ?? '')) ?: 'چالش';
-            $c['word_rand']  = trim((string)($post['word_rand'] ?? '')) ?: 'بازی';
-            $c['word_bal']   = trim((string)($post['word_bal'] ?? '')) ?: 'موجودی';
-            $c['word_send']  = trim((string)($post['word_send'] ?? '')) ?: 'انتقال';
-            $c['min']        = max(0, (float)str_replace([',', '،'], '', $post['gm_min'] ?? 0));
-            $c['max']        = max(0, (float)str_replace([',', '،'], '', $post['gm_max'] ?? 0));
-            $c['tax']        = max(0, min(100, (float)str_replace([',', '،'], '', $post['tax'] ?? 0)));
-            $c['send_tax']   = max(0, min(100, (float)str_replace([',', '،'], '', $post['send_tax'] ?? 0)));
-        });
-        go('✅ تنظیماتِ بازی‌ها ذخیره شد.');
-    }
-
-    // ---- 🏦 بانک ----
-    if ($a === 'save_bank') {
-        $post = $_POST;
-        $num = fn($k, $d = 0) => (float)str_replace([',', '،'], '', $post[$k] ?? $d);
-        bkSet(function (&$c) use ($post, $num) {
-            $c['on']            = !empty($post['bk_on']);
-            $c['group_only']    = !empty($post['bk_group_only']);
-            $c['word_bank']     = trim((string)($post['word_bank'] ?? '')) ?: 'بانک';
-            $c['word_hack']     = trim((string)($post['word_hack'] ?? '')) ?: 'هک,حمله';
-            $c['manual_protect']= max(60, (int)$num('manual_protect', 900));
-            $c['shield_after']  = max(0, (int)$num('shield_after', 300));
-            $c['hack_cooldown'] = max(60, (int)$num('hack_cooldown', 1200));
-            $c['level_step']    = max(1, (int)$num('level_step', 500000));
-            $c['top_n']         = max(1, (int)$num('top_n', 10));
-
-            if (!is_array($c['rng'] ?? null)) $c['rng'] = [];
-            $r = &$c['rng'];
-            $r['base_success']  = max(0, min(100, $num('rng_base', 42)));
-            $r['success_floor'] = max(0, min(100, $num('rng_floor', 18)));
-            $r['success_ceil']  = max(0, min(100, $num('rng_ceil', 72)));
-            $r['jitter_pct']    = max(0, min(50, $num('rng_jitter', 12)));
-            $r['jackpot_pct']   = max(0, min(100, $num('rng_jackpot_pct', 0.4)));
-            $r['perfect_pct']   = max(0, min(100, $num('rng_perfect_pct', 7)));
-            $r['critfail_pct']  = max(0, min(100, $num('rng_critfail_pct', 8)));
-            $r['partial_share'] = max(0, min(1, $num('rng_partial_share', 0.35)));
-            $r['jackpot_min']   = max(0, min(100, $num('rng_jackpot_min', 25)));
-            $r['jackpot_max']   = max(0, min(100, $num('rng_jackpot_max', 40)));
-            $r['perfect_min']   = max(0, min(100, $num('rng_perfect_min', 10)));
-            $r['perfect_max']   = max(0, min(100, $num('rng_perfect_max', 16)));
-            $r['success_min']   = max(0, min(100, $num('rng_success_min', 4)));
-            $r['success_max']   = max(0, min(100, $num('rng_success_max', 10)));
-            $r['partial_min']   = max(0, min(100, $num('rng_partial_min', 1)));
-            $r['partial_max']   = max(0, min(100, $num('rng_partial_max', 4)));
-            $r['critfail_min']  = max(0, min(100, $num('rng_critfail_min', 5)));
-            $r['critfail_max']  = max(0, min(100, $num('rng_critfail_max', 15)));
-            unset($r);
-        });
-        go('✅ تنظیماتِ بانک ذخیره شد.');
-    }
-    if ($a === 'save_bank_texts') {
-        $post = $_POST;
-        bkSet(function (&$c) use ($post) {
-            if (!is_array($c['texts'] ?? null)) $c['texts'] = [];
-            foreach (bkDefaults()['texts'] as $k => $_) {
-                if (isset($post['txt_' . $k])) $c['texts'][$k] = trim((string)$post['txt_' . $k]);
-            }
-            if (!is_array($c['icons'] ?? null)) $c['icons'] = [];
-            if (!is_array($c['btns']  ?? null)) $c['btns']  = [];
-            foreach (['btn_protect', 'btn_send', 'btn_send_confirm', 'btn_back'] as $k) {
-                if (isset($post['icon_' . $k])) $c['icons'][$k] = trim((string)$post['icon_' . $k]);
-                if (!is_array($c['btns'][$k] ?? null)) $c['btns'][$k] = [];
-                $c['btns'][$k]['color'] = isStyle($post['color_' . $k] ?? '') ? $post['color_' . $k] : 'none';
-            }
-        });
-        go('✅ متن‌ها و ایموجیِ دکمه‌های بانک ذخیره شد.');
-    }
-
-    // ---- 💣 مین‌یاب ----
-    if ($a === 'save_mine') {
-        $post = $_POST;
-        $num = fn($k, $d = 0) => (float)str_replace([',', '،'], '', $post[$k] ?? $d);
-        mnSet(function (&$c) use ($post, $num) {
-            $c['on']         = !empty($post['mn_on']);
-            $c['group_only'] = !empty($post['mn_group_only']);
-            $c['word']       = trim((string)($post['mn_word'] ?? '')) ?: 'مین';
-            $c['entry_min']  = max(0, $num('entry_min', 100));
-            $c['entry_max']  = max($c['entry_min'], $num('entry_max', 1000000));
-            $c['min_safe_for_protection'] = max(0, (int)$num('min_safe', 3));
-            $c['reward_growth']   = max(1, $num('reward_growth', 1.5));
-            $c['max_active_games']= max(1, (int)$num('max_active', 200));
-            $c['game_timeout']    = max(60, (int)$num('game_timeout', 1800));
-            $c['expire_refund']   = !empty($post['expire_refund']);
-            $c['game_cooldown']   = max(0, (int)$num('game_cooldown', 0));
-
-            $rewards = [];
-            for ($i = 1; $i <= 8; $i++) $rewards[] = max(0, $num('reward_' . $i, 0));
-            $c['rewards'] = $rewards;
-        });
-        go('✅ تنظیماتِ مین‌یاب ذخیره شد.');
-    }
-    if ($a === 'save_mine_texts') {
-        $post = $_POST;
-        mnSet(function (&$c) use ($post) {
-            if (!is_array($c['texts'] ?? null)) $c['texts'] = [];
-            foreach (mnDefaults()['texts'] as $k => $_) {
-                if (isset($post['txt_' . $k])) $c['texts'][$k] = trim((string)$post['txt_' . $k]);
-            }
-            if (!is_array($c['icons'] ?? null)) $c['icons'] = [];
-            if (!is_array($c['btns']  ?? null)) $c['btns']  = [];
-            foreach (['btn_field', 'btn_join', 'btn_cancel', 'btn_cash'] as $k) {
-                if (isset($post['icon_' . $k])) $c['icons'][$k] = trim((string)$post['icon_' . $k]);
-                if (!is_array($c['btns'][$k] ?? null)) $c['btns'][$k] = [];
-                $c['btns'][$k]['color'] = isStyle($post['color_' . $k] ?? '') ? $post['color_' . $k] : 'none';
-            }
-        });
-        go('✅ متن‌ها و ایموجیِ دکمه‌های مین‌یاب ذخیره شد.');
     }
 
     // ---- 🩺 تشخیص و سرعت ----
@@ -1446,12 +1291,6 @@ $products = Product::all();
 $bots     = BotManager::all();
 $orders   = Order::all();
 $users    = allUsers();
-// شمارش زیرمجموعه‌ها یک‌بار برای کل جدول (قبلا برای هر ردیف کل کاربران پیمایش می‌شد)
-$refCount = [];
-foreach ($users as $_u) {
-    $r = (int)($_u['referrer'] ?? 0);
-    if ($r > 0) $refCount[$r] = ($refCount[$r] ?? 0) + 1;
-}
 $channels  = Channels::all();
 $partners  = Partner::all();
 $campaigns = Campaign::all();
@@ -1921,16 +1760,11 @@ $tabs = [
   'channels'  => '📢 کانال‌ها',
   'campaigns' => '🎯 کمپین‌ها',
   'partners'  => '🤝 ربات‌های شریک',
-  'referral'  => '👥 رفرال',
   'users'     => '👥 کاربران',
   'auto'      => '⚡ خودکارسازی',
   'settings'  => '⚙️ تنظیمات',
   'numbers'   => '☎️ شماره مجازی',
   'miniapps'  => '🚀 مینی‌اپ‌ها',
-  'diamond'   => '💎 الماس',
-  'games'     => '🎮 بازی‌ها',
-  'bank'      => '🏦 بانک',
-  'mine'      => '💣 مین‌یاب',
 ];
 // 🔴 فقط جایی که واقعا «نیاز به اقدام» معنی دارد badge می‌گیرد — عددهای الکی شلوغی می‌سازند
 $tabBadges = ['orders' => count($pending)];
@@ -1938,9 +1772,9 @@ $tabBadges = ['orders' => count($pending)];
 $tabFolders = [
   'نمای کلی'  => ['dashboard'],
   'فروش'      => ['orders', 'products', 'profit'],
-  'کاربران'   => ['users', 'referral', 'support'],
+  'کاربران'   => ['users', 'support'],
   'زیرساخت'   => ['bots', 'channels', 'campaigns', 'partners'],
-  'ویژگی‌ها'  => ['numbers', 'miniapps', 'diamond', 'games', 'bank', 'mine'],
+  'ویژگی‌ها'  => ['numbers', 'miniapps'],
   'سیستم'     => ['auto', 'settings'],
 ];
 ?>
@@ -3610,107 +3444,6 @@ def join_gate(user_id):
   <?php endforeach; ?>
   <?php if (!$partners): ?><div class="card"><div class="body"><div class="empty"><div class="ic">🤝</div>هنوز شریکی اضافه نکرده‌اید.</div></div></div><?php endif; ?>
 
-<?php // ================= رفرال ================= ?>
-<?php elseif ($tab === 'referral'):
-  $refCount = []; $refEarn = [];
-  foreach ($users as $u) {
-      if (!empty($u['referrer'])) $refCount[(string)$u['referrer']] = ($refCount[(string)$u['referrer']] ?? 0) + 1;
-      if (!empty($u['ref_earned'])) $refEarn[(string)$u['telegram_id']] = (float)$u['ref_earned'];
-  }
-  arsort($refCount);
-  $totalEarn = array_sum($refEarn);
-  $withRef = count(array_filter($users, fn($u) => !empty($u['referrer'])));
-?>
-  <div class="stats">
-    <div class="stat"><div class="n"><?= count($refCount) ?></div><div class="l">👤 معرف فعال</div></div>
-    <div class="stat"><div class="n"><?= $withRef ?></div><div class="l">👥 کاربر معرفی‌شده</div></div>
-    <div class="stat"><div class="n"><?= fmtNum($totalEarn) ?></div><div class="l">💵 پورسانت پرداختی</div></div>
-    <div class="stat"><div class="n"><?= h($C['referral']['percent']) ?>%</div><div class="l">📈 درصد فعلی</div></div>
-  </div>
-
-  <div class="card"><h2>⚙️ تنظیم رفرال</h2><div class="body">
-    <form method="post">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="referral">
-      <input type="hidden" name="action" value="save_settings">
-      <input type="hidden" name="usdt" value="<?= h($C['wallets']['usdt']) ?>">
-      <input type="hidden" name="trx" value="<?= h($C['wallets']['trx']) ?>">
-      <input type="hidden" name="card" value="<?= h($C['wallets']['card']) ?>">
-      <input type="hidden" name="card_name" value="<?= h($C['wallets']['card_name']) ?>">
-      <input type="hidden" name="del_sec" value="<?= (int)$C['uploader']['delete_seconds'] ?>">
-      <?php if (!empty($C['uploader']['force_join'])): ?><input type="hidden" name="force_join" value="1"><?php endif; ?>
-      <?php if (!empty($C['uploader']['protect_content'])): ?><input type="hidden" name="protect" value="1"><?php endif; ?>
-      <div class="grid2">
-        <div><label>درصد پورسانت از هر خرید</label>
-          <input name="ref_percent" type="number" min="0" max="100" step="0.5" value="<?= h($C['referral']['percent']) ?>"></div>
-        <div><label>&nbsp;</label><label style="font-weight:500">
-          <input type="checkbox" name="ref_on" style="width:auto" <?= !empty($C['referral']['on']) ? 'checked' : '' ?>>
-          سیستم معرفی فعال باشد</label></div>
-      </div>
-      <div style="margin-top:14px"><button class="btn g">ذخیره</button></div>
-    </form>
-  </div></div>
-
-  <div class="card"><h2>🏆 برترین معرف‌ها</h2><div class="body">
-    <?php if (!$refCount): ?><div class="empty"><div class="ic">👥</div>هنوز کسی زیرمجموعه نگرفته.</div>
-    <?php else: ?><div class="scroll"><table>
-      <tr><th>#</th><th>معرف</th><th>آیدی</th><th>تعداد زیرمجموعه</th><th>پورسانت دریافتی</th><th>موجودی</th></tr>
-      <?php $i = 1; foreach (array_slice($refCount, 0, 50, true) as $rid => $cnt): ?>
-      <tr><td><?= $i++ ?></td>
-        <td><?= h(uLabel($users, $rid)) ?></td>
-        <td><code><?= h($rid) ?></code></td>
-        <td><b><?= $cnt ?></b></td>
-        <td><?= h(fmtNum($refEarn[$rid] ?? 0)) ?></td>
-        <td><?= h(fmtNum($users[$rid]['balance'] ?? 0)) ?></td></tr>
-      <?php endforeach; ?>
-    </table></div><?php endif; ?>
-  </div></div>
-
-  <div class="card"><h2>📢 کانال اعلام فروش</h2><div class="body">
-    <div class="note">
-      هر خرید موفق به‌صورت خودکار در یک کانال جدا اعلام می‌شود — با
-      <b>کد خرید</b>، <b>مبلغ</b> و <b>تعداد ممبر فروخته‌شده</b>.
-      ربات مادر باید در آن کانال ادمین باشد.
-    </div>
-    <form method="post">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="referral">
-      <input type="hidden" name="action" value="save_sales">
-      <div class="grid2">
-        <div><label>آیدی کانال اعلام فروش</label>
-          <input name="sales_chat" value="<?= h($C['sales']['chat_id']) ?>" placeholder="@saleschannel یا -100..." style="direction:ltr"></div>
-        <div><label>گزینه‌ها</label>
-          <label style="font-weight:500"><input type="checkbox" name="sales_on" style="width:auto"
-            <?= !empty($C['sales']['on']) ? 'checked' : '' ?>> اعلام فروش فعال باشد</label>
-          <label style="font-weight:500"><input type="checkbox" name="sales_user" style="width:auto"
-            <?= !empty($C['sales']['show_user']) ? 'checked' : '' ?>> نمایش نام خریدار</label></div>
-      </div>
-      <div style="margin-top:12px">
-        <label>قالب پیام</label>
-        <div class="tbar">
-          <button type="button" onclick="wrapSel('sales_tpl','<blockquote>','</blockquote>')">❝ نقل‌قول</button>
-          <button type="button" onclick="wrapSel('sales_tpl','<blockquote expandable>','</blockquote>')">❝ بازشو</button>
-          <button type="button" onclick="wrapSel('sales_tpl','<b>','</b>')"><b>پررنگ</b></button>
-          <button type="button" onclick="wrapSel('sales_tpl','<code>','</code>')">&lt;/&gt; کد</button>
-        <button type="button" onclick="premEmoji('sales_tpl')">✨ ایموجی پریمیوم</button>
-        <button type="button" onclick="resetTpl('sales_tpl', <?= json_encode("<b>فروش جدید</b>\n\nمحصول: {product}\nکد خرید: <code>{code}</code>\nمبلغ: <b>{amount} {currency}</b>\nتعداد ممبر: <b>{count}</b>{limit_part}\n{date}") ?>)">🔄 پیش‌فرض</button>
-        </div>
-        <textarea id="sales_tpl" name="sales_tpl" style="min-height:140px"><?= h($C['sales']['template']) ?></textarea>
-        <div class="muted" style="margin-top:6px;line-height:1.9">
-          متغیرها: <code>{product}</code> <code>{code}</code> <code>{amount}</code> <code>{currency}</code>
-          <code>{count}</code> <code>{limit}</code> <code>{remaining}</code> <code>{limit_part}</code>
-          <code>{user}</code> <code>{user_id}</code> <code>{date}</code>
-        </div>
-      </div>
-      <div style="margin-top:14px">
-        <button class="btn g">ذخیره</button>
-      </div>
-    </form>
-    <form method="post" style="margin-top:10px">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="referral">
-      <input type="hidden" name="action" value="test_sales">
-      <button class="btn b sm">ارسال پیام آزمایشی به کانال</button>
-    </form>
-  </div></div>
-
 <?php // ================= کاربران ================= ?>
 <?php elseif ($tab === 'users'): ?>
   <?php $uDetailId = trim((string)($_GET['id'] ?? '')); ?>
@@ -3719,7 +3452,6 @@ def join_gate(user_id):
     uasort($uOrders, fn($a, $b) => strcmp($b['created_at'] ?? '', $a['created_at'] ?? ''));
     $uSpent = 0; foreach ($uOrders as $o) if ($o['status'] === Order::APPROVED && $o['type'] === 'product') $uSpent += (float)$o['amount'];
     $uTopup = 0; foreach ($uOrders as $o) if ($o['status'] === Order::APPROVED && $o['type'] === 'topup') $uTopup += (float)$o['amount'];
-    $uRefs = array_filter($users, fn($x) => (int)($x['referrer'] ?? 0) === (int)$uDetailId);
   ?>
   <div class="crumb">کاربران <span>/</span> <b><?= h(uLabel($users, $uDetailId)) ?></b></div>
   <a href="?tab=users" class="btn ghost sm" style="margin-bottom:14px;display:inline-block">→ بازگشت به فهرست</a>
@@ -3774,20 +3506,6 @@ def join_gate(user_id):
           <td data-label="وضعیت"><?= oBadge($o['status']) ?></td>
           <td data-label="تاریخ" class="muted"><?= h($o['created_at']) ?></td>
         </tr>
-      <?php endforeach; ?>
-    </table></div><?php endif; ?>
-  </div></div>
-
-  <div class="card"><h2>👥 رفرال</h2><div class="body">
-    <div class="grid2" style="margin-bottom:12px">
-      <div><label>معرف</label><div><?= !empty($uD['referrer']) ? h(uLabel($users, $uD['referrer'])) : '<span class="muted">—</span>' ?></div></div>
-      <div><label>تعداد زیرمجموعه</label><div><?= count($uRefs) ?></div></div>
-    </div>
-    <?php if ($uRefs): ?><div class="scroll"><table class="responsive">
-      <tr><th>کاربر</th><th>آیدی</th></tr>
-      <?php foreach (array_slice($uRefs, 0, 30) as $ru): ?>
-        <tr><td data-label="کاربر"><a href="?tab=users&id=<?= h($ru['telegram_id']) ?>"><?= h(uLabel($users, $ru['telegram_id'])) ?></a></td>
-          <td data-label="آیدی"><code><?= h($ru['telegram_id']) ?></code></td></tr>
       <?php endforeach; ?>
     </table></div><?php endif; ?>
   </div></div>
@@ -3865,7 +3583,7 @@ def join_gate(user_id):
     <?php if (!$uSlice): ?>
       <div class="empty"><div class="ic">👥</div><?= $uQ !== '' ? 'با این جستجو کاربری پیدا نشد.' : 'هنوز کاربری ربات را استارت نکرده.' ?></div>
     <?php else: ?><div class="scroll"><table class="responsive">
-      <tr><th>کاربر</th><th>آیدی</th><th>موجودی</th><th>معرف</th><th>زیرمجموعه</th><th>وضعیت</th><th>اقدام</th></tr>
+      <tr><th>کاربر</th><th>آیدی</th><th>موجودی</th><th>وضعیت</th><th>اقدام</th></tr>
       <?php foreach ($uSlice as $u): ?>
       <tr>
         <td data-label="کاربر"><a href="?tab=users&id=<?= h($u['telegram_id']) ?>"><?= h(!empty($u['username']) ? '@' . $u['username'] : ($u['first_name'] ?? '—')) ?></a></td>
@@ -3879,8 +3597,6 @@ def join_gate(user_id):
             <button class="btn ghost sm">ذخیره</button>
           </form>
         </td>
-        <td data-label="معرف"><?= !empty($u['referrer']) ? h(uLabel($users, $u['referrer'])) : '<span class="muted">—</span>' ?></td>
-        <td data-label="زیرمجموعه"><?= (int)($refCount[(int)$u['telegram_id']] ?? 0) ?></td>
         <td data-label="وضعیت"><?= !empty($u['banned']) ? '<span class="badge red">مسدود</span>' : '<span class="badge green">فعال</span>' ?></td>
         <td data-label="اقدام"><form method="post">
           <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="users">
@@ -4315,338 +4031,6 @@ def join_gate(user_id):
   </div></div>
   <?php endforeach; ?>
 
-<?php // ================= 💎 الماس ================= ?>
-<?php elseif ($tab === 'diamond'): ?>
-  <?php $DM = dmCfg(); $DMS = function_exists('dmStats') ? dmStats() : ['users' => 0, 'points' => 0, 'total' => 0]; ?>
-  <div class="card"><h2>💎 الماس
-    <?= !empty($DM['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
-  </h2><div class="body">
-    <div class="note">
-      متن‌های پیام‌ها (وقتی الماس می‌گیره، لِول‌آپ، هدیه، زندان و...) همچنان تو <code>/panel</code> ← 💎 الماس ← ✏️ متن‌ها می‌مونن.
-    </div>
-    <div class="stats" style="margin-bottom:16px">
-      <div class="stat"><div class="n"><?= number_format($DMS['users']) ?></div><div class="l">👥 بازیکن</div></div>
-      <div class="stat"><div class="n"><?= number_format($DMS['points']) ?></div><div class="l">💎 مجموعِ الماس</div></div>
-      <div class="stat"><div class="n"><?= number_format($DMS['total']) ?></div><div class="l">🔁 تعدادِ دفعات</div></div>
-    </div>
-
-    <form method="post">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="diamond">
-      <input type="hidden" name="action" value="save_diamond">
-
-      <details class="subcard" open><summary><h3>🔌 وضعیت و کلمه</h3></summary>
-        <div style="margin-bottom:10px">
-          <label style="font-weight:500"><input type="checkbox" name="dm_on" style="width:auto" <?= !empty($DM['on']) ? 'checked' : '' ?>> روشن باشد</label>
-          <label style="font-weight:500"><input type="checkbox" name="group_only" style="width:auto" <?= !empty($DM['group_only']) ? 'checked' : '' ?>> فقط داخلِ گروه کار کند</label>
-        </div>
-        <div class="grid2">
-          <div><label>💬 کلمه</label><input name="word" value="<?= h($DM['word'] ?? 'الماس') ?>"></div>
-          <div><label>➕ کلمه‌های دیگر (با ویرگول)</label><input name="aliases" value="<?= h($DM['aliases'] ?? '') ?>"></div>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>🎁 جایزه</h3></summary>
-        <div class="grid2">
-          <div><label>⏳ فاصله بینِ دو الماس (ثانیه)</label><input name="cooldown" type="number" min="0" value="<?= (int)($DM['cooldown'] ?? 300) ?>"></div>
-          <div><label>🎁 جایزه‌ی پایه (سطح ۱)</label><input name="base" value="<?= h($DM['base'] ?? 56.74) ?>" style="direction:ltr"></div>
-          <div><label>📈 ضریبِ رشدِ جایزه با هر سطح</label><input name="ratio" value="<?= h($DM['ratio'] ?? 1.2336) ?>" style="direction:ltr"></div>
-          <div><label>🔢 کفِ جایزه</label><input name="min_reward" value="<?= h($DM['min'] ?? 20) ?>" style="direction:ltr"></div>
-          <div><label>🧢 سقفِ جایزه</label><input name="cap" value="<?= h($DM['cap'] ?? 1000000000) ?>" style="direction:ltr"></div>
-          <div><label>⭐️ امتیاز لازم برای هر سطح</label><input name="level_step" type="number" min="1" value="<?= (int)($DM['level_step'] ?? 10000) ?>"></div>
-          <div><label>🏆 تعدادِ نفراتِ لیستِ برترین‌ها</label><input name="top_n" type="number" min="1" value="<?= (int)($DM['top_n'] ?? 10) ?>"></div>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>🔁 تبدیل به کیف پول (۰ = خاموش)</h3></summary>
-        <div class="grid2">
-          <div><label>هر ۱ الماس چند تومان</label><input name="to_wallet" value="<?= h($DM['to_wallet'] ?? 0) ?>" placeholder="0 = خاموش" style="direction:ltr"></div>
-          <div><label>حداقلِ الماس برای تبدیل</label><input name="min_swap" value="<?= h($DM['min_swap'] ?? 10000) ?>" style="direction:ltr"></div>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>🎁 هدیه با الماس</h3></summary>
-        <div style="margin-bottom:10px">
-          <label style="font-weight:500"><input type="checkbox" name="gift_on" style="width:auto" <?= !empty($DM['gift']['on']) ? 'checked' : '' ?>> روشن باشد</label>
-        </div>
-        <div class="grid2">
-          <div><label>💎 چند الماس خرج شود</label><input name="gift_cost" value="<?= h($DM['gift']['cost'] ?? 100000) ?>" style="direction:ltr"></div>
-          <div><label>🚀 کدام مینی‌اپ</label>
-            <select name="gift_app">
-              <option value="tg" <?= ($DM['gift']['app'] ?? 'tg') === 'tg' ? 'selected' : '' ?>>🌟 خدمات تلگرام</option>
-              <option value="num" <?= ($DM['gift']['app'] ?? 'tg') === 'num' ? 'selected' : '' ?>>☎️ شماره مجازی</option>
-            </select></div>
-          <div><label>🛍 شناسه‌ی محصول (از کاتالوگِ همون مینی‌اپ)</label>
-            <input name="gift_item" value="<?= h($DM['gift']['item'] ?? '') ?>" style="direction:ltr"></div>
-          <div><label>💬 کاربر چه بنویسد</label><input name="gift_word" value="<?= h($DM['gift']['word'] ?? 'هدیه') ?>"></div>
-          <div><label>🔢 سقفِ دفعات برای هر نفر (۰ = بی‌نهایت)</label>
-            <input name="gift_limit" type="number" min="0" value="<?= (int)($DM['gift']['limit'] ?? 0) ?>"></div>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>🚨 زندان</h3></summary>
-        <div class="grid2">
-          <div><label>کلمه‌های دام (با ویرگول)</label><input name="jail_words" value="<?= h($DM['jail']['words'] ?? '') ?>"></div>
-          <div><label>چند نفرِ متفاوت باید تایید کنن</label><input name="jail_need" type="number" min="1" value="<?= (int)($DM['jail']['need'] ?? 3) ?>"></div>
-          <div><label>مدتِ زندان (ثانیه)</label><input name="jail_secs" type="number" min="0" value="<?= (int)($DM['jail']['secs'] ?? 3600) ?>"></div>
-          <div><label>رنگِ دکمه‌ی تایید</label>
-            <select name="jail_color">
-              <?php foreach (styleMap() as $sk => $sl): ?>
-                <option value="<?= h($sk) ?>" <?= ($DM['jail']['color'] ?? 'danger') === $sk ? 'selected' : '' ?>><?= h($sl) ?></option>
-              <?php endforeach; ?>
-            </select></div>
-        </div>
-      </details>
-
-      <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ الماس</button></div>
-    </form>
-  </div></div>
-
-<?php // ================= 🎮 بازی‌ها ================= ?>
-<?php elseif ($tab === 'games'): ?>
-  <?php $GM = gmCfg(); ?>
-  <div class="card"><h2>🎮 بازی‌ها (چالش و قرعه با الماس)
-    <?= !empty($GM['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
-  </h2><div class="body">
-    <div class="note">
-      شرط‌ها با <b>الماس</b> بازی می‌شود (تبِ «💎 الماس»)، نه پول نقد. متن‌های پیام‌ها و ایموجیِ پریمیومِ دکمه‌ها
-      همچنان تو <code>/panel</code> ← 🎮 بازی‌ها می‌مونن.
-    </div>
-    <form method="post">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="games">
-      <input type="hidden" name="action" value="save_games">
-
-      <details class="subcard" open><summary><h3>🔌 وضعیت</h3></summary>
-        <label style="font-weight:500"><input type="checkbox" name="gm_on" style="width:auto" <?= !empty($GM['on']) ? 'checked' : '' ?>> بازی‌ها روشن باشند</label>
-        <label style="font-weight:500;margin-right:14px"><input type="checkbox" name="duel_board" style="width:auto" <?= !empty($GM['duel_board']) ? 'checked' : '' ?>> چالش با صفحه‌ی دوز (نه نتیجه‌ی درجا)</label>
-      </details>
-
-      <details class="subcard"><summary><h3>💬 کلمه‌های شروع</h3></summary>
-        <div class="grid2">
-          <div><label>🎯 چالش (با ویرگول)</label><input name="word_duel" value="<?= h($GM['word_duel'] ?? 'چالش,دوز') ?>"></div>
-          <div><label>🎲 قرعه</label><input name="word_rand" value="<?= h($GM['word_rand'] ?? 'بازی') ?>"></div>
-          <div><label>💎 موجودی</label><input name="word_bal" value="<?= h($GM['word_bal'] ?? 'موجودی') ?>"></div>
-          <div><label>📤 انتقال (با ویرگول)</label><input name="word_send" value="<?= h($GM['word_send'] ?? 'انتقال') ?>"></div>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>💰 شرط و مالیات</h3></summary>
-        <div class="grid2">
-          <div><label>کمترینِ شرط (الماس)</label><input name="gm_min" value="<?= h($GM['min'] ?? 10) ?>" style="direction:ltr"></div>
-          <div><label>بیشترینِ شرط (الماس)</label><input name="gm_max" value="<?= h($GM['max'] ?? 1000000000) ?>" style="direction:ltr"></div>
-          <div><label>🧾 مالیاتِ برد (٪)</label><input name="tax" value="<?= h($GM['tax'] ?? 10) ?>" style="direction:ltr"></div>
-          <div><label>🧾 مالیاتِ انتقال (٪)</label><input name="send_tax" value="<?= h($GM['send_tax'] ?? 10) ?>" style="direction:ltr"></div>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>⏱ محدودیت‌ها</h3></summary>
-        <div class="grid2">
-          <div><label>حداکثرِ بازیِ بازِ هم‌زمانِ هر نفر</label><input name="open_max" type="number" min="1" value="<?= (int)($GM['open_max'] ?? 2) ?>"></div>
-          <div><label>مهلتِ بی‌حریف تا لغوِ خودکار (ثانیه)</label><input name="expire" type="number" min="10" value="<?= (int)($GM['expire'] ?? 180) ?>"></div>
-          <div><label>مهلتِ انتظارِ قرعه (ثانیه)</label><input name="wait" type="number" min="1" value="<?= (int)($GM['wait'] ?? 8) ?>"></div>
-          <div><label>حداکثرِ شرکت‌کننده در قرعه</label><input name="join_max" type="number" min="2" value="<?= (int)($GM['join_max'] ?? 50) ?>"></div>
-        </div>
-      </details>
-
-      <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ بازی‌ها</button></div>
-    </form>
-  </div></div>
-
-<?php // ================= 🏦 بانک ================= ?>
-<?php elseif ($tab === 'bank'): ?>
-  <?php $BK = bkCfg(); $BKR = $BK['rng']; ?>
-  <div class="card"><h2>🏦 بانک — بازیِ سرقت/هک با همان الماس
-    <?= !empty($BK['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
-  </h2><div class="body">
-    <div class="note">
-      کیف‌پول همان الماسِ بخشِ «💎 الماس» است — بانک ارزِ جدیدی نیست، فقط بخشی از همان الماس که کاربر
-      کنار گذاشته و قابلِ دزدیدن است. دستورها فقط داخلِ گروه کار می‌کنند: <code>/bank</code>،
-      <code>/bankleader</code>، و هک با ریپلای‌کردنِ پیامِ هدف + نوشتنِ <code>/hack</code> یا کلمه‌ی هک.
-    </div>
-    <form method="post">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="bank">
-      <input type="hidden" name="action" value="save_bank">
-
-      <details class="subcard" open><summary><h3>🔌 وضعیت</h3></summary>
-        <div style="margin-bottom:10px">
-          <label style="font-weight:500"><input type="checkbox" name="bk_on" style="width:auto" <?= !empty($BK['on']) ? 'checked' : '' ?>> روشن باشد</label>
-          <label style="font-weight:500"><input type="checkbox" name="bk_group_only" style="width:auto" <?= !empty($BK['group_only']) ? 'checked' : '' ?>> فقط داخلِ گروه کار کند</label>
-        </div>
-        <div class="grid2">
-          <div><label>💬 کلمه‌ی باز کردنِ کارتِ بانک (جایگزینِ /bank)</label><input name="word_bank" value="<?= h($BK['word_bank'] ?? 'بانک') ?>"></div>
-          <div><label>💬 کلمه‌های هک، با ویرگول (جایگزینِ /hack)</label><input name="word_hack" value="<?= h($BK['word_hack'] ?? 'هک,حمله') ?>"></div>
-        </div>
-        <div class="note">کلمه باید تنها و دقیق نوشته شود (مثلا فقط «بانک»)، نه وسطِ یک جمله — درست مثلِ کلمه‌ی «موجودی»/«انتقال» تو بخشِ بازی‌ها.</div>
-      </details>
-
-      <details class="subcard"><summary><h3>🏦 بانک</h3></summary>
-        <div class="note">«بانک» صندوقِ جدایی نیست — دقیقا همان کیف‌پولِ الماسِ کاربر است؛ هرچه کاربر داشته باشد خودکار قابلِ هک‌شدن است.</div>
-        <div class="grid2">
-          <div><label>⭐️ هر چند الماسِ دزدیده‌شده، یک سطحِ بانک</label><input name="level_step" type="number" min="1" value="<?= (int)($BK['level_step'] ?? 500000) ?>"></div>
-          <div><label>🏆 تعدادِ نفراتِ لیستِ برترین‌ها</label><input name="top_n" type="number" min="1" value="<?= (int)($BK['top_n'] ?? 10) ?>"></div>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>🛡 حفاظت و کول‌داون</h3></summary>
-        <div class="grid2">
-          <div><label>⏱ حفاظتِ دستی (ثانیه)</label><input name="manual_protect" type="number" min="60" value="<?= (int)($BK['manual_protect'] ?? 900) ?>"></div>
-          <div><label>🛡 شیلدِ خودکار بعدِ هر هک (ثانیه)</label><input name="shield_after" type="number" min="0" value="<?= (int)($BK['shield_after'] ?? 300) ?>"></div>
-          <div><label>⏳ کول‌داونِ هکِ همان مهاجم (ثانیه)</label><input name="hack_cooldown" type="number" min="60" value="<?= (int)($BK['hack_cooldown'] ?? 1200) ?>"></div>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>🎲 موتورِ رند — شانس و درصدها</h3></summary>
-        <div class="note">
-          نتیجه‌ی هک هیچ‌وقت از رویِ یک عددِ ثابت تعیین نمی‌شود — این‌ها فقط بازه‌ها و وزن‌هایی‌اند که موتورِ
-          رندِ امن (<code>random_int</code>) با جیترِ رندومِ خودش ترکیب‌شان می‌کند.
-        </div>
-        <div class="grid2">
-          <div><label>٪ شانسِ پایه</label><input name="rng_base" value="<?= h($BKR['base_success'] ?? 42) ?>" style="direction:ltr"></div>
-          <div><label>٪ کفِ شانسِ مؤثر</label><input name="rng_floor" value="<?= h($BKR['success_floor'] ?? 18) ?>" style="direction:ltr"></div>
-          <div><label>٪ سقفِ شانسِ مؤثر</label><input name="rng_ceil" value="<?= h($BKR['success_ceil'] ?? 72) ?>" style="direction:ltr"></div>
-          <div><label>٪ جیترِ رندومِ ± روی شانس</label><input name="rng_jitter" value="<?= h($BKR['jitter_pct'] ?? 12) ?>" style="direction:ltr"></div>
-        </div>
-        <div class="grid2">
-          <div><label>٪ سهمِ JACKPOT</label><input name="rng_jackpot_pct" value="<?= h($BKR['jackpot_pct'] ?? 0.4) ?>" style="direction:ltr"></div>
-          <div><label>٪ سهمِ PERFECT HEIST</label><input name="rng_perfect_pct" value="<?= h($BKR['perfect_pct'] ?? 7) ?>" style="direction:ltr"></div>
-          <div><label>٪ سهمِ CRITICAL FAILURE</label><input name="rng_critfail_pct" value="<?= h($BKR['critfail_pct'] ?? 8) ?>" style="direction:ltr"></div>
-          <div><label>سهمِ PARTIAL از موفقیت (۰ تا ۱)</label><input name="rng_partial_share" value="<?= h($BKR['partial_share'] ?? 0.35) ?>" style="direction:ltr"></div>
-        </div>
-        <div class="note">بازه‌ی درصدِ دزدیده‌شده از بانکِ هدف، برایِ هر تیر:</div>
-        <div class="grid2">
-          <div><label>🎯 Jackpot — از</label><input name="rng_jackpot_min" value="<?= h($BKR['jackpot_min'] ?? 25) ?>" style="direction:ltr"></div>
-          <div><label>🎯 Jackpot — تا</label><input name="rng_jackpot_max" value="<?= h($BKR['jackpot_max'] ?? 40) ?>" style="direction:ltr"></div>
-          <div><label>🟢 Perfect — از</label><input name="rng_perfect_min" value="<?= h($BKR['perfect_min'] ?? 10) ?>" style="direction:ltr"></div>
-          <div><label>🟢 Perfect — تا</label><input name="rng_perfect_max" value="<?= h($BKR['perfect_max'] ?? 16) ?>" style="direction:ltr"></div>
-          <div><label>🟢 Success — از</label><input name="rng_success_min" value="<?= h($BKR['success_min'] ?? 4) ?>" style="direction:ltr"></div>
-          <div><label>🟢 Success — تا</label><input name="rng_success_max" value="<?= h($BKR['success_max'] ?? 10) ?>" style="direction:ltr"></div>
-          <div><label>🟡 Partial — از</label><input name="rng_partial_min" value="<?= h($BKR['partial_min'] ?? 1) ?>" style="direction:ltr"></div>
-          <div><label>🟡 Partial — تا</label><input name="rng_partial_max" value="<?= h($BKR['partial_max'] ?? 4) ?>" style="direction:ltr"></div>
-          <div><label>💥 جریمه‌ی Critical Fail (٪ از بانکِ خودِ هکر) — از</label><input name="rng_critfail_min" value="<?= h($BKR['critfail_min'] ?? 5) ?>" style="direction:ltr"></div>
-          <div><label>💥 جریمه‌ی Critical Fail — تا</label><input name="rng_critfail_max" value="<?= h($BKR['critfail_max'] ?? 15) ?>" style="direction:ltr"></div>
-        </div>
-      </details>
-
-      <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ بانک</button></div>
-    </form>
-
-    <form method="post" style="margin-top:20px">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="bank">
-      <input type="hidden" name="action" value="save_bank_texts">
-      <details class="subcard" open><summary><h3>✏️ متن‌ها و دکمه‌ها</h3></summary>
-        <div class="note">
-          داخلِ متن‌ها می‌توانید ایموجیِ پریمیوم هم بگذارید — کدش را از داخلِ خودِ ربات با
-          <code>/panel</code> ← 🔘 ایموجیِ پریمیوم بگیرید و به‌شکلِ <code>&lt;tg-emoji emoji-id="..."&gt;✨&lt;/tg-emoji&gt;</code>
-          داخلِ متن بچسبانید. برایِ خودِ سه‌تا دکمه، شناسه‌ی همان ایموجیِ پریمیوم را (بدونِ تگ، فقط عدد) در
-          کادرِ «ایموجیِ دکمه» زیرِ همان دکمه بگذارید.
-        </div>
-        <?php foreach (bkDefaults()['texts'] as $k => $def): $isBtn = in_array($k, ['btn_protect','btn_send','btn_send_confirm','btn_back'], true); ?>
-          <div style="margin-bottom:12px">
-            <label><?= h($k) ?><?= $isBtn ? ' (متنِ دکمه)' : '' ?></label>
-            <?php if ($isBtn): ?>
-              <input name="txt_<?= h($k) ?>" value="<?= h($BK['texts'][$k] ?? $def) ?>">
-              <div class="grid2" style="margin-top:6px">
-                <input name="icon_<?= h($k) ?>" value="<?= h($BK['icons'][$k] ?? '') ?>" placeholder="شناسه‌ی ایموجیِ پریمیومِ این دکمه (اختیاری)" style="direction:ltr">
-                <select name="color_<?= h($k) ?>">
-                  <?php foreach (styleMap() as $sk => $sl): ?>
-                    <option value="<?= h($sk) ?>" <?= ($BK['btns'][$k]['color'] ?? 'none') === $sk ? 'selected' : '' ?>><?= h($sl) ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-            <?php else: ?>
-              <textarea name="txt_<?= h($k) ?>" rows="3" style="direction:rtl"><?= h($BK['texts'][$k] ?? $def) ?></textarea>
-            <?php endif; ?>
-          </div>
-        <?php endforeach; ?>
-      </details>
-      <div style="margin-top:16px"><button class="btn g">ذخیره متن‌ها</button></div>
-    </form>
-  </div></div>
-
-<?php // ================= 💣 مین‌یاب ================= ?>
-<?php elseif ($tab === 'mine'): ?>
-  <?php $MN = mnCfg(); ?>
-  <div class="card"><h2>💣 مین‌یاب
-    <?= !empty($MN['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?>
-  </h2><div class="body">
-    <div class="note">
-      همین‌طور روی همان الماسِ بخشِ «💎 الماس» کار می‌کند. دستور: <code>مین ۵۰۰</code> (کلمه‌اش قابلِ تغییر است) —
-      فقط داخلِ گروه.
-    </div>
-    <form method="post">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="mine">
-      <input type="hidden" name="action" value="save_mine">
-
-      <details class="subcard" open><summary><h3>🔌 وضعیت</h3></summary>
-        <div style="margin-bottom:10px">
-          <label style="font-weight:500"><input type="checkbox" name="mn_on" style="width:auto" <?= !empty($MN['on']) ? 'checked' : '' ?>> روشن باشد</label>
-          <label style="font-weight:500"><input type="checkbox" name="mn_group_only" style="width:auto" <?= !empty($MN['group_only']) ? 'checked' : '' ?>> فقط داخلِ گروه کار کند</label>
-        </div>
-        <div class="grid2">
-          <div><label>💬 کلمه‌ی شروع (قبلِ عدد)</label><input name="mn_word" value="<?= h($MN['word'] ?? 'مین') ?>"></div>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>💎 ورودی و بازی</h3></summary>
-        <div class="grid2">
-          <div><label>حداقلِ ورودی</label><input name="entry_min" value="<?= h($MN['entry_min'] ?? 100) ?>" style="direction:ltr"></div>
-          <div><label>حداکثرِ ورودی</label><input name="entry_max" value="<?= h($MN['entry_max'] ?? 1000000) ?>" style="direction:ltr"></div>
-          <div><label>حداقلِ خانه‌ی امن برایِ حفاظت از جریمه</label><input name="min_safe" type="number" min="0" max="8" value="<?= (int)($MN['min_safe_for_protection'] ?? 3) ?>"></div>
-          <div><label>حداکثرِ بازی‌های فعالِ هم‌زمان (کلِ ربات)</label><input name="max_active" type="number" min="1" value="<?= (int)($MN['max_active_games'] ?? 200) ?>"></div>
-          <div><label>مهلتِ بی‌کاری تا انقضایِ بازی (ثانیه)</label><input name="game_timeout" type="number" min="60" value="<?= (int)($MN['game_timeout'] ?? 1800) ?>"></div>
-          <div><label>فاصله‌ی دو بازیِ همان کاربر (ثانیه، ۰=خاموش)</label><input name="game_cooldown" type="number" min="0" value="<?= (int)($MN['game_cooldown'] ?? 0) ?>"></div>
-        </div>
-        <div style="margin-top:10px">
-          <label style="font-weight:500"><input type="checkbox" name="expire_refund" style="width:auto" <?= !empty($MN['expire_refund']) ? 'checked' : '' ?>> بعدِ انقضا، ورودی به کاربر برگردد</label>
-        </div>
-      </details>
-
-      <details class="subcard"><summary><h3>🏆 جایزه‌ی هر خانه‌ی امن</h3></summary>
-        <div class="note">هرکدام، جایزه‌ی همان شماره خانه‌ی امن است (نه تجمعی) — جمعِ رویِ‌همِ همه‌شان پرداخت می‌شود.</div>
-        <div class="grid2">
-          <?php $RW = $MN['rewards'] ?? mnDefaults()['rewards']; for ($i = 1; $i <= 8; $i++): ?>
-            <div><label>🏆 خانه‌ی امنِ #<?= $i ?></label><input name="reward_<?= $i ?>" value="<?= h($RW[$i - 1] ?? 0) ?>" style="direction:ltr"></div>
-          <?php endfor; ?>
-        </div>
-        <div class="grid2">
-          <div><label>ضریبِ رشد برایِ فراترِ از ۸ (عملا پیش نمی‌آید)</label><input name="reward_growth" value="<?= h($MN['reward_growth'] ?? 1.5) ?>" style="direction:ltr"></div>
-        </div>
-      </details>
-
-      <div style="margin-top:16px"><button class="btn g">ذخیره تنظیماتِ مین‌یاب</button></div>
-    </form>
-
-    <form method="post" style="margin-top:20px">
-      <input type="hidden" name="csrf" value="<?= h($CSRF) ?>"><input type="hidden" name="tab" value="mine">
-      <input type="hidden" name="action" value="save_mine_texts">
-      <details class="subcard" open><summary><h3>✏️ متن‌ها و دکمه‌ها</h3></summary>
-        <div class="note">
-          داخلِ متن‌ها ایموجیِ پریمیوم با <code>&lt;tg-emoji emoji-id="..."&gt;✨&lt;/tg-emoji&gt;</code> — کدش را از
-          <code>/panel</code> ← 🔘 ایموجیِ پریمیوم بگیرید. برایِ خودِ دکمه‌ها، شناسه را (بدونِ تگ) در کادرِ زیرِ
-          همان دکمه بگذارید و رنگش را هم از کنارش انتخاب کنید.
-        </div>
-        <?php foreach (mnDefaults()['texts'] as $k => $def): $isBtn = in_array($k, ['btn_field','btn_join','btn_cancel','btn_cash'], true); ?>
-          <div style="margin-bottom:12px">
-            <label><?= h($k) ?><?= $isBtn ? ' (متنِ دکمه)' : '' ?></label>
-            <?php if ($isBtn): ?>
-              <input name="txt_<?= h($k) ?>" value="<?= h($MN['texts'][$k] ?? $def) ?>">
-              <div class="grid2" style="margin-top:6px">
-                <input name="icon_<?= h($k) ?>" value="<?= h($MN['icons'][$k] ?? '') ?>" placeholder="شناسه‌ی ایموجیِ پریمیومِ این دکمه (اختیاری)" style="direction:ltr">
-                <select name="color_<?= h($k) ?>">
-                  <?php foreach (styleMap() as $sk => $sl): ?>
-                    <option value="<?= h($sk) ?>" <?= ($MN['btns'][$k]['color'] ?? 'none') === $sk ? 'selected' : '' ?>><?= h($sl) ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-            <?php else: ?>
-              <textarea name="txt_<?= h($k) ?>" rows="3" style="direction:rtl"><?= h($MN['texts'][$k] ?? $def) ?></textarea>
-            <?php endif; ?>
-          </div>
-        <?php endforeach; ?>
-      </details>
-      <div style="margin-top:16px"><button class="btn g">ذخیره متن‌ها</button></div>
-    </form>
-  </div></div>
-
 <?php else: ?>
   <div class="crumb">سیستم <span>/</span> <b>تنظیمات</b></div>
   <?php // 🧩 پنج بخشِ زیر همه یک فرم/یک submit هستند (همان چیزی که قبلا بود) —
@@ -4663,16 +4047,6 @@ def join_gate(user_id):
         <div><label>آدرس TRX</label><input name="trx" value="<?= h($C['wallets']['trx']) ?>" style="direction:ltr"></div>
         <div><label>شماره کارت</label><input name="card" value="<?= h($C['wallets']['card']) ?>" style="direction:ltr"></div>
         <div><label>به نام</label><input name="card_name" value="<?= h($C['wallets']['card_name']) ?>"></div>
-      </div>
-    </div></details>
-
-    <details class="card"><summary><h2 style="border:0;padding:0;background:none">👥 زیرمجموعه‌گیری (رفرال)</h2></summary><div class="body">
-      <div class="grid2">
-        <div><label>درصد پورسانت</label><input name="ref_percent" type="number" min="0" max="100" step="0.5"
-             value="<?= h($C['referral']['percent']) ?>"></div>
-        <div><label>&nbsp;</label><label style="font-weight:500">
-          <input type="checkbox" name="ref_on" style="width:auto" <?= !empty($C['referral']['on']) ? 'checked' : '' ?>>
-          سیستم معرفی فعال باشد</label></div>
       </div>
     </div></details>
 

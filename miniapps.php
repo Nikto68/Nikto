@@ -2557,7 +2557,6 @@ function maPayFromWallet($orderId, $uid) {
     if (!maDebit($uid, (float)$o['total']))
         return [false, 'موجودی کیف پول کافی نیست.'];
 
-    payReferralCommission($uid, (float)$o['total']);
     maMarkPaid($orderId, 'wallet');
     return [true, ''];
 }

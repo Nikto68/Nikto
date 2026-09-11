@@ -2,7 +2,7 @@
 /**
  * 🛍️ ربات فروشگاه + ربات‌های اپلودر عمومی
  *
- * ربات مادر : فروشگاه کامل با منوی دکمه‌ای (کیبورد)، کیف پول، زیرمجموعه‌گیری،
+ * ربات مادر : فروشگاه کامل با منوی دکمه‌ای (کیبورد)، کیف پول،
  *             پیگیری سفارش، پشتیبانی ۱۰ روشه، و پنل مدیریت کامل
  * ربات فرعی : اپلودر عمومی — فایل می‌گیرد، لینک می‌سازد؛ کاربر با کلیک روی لینک
  *             اول در کانال‌های اجباری عضو می‌شود، بعد فایل را می‌گیرد و
@@ -215,15 +215,9 @@ require_once __DIR__ . '/numbers.php';
 require_once __DIR__ . '/ton_wallet.php';
 require_once __DIR__ . '/admin_ext.php';
 require_once __DIR__ . '/prices.php';
-require_once __DIR__ . '/diamond.php';
 require_once __DIR__ . '/channels.php';
-require_once __DIR__ . '/games.php';
 require_once __DIR__ . '/airdrop.php';
 require_once __DIR__ . '/coupons.php';
-require_once __DIR__ . '/bank.php';
-require_once __DIR__ . '/mine.php';
-require_once __DIR__ . '/vault.php';
-require_once __DIR__ . '/arcade.php';
 require_once __DIR__ . '/profit.php';
 
 // ============================================================
@@ -878,7 +872,6 @@ function defaultConfig() {
             'buy'      => ['emoji' => '🛒', 'text' => 'خرید محصول',                     'color' => 'success', 'dot' => '🟢', 'icon' => '', 'row' => 1, 'order' => 1, 'on' => true, 'action' => ''],
             'account'  => ['emoji' => '👤', 'text' => 'حساب کاربری',                    'color' => 'primary', 'dot' => '🔵', 'icon' => '', 'row' => 2, 'order' => 2, 'on' => true, 'action' => ''],
             'topup'    => ['emoji' => '➕', 'text' => 'افزایش موجودی',                  'color' => 'primary', 'dot' => '🔵', 'icon' => '', 'row' => 2, 'order' => 3, 'on' => true, 'action' => ''],
-            'referral' => ['emoji' => '👥', 'text' => 'زیر مجموعه گیری',                'color' => 'danger',  'dot' => '🔴', 'icon' => '', 'row' => 3, 'order' => 4, 'on' => true, 'action' => ''],
             'orders'   => ['emoji' => '📊', 'text' => 'پیگیری سفارش',                   'color' => 'primary', 'dot' => '🔵', 'icon' => '', 'row' => 4, 'order' => 5, 'on' => true, 'action' => ''],
             'support'  => ['emoji' => '📞', 'text' => 'پشتیبانی',                       'color' => 'primary', 'dot' => '🔵', 'icon' => '', 'row' => 4, 'order' => 6, 'on' => true, 'action' => ''],
             'trust'    => ['emoji' => '💚', 'text' => 'چطوری میتوانم به شما اعتماد کنم', 'color' => 'danger',  'dot' => '🔴', 'icon' => '', 'row' => 5, 'order' => 7, 'on' => true, 'action' => ''],
@@ -939,7 +932,7 @@ function defaultConfig() {
 
         'texts' => [
             'welcome'      => "👋 سلام {name} عزیز\nبه فروشگاه ما خوش آمدید.\n\nاز منوی پایین یکی از گزینه‌ها را انتخاب کنید.",
-            'account'      => "👤 <b>حساب کاربری</b>\n\n🆔 آیدی: <code>{id}</code>\n👤 نام: {name}\n📛 یوزرنیم: {username}\n\n💰 موجودی: <b>{balance}</b> تومان\n🛒 خریدها: {orders}\n👥 زیرمجموعه: {referrals}\n💵 درآمد معرفی: {ref_earned} تومان\n\n📅 عضویت: {joined}",
+            'account'      => "👤 <b>حساب کاربری</b>\n\n🆔 آیدی: <code>{id}</code>\n👤 نام: {name}\n📛 یوزرنیم: {username}\n\n💰 موجودی: <b>{balance}</b> تومان\n🛒 خریدها: {orders}\n\n📅 عضویت: {joined}",
             'trust'        => "💚 <b>چرا می‌توانید به ما اعتماد کنید؟</b>\n\n✅ سال‌ها سابقه فعالیت\n✅ تحویل آنی و خودکار\n✅ پشتیبانی ۲۴ ساعته\n✅ ضمانت بازگشت وجه\n✅ هزاران مشتری راضی\n\nبرای مشاهده نظرات مشتریان به کانال ما مراجعه کنید.",
             'support'      => "📞 <b>پشتیبانی</b>\n\nاز روش‌های زیر می‌توانید با ما در ارتباط باشید:",
             'orders_empty' => "📊 هنوز سفارشی ثبت نکرده‌اید.",
@@ -956,13 +949,6 @@ function defaultConfig() {
                               "{content}\n{note}",
             'order_status' => "<b>وضعیت سفارش</b>\n\nکد پیگیری: <code>{code}</code>\nوضعیت: <b>{status}</b>\n\n<b>{product}</b>\n{link_line}{qty_line}{perday_line}{eta_line}{progress}\nمبلغ: <b>{amount} {currency}</b>\nثبت: {created}\n{approved_line}\n{hint}",
             'orders_head'  => "📊 <b>سفارش‌های شما</b>\n",
-            'referral'     => "👥 <b>داشبورد زیرمجموعه</b>\n\nبا دعوت دوستان خود <b>{percent}%</b> از هر خرید آن‌ها را دریافت کنید.\n\n👥 تعداد زیرمجموعه: <b>{referrals}</b>\n💵 کل درآمد: <b>{ref_earned}</b> تومان\n💰 قابل برداشت: <b>{ref_pending}</b> تومان",
-            'referral_link'=> "🔗 <b>لینک دعوت شما</b>\n\n{link}\n\nاین لینک را با دوستانتان به اشتراک بگذارید.",
-            'referral_wallet_none' => "💼 <b>برداشت پورسانت</b>\n\nهنوز چیزی برای برداشت جمع نشده.",
-            'referral_wallet_ok'   => "✅ <b>{amount}</b> تومان به کیف‌پولِ شما (داخلِ ربات) واریز شد.",
-            'referral_hist_head' => "🧾 <b>تاریخچه‌ی پورسانت</b>\n",
-            'referral_hist_row'  => "▪️ {date} — از خرید <b>{amount}</b> تومانی: <b>+{commission}</b> تومان\n",
-            'referral_hist_none' => "هنوز پورسانتی ثبت نشده است.",
             'topup'        => "➕ <b>افزایش موجودی</b>\n\nمبلغ مورد نظر را به تومان وارد کنید (فقط عدد):",
             // ✅ پیامی که بعد از تایید شارژ به کاربر می‌رسد.
             // ایموجی پریمیوم و <blockquote> هم می‌شود گذاشت.
@@ -1018,15 +1004,6 @@ function defaultConfig() {
             ['on' => false, 'kind' => 'indirect', 'type' => 'text',   'emoji' => '📧', 'label' => 'ایمیل',              'value' => ''],
             ['on' => false, 'kind' => 'indirect', 'type' => 'url',    'emoji' => '✈️', 'label' => 'ایتا',               'value' => ''],
             ['on' => false, 'kind' => 'indirect', 'type' => 'text',   'emoji' => '📋', 'label' => 'قوانین',             'value' => ''],
-        ],
-
-        'referral' => [
-            'on' => true, 'percent' => 2,
-            'btns' => [
-                'link'   => ['emoji' => '🔗', 'text' => 'ساخت لینک دعوت',   'color' => 'success', 'icon' => ''],
-                'hist'   => ['emoji' => '🧾', 'text' => 'تاریخچه پورسانت', 'color' => 'primary', 'icon' => ''],
-                'wallet' => ['emoji' => '💼', 'text' => 'برداشت پورسانت', 'color' => 'primary', 'icon' => ''],
-            ],
         ],
 
         // 📋 قوانینِ افزایش موجودی — اولین بار که کاربر می‌رود «افزایش
@@ -1453,31 +1430,24 @@ function countUsers() {
  * پس اگر کاربر قبلا هست و نام و آیدی‌اش همان است و کمتر از یک دقیقه
  * از آخرین دیدنش گذشته، اصلا قفل نمی‌گیریم و فایل را بازنویسی نمی‌کنیم.
  */
-function touchUser($id, $username = '', $firstName = '', $referrer = null) {
+function touchUser($id, $username = '', $firstName = '') {
     $cur = getUser($id);
     // رکورد قدیمی که هنوز همه‌ی فیلدها را ندارد باید از مسیر عادی رد شود
     // تا فیلدهای تازه به آن اضافه شوند
     $whole = is_array($cur)
           && array_key_exists('balance', $cur) && array_key_exists('banned', $cur)
-          && array_key_exists('referrer', $cur) && array_key_exists('joined_at', $cur);
-    if ($whole && $referrer === null
+          && array_key_exists('joined_at', $cur);
+    if ($whole
         && (string)($cur['username'] ?? '')   === (string)$username
         && (string)($cur['first_name'] ?? '') === (string)$firstName) {
         $seen = strtotime((string)($cur['seen_at'] ?? '')) ?: 0;
         if ($seen > 0 && (time() - $seen) < 60) return $cur;
     }
 
-    // بررسیِ وجودِ معرف بیرونِ تراکنش — فقط یک خواندنِ سبک است
-    $referrerOk = $referrer && (int)$referrer !== (int)$id && getUser($referrer) !== null;
-
-    $didSetReferrer = false;
-    $out = mutateUser($id, function (&$user) use ($id, $username, $firstName, $referrerOk, $referrer, &$didSetReferrer) {
-        $isNew = ($user === null);
+    $out = mutateUser($id, function (&$user) use ($id, $username, $firstName) {
         $user = array_merge([
             'telegram_id' => (int)$id,
             'balance'     => 0,
-            'referrer'    => null,
-            'ref_earned'  => 0,
             'banned'      => false,
             'joined_at'   => nowStr(),
         ], is_array($user) ? $user : [], [
@@ -1485,22 +1455,8 @@ function touchUser($id, $username = '', $firstName = '', $referrer = null) {
             'first_name' => $firstName,
             'seen_at'    => nowStr(),
         ]);
-        // معرف فقط یک بار و فقط برای کاربر جدید ثبت می‌شود
-        if ($isNew && $referrerOk) {
-            $user['referrer'] = (int)$referrer;
-            $didSetReferrer = true;
-        }
         return $user;
     });
-
-    // ردیفِ کاربرِ معرف، ردیفِ دیگری است — نمی‌شود همان تراکنشِ بالا آن
-    // را هم عوض کند (یک اتصالِ SQLite دو تراکنشِ تودرتو را قبول نمی‌کند)،
-    // پس جدا، بعد از تمام‌شدنِ تراکنشِ اول
-    if ($didSetReferrer) {
-        mutateUser($referrer, function (&$r) {
-            if ($r !== null) $r['ref_count'] = (int)($r['ref_count'] ?? 0) + 1;
-        });
-    }
 
     return $out;
 }
@@ -1531,67 +1487,6 @@ function debitBalance($userId, $amount) {
         $user['balance'] = round($bal - $amount);
         return true;
     });
-}
-
-/**
- * تعدادِ زیرمجموعه‌ها — کش‌شده روی ردیفِ خودِ کاربر (ref_count)، نه
- * شمارشِ کلِ جدولِ کاربران در هر بازدیدِ حساب. این عدد از دو جا درست
- * می‌ماند: افزایشِ لحظه‌ایِ touchUser() برای هر زیرمجموعه‌ی تازه، و
- * مهاجرتِ یک‌باره‌ی backfillRefCounts() برای داده‌های قدیمی‌تر از این
- * تغییر (پایین‌تر، در بخشِ «مهاجرت‌های یک‌باره»).
- */
-function countReferrals($userId) {
-    return (int)(getUser($userId)['ref_count'] ?? 0);
-}
-
-/**
- * مهاجرتِ یک‌باره: شمارشِ واقعیِ زیرمجموعه‌های هرکس از رویِ کلِ جدول،
- * و نوشتنش روی ردیفِ خودش — تا از این به بعد countReferrals() دیگر
- * لازم نباشد کلِ کاربران را بخواند. عمدا همه را «بازنویسی» می‌کند، نه
- * فقط کسانی که هنوز ref_count ندارند — چون تا لحظه‌ی اجرا شدنِ همین
- * مهاجرت، ممکن است افزایشِ لحظه‌ای (touchUser) برای بعضی‌ها زودتر از
- * این مهاجرت جلو افتاده و یک عددِ ناقص کش کرده باشد؛ فقط بازنویسیِ کامل
- * این حالت را هم درست می‌کند.
- */
-function backfillRefCounts() {
-    $all = allUsers();
-    $counts = [];
-    foreach ($all as $u) {
-        $r = (int)($u['referrer'] ?? 0);
-        if ($r > 0) $counts[$r] = ($counts[$r] ?? 0) + 1;
-    }
-    foreach ($all as $id => $u) {
-        $n = $counts[(int)$id] ?? 0;
-        mutateUser($id, function (&$user) use ($n) { if ($user !== null) $user['ref_count'] = $n; });
-    }
-}
-
-function payReferralCommission($buyerId, $amount) {
-    $u = getUser($buyerId);
-    if (!$u || empty($u['referrer'])) return;
-    $c = cfg()['referral'];
-    if (empty($c['on'])) return;
-    $commission = round((float)$amount * ((float)$c['percent'] / 100), 2);
-    if ($commission <= 0) return;
-    // 💠 دیگر خودکار به موجودی واریز نمی‌شود — تا خودِ کاربر «برداشت
-    // پورسانت» را نزند، توی ref_pending می‌ماند. ref_earned همچنان
-    // مجموعِ کلِ تاریخیِ درآمد است (فقط برای نمایش، دست‌نخورده).
-    mutateUser($u['referrer'], function (&$user) use ($commission) {
-        if ($user === null) return;
-        $user['ref_earned']  = round((float)($user['ref_earned'] ?? 0) + $commission, 2);
-        $user['ref_pending'] = round((float)($user['ref_pending'] ?? 0) + $commission, 2);
-    });
-    // 🧾 تاریخچه‌ی پورسانت — هر ردیف: خرید کدام زیرمجموعه، چه مبلغی، کِی.
-    //    فقط ۵۰ ردیفِ آخرِ هر معرف نگه داشته می‌شود، وگرنه بی‌نهایت بزرگ می‌شود.
-    mutate('ref_log', function (&$a) use ($u, $amount, $commission) {
-        $k = (string)$u['referrer'];
-        if (!isset($a[$k]) || !is_array($a[$k])) $a[$k] = [];
-        array_unshift($a[$k], ['amount' => (float)$amount, 'commission' => $commission, 'at' => nowStr()]);
-        $a[$k] = array_slice($a[$k], 0, 50);
-    });
-    sendMsg(BOT_TOKEN, $u['referrer'],
-        "🎉 یکی از زیرمجموعه‌های شما خرید کرد!\n💵 پورسانت شما: <b>" . fmtNum($commission) . "</b> تومان\n\n" .
-        "برای واریز به کیف‌پولتان، از 👥 زیرمجموعه ← 💼 برداشت پورسانت استفاده کنید.");
 }
 
 // ============================================================
@@ -2501,7 +2396,6 @@ class Order
             if ($user !== null) $user['approved_orders'] = (int)($user['approved_orders'] ?? 0) + 1;
         });
 
-        payReferralCommission($o['user_id'], $o['amount']);
         campaignFromOrder($o);   // 🎯 کانال مشتری خودکار در ربات‌های اپلودر قفل می‌شود
         smmAutoFulfill($o, $p);  // 🤖 اگر محصول به پنل ممبر وصل است، همان‌جا سفارش ثبت می‌شود
         return [true, $o];
@@ -3401,8 +3295,6 @@ function showAccount($uid, $chatId, $extra = [], $replyTo = null) {
         'username'   => !empty($u['username']) ? '@' . h($u['username']) : '—',
         'balance'    => fmtNum($u['balance'] ?? 0),
         'orders'     => $orders,
-        'referrals'  => countReferrals($uid),
-        'ref_earned' => fmtNum($u['ref_earned'] ?? 0),
         'joined'     => h($u['joined_at'] ?? '—'),
     ]);
     $rows = [[btnUI('topup', 'menu_topup', 'buy')], [btnUI('my_orders', 'menu_orders', 'info')]];
@@ -3820,388 +3712,6 @@ function showOrderStatus($uid, $chatId, $code, $replyTo = null) {
 
     panelShow($uid, $chatId, 'menu', $text, inlineKb($rows), $replyTo);
     return true;
-}
-
-function refBtn($which, $cb) {
-    $m = cfg()['referral']['btns'][$which] ?? [];
-    $b = ['text' => trim(($m['emoji'] ?? '') . ' ' . ($m['text'] ?? '')), 'callback_data' => $cb];
-    if (isStyle($m['color'] ?? '')) $b['style'] = $m['color'];
-    if (!empty($m['icon'])) $b['icon_custom_emoji_id'] = (string)$m['icon'];
-    return $b;
-}
-
-function refInviteLink($uid) {
-    $me = tg(BOT_TOKEN, 'getMe', []);
-    $un = $me['result']['username'] ?? '';
-    return $un ? "https://t.me/{$un}?start=ref{$uid}" : '';
-}
-
-/** داشبورد زیرمجموعه — لینک و تاریخچه و کیف‌پول، هرکدام پشتِ دکمه‌ی خودش */
-function showReferral($uid, $chatId, $extra = [], $replyTo = null) {
-    // از روی کارتِ گرافیکیِ لینک برگشته؟ عکس نمی‌تواند به متن ویرایش شود،
-    // پس جمعش می‌کنیم تا هم‌زمان دو پیام (کارت + داشبورد) دیده نشود.
-    $cardMid = slotGet($uid, 'refcard');
-    if ($cardMid) { delMsg(BOT_TOKEN, $chatId, $cardMid); slotClear($uid, 'refcard'); }
-
-    $u = getUser($uid) ?: [];
-    $refText = T('referral', [
-        'percent'     => cfg()['referral']['percent'],
-        'referrals'   => countReferrals($uid),
-        'ref_earned'  => fmtNum($u['ref_earned'] ?? 0),
-        'ref_pending' => fmtNum($u['ref_pending'] ?? 0),
-    ]);
-    $rows = [
-        [refBtn('link', 'ref_link')],
-        [refBtn('hist', 'ref_hist'), refBtn('wallet', 'ref_wallet')],
-    ];
-    foreach ($extra as $r) $rows[] = $r;
-    panelShow($uid, $chatId, 'menu', $refText, inlineKb($rows), $replyTo);
-}
-
-/**
- * 🔗 لینکِ دعوت — متن + دکمه‌ها روی خودِ کارتِ گرافیکی می‌نشینند، نه
- * یک پیامِ متنیِ جدا. یعنی یک پیام (عکس با کپشن)، نه دو تا.
- */
-function showReferralLink($uid, $chatId) {
-    $link = refInviteLink($uid);
-    if ($link === '') {
-        panelShow($uid, $chatId, 'menu', '⚠️ لینک هنوز آماده نیست.',
-            inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
-        return;
-    }
-    // متن ویرایش به عکس نمی‌شود، پس داشبورد را جمع می‌کنیم تا فقط
-    // کارت بماند — نه اینکه یک پیامِ تازه زیرِ داشبوردِ قبلی بنشیند.
-    $oldMid = slotGet($uid, 'menu');
-    if ($oldMid) { delMsg(BOT_TOKEN, $chatId, $oldMid); slotClear($uid, 'menu'); }
-
-    $rows = [];
-    if (function_exists('axShareButton')) {
-        if ($sb = axShareButton($link)) $rows[] = [$sb];
-    }
-    $rows[] = [btnUI('back', 'menu_referral', 'nav')];
-    $caption = T('referral_link', ['link' => $link]);
-    $ok = refCardShow($uid, $chatId, $caption, inlineKb($rows));
-    // 🛟 کارتِ گرافیکی هر دلیلی داشته باشد که نشد (فونت، شبکه، هرچه)،
-    // کاربر نباید از این دکمه دست‌خالی بماند — لااقل خودِ لینک را بده.
-    if (!$ok) panelShow($uid, $chatId, 'menu', $caption, inlineKb($rows));
-}
-
-// ============================================================
-// 🖼 کارتِ گرافیکیِ دعوت — ۶۴۰×۳۶۰، کنارِ لینکِ دعوت فرستاده می‌شود
-// ============================================================
-//
-// از همان زیرساختِ فونت/رنگِ کارتِ قیمت (prices.php: pxFont, pxRoundRect)
-// استفاده می‌کند — اگر آن‌جا فونت پیدا شده، همین‌جا هم کار می‌کند؛ اگر
-// نه، همان راهنماییِ «یک ttf برای ربات بفرستید» آن‌جا هست.
-
-/** بایت‌های PNG کارت — یا رشته‌ی خالی اگر GD/فونت نبود */
-function refCardBytes($link, $uid) {
-    if (!function_exists('imagecreatetruecolor') || !function_exists('imagettftext')) return '';
-    $font = function_exists('pxFont') ? pxFont(true) : '';
-    if ($font === '') return '';
-
-    $W = 640; $H = 360;
-    $im = imagecreatetruecolor($W, $H);
-
-    // 🎨 پس‌زمینه: گرادیانِ مشکی → سرمه‌ای، از بالا به پایین
-    $top = [10, 10, 20]; $bot = [28, 22, 48];
-    for ($y = 0; $y < $H; $y++) {
-        $t = $y / $H;
-        imageline($im, 0, $y, $W, $y, imagecolorallocate($im,
-            (int)($top[0] + ($bot[0] - $top[0]) * $t),
-            (int)($top[1] + ($bot[1] - $top[1]) * $t),
-            (int)($top[2] + ($bot[2] - $top[2]) * $t)));
-    }
-
-    // 🔵🔴🟡 نوارِ سه‌رنگِ بالا — آبی، قرمز، طلایی
-    imagefilledrectangle($im, 0, 0, (int)($W * 0.34), 10, imagecolorallocate($im, 52, 120, 246));
-    imagefilledrectangle($im, (int)($W * 0.34), 0, (int)($W * 0.67), 10, imagecolorallocate($im, 214, 40, 57));
-    imagefilledrectangle($im, (int)($W * 0.67), 0, $W, 10, imagecolorallocate($im, 212, 175, 55));
-
-    $white = imagecolorallocate($im, 255, 255, 255);
-    $gold  = imagecolorallocate($im, 230, 190, 70);
-    $gray  = imagecolorallocate($im, 175, 175, 195);
-    $dark  = imagecolorallocate($im, 20, 20, 32);
-    $blue  = imagecolorallocate($im, 52, 120, 246);
-    $red   = imagecolorallocate($im, 214, 40, 57);
-    $shadow = imagecolorallocate($im, 0, 0, 0);
-
-    $center = function ($size, $text) use ($font, $W) {
-        $bb = imagettfbbox($size, 0, $font, $text);
-        return (int)(($W - abs($bb[2] - $bb[0])) / 2);
-    };
-
-    // ✨ نقطه‌های تزئینی کنارِ عنوان — حس جشن/پفکی
-    foreach ([[70, 50, 5, $blue], [90, 75, 3, $gold], [$W - 70, 50, 5, $red], [$W - 90, 75, 3, $gold]] as $dot)
-        imagefilledellipse($im, $dot[0], $dot[1], $dot[2] * 2, $dot[2] * 2, $dot[3]);
-
-    // عنوان — با سایه‌ی نرمِ زیرش تا حسِ برجسته/پفکی بدهد
-    $title = 'INVITE & EARN';
-    $tx = $center(30, $title);
-    imagettftext($im, 30, 0, $tx + 2, 66, $shadow, $font, $title);
-    imagettftext($im, 30, 0, $tx, 63, $gold, $font, $title);
-
-    // 🖼 قابِ سه‌رنگِ دورِ چیپ — یک لایه‌ی رنگی بزرگ‌تر زیرِ چیپِ سفید،
-    //    که از هر طرف چند پیکسل بیرون می‌زند و رنگش دیده می‌شود
-    $chipX1 = 40; $chipY1 = 148; $chipX2 = $W - 40; $chipY2 = 236;
-    if (function_exists('pxRoundRect')) {
-        pxRoundRect($im, $chipX1 - 4, $chipY1 - 4, $chipX2 + 4, $chipY2 + 4, 22, $gold);
-        pxRoundRect($im, $chipX1, $chipY1, $chipX2, $chipY2, 18, $white);
-    } else {
-        imagefilledrectangle($im, $chipX1 - 4, $chipY1 - 4, $chipX2 + 4, $chipY2 + 4, $gold);
-        imagefilledrectangle($im, $chipX1, $chipY1, $chipX2, $chipY2, $white);
-    }
-
-    $size = 22;
-    while ($size > 11) {
-        $bb = imagettfbbox($size, 0, $font, $link);
-        if (abs($bb[2] - $bb[0]) <= ($chipX2 - $chipX1 - 40)) break;
-        $size--;
-    }
-    imagettftext($im, $size, 0, $center($size, $link), (int)(($chipY1 + $chipY2) / 2) + 7, $dark, $font, $link);
-
-    // کدِ دعوت — پایینِ کارت، با یک خطِ کوتاهِ تزئینی هر طرف
-    $code = 'CODE: ' . $uid;
-    $cw = abs(imagettfbbox(16, 0, $font, $code)[2] - imagettfbbox(16, 0, $font, $code)[0]);
-    $cx = $center(16, $code);
-    imagettftext($im, 16, 0, $cx, $H - 34, $gray, $font, $code);
-    imagefilledrectangle($im, $cx - 46, $H - 39, $cx - 16, $H - 37, $gray);
-    imagefilledrectangle($im, $cx + $cw + 16, $H - 39, $cx + $cw + 46, $H - 37, $gray);
-
-    ob_start();
-    imagepng($im);
-    $bytes = (string)ob_get_clean();
-    imagedestroy($im);
-    return $bytes;
-}
-
-function refCardPhotoIdKey($uid) { return 'refcard_fid_' . (int)$uid; }
-
-/**
- * کارت را با متن و دکمه‌هایش، در یک پیام (نه دو تا) می‌فرستد — کپشنِ
- * خودِ عکس همان متنِ لینک است، دکمه‌ها هم روی همان پیامِ عکس می‌نشینند.
- * اگر قبلا برای همین کاربر فرستاده شده، همان پیام (عکس+کپشن+دکمه)
- * ویرایش می‌شود — نه پیامِ تازه، نه آپلودِ دوباره اگر فایل‌شناسه را داریم.
- */
-/**
- * فایل‌شناسه/شناسه‌ی پیامِ کارت را ذخیره می‌کند و بلافاصله دوباره
- * می‌خواند تا مطمئن شود واقعا رویِ دیسک نشست — دقیقا همان دلیلی که
- * قبلا باعث شد «هر بار کارتِ تازه بسازد»: اگر نوشتنِ ma_cache یا
- * اسلاتِ کاربر بی‌صدا شکست بخورد، دفعه‌ی بعد نه فایل‌شناسه‌ای هست نه
- * پیامی، و کل زنجیره از نو (با GD) شروع می‌شود. حالا اگر این نوشتن
- * شکست بخورد، لااقل یک‌بار در ساعت به ادمین می‌گوید.
- */
-function refCardRemember($uid, $fid, $nid) {
-    if ($fid !== '' && function_exists('maCachePut')) {
-        maCachePut(refCardPhotoIdKey($uid), $fid);
-        $check = function_exists('maCacheGet') ? (string)(maCacheGet(refCardPhotoIdKey($uid), 2592000) ?? '') : $fid;
-        if ($check !== $fid && function_exists('adminAlertOnce')) {
-            adminAlertOnce('refcard_cache_fail',
-                '🖼 <b>ذخیره‌ی فایل‌شناسه‌ی کارتِ دعوت شکست خورد</b>' . "\n\n" .
-                'یعنی هر بار کارت از نو ساخته می‌شود، نه اینکه یک‌بار بسازد و دوباره بفرستد. ' .
-                'دسترسیِ نوشتن روی پوشه‌ی data_master را چک کنید.');
-        }
-    }
-    if ($nid) {
-        slotSet($uid, 'refcard', $nid);
-        $checkMid = slotGet($uid, 'refcard');
-        if ((int)$checkMid !== (int)$nid && function_exists('adminAlertOnce')) {
-            adminAlertOnce('refcard_slot_fail',
-                '🖼 <b>ذخیره‌ی شناسه‌ی پیامِ کارتِ دعوت شکست خورد</b>' . "\n\n" .
-                'دسترسیِ نوشتن روی پوشه‌ی data_master را چک کنید.');
-        }
-    }
-}
-
-/**
- * برگشتِ true یعنی کارت واقعا فرستاده/ویرایش شد. false یعنی هر دلیلی
- * (GD نبود، فونت نبود، تلگرام رد کرد، شبکه قطع بود) — و در این حالت
- * صدا زننده باید لااقل لینک را به‌شکل متن ساده نشان بدهد، وگرنه کاربر
- * از این دکمه هیچ‌چی نمی‌بیند.
- */
-function refCardShow($uid, $chatId, $caption = '', $markup = null) {
-    $link = refInviteLink($uid);
-    if ($link === '') return false;
-    $mid = slotGet($uid, 'refcard');
-    $fid = function_exists('maCacheGet') ? (string)(maCacheGet(refCardPhotoIdKey($uid), 2592000) ?? '') : '';
-    $rm  = $markup ? (is_string($markup) ? $markup : json_encode($markup)) : null;
-
-    if (function_exists('__tgHook')) {
-        if ($mid && $fid !== '') {
-            $media = ['type' => 'photo', 'media' => $fid, 'caption' => $caption, 'parse_mode' => 'HTML'];
-            $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
-            if ($rm !== null) $data['reply_markup'] = $rm;
-            $out = __tgHook(BOT_TOKEN, 'editMessageMedia', $data);
-            if (!empty($out['ok']) || isNotModified($out)) return true;
-            // 🔴 پیامِ قبلی دیگر وجود ندارد — با همان فایل‌شناسه، تازه بفرست
-        }
-        $data = ['chat_id' => $chatId, 'caption' => $caption, 'photo_len' => 999];
-        if ($rm !== null) $data['reply_markup'] = $rm;
-        if ($fid !== '') $data['reused_fid'] = $fid;
-        $out = __tgHook(BOT_TOKEN, 'sendPhoto', $data);
-        if (empty($out['ok'])) return false;
-        $nid = $out['result']['message_id'] ?? null;
-        $newFid = $out['result']['photo'][0]['file_id'] ?? ('TESTFID_' . $uid);
-        refCardRemember($uid, $newFid, $nid);
-        return true;
-    }
-
-    // ⚡ فایل‌شناسه را داریم؟ نه آپلودی، نه ساختنِ کارتِ تازه — فقط جاگذاری
-    if ($mid && $fid !== '') {
-        $media = ['type' => 'photo', 'media' => $fid, 'caption' => $caption, 'parse_mode' => 'HTML'];
-        $data = ['chat_id' => $chatId, 'message_id' => $mid, 'media' => json_encode($media)];
-        if ($rm !== null) $data['reply_markup'] = $rm;
-        $r = tg(BOT_TOKEN, 'editMessageMedia', $data, 8);
-        // ⚠️ اگه محتوا/دکمه‌ها دقیقا همان چیزیه که همین الان رو پیام
-        // هست (مثلا کاربر دوباره همان دکمه را زده)، تلگرام این را خطا
-        // حساب می‌کند — ولی درواقع همه‌چی درسته و پیام دقیقا همان چیزیه
-        // که باید باشد. این را شکست حساب نکن.
-        if (!empty($r['ok']) || isNotModified($r)) return true;
-
-        // 🔴 خودِ پیام دیگر وجود ندارد (کاربر پاکش کرده، یا هرچه) — نه
-        // فقط فایل‌شناسه‌اش خراب بوده. قبلا اینجا مستقیم می‌رفت سراغِ
-        // ساختنِ کارتِ تازه (که به GD/فونت نیاز دارد)؛ ولی چون
-        // فایل‌شناسه را داریم، اول ارزان‌تر امتحان می‌کنیم: همین
-        // فایل‌شناسه را در یک پیامِ کاملا تازه بفرست — نه آپلودی، نه GD.
-        //
-        // ⏱ همه‌ی این تایم‌اوت‌ها عمدا کوتاهند: قبلا این زنجیره تا ۴ تلاشِ
-        // پشتِ‌سرهم می‌رفت و هرکدام تا ۴۰ ثانیه صبر می‌کرد — یعنی روی
-        // یک اتصالِ کند، کاربر تا ۲ دقیقه هیچی نمی‌دید.
-        if (function_exists('pxSendPhotoById')) {
-            $resend = pxSendPhotoById($chatId, $fid, $caption, $rm, null, 8);
-            if (!empty($resend['ok'])) {
-                $nid = $resend['result']['message_id'] ?? null;
-                refCardRemember($uid, '', $nid);
-                return true;
-            }
-        }
-        // فایل‌شناسه هم دیگر معتبر نیست — از نو می‌سازیم
-    }
-
-    $bytes = refCardBytes($link, $uid);
-    if ($bytes === '') {
-        // 🔴 قبلا اینجا کاملا بی‌صدا صرف‌نظر می‌شد — یعنی اگر روی سرور
-        // GD یا فونت نبود، کارت هیچ‌وقت نمی‌آمد و هیچ‌کس نمی‌فهمید چرا.
-        // حالا لااقل یک‌بار در ساعت به ادمین می‌گوید مشکل دقیقا کجاست.
-        if (function_exists('adminAlertOnce') && function_exists('pxCardWhy')) {
-            $why = pxCardWhy();
-            if ($why !== '') adminAlertOnce('refcard_broken', '🖼 <b>کارتِ دعوت ساخته نمی‌شود</b>' . "\n\n" . $why);
-        }
-        return false;
-    }
-
-    $dir = rtrim(DATA_DIR, '/') . '/tmp';
-    if (!is_dir($dir)) @mkdir($dir, 0755, true);
-
-    $base = defined('TG_API_BASE') ? TG_API_BASE : 'https://api.telegram.org';
-    $upload = function ($asEdit) use ($base, $chatId, $mid, $caption, $rm, $dir, $bytes) {
-        $tmp = $dir . '/refcard_' . bin2hex(random_bytes(6)) . '.png';
-        if (@file_put_contents($tmp, $bytes) === false) return [false, '', ''];
-        if ($asEdit) {
-            $post = ['chat_id' => $chatId, 'message_id' => $mid,
-                'media' => json_encode(['type' => 'photo', 'media' => 'attach://photo',
-                    'caption' => $caption, 'parse_mode' => 'HTML']),
-                'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
-            if ($rm !== null) $post['reply_markup'] = $rm;
-            $ch = curl_init($base . '/bot' . BOT_TOKEN . '/editMessageMedia');
-        } else {
-            $post = ['chat_id' => $chatId, 'caption' => $caption, 'parse_mode' => 'HTML',
-                'photo' => new CURLFile($tmp, 'image/png', 'card.png')];
-            if ($rm !== null) $post['reply_markup'] = $rm;
-            $ch = curl_init($base . '/bot' . BOT_TOKEN . '/sendPhoto');
-        }
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true, CURLOPT_POSTFIELDS => $post, CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 12, CURLOPT_CONNECTTIMEOUT => 5,
-        ]);
-        $res = curl_exec($ch);
-        $err = curl_error($ch);
-        curl_close($ch);
-        @unlink($tmp);
-        return [true, $res, $err];
-    };
-
-    $applyResult = function ($j) use ($uid) {
-        $ph = $j['result']['photo'] ?? [];
-        $newFid = '';
-        if ($ph) {
-            $last = end($ph);
-            $newFid = (string)($last['file_id'] ?? '');
-        }
-        $nid = $j['result']['message_id'] ?? null;
-        refCardRemember($uid, $newFid, $nid);
-    };
-
-    [$wrote, $res, $curlErr] = $upload((bool)$mid);
-    if (!$wrote) return false;
-    $j = json_decode((string)$res, true);
-
-    if (!empty($j['ok'])) { $applyResult($j); return true; }
-    if (isNotModified($j)) return true;   // محتوا همینه که هست — خطا نیست
-
-    // ⚠️ اگر داشتیم پیامِ قبلی را ویرایش می‌کردیم و شکست خورد، شاید خودِ
-    // آن پیام دیگر وجود ندارد (کاربر پاکش کرده، یا هرچه) — نه فقط
-    // فایل‌شناسه‌اش خراب بوده. یک‌بار دیگر، این‌بار به‌شکلِ پیامِ کاملا
-    // تازه، امتحان می‌کنیم؛ وگرنه تا ابد گیرِ همان پیامِ مرده می‌ماند.
-    if ($mid) {
-        [$wrote2, $res2] = $upload(false);
-        if ($wrote2) {
-            $j2 = json_decode((string)$res2, true);
-            if (!empty($j2['ok'])) { $applyResult($j2); return true; }
-        }
-    }
-
-    // 🔴 آپلود رفت ولی تلگرام قبول نکرد (یا اصلا شبکه قطع بود) — این هم
-    // قبلا کاملا بی‌صدا بود. حالا دلیلِ دقیق را به ادمین می‌گوید.
-    //
-    // ⚠️ کلید هشدار را از رویِ خودِ متنِ خطا می‌سازیم، نه یک کلیدِ ثابت —
-    // وگرنه یک خطای قدیمی (مثلا همان «not modified» که قبلا رخ داده)
-    // برای یک ساعت جلوی هر خطای تازه و کاملا متفاوت را هم می‌گرفت.
-    if (function_exists('adminAlertOnce')) {
-        $desc = $curlErr !== '' ? $curlErr : (string)($j['description'] ?? 'پاسخ نامعتبر از تلگرام');
-        adminAlertOnce('refcard_upload_fail_' . substr(md5($desc), 0, 10),
-            '🖼 <b>آپلودِ کارتِ دعوت رد شد</b>' . "\n\n" . h($desc));
-    }
-    return false;
-}
-
-/** 🧾 آخرین ردیف‌های پورسانتِ این کاربر */
-function showReferralHistory($uid, $chatId) {
-    $rows = (array)(load('ref_log')[(string)$uid] ?? []);
-    $t = T('referral_hist_head');
-    if (!$rows) {
-        $t .= "\n" . T('referral_hist_none');
-    } else {
-        foreach (array_slice($rows, 0, 20) as $r) {
-            $t .= T('referral_hist_row', [
-                'date'       => (string)($r['at'] ?? ''),
-                'amount'     => fmtNum((float)($r['amount'] ?? 0)),
-                'commission' => fmtNum((float)($r['commission'] ?? 0)),
-            ]);
-        }
-    }
-    panelShow($uid, $chatId, 'menu', $t, inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
-}
-
-/**
- * 💼 برداشت پورسانت — هرچه از رفرال جمع شده (ref_pending) را همین الان
- * به موجودیِ داخلِ ربات (کیف‌پولِ خودِ کاربر، همان‌جایی که برای خرید
- * استفاده می‌شود) واریز می‌کند.
- */
-function refWithdraw($uid, $chatId) {
-    $u = getUser($uid) ?: [];
-    $pending = round((float)($u['ref_pending'] ?? 0), 2);
-    if ($pending <= 0) {
-        panelShow($uid, $chatId, 'menu', T('referral_wallet_none'),
-            inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
-        return;
-    }
-    addBalance($uid, $pending);
-    mutateUser($uid, function (&$user) {
-        if ($user !== null) $user['ref_pending'] = 0;
-    });
-    panelShow($uid, $chatId, 'menu', T('referral_wallet_ok', ['amount' => fmtNum($pending)]),
-        inlineKb([[btnUI('back', 'menu_referral', 'nav')]]));
 }
 
 function supMainBtn($which, $cb) {
@@ -5594,8 +5104,7 @@ function admHome($chatId, $msgId = null) {
     $rows = [
         [btnCb('🛍 فروشگاه', 'ag_shop', 'admin'),      btnCb('🚀 مینی‌اپ‌ها', 'ag_mini', 'admin')],
         [btnCb('🤖 ربات‌های اپلودر', 'ag_up', 'admin'), btnCb('🎯 ممبر و قفل‌ها', 'ag_lock', 'admin')],
-        [btnCb('💹 قیمت لحظه‌ای', 'px_home', 'admin'),  btnCb('💎 الماس', 'dm_home', 'admin')],
-        [btnCb('☎️ شماره مجازی', 'num_home', 'admin'), btnCb('🎮 بازی‌ها', 'ag_games', 'admin')],
+        [btnCb('💹 قیمت لحظه‌ای', 'px_home', 'admin'),  btnCb('☎️ شماره مجازی', 'num_home', 'admin')],
         [btnCb('📈 سود روی محصولات', 'pf_home', 'admin')],
         [btnCb('💳 پرداخت', 'ag_pay', 'admin'),        btnCb('🎨 ظاهر و متن‌ها', 'ag_look', 'admin')],
         [btnCb('📡 کانال‌های متصل', 'ch_home', 'admin'),
@@ -5769,19 +5278,10 @@ function admGroups() {
             [['💠 رنگ دکمه‌های شیشه‌ای', 'eglass']],
             [['📞 دکمه‌های پشتیبانی', 'esup']],
             [['📋 قوانین شارژ', 'etop_home']],
-            [['👥 دکمه‌های زیرمجموعه', 'eref_home']],
         ]],
         'rep' => ['📢 <b>گزارش و پیام همگانی</b>', 'اعلام فروش و پیام به همه.', [
             [['📢 گزارش خرید در گروه', 'adm_reports']],
             [['📢 پیام همگانی', 'adm_bc']],
-        ]],
-        // 🎮 همه‌ی بازی‌های گروهی، یک‌جا — قبلا بازی‌ها/بانک/مین‌یاب/بانکِ
-        // الماسی/بازی الماسی هرکدام یک دکمه‌ی جداگانه بودند؛ دسترسیِ کامل به
-        // هرکدام همچنان همینجاست، فقط پشتِ یک در.
-        'games' => ['🎮 <b>بازی‌ها</b>', 'همه‌ی بازی‌های گروهی و تنظیماتشان.', [
-            [['💎 بازی الماسی (هاب)', 'ar_home']],
-            [['🎮 چالش/دوز و قرعه', 'gm_home'], ['💣 مین‌یاب', 'mn_home']],
-            [['🏦 بانک (سرقت الماس)', 'bk_home'], ['💰 بانکِ الماسی', 'vl_home']],
         ]],
     ];
 }
@@ -6122,7 +5622,7 @@ function admTexts($chatId, $msgId) {
     $rows = [];
     $labels = [
         'welcome' => 'خوش‌آمد', 'account' => 'حساب کاربری', 'trust' => 'اعتماد',
-        'support' => 'پشتیبانی', 'referral' => 'زیرمجموعه', 'topup' => 'شارژ',
+        'support' => 'پشتیبانی', 'topup' => 'شارژ',
         'buy_head' => 'سر محصولات', 'orders_head' => 'سر سفارش‌ها',
     ];
     foreach ($labels as $k => $l) $rows[] = [['text' => '📝 ' . $l, 'callback_data' => 'adm_txt_' . $k, 'style' => gs('admin') ?: null]];
@@ -6192,7 +5692,7 @@ function textLabels() {
     return [
         'welcome' => '👋 خوش‌آمد', 'account' => '👤 حساب کاربری',
         'trust' => '💚 اعتماد', 'support' => '📞 سربرگ پشتیبانی',
-        'referral' => '👥 زیرمجموعه', 'topup' => '➕ افزایش موجودی',
+        'topup' => '➕ افزایش موجودی',
         'buy_head' => '🛒 سربرگ محصولات', 'buy_empty' => '🛒 محصولی نیست',
         'orders_head' => '📊 سربرگ سفارش‌ها', 'orders_empty' => '📊 سفارشی نیست',
         'pay_info' => '💳 اطلاعات پرداخت', 'receipt_ask' => '🧾 درخواست رسید',
@@ -6665,39 +6165,6 @@ function edSupOne($chatId, $msgId, $which) {
     editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
 }
 
-/** 👥 صفحه‌ی دکمه‌های زیرمجموعه */
-function edRefButtons($chatId, $msgId) {
-    $t = "👥 <b>دکمه‌های زیرمجموعه</b>\n\nهرکدام را ویرایش کنید — متن، ایموجی معمولی، ایموجی پریمیوم، رنگ.";
-    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb([
-        [btnCb('🔗 ساخت لینک دعوت', 'eref_link', 'admin')],
-        [btnCb('🧾 تاریخچه پورسانت', 'eref_hist', 'admin')],
-        [btnCb('💠 اتصال به کیف پول', 'eref_wallet', 'admin')],
-        [btnUI('back', 'ag_look', 'nav')],
-    ]));
-}
-
-/** 👥 ویرایش یکی از سه دکمه‌ی زیرمجموعه */
-function edRefButtonOne($chatId, $msgId, $which) {
-    if (!in_array($which, ['link', 'hist', 'wallet'], true)) { edRefButtons($chatId, $msgId); return; }
-    $m   = cfg()['referral']['btns'][$which] ?? [];
-    $lbl = ['link' => 'ساخت لینک دعوت', 'hist' => 'تاریخچه پورسانت', 'wallet' => 'برداشت پورسانت'][$which];
-
-    $t  = "🔘 <b>" . h($lbl) . "</b>\n\n";
-    $t .= 'متن: ' . h(trim((string)($m['text'] ?? '')) ?: '—') . "\n";
-    $t .= 'ایموجی معمولی: ' . (trim((string)($m['emoji'] ?? '')) !== ''
-          ? h($m['emoji']) : '<b>ندارد</b>') . "\n";
-    $t .= '✨ پریمیوم: ' . (!empty($m['icon']) ? '<code>' . h($m['icon']) . '</code>' : '—') . "\n";
-    $t .= 'رنگ: ' . (styleMap()[$m['color'] ?? 'none'] ?? '—') . "\n";
-
-    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb([
-        [btnCb('✏️ متن', 'erefbt_' . $which, 'admin'),
-         btnCb('😀 ایموجی معمولی', 'erefbe_' . $which, 'admin')],
-        [btnCb('✨ ایموجی پریمیوم', 'erefbi_' . $which, 'admin'),
-         btnCb('🎨 رنگ', 'erefbc_' . $which, 'admin')],
-        [btnUI('back', 'eref_home', 'nav')],
-    ]));
-}
-
 /** 📋 صفحه‌ی قوانینِ افزایش موجودی */
 function edTopupRules($chatId, $msgId) {
     $c = cfg()['topup_rules'] ?? [];
@@ -6837,8 +6304,7 @@ function edTexts($chatId, $msgId, $page = 0) {
 function textVars($key) {
     return [
         'welcome'      => '{name}',
-        'account'      => '{id} {name} {username} {balance} {orders} {referrals} {ref_earned} {joined}',
-        'referral'     => '{link} {count} {earned} {percent}',
+        'account'      => '{id} {name} {username} {balance} {orders} {joined}',
         'no_balance'   => '{balance}',
         'pay_info'     => '{title} {amount} {currency} {method} {wallet} {id}',
         'flow_qty'     => '{min} {max}',
@@ -7321,24 +6787,6 @@ function masterHandle($update) {
         $cbId   = $cb['id'];
         $isAdmin = isAdmin($uid);
 
-        // 🎮 دکمه‌های بازی عمدا در گروه هم کار می‌کنند — بازی همان‌جاست
-        if (gmCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
-
-        // 🚨 دکمه‌های تاییدِ زندانِ الماس — همین‌طور، باید تو گروه کار کنند
-        if (function_exists('dmCallback') && dmCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
-
-        // 🏦 دکمه‌های بانک — عمدا در گروه، درست مثلِ بازی‌ها
-        if (function_exists('bkCallback') && bkCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
-
-        // 💣 دکمه‌های مین‌یاب — همین‌طور، در گروه
-        if (function_exists('mnCallback') && mnCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
-
-        // 🏦 دکمه‌های بانکِ الماسی (سپرده/سود) — همین‌طور، در گروه
-        if (function_exists('vlCallback') && vlCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
-
-        // 🎮 دکمه‌های «بازی الماسی» (سنگ‌کاغذقیچی/بسکتبال) — همین‌طور، در گروه
-        if (function_exists('arCallback') && arCallback($data, $uid, $chatId, $msgId, $cbId, $cb['from'] ?? [])) return;
-
         // 🧾 تصمیمِ رسید (تایید/رد) عمدا تو گروه هم کار می‌کند — دقیقا
         // برای همین رسیدها به گروهِ گزارش می‌روند؛ وگرنه دروازه‌ی پایین
         // (که فقط چتِ خصوصی را رد نمی‌کند) دکمه‌اش را همیشه بی‌اثر می‌کرد
@@ -7447,10 +6895,6 @@ function masterHandle($update) {
         }
 
         // --- 📋 قوانینِ افزایش موجودی ---
-        // --- 👥 داشبورد زیرمجموعه ---
-        if ($data === 'ref_link')   { answerCb(BOT_TOKEN, $cbId); showReferralLink($uid, $chatId); return; }
-        if ($data === 'ref_hist')   { answerCb(BOT_TOKEN, $cbId); showReferralHistory($uid, $chatId); return; }
-        if ($data === 'ref_wallet') { answerCb(BOT_TOKEN, $cbId); refWithdraw($uid, $chatId); return; }
 
         if ($data === 'trnop') { answerCb(BOT_TOKEN, $cbId); return; }
         if ($data === 'tr_cancel') {
@@ -8004,13 +7448,7 @@ function masterHandle($update) {
             return;
         }
         if (pxAdminCallback($data, $chatId, $msgId, $cbId)) return;
-        if (dmAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if (chAdminCallback($data, $chatId, $msgId, $cbId)) return;
-        if (gmAdminCallback($data, $chatId, $msgId, $cbId)) return;
-        if (function_exists('bkAdminCallback') && bkAdminCallback($data, $chatId, $msgId, $cbId)) return;
-        if (function_exists('mnAdminCallback') && mnAdminCallback($data, $chatId, $msgId, $cbId)) return;
-        if (function_exists('vlAdminCallback') && vlAdminCallback($data, $chatId, $msgId, $cbId)) return;
-        if (function_exists('arAdminCallback') && arAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if ($data === 'adm_gw')      { answerCb(BOT_TOKEN, $cbId); admGateway($chatId, $msgId); return; }
         if ($data === 'adm_pay')     { answerCb(BOT_TOKEN, $cbId); admPay($chatId, $msgId); return; }
         foreach ([['payc', 'pay_card', "💳 شماره کارت را بفرستید (۱۶ رقم).\n\nخط تیره = پاک کردن"],
@@ -9073,42 +8511,6 @@ function masterHandle($update) {
             return;
         }
 
-        // 👥 دکمه‌های زیرمجموعه
-        if ($data === 'eref_home') { answerCb(BOT_TOKEN, $cbId); edRefButtons($chatId, $msgId); return; }
-        if (preg_match('/^eref_(link|hist|wallet)$/', $data, $em)) {
-            answerCb(BOT_TOKEN, $cbId);
-            edRefButtonOne($chatId, $msgId, $em[1]);
-            return;
-        }
-        if (preg_match('/^erefb([teic])_(link|hist|wallet)$/', $data, $em)) {
-            if ($em[1] === 'c') {
-                answerCb(BOT_TOKEN, $cbId);
-                $rows = [];
-                foreach (styleMap() as $sk => $sl) $rows[] = [btnCb($sl, 'erefbC_' . $em[2] . '_' . $sk, 'info')];
-                $rows[] = [btnUI('back', 'eref_' . $em[2], 'nav')];
-                editMsg(BOT_TOKEN, $chatId, $msgId, "🎨 <b>رنگ دکمه</b>", inlineKb($rows));
-                return;
-            }
-            static $refAsk = [
-                't' => ["✏️ متنِ دکمه را بفرستید.", 'ref_btext'],
-                'e' => ["😀 ایموجیِ معمولی را بفرستید.\n\n<code>-</code> بفرستید تا پاک شود.", 'ref_bemoji'],
-                'i' => ["✨ <b>ایموجی پریمیوم</b>\n\nخودِ ایموجی را بفرستید — شناسه‌اش خودکار خوانده می‌شود.\n\n" .
-                        "<code>-</code> بفرستید تا برداشته شود.", 'ref_bicon'],
-            ];
-            [$txt, $st] = $refAsk[$em[1]];
-            setState($uid, $st, ['which' => $em[2]]);
-            answerCb(BOT_TOKEN, $cbId);
-            sendMsg(BOT_TOKEN, $chatId, $txt, inlineKb([[btnUI('cancel', 'eref_' . $em[2], 'cancel')]]));
-            return;
-        }
-        if (preg_match('/^erefbC_(link|hist|wallet)_(\w+)$/', $data, $em)) {
-            $col = isStyle($em[2]) ? $em[2] : 'none';
-            cfgSet(function (&$c) use ($em, $col) { $c['referral']['btns'][$em[1]]['color'] = $col; });
-            answerCb(BOT_TOKEN, $cbId, '✅');
-            edRefButtonOne($chatId, $msgId, $em[1]);
-            return;
-        }
-
         if ($data === 'adm_web' || $data === 'adm_sup' || $data === 'adm_prods'
             || $data === 'setup' || $data === 'adm_leak' || $data === 'adm_wtest' || $data === 'adm_speed') {
             answerCb(BOT_TOKEN, $cbId);
@@ -9137,32 +8539,17 @@ function masterHandle($update) {
     $text   = trim($msg['text'] ?? '');
     if (!$uid) return;
 
-    // 🤐 ربات فروشگاه در گروه چیزی نمی‌فروشد. ولی دو چیز عمدا در گروه کار
-    // می‌کنند: قیمت لحظه‌ای، و بازی الماس. بقیه‌ی ربات همچنان ساکت است.
+    // 🤐 ربات فروشگاه در گروه چیزی نمی‌فروشد. فقط قیمتِ لحظه‌ای در گروه
+    // جواب داده می‌شود؛ بقیه‌ی ربات همچنان ساکت است.
     if (($msg['chat']['type'] ?? 'private') !== 'private') {
         $rt = $msg['message_id'] ?? null;
-        // 🏀 استیکرِ واقعیِ 🏀ِ ریپلای‌شده رویِ لابیِ بسکتبال — پیامِ dice
-        // متنی ندارد، پس باید قبل از همه‌ی دست‌کاری‌هایِ متنی بررسی شود.
-        if (isset($msg['dice']) && function_exists('arHandleDice') && arHandleDice($msg, $uid, $chatId, $fname, $uname)) return;
-        // 💹 قیمت اول — قبل از هرکاری. «بیت کوین» نباید منتظرِ housekeeping
-        // بازی (gmTick) یا پارس‌کردنِ بازی/الماس بماند؛ اول با کشِ موجود
-        // جواب بده، بعد کش را تازه کن.
         if (pxAnswerThenWarm($text, $chatId, $rt)) return;
-        if (gmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
-        if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, false)) return;
-        if (function_exists('bkHandleText') && bkHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
-        // 💣 «مین» دیگر با تایپِ مستقیم ساخته نمی‌شود — فقط از هابِ
-        // «بازی الماسی» (arcade.php ← ar_mine)؛ mnCreate/mnCallback دست‌نخورده‌اند.
-        if (function_exists('vlHandleText') && vlHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
-        if (function_exists('arHandleText') && arHandleText($text, $uid, $chatId, $fname, $uname, $rt, false, $msg)) return;
         return;
     }
 
-    // /start [ref…]
+    // /start
     if (str_starts_with($text, '/start')) {
-        $arg = trim(explode(' ', $text, 2)[1] ?? '');
-        $ref = (str_starts_with($arg, 'ref')) ? (int)substr($arg, 3) : null;
-        touchUser($uid, $uname, $fname, $ref);
+        touchUser($uid, $uname, $fname);
         clearState($uid);
         slotClear($uid);   // منوی تازه، پیام‌های قدیمی رها می‌شوند
         if ($miss = masterJoinMissing($uid)) { masterJoinGate($uid, $chatId, $miss); return; }
@@ -9237,10 +8624,8 @@ function masterHandle($update) {
     if (!$st) {
         // چیزی وسط کار نیست؟ شاید دنبال قیمت است — «پریمیوم»، «استارز»، «بیتکوین»
         $rt = $msg['message_id'] ?? null;
-        // 💹 همان‌طور که در گروه — قیمت اول، بدون معطلیِ بازی/الماس.
+        // 💹 همان‌طور که در گروه — قیمت اول.
         if (pxAnswerThenWarm($text, $chatId, $rt)) return;
-        if (gmHandleText($text, $uid, $chatId, $fname, $uname, $rt, true, $msg)) return;
-        if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, true)) return;
         return;
     }
     $action = $st['action'];
@@ -9265,13 +8650,7 @@ function masterHandle($update) {
     }
 
     if (pxStateHandle($action, $msg, $uid, $chatId)) return;
-    if (dmStateHandle($action, $msg, $uid, $chatId)) return;
     if (chStateHandle($action, $msg, $uid, $chatId)) return;
-    if (gmStateHandle($action, $msg, $uid, $chatId)) return;
-    if (function_exists('bkStateHandle') && bkStateHandle($action, $msg, $uid, $chatId)) return;
-    if (function_exists('mnStateHandle') && mnStateHandle($action, $msg, $uid, $chatId)) return;
-    if (function_exists('vlStateHandle') && vlStateHandle($action, $msg, $uid, $chatId)) return;
-    if (function_exists('arStateHandle') && arStateHandle($action, $msg, $uid, $chatId)) return;
 
     if (str_starts_with($action, 'pay_')) {
         $plain = trim($msg['text'] ?? '');
@@ -9434,49 +8813,6 @@ function masterHandle($update) {
                 return;
             }
             cfgSet(function (&$c) use ($which, $v) { $c['topup_rules']['btns'][$which]['icon'] = $v; });
-            clearState($uid);
-            sendMsg(BOT_TOKEN, $chatId,
-                $v === '' ? '✅ پریمیوم برداشته شد.'
-                          : "✅ ثبت شد: <code>" . h($v) . "</code>\n\n" .
-                            "<i>اگر ایموجیِ معمولی هم دارد، پاکش کنید — با هم جا نمی‌شوند.</i>",
-                $back);
-            return;
-        }
-        clearState($uid);
-        return;
-    }
-
-    if (str_starts_with($action, 'ref_b')) {
-        $st    = getState($uid);
-        $which = (string)(($st['data'] ?? [])['which'] ?? '');
-        if (!in_array($which, ['link', 'hist', 'wallet'], true)) { clearState($uid); return; }
-        $plain = trim((string)($msg['text'] ?? ''));
-        $blank = ($plain === '-' || $plain === '—');
-        $back  = inlineKb([[btnCb('👥 دکمه‌های زیرمجموعه', 'eref_home', 'admin')]]);
-
-        if ($action === 'ref_btext') {
-            if ($plain === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ یک متن بفرستید."); return; }
-            $v = mb_substr($plain, 0, 40);
-            cfgSet(function (&$c) use ($which, $v) { $c['referral']['btns'][$which]['text'] = $v; });
-            clearState($uid); sendMsg(BOT_TOKEN, $chatId, '✅ ثبت شد.', $back); return;
-        }
-        if ($action === 'ref_bemoji') {
-            $v = $blank ? '' : mb_substr($plain, 0, 8);
-            cfgSet(function (&$c) use ($which, $v) { $c['referral']['btns'][$which]['emoji'] = $v; });
-            clearState($uid);
-            sendMsg(BOT_TOKEN, $chatId, $v === '' ? '✅ ایموجی معمولی پاک شد.' : '✅ ثبت شد.', $back);
-            return;
-        }
-        if ($action === 'ref_bicon') {
-            $ids = customEmojiIds($msg);
-            $v   = $blank ? '' : (string)($ids[0] ?? '');
-            if (!$blank && $v === '') {
-                sendMsg(BOT_TOKEN, $chatId,
-                    "⚠️ ایموجی پریمیوم پیدا نشد.\n\n" .
-                    "باید خودِ ایموجیِ پریمیوم را بفرستید (با اکانت پریمیوم)، نه شناسه‌اش را.");
-                return;
-            }
-            cfgSet(function (&$c) use ($which, $v) { $c['referral']['btns'][$which]['icon'] = $v; });
             clearState($uid);
             sendMsg(BOT_TOKEN, $chatId,
                 $v === '' ? '✅ پریمیوم برداشته شد.'
@@ -10923,7 +10259,6 @@ function runMenuAction($act, $uid, $chatId, $uname, $fname, $replyTo = null) {
         case 'buy':      showProducts($uid, $chatId, $subs, $replyTo); break;
         case 'account':  showAccount($uid, $chatId, $subs, $replyTo); break;
         case 'topup':    startTopup($uid, $chatId, $replyTo); break;
-        case 'referral': showReferral($uid, $chatId, $subs, $replyTo); break;
         case 'orders':   showOrders($uid, $chatId, $subs, $replyTo); break;
         case 'support':  showSupport($uid, $chatId, $subs, $replyTo); break;
         case 'trust':    panelShow($uid, $chatId, 'menu', T('trust'), $subs ? inlineKb($subs) : null, $replyTo); break;
@@ -11453,7 +10788,6 @@ if (isset($_GET['cron'])) {
     }
     echo 'deleted: ' . processDeleteQueue(200) . ' · gw: ' . gwPoll(50) .
          ' · campaigns: ' . campaignCleanup() .
-         ' · games: ' . gmTick(50) .
          ' · miniapp: ' . maAutoQueue(10) .
          ' · stock: ' . maStockQueue(10) .
          ' · rates: ' . count(axRatesRefresh()) .
@@ -11462,8 +10796,6 @@ if (isset($_GET['cron'])) {
          //    ساعت‌ها هیچ‌کس با ربات کار نکند.
          ' · numbers: ' . (function_exists('numTick') ? numTick(50) : 0) .
          ' · archive: ' . (ordersArchive() + maOrdersArchive()) .
-         ' · mine: ' . (function_exists('mnTick') ? mnTick(50) : 0) .
-         ' · bank: ' . (function_exists('bkPendSweep') ? bkPendSweep(200) : 0) .
          ' · states: ' . (function_exists('stateSweep') ? stateSweep() : 0) .
          ' · broadcast: ' . bcTick(120);
     exit;
@@ -11771,7 +11103,6 @@ function runBackgroundQueues() {
     $qMark = DATA_DIR . '/.queue_at';
     if (time() - (@filemtime($qMark) ?: 0) >= 60) {
         @touch($qMark);
-        gmTick(5);        // قرعه‌های رسیده — بدون cron هم کشیده می‌شوند
         bcTick(20);       // یک دسته از پیام همگانی — بدون cron هم تمام می‌شود
         maAutoQueue(2);   // تحویل خودکارِ معطل‌مانده
         maStockQueue(2);  // سفارش‌هایی که منتظر شارژ مخزن مانده‌اند
@@ -11831,7 +11162,7 @@ function runBackgroundQueues() {
     // 🚀 «حساب من» دیگر هر بار کلِ کاربران/سفارش‌ها را نمی‌خواند — این دو
     // عدد از قبل روی ردیفِ خودِ هر کاربر شمرده و کش می‌شوند.
     migrateOnce('v14_ref_approved_counts', function () {
-        backfillRefCounts();
+        if (function_exists('backfillRefCounts')) backfillRefCounts();
         backfillApprovedOrderCounts();
     });
     // 🧹 دکمه‌ی «خدمات ممبر پریمیوم» و دو زیردکمه‌ای که راه‌اندازیِ
