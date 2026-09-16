@@ -1923,13 +1923,13 @@ final class CardChrome
     }
 
     /** Footer wordmark + timestamp, on a hairline rule. */
-    public static function footer(CardCanvas $c, float $left, float $right, float $y, string $time, array $accent): void
+    public static function footer(CardCanvas $c, float $left, float $right, float $y, string $time, array $accent, float $size = 16): void
     {
         $muted = CardCanvas::mix(CardPalette::MUTED, CardPalette::BG_BOTTOM, 0.90);
         $c->rule($left, $y, $right - $left, CardPalette::GLASS, 0.09);
         $c->roundRect($left, $y, 64, 2.0, 1.0, $accent, 0.7);
-        $c->text(CardConfig::brand(), $left, $y + 20, 16, CardCanvas::mix(CardPalette::TEXT, CardPalette::BG_BOTTOM, 0.72), 'left', 0.11, 2.8);
-        $c->text($time, $right, $y + 20, 16, $muted, 'right', 0.11, 1.5);
+        $c->text(CardConfig::brand(), $left, $y + $size + 4, $size, CardCanvas::mix(CardPalette::TEXT, CardPalette::BG_BOTTOM, 0.72), 'left', 0.11, 2.8);
+        $c->text($time, $right, $y + $size + 4, $size, $muted, 'right', 0.11, 1.5);
     }
 
     /**
@@ -2297,9 +2297,9 @@ final class ResultCard
                 1.2
             );
 
-            // -- footer: brand + timestamp on a hairline rule -----------------
-            $footY = $H - $pad - 22.0;
-            CardChrome::footer($c, $left, $right, $footY, (string) ($d['time'] ?? ''), $accent);
+            // -- footer: brand + timestamp on a hairline rule, small ---------
+            $footY = $H - $pad - 16.0;
+            CardChrome::footer($c, $left, $right, $footY, (string) ($d['time'] ?? ''), $accent, 9);
 
             $png = $c->toPng();
             $c->destroy();
