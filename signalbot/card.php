@@ -2191,10 +2191,8 @@ final class ResultCard
      * } $d  kind: tp1|tp2|tp3|tp4|trail|sl|be — EXACT same input contract as
      *   before this redesign; SignalCardFactory::result() (signal.php) needs
      *   no changes.
-     * @param string $format 'post' (1080x1350, the default — what actually
-     *   gets sent to Telegram) or 'story' (1080x1920). Purely a rendering
-     *   option, additive and backward-compatible: every existing call site
-     *   that only ever passed $d keeps working unchanged.
+     * @param string $format ignored — kept only so no call site needs to
+     *   change; every card now renders at the one compact size below.
      * @return string|null PNG bytes, or null when the card cannot be drawn
      */
     public static function render(array $d, string $format = 'post'): ?string
@@ -2204,158 +2202,104 @@ final class ResultCard
         }
 
         try {
-            [$W, $H] = $format === 'story' ? [1080, 1920] : [1080, 1350];
+            // Compact landscape, not a tall poster — this used to be a
+            // 1080x1350 portrait, which reads as enormous inside a phone-
+            // width chat column. Same family aspect as the signal card.
+            $W = 960;
+            $H = 500;
+            $pad = 34.0;
 
             $kind = strtolower((string) ($d['kind'] ?? 'tp1'));
             $headline = trim((string) ($d['headline'] ?? ''));
             $losing = $kind === 'sl' || str_starts_with($headline, '-');
             $accent = $losing ? CardPalette::LOSS : CardPalette::PROFIT;
+            // A second, distinct hue (not just win-green/loss-red) so the
+            // card reads as more than a single flat accent colour.
+            $amber = [245, 176, 66];
             $isLong = strtoupper((string) ($d['direction'] ?? '')) !== 'SHORT';
-            // The candlestick/chevron motif reads as the trade's OUTCOME --
-            // one consistent "up" look for every win and one consistent
-            // "down" look for every loss, whether the entry was LONG or
-            // SHORT. LONG/SHORT is already shown by the chip below; the
-            // hero graphic doesn't need to repeat it a second, mirrored way.
-            $rising = !$losing;
             $muted = CardCanvas::mix(CardPalette::MUTED, CardPalette::BG_BOTTOM, 0.9);
             $faint = CardCanvas::mix(CardPalette::TEXT, CardPalette::BG_BOTTOM, 0.28);
-            // A step off pure white for every number/value on the card --
-            // full white reads harsh at this density; this is the softened
-            // tone every price/duration figure below actually draws in.
             $soft = CardCanvas::mix(CardPalette::TEXT, CardPalette::BG_BOTTOM, 0.82);
 
             $c = new CardCanvas($W, $H);
             $c->backdrop(CardPalette::BG_TOP, CardPalette::BG_BOTTOM, [
-                [$W * 0.5, $H * 0.30, $W * 0.62, $accent, $losing ? 0.07 : 0.10],
+                [$W * 0.5, $H * 0.32, $W * 0.65, $accent, $losing ? 0.09 : 0.12],
+                [$W * 0.92, $H * 0.08, $W * 0.22, $amber, 0.10],
             ]);
 
-            $left = self::PAD;
-            $right = $W - self::PAD;
+            $left = $pad;
+            $right = $W - $pad;
             $cx = $W / 2;
 
-            CardChrome::grid($c, $left, 40, $right - $left, $H * 0.42, 6, 8, CardTheme::TEXT_SECONDARY, 0.035);
-
-            // -- header ------------------------------------------------------
-            CardChrome::brandLockup($c, $left, 60, 32);
+            // -- header: brand, symbol/direction/leverage, badge ------------
+            CardChrome::brandLockup($c, $left, 22, 18);
             $badgeLabel = $losing ? 'RESULT' : 'PROFIT SHOT';
-            $badgeSize = $c->textWidth($badgeLabel, 20, 2.4, 0.14) + 40;
-            $c->glassPanel($right - $badgeSize, 54, $badgeSize, 42, 21, $accent, 0.10, 0.55, 1.4, false, 0.90);
-            $c->text($badgeLabel, $right - $badgeSize / 2, 54 + 12, 20, $accent, 'center', 0.14, 2.4);
-            $c->text('TRADE  •  FUTURES  •  ' . ($losing ? 'RESULT' : 'PROFIT'), $left, 54 + 42 + 22, 18, $muted, 'left', 0.12, 3.0);
+            $badgeSize = $c->textWidth($badgeLabel, 12, 1.8, 0.14) + 26;
+            $c->glassPanel($right - $badgeSize, 18, $badgeSize, 26, 13, $accent, 0.10, 0.55, 1.2, false, 0.90);
+            $c->text($badgeLabel, $right - $badgeSize / 2, 25, 12, $accent, 'center', 0.14, 1.8);
 
-            // -- hero: directional candlesticks + a big glowing chevron ------
-            $heroY = $H * 0.30;
-            $c->halo($cx, $heroY, $W * 0.42, $accent, $losing ? 0.13 : 0.20, 32);
-
-            // A rising (win) or falling (loss) staircase of candles: each bar
-            // anchored to one shared baseline, growing taller left to right.
-            // A win anchors at the bottom and grows up; a loss anchors at
-            // the top and grows down -- keyed off $rising (the outcome).
-            $bodyW = 26.0;
-            $gap = 20.0;
-            $heights = [70, 110, 160, 210, 270];
-            $n = count($heights);
-            $totalW = $n * $bodyW + ($n - 1) * $gap;
-            $sx = $cx - $totalW / 2;
-            $baseline = $rising ? ($heroY + 150) : ($heroY - 150);
-            foreach ($heights as $i => $bh) {
-                $bx = $sx + $i * ($bodyW + $gap);
-                $y0 = $rising ? ($baseline - $bh) : $baseline;
-                $tone = $i === $n - 1 ? $accent : CardCanvas::mix($accent, CardPalette::BG_BOTTOM, 0.55 + $i * 0.06);
-                $c->roundRect($bx, $y0, $bodyW, $bh, 6.0, $tone, $i === $n - 1 ? 1.0 : 0.75);
-                $wickX = $bx + $bodyW / 2;
-                $c->polyline([[$wickX, $y0 - 16], [$wickX, $y0 + $bh + 16]], 3.0, $tone, 0.45);
-            }
-
-            // Clamped against where the chip row starts, not just against
-            // the candles -- the falling case has much less real room
-            // between the candle stack and the symbol/chip row below it
-            // than the rising case has above it, and sizing the arrow the
-            // same on both sides without checking that pushed it straight
-            // into the chips.
-            $chipRowY = $H * 0.48;
-            $chevSize = 84.0;
-            $chevY = $rising
-                ? ($baseline - end($heights) - 90)
-                : min($baseline + end($heights) + 30, $chipRowY - $chevSize - 26);
-            $c->icon($rising ? 'up' : 'down', $cx - $chevSize / 2, $chevY, $chevSize, $accent, 0.16, 1.0);
-
-            // -- profit panel --------------------------------------------------
-            $panelY = $chipRowY;
+            $chipY = 62.0;
             $symbol = self::displaySymbol((string) ($d['symbol'] ?? ''));
-
             $x = $left;
-            $x += CardChrome::chip($c, $x, $panelY, $symbol, $soft, null, 26, 50, 22, 0.06, 0.30, 1.3, 0.14, false) + 14;
-            $x += CardChrome::chip($c, $x, $panelY, $isLong ? 'LONG' : 'SHORT', $accent, $isLong ? 'up' : 'down', 24, 50, 20, 0.12, 0.6, 1.4, 0.14, true) + 14;
-            CardChrome::chip($c, $x, $panelY, strtoupper((string) ($d['leverage'] ?? '')), $muted, 'bolt', 24, 50, 20, 0.0, 0.30, 1.4, 0.14, false);
+            $x += CardChrome::chip($c, $x, $chipY, $symbol, $soft, null, 14, 30, 13, 0.06, 0.30, 1.1, 0.13, false) + 8;
+            $x += CardChrome::chip($c, $x, $chipY, $isLong ? 'LONG' : 'SHORT', $accent, $isLong ? 'up' : 'down', 13, 30, 12, 0.12, 0.6, 1.2, 0.13, true) + 8;
+            CardChrome::chip($c, $x, $chipY, strtoupper((string) ($d['leverage'] ?? '')), $amber, 'bolt', 13, 30, 12, 0.12, 0.55, 1.2, 0.13, false);
 
-            $labelY = $panelY + 64;
-            $c->text('TOTAL PROFIT', $left, $labelY, 18, $muted, 'left', 0.13, 3.4);
+            // -- hero: small glowing chevron + the headline PnL number -------
+            // Outcome, not entry direction — one consistent "up" look for
+            // every win and "down" for every loss (LONG/SHORT already
+            // shown by the chip above).
+            $rising = !$losing;
+            $heroY = 118.0;
+            $chevSize = 38.0;
+            $c->halo($cx, $heroY + 10, $W * 0.30, $accent, $losing ? 0.14 : 0.20, 22);
+            $c->icon($rising ? 'up' : 'down', $cx - $chevSize / 2, $heroY - $chevSize - 6, $chevSize, $accent, 0.20, 1.0);
 
-            // The number the whole card exists for. Given its own clear
-            // block now -- a real gap above (from the label) and below
-            // (before PRICE MOVE), and sized to actually read as the hero
-            // figure again rather than compete with the small print
-            // around it.
-            $numY = $labelY + 62;
-            $numSize = 50.0;
-            while ($numSize > 34 && $c->textWidth($headline, $numSize, 0.7, 0.24) > $right - $left) {
+            $labelY = $heroY + 12;
+            $c->text('TOTAL PROFIT', $cx, $labelY, 12, $muted, 'center', 0.13, 3.0);
+
+            $numY = $labelY + 26;
+            $numSize = 40.0;
+            while ($numSize > 22 && $c->textWidth($headline, $numSize, 0.5, 0.22) > $W * 0.7) {
                 $numSize -= 2;
             }
-            $c->halo($left + $c->textWidth($headline, $numSize, 0.7, 0.24) * 0.35, $numY + $numSize * 0.4, $numSize * 1.4, $accent, 0.24);
-            $c->text($headline, $left, $numY, $numSize, $accent, 'left', 0.24, 0.7);
+            $c->text($headline, $cx, $numY, $numSize, $accent, 'center', 0.22, 0.5);
 
-            $moveY = $numY + $numSize + 34;
-            $c->text('PRICE MOVE ' . (string) ($d['move'] ?? '-'), $left, $moveY, 15, $muted, 'left', 0.12, 1.8);
+            $moveY = $numY + $numSize + 20;
+            $c->text('PRICE MOVE ' . (string) ($d['move'] ?? '-'), $cx, $moveY, 11, $muted, 'center', 0.12, 1.4);
 
-            // -- entry / exit / duration rows -- a HUD-style bracket-cornered
-            // strip per row (icon chip + label + value), not a plain
-            // label/value line, for the same "trading terminal" energy the
-            // rest of the card's glow and chevron already carry. -----------
-            $rowY = $moveY + 44;
-            $rowH = 52.0;
-            $rowGap = 10.0;
-            $rows = [
-                ['entry', 'ENTRY PRICE', CardFormat::orNA($d['entry'] ?? null)],
-                ['target', 'EXIT PRICE', CardFormat::orNA($d['exit'] ?? null)],
-                ['clock', 'DURATION', CardFormat::orNA($d['duration'] ?? null)],
-            ];
-            foreach ($rows as [$icon, $label, $value]) {
-                self::bracketRow($c, $left, $rowY, $right - $left, $rowH, $icon, $label, $value, $accent, $muted, $soft);
-                $rowY += $rowH + $rowGap;
-            }
-            $rowY -= $rowGap;
+            // -- entry / exit / duration — one small shared strip, not three
+            // separate boxes ---------------------------------------------
+            $gridY = $moveY + 30;
+            // dataGrid()'s label/value offsets are fixed pixel amounts
+            // (22 from the top, 28+size from the bottom) rather than
+            // scaling with the label/value sizes passed in — anything
+            // shorter than this overlaps the two lines.
+            $gridH = 86.0;
+            CardChrome::dataGrid($c, $left, $gridY, $right - $left, $gridH, [
+                ['ENTRY', CardFormat::orNA($d['entry'] ?? null), $soft],
+                ['EXIT', CardFormat::orNA($d['exit'] ?? null), $soft],
+                ['DURATION', CardFormat::orNA($d['duration'] ?? null), $soft],
+            ], 10, 16);
 
-            // -- result line: a checkmark, never a badge borrowed from the
-            // entry-card vocabulary (tp1/tp2/... stays internal bookkeeping,
-            // not something a reader of the SHARE card needs to parse) -----
-            $resY = $rowY + 24;
-            $checkSize = 30.0;
-            $checkBox = $checkSize + 20;
-            $c->glassPanel($left, $resY, $checkBox, $checkBox, $checkBox / 2, $accent, 0.12, 0.6, 1.4, false, 0.90);
-            $c->icon('check', $left + 10, $resY + 10, $checkSize, $accent, 0.16);
-            $c->text('TRADE CLOSED', $left + $checkSize + 40, $resY + 4, 17, $soft, 'left', 0.14, 1.8);
-            $c->text($losing ? 'STOP HONOURED' : 'PROFIT SECURED', $left + $checkSize + 40, $resY + 34, 15, $accent, 'left', 0.13, 1.8);
+            // -- result line: small check + status, no separate badge --------
+            $resY = $gridY + $gridH + 18;
+            $checkSize = 15.0;
+            $c->icon('check', $left, $resY, $checkSize, $accent, 0.30);
+            $c->text(
+                'TRADE CLOSED  •  ' . ($losing ? 'STOP HONOURED' : 'PROFIT SECURED'),
+                $left + $checkSize + 10,
+                $resY - 1,
+                12,
+                $soft,
+                'left',
+                0.13,
+                1.2
+            );
 
-            // -- footer ----------------------------------------------------------
-            // Never further from the result line than a smaller headline
-            // number needs -- a shrunk TOTAL PROFIT number pulls everything
-            // below it up too, rather than leaving a dead gap before a
-            // footer still anchored to the bottom of a fixed-height canvas.
-            $footY = min($H - 150.0, $resY + 130.0);
-            $c->dashedRule($left, $footY, $right - $left, CardPalette::GLASS, 0.14);
-            // A quiet closing line, not a second headline -- this used to
-            // draw at the same size as the result text above it and ended
-            // up competing with it instead of just signing the card off.
-            $c->text('GOOD TRADES BRING FREEDOM', $cx, $footY + 30, 16, $muted, 'center', 0.13, 2.4);
-            $c->text('Trade Smarter With ' . CardConfig::brand(), $cx, $footY + 60, 15, $faint, 'center', 0.12, 1.6);
-
-            $handle = CardConfig::handle();
-            $bottomY = $H - self::PAD - 10;
-            if ($handle !== '') {
-                $c->text($handle, $left, $bottomY, 20, $muted, 'left', 0.11, 1.4);
-            }
-            $c->text((string) ($d['time'] ?? ''), $right, $bottomY, 18, $faint, 'right', 0.11, 1.0);
+            // -- footer: brand + timestamp on a hairline rule -----------------
+            $footY = $H - $pad - 22.0;
+            CardChrome::footer($c, $left, $right, $footY, (string) ($d['time'] ?? ''), $accent);
 
             $png = $c->toPng();
             $c->destroy();
@@ -2366,50 +2310,6 @@ final class ResultCard
             }
             return null;
         }
-    }
-
-    /**
-     * A HUD-style stat strip: an icon chip on the left, label above value,
-     * and a bracket (corner-only) frame instead of a full border -- the
-     * "trading terminal" cue the rest of the card's glow and chevron
-     * already carry, on the one part of it that used to be a plain,
-     * flat label/value line.
-     *
-     * @param array{0:int,1:int,2:int} $accent
-     * @param array{0:int,1:int,2:int} $muted
-     * @param array{0:int,1:int,2:int} $valueColor
-     */
-    private static function bracketRow(
-        CardCanvas $c,
-        float $x,
-        float $y,
-        float $w,
-        float $h,
-        string $icon,
-        string $label,
-        string $value,
-        array $accent,
-        array $muted,
-        array $valueColor,
-    ): void {
-        // A faint fill, then just the two opposite corners traced in the
-        // accent colour -- a full rectangle would turn this back into the
-        // plain box the redesign is moving away from.
-        $c->roundRect($x, $y, $w, $h, 12.0, CardPalette::GLASS, 0.03);
-        $arm = 16.0;
-        $c->polyline([[$x, $y + $arm], [$x, $y], [$x + $arm, $y]], 2.0, $accent, 0.55);
-        $c->polyline([[$x + $w - $arm, $y + $h], [$x + $w, $y + $h], [$x + $w, $y + $h - $arm]], 2.0, $accent, 0.55);
-
-        $chipR = $h * 0.32;
-        $chipCx = $x + 28.0;
-        $chipCy = $y + $h / 2;
-        $c->roundRect($chipCx - $chipR, $chipCy - $chipR, $chipR * 2, $chipR * 2, $chipR, $accent, 0.16);
-        $iconSize = $chipR * 1.1;
-        $c->icon($icon, $chipCx - $iconSize / 2, $chipCy - $iconSize / 2, $iconSize, $accent, 0.16);
-
-        $textX = $x + 58.0;
-        $c->text($label, $textX, $y + $h * 0.20, 13, $muted, 'left', 0.12, 2.0);
-        $c->text($value, $x + $w - 16.0, $y + $h * 0.48, 20, $valueColor, 'right', 0.15, 1.0);
     }
 
     /** BTCUSDT / BTC-USDT / BTC_USDT all display as BTC/USDT. */
