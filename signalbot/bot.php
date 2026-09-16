@@ -2074,8 +2074,29 @@ final class AdminPanel
                 $report[] = $echoed >= $sentEmoji
                     ? sprintf('   ایموجی پریمیوم قبول شد (%d از %d)', $echoed, $sentEmoji)
                     : sprintf('   ایموجی پریمیوم در کانال حذف شد (%d از %d باقی ماند)', $echoed, $sentEmoji);
+
+                if ($echoed < $sentEmoji && $messageId > 0) {
+                    // The "ارسال ساده، بعد ویرایش" trick some bot operators
+                    // report: sendPhoto just stripped the emoji above, so
+                    // try putting it back with an edit on the SAME message
+                    // and see whether Telegram treats that call differently.
+                    $editRes = $this->telegram->request('editMessageCaption', [
+                        'chat_id' => $chat,
+                        'message_id' => $messageId,
+                        'caption' => $signalRendered['text'],
+                        'caption_entities' => $signalRendered['entities'],
+                    ]);
+                    if ($editRes['ok'] ?? false) {
+                        $echoedAfterEdit = $this->countCustomEmoji($editRes['result']['caption_entities'] ?? []);
+                        $report[] = $echoedAfterEdit >= $sentEmoji
+                            ? sprintf('   ترفند «ارسال ساده بعد ویرایش» جواب داد — با ادیت قبول شد (%d از %d)', $echoedAfterEdit, $sentEmoji)
+                            : sprintf('   ترفند ادیت هم جواب نداد — همچنان حذف شد (%d از %d باقی ماند)', $echoedAfterEdit, $sentEmoji);
+                    } else {
+                        $report[] = sprintf('   تلاش برای ترفند ادیت رد شد: %s', (string) ($editRes['description'] ?? 'خطای نامشخص'));
+                    }
+                }
             } else {
-                $report[] = '   در قالب فعلی هیچ ایموجی پریمیومی نیست';
+                $report[] = '   در قالب فعلی هیچ ایموجی پریمیومی نیست — برای تست این بخش، یه ایموجی اختصاصی/پریمیوم رو توی «قالب سیگنال» بذار';
             }
 
             // The announcement replies to the signal, exactly like the live
@@ -2099,7 +2120,7 @@ final class AdminPanel
             $report[] = '';
         }
 
-        $report[] = 'اگر ایموجی پریمیوم حذف شده باشد، ربات در ارسال واقعی هم خودکار بدون آن می‌فرستد تا سیگنال از دست نرود. همین قانون برای آیکون پریمیوم روی دکمه‌ها هم برقرار است.';
+        $report[] = 'اگر ایموجی پریمیوم حذف شده باشد، ربات در ارسال واقعی هم خودکار بدون آن می‌فرستد تا سیگنال از دست نرود (چه با ارسال مستقیم، چه با ترفند ادیت — هرکدوم جواب بده). همین قانون برای آیکون پریمیوم روی دکمه‌ها هم برقرار است.';
         $this->telegram->sendMessage($chatId, implode("\n", $report));
     }
 
