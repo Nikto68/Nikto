@@ -2017,14 +2017,14 @@ final class CardChrome
 // ============================================================================
 // SECTION 8 — ENTRY SIGNAL CARD (landscape)
 //
-// A single, static brand plate — the same image on every signal regardless
-// of symbol or direction. The trade's own details (entry/stop/targets/etc.)
-// already travel in the Telegram message's TEXT caption next to this photo
-// (see AUTO_SIGNAL_TEMPLATE in config.php), so the image's job is just to be
-// a clean, recognisable, premium mark, not a second copy of the same
-// numbers. $d is kept as the parameter (SignalCardFactory::entry() still
-// builds and passes the full signal array) purely so that call site needs
-// no changes; nothing in it is read here.
+// Shows the trade itself: symbol, direction, leverage, and the four numbers
+// that matter before anyone acts on a signal — entry, stop loss, target 1,
+// target 2 (the same "چهار کاشی" shape the project's own README describes).
+// Same monochrome language as the black-and-white card redesign: no colour
+// anywhere except the one solid white LONG/SHORT pill, exactly like the
+// profit-shot card's ResultCard keeps colour to a single accent. Built from
+// the same CardChrome tiles (stat/chip/footer) ResultCard already uses, so
+// the two cards read as one family instead of two different designs.
 // ============================================================================
 
 final class SignalCard
@@ -2034,7 +2034,14 @@ final class SignalCard
     private const MARGIN = 90.0;
     private const RADIUS = 46.0;
 
-    /** @return string|null PNG bytes, or null when the card cannot be drawn */
+    /**
+     * @param array{
+     *   symbol:string, direction:string, leverage:string, entry:string,
+     *   sl:string, tp1?:string, tp2?:string, tp3?:string, tp4?:string,
+     *   time:string
+     * } $d exact same shape SignalCardFactory::entry() already builds.
+     * @return string|null PNG bytes, or null when the card cannot be drawn
+     */
     public static function render(array $d): ?string
     {
         if (!CardConfig::available()) {
@@ -2047,9 +2054,9 @@ final class SignalCard
             $black = [6, 6, 7];
             $blackDeep = [0, 0, 0];
             $white = CardPalette::WHITE;
-            $silver = CardCanvas::mix($white, $black, 0.80);
             $muted = CardCanvas::mix($white, $black, 0.46);
             $faint = CardCanvas::mix($white, $black, 0.20);
+            $soft = CardCanvas::mix($white, $black, 0.86);
 
             // Flat near-black, no colour, no vignette -- a large glow radius
             // here clipped against backdrop()'s half-size internal canvas
@@ -2060,6 +2067,7 @@ final class SignalCard
             $top = self::MARGIN;
             $w = self::W - self::MARGIN * 2;
             $h = self::H - self::MARGIN * 2;
+            $right = self::W - $left;
             $cx = self::W / 2;
 
             // -- the card shell: a soft outer glow, a hairline rim, a near-
@@ -2075,60 +2083,49 @@ final class SignalCard
             self::cornerMark($c, $left + 44, $top + 40, 1, $white);
             self::cornerMark($c, self::W - $left - 44, self::H - $top - 40, -1, $white);
 
-            // -- candlestick glyph, small, top-center -------------------------
-            $candleY = self::H * 0.30;
-            $bodyW = 15.0;
-            $gap = 13.0;
-            $heights = [44, 72, 106, 78, 50];
-            $wicks = [16, 22, 28, 24, 18];
-            $tones = [$muted, $silver, $white, $silver, $muted];
-            $n = count($heights);
-            $totalW = $n * $bodyW + ($n - 1) * $gap;
-            $startX = $cx - $totalW / 2;
-            for ($i = 0; $i < $n; $i++) {
-                $bx = $startX + $i * ($bodyW + $gap) + $bodyW / 2;
-                $bh = $heights[$i];
-                $wk = $wicks[$i];
-                $topY = $candleY - $bh / 2;
-                $botY = $candleY + $bh / 2;
-                $rgb = $tones[$i];
-                $c->polyline([[$bx, $topY - $wk], [$bx, $botY + $wk]], 2.4, $rgb, 0.55);
-                $c->roundRect($bx - $bodyW / 2, $topY, $bodyW, $bh, $bodyW / 2, $rgb, 1.0);
-            }
+            $innerLeft = $left + 46.0;
+            $innerRight = $right - 46.0;
+            $innerTop = $top + 40.0;
+            CardChrome::grid($c, $innerLeft, $innerTop, $innerRight - $innerLeft, $h - 80.0, 4, 1, $white, 0.02);
 
-            // -- SIGNAL wordmark -----------------------------------------------
-            $wordY = self::H * 0.505;
-            $size = 132.0;
-            $tracking = 2.6;
-            while ($size > 60 && $c->textWidth('SIGNAL', $size, $tracking, 0.20) > $w * 0.78) {
-                $size -= 4;
-            }
-            $c->text('SIGNAL', $cx, $wordY, $size, $white, 'center', 0.20, $tracking);
+            // -- header: brand + "MARKET ENTRY" badge -------------------------
+            CardChrome::brandLockup($c, $innerLeft, $innerTop, 30);
+            $badgeLabel = 'MARKET ENTRY';
+            $badgeSize = $c->textWidth($badgeLabel, 18, 2.2, 0.14) + 40;
+            $c->glassPanel($innerRight - $badgeSize, $innerTop - 4, $badgeSize, 40, 20, $white, 0.08, 0.5, 1.4, false, 0.90);
+            $c->text($badgeLabel, $innerRight - $badgeSize / 2, $innerTop + 8, 18, $white, 'center', 0.14, 2.2);
+            $c->text('TRADE  •  FUTURES  •  SIGNAL', $innerLeft, $innerTop + 30 + 22, 17, $muted, 'left', 0.12, 2.8);
 
-            // -- thin rule, broken in the middle for a small pulse ------------
-            $ruleY = self::H * 0.685;
-            $ruleW = $w * 0.46;
-            $pulseW = 150.0;
-            $sideW = ($ruleW - $pulseW) / 2;
-            $c->rule($cx - $ruleW / 2, $ruleY, $sideW, $white, 0.16, 1.2);
-            $c->rule($cx + $pulseW / 2, $ruleY, $sideW, $white, 0.16, 1.2);
+            // -- chip row: symbol, direction (the one solid element on this
+            // card, per the black-and-white design), leverage --------------
+            $chipY = $innerTop + 108.0;
+            $isLong = strtoupper((string) ($d['direction'] ?? '')) !== 'SHORT';
+            // Already display-formatted (BTC/USDT) by SignalCardFactory::entry()
+            // before it ever calls here — no second pass needed.
+            $symbol = (string) ($d['symbol'] ?? '');
+            $x = $innerLeft;
+            $x += CardChrome::chip($c, $x, $chipY, $symbol, $soft, null, 24, 50, 20, 0.05, 0.28, 1.3, 0.14, false) + 14;
+            $x += CardChrome::chip($c, $x, $chipY, $isLong ? 'LONG' : 'SHORT', $white, $isLong ? 'up' : 'down', 22, 50, 20, 0.12, 0.6, 1.4, 0.14, true) + 14;
+            CardChrome::chip($c, $x, $chipY, strtoupper((string) ($d['leverage'] ?? '')), $muted, 'bolt', 22, 50, 20, 0.0, 0.28, 1.4, 0.14, false);
 
-            $pulseH = 22.0;
-            $px = $cx - $pulseW / 2;
-            $py = $ruleY + 0.6;
-            $pulse = [
-                [$px, $py],
-                [$px + $pulseW * 0.30, $py],
-                [$px + $pulseW * 0.40, $py - $pulseH],
-                [$px + $pulseW * 0.50, $py + $pulseH * 1.15],
-                [$px + $pulseW * 0.60, $py - $pulseH * 0.5],
-                [$px + $pulseW * 0.70, $py],
-                [$px + $pulseW, $py],
+            // -- four tiles: entry, stop loss, target 1, target 2 -------------
+            $tilesY = $chipY + 50.0 + 54.0;
+            $tileH = min(200.0, $top + $h - 40.0 - 66.0 - $tilesY);
+            $tileGap = 20.0;
+            $tileW = ($innerRight - $innerLeft - 3 * $tileGap) / 4;
+            $tiles = [
+                ['entry', 'ENTRY PRICE', $d['entry'] ?? null],
+                ['stop', 'STOP LOSS', $d['sl'] ?? null],
+                ['target', 'TARGET 1', $d['tp1'] ?? null],
+                ['target', 'TARGET 2', $d['tp2'] ?? null],
             ];
-            $c->polyline($pulse, 2.6, $white, 0.85);
+            foreach ($tiles as $i => [$icon, $label, $value]) {
+                $tx = $innerLeft + $i * ($tileW + $tileGap);
+                CardChrome::stat($c, $tx, $tilesY, $tileW, $tileH, $icon, $label, CardFormat::orNA($value), $white, 16, 30);
+            }
 
-            // -- footer tagline -------------------------------------------------
-            $c->text('TRADING SIGNAL TERMINAL', $cx, self::H - self::MARGIN - 46, 20, $faint, 'center', 0.14, 3.2);
+            // -- footer: brand + timestamp on a hairline rule -----------------
+            CardChrome::footer($c, $innerLeft, $innerRight, self::H - self::MARGIN - 66.0, (string) ($d['time'] ?? ''), $white);
 
             $png = $c->toPng();
             $c->destroy();
