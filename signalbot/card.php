@@ -2269,8 +2269,10 @@ final class ResultCard
             $c->text('PRICE MOVE ' . (string) ($d['move'] ?? '-'), $cx, $moveY, 11, $muted, 'center', 0.12, 1.4);
 
             // -- entry / exit / duration — one small shared strip, not three
-            // separate boxes ---------------------------------------------
-            $gridY = $moveY + 30;
+            // separate boxes. Pushed well down from the headline number,
+            // with its own clear block of space rather than sitting right
+            // under PRICE MOVE. -------------------------------------------
+            $gridY = $moveY + 100;
             // dataGrid()'s label/value offsets are fixed pixel amounts
             // (22 from the top, 28+size from the bottom) rather than
             // scaling with the label/value sizes passed in — anything
@@ -2283,7 +2285,7 @@ final class ResultCard
             ], 10, 16);
 
             // -- result line: small check + status, no separate badge --------
-            $resY = $gridY + $gridH + 18;
+            $resY = $gridY + $gridH + 14;
             $checkSize = 15.0;
             $c->icon('check', $left, $resY, $checkSize, $accent, 0.30);
             $c->text(
