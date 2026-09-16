@@ -1,19 +1,21 @@
 <?php
-/** ساختِ کیبوردهای شیشه‌ای */
 
 function kbStart(bool $isAdmin): array {
-    $rows = [[
-        ['text' => trim(emojiButtonChar('btn_report') . ' ارسال گزارش'), 'callback_data' => 'rep:new'],
-        ['text' => trim(emojiButtonChar('btn_support') . ' ارتباط با پشتیبانی'), 'callback_data' => 'sup:new'],
-    ]];
+    $rows = [
+        [
+            ['text' => trim(emojiButtonChar('btn_report') . ' ارسال گزارش'), 'callback_data' => 'rep:new'],
+            ['text' => trim(emojiButtonChar('btn_support') . ' ارتباط با پشتیبانی'), 'callback_data' => 'sup:new'],
+        ],
+        [['text' => trim(emojiButtonChar('btn_account') . ' حساب کاربری'), 'callback_data' => 'acc:view']],
+    ];
     if ($isAdmin) {
         $rows[] = [['text' => trim(emojiButtonChar('admin_prefix') . ' پنل مدیریت'), 'callback_data' => 'adm:menu']];
     }
     return ['inline_keyboard' => $rows];
 }
 
-function kbCancel(): array {
-    return ['inline_keyboard' => [[['text' => '🔙 انصراف', 'callback_data' => 'rep:cancel']]]];
+function kbBack(): array {
+    return ['inline_keyboard' => [[['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'nav:back']]]];
 }
 
 function kbReview(int $submissionId, array $tags, ?int $selectedTagId, bool $decided): array {
@@ -48,5 +50,5 @@ function kbAdminMenu(): array {
 }
 
 function kbBackToAdmin(): array {
-    return ['inline_keyboard' => [[['text' => '🔙 بازگشت', 'callback_data' => 'adm:menu']]]];
+    return ['inline_keyboard' => [[['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'adm:menu']]]];
 }

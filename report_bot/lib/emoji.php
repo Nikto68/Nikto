@@ -1,17 +1,11 @@
 <?php
-/**
- * ایموجیِ پریمیوم، جای‌به‌جاشونده توسط پنلِ مدیریت.
- *
- * ⚠️ محدودیتِ واقعیِ Bot API: روی متنِ دکمه‌های شیشه‌ای هیچ entity/فرمتی
- * پذیرفته نمی‌شود — فقط رشته‌ی ساده. یعنی گرافیکِ متحرکِ ایموجیِ پریمیوم
- * فقط داخلِ متنِ پیام‌ها/کپشن‌ها (با caption_entities از نوعِ custom_emoji)
- * دیده می‌شود؛ روی دکمه‌ها همیشه همان کاراکترِ ساده‌ی جایگزین (placeholder)
- * نمایش داده می‌شود، نه نسخه‌ی پریمیوم.
- */
+/** روی متنِ دکمه‌ها تلگرام entity قبول نمی‌کند؛ گرافیکِ پریمیوم فقط در متن/کپشن دیده می‌شود. */
 
 const REPORT_EMOJI_DEFAULTS = [
     'btn_report'   => '📮',
     'btn_support'  => '🎧',
+    'btn_account'  => '👤',
+    'btn_back'     => '🔙',
     'btn_approve'  => '✅',
     'btn_reject'   => '❌',
     'start_prefix' => '👋',
@@ -22,6 +16,8 @@ function emojiSlotLabel(string $slot): string {
     $labels = [
         'btn_report'   => 'دکمه‌ی «ارسال گزارش»',
         'btn_support'  => 'دکمه‌ی «ارتباط با پشتیبانی»',
+        'btn_account'  => 'دکمه‌ی «حساب کاربری»',
+        'btn_back'     => 'دکمه‌ی «بازگشت»',
         'btn_approve'  => 'دکمه‌ی «تایید»',
         'btn_reject'   => 'دکمه‌ی «رد»',
         'start_prefix' => 'ابتدای پیام خوش‌آمد',
@@ -54,7 +50,6 @@ function emojiClear(string $slot): void {
     $stmt->execute();
 }
 
-/** برای متن/کپشن: {text, entities} که entity پریمیوم را هم شامل می‌شود */
 function emojiTextPart(string $slot): array {
     $e = emojiGet($slot);
     if ($e['id']) {
@@ -66,7 +61,6 @@ function emojiTextPart(string $slot): array {
     return ['text' => $e['char'], 'entities' => []];
 }
 
-/** برای دکمه‌ها: فقط کاراکترِ ساده (بدونِ گرافیکِ پریمیوم — محدودیتِ تلگرام) */
 function emojiButtonChar(string $slot): string {
     return emojiGet($slot)['char'];
 }

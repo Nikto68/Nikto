@@ -57,6 +57,15 @@ function tgCopyMessage(int $toChatId, int $fromChatId, int $messageId, array $op
     ], $opts));
 }
 
+function tgEditMessageText(int $chatId, int $messageId, string $text, array $entities = [], array $opts = []) {
+    return tgCall('editMessageText', array_merge([
+        'chat_id' => $chatId,
+        'message_id' => $messageId,
+        'text' => $text,
+        'entities' => $entities ?: null,
+    ], $opts));
+}
+
 function tgEditCaption(int $chatId, int $messageId, string $caption, array $entities = [], array $opts = []) {
     return tgCall('editMessageCaption', array_merge([
         'chat_id' => $chatId,

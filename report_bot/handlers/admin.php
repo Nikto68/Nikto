@@ -1,7 +1,6 @@
 <?php
-/** پنلِ مدیریت — کاملاً داخلِ خودِ ربات (با دستورِ /admin یا دکمه‌ی «پنل مدیریت») */
 
-const EMOJI_SLOTS = ['btn_report', 'btn_support', 'btn_approve', 'btn_reject', 'start_prefix', 'admin_prefix'];
+const EMOJI_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_back', 'btn_approve', 'btn_reject', 'start_prefix', 'admin_prefix'];
 
 function requireAdminCq(array $cq): bool {
     if (!reportIsAdmin($cq['from']['id'])) {
@@ -13,7 +12,8 @@ function requireAdminCq(array $cq): bool {
 
 function handleAdminMenu(array $cq): void {
     if (!requireAdminCq($cq)) return;
-    tgSendMessage((int)$cq['message']['chat']['id'], '⚙️ پنل مدیریت ربات گزارشات', [], ['reply_markup' => kbAdminMenu()]);
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '⚙️ پنل مدیریت ربات گزارشات', [], kbAdminMenu());
     tgAnswerCallback($cq['id']);
 }
 
@@ -24,7 +24,7 @@ function handleAdminCommand(array $msg): void {
     tgSendMessage((int)$msg['chat']['id'], '⚙️ پنل مدیریت ربات گزارشات', [], ['reply_markup' => kbAdminMenu()]);
 }
 
-// ---------------------------------------------------------------- تگ‌ها ---
+// ---- تگ‌ها ----
 
 function kbTagsList(): array {
     $rows = [];
@@ -35,32 +35,36 @@ function kbTagsList(): array {
         ];
     }
     $rows[] = [['text' => '➕ افزودن تگ', 'callback_data' => 'tagadd']];
-    $rows[] = [['text' => '🔙 بازگشت', 'callback_data' => 'adm:menu']];
+    $rows[] = [['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'adm:menu']];
     return ['inline_keyboard' => $rows];
 }
 
 function handleAdminTags(array $cq): void {
     if (!requireAdminCq($cq)) return;
-    tgSendMessage((int)$cq['message']['chat']['id'],
-        '🏷 تگ‌های فعلی — این‌ها زیرِ هر گزارش در گروه/تاپیک به‌صورتِ دکمه نشان داده می‌شوند و هنگامِ تایید، همراهِ پست به کانال می‌روند:',
-        [], ['reply_markup' => kbTagsList()]);
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '🏷 تگ‌ها', [], kbTagsList());
     tgAnswerCallback($cq['id']);
 }
 
 function handleAdminTagAdd(array $cq): void {
     if (!requireAdminCq($cq)) return;
-    stateSet((int)$cq['from']['id'], 'admin_await_tag_text');
-    tgSendMessage((int)$cq['message']['chat']['id'],
-        '✏️ متنِ تگِ جدید را بفرستید (ایموجیِ پریمیوم هم می‌توانید داخلش بگذارید).',
-        [], ['reply_markup' => kbCancel()]);
+    $uid = (int)$cq['from']['id'];
+    $a = screenAnchorFromCq($cq);
+    stateSet($uid, 'admin_await_tag_text', ['prompt' => $a]);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✏️ متن تگ جدید را بفرستید.', [], kbBack());
     tgAnswerCallback($cq['id']);
 }
 
-function handleAdminTagText(array $msg): void {
+function handleAdminTagText(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? (int)$msg['chat']['id'];
+    $anchorMsg = $prompt['message_id'] ?? null;
+    $anchorPhoto = $prompt['has_photo'] ?? false;
+
     $text = $msg['text'] ?? '';
     if (trim($text) === '') {
-        tgSendMessage((int)$msg['chat']['id'], '⚠️ متن خالی است؛ دوباره بفرستید.', [], ['reply_markup' => kbCancel()]);
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است؛ دوباره بفرستید.', [], kbBack());
         return;
     }
 
@@ -72,7 +76,7 @@ function handleAdminTagText(array $msg): void {
     $stmt->execute();
 
     stateClear($uid);
-    tgSendMessage((int)$msg['chat']['id'], '✅ تگ اضافه شد.', [], ['reply_markup' => kbTagsList()]);
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ تگ اضافه شد.', [], kbTagsList());
 }
 
 function handleAdminTagDelete(array $cq, int $tagId): void {
@@ -84,7 +88,7 @@ function handleAdminTagDelete(array $cq, int $tagId): void {
     tgEditReplyMarkup((int)$cq['message']['chat']['id'], $cq['message']['message_id'], kbTagsList());
 }
 
-// ----------------------------------------------------- ایموجیِ پریمیوم ---
+// ---- ایموجی پریمیوم ----
 
 function kbEmojiList(): array {
     $rows = [];
@@ -96,24 +100,24 @@ function kbEmojiList(): array {
             ['text' => '↩️ پیش‌فرض', 'callback_data' => 'emoclr:' . $slot],
         ];
     }
-    $rows[] = [['text' => '🔙 بازگشت', 'callback_data' => 'adm:menu']];
+    $rows[] = [['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'adm:menu']];
     return ['inline_keyboard' => $rows];
 }
 
 function handleAdminEmoji(array $cq): void {
     if (!requireAdminCq($cq)) return;
-    $note = "⭐ ایموجی‌های پریمیوم\n\n" .
-        "برای هرکدام «تغییر» را بزنید و یک پیامِ حاویِ همان ایموجیِ پریمیوم بفرستید (خودتان باید تلگرامِ پریمیوم داشته باشید تا بتوانید چنین پیامی بفرستید).\n\n" .
-        "⚠️ توجه: تلگرام روی متنِ دکمه‌ها هیچ‌جور فرمت/گرافیکِ ویژه‌ای اجازه نمی‌دهد — روی دکمه‌ها همیشه همان کاراکترِ سادهٔ جایگزین دیده می‌شود؛ نسخهٔ متحرکِ پریمیوم فقط داخلِ متنِ پیام‌ها (مثلاً پیامِ خوش‌آمد) نمایش داده می‌شود.";
-    tgSendMessage((int)$cq['message']['chat']['id'], $note, [], ['reply_markup' => kbEmojiList()]);
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '⭐ ایموجی‌های پریمیوم', [], kbEmojiList());
     tgAnswerCallback($cq['id']);
 }
 
 function handleAdminEmojiSet(array $cq, string $slot): void {
     if (!requireAdminCq($cq)) return;
     if (!in_array($slot, EMOJI_SLOTS, true)) { tgAnswerCallback($cq['id'], 'نامعتبر.', true); return; }
-    stateSet((int)$cq['from']['id'], 'admin_await_emoji', ['slot' => $slot]);
-    tgSendMessage((int)$cq['message']['chat']['id'], '⭐ یک پیامِ حاویِ ایموجیِ پریمیوم بفرستید:', [], ['reply_markup' => kbCancel()]);
+    $uid = (int)$cq['from']['id'];
+    $a = screenAnchorFromCq($cq);
+    stateSet($uid, 'admin_await_emoji', ['slot' => $slot, 'prompt' => $a]);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '⭐ یک پیام حاوی ایموجی پریمیوم بفرستید:', [], kbBack());
     tgAnswerCallback($cq['id']);
 }
 
@@ -124,96 +128,109 @@ function handleAdminEmojiClear(array $cq, string $slot): void {
     tgEditReplyMarkup((int)$cq['message']['chat']['id'], $cq['message']['message_id'], kbEmojiList());
 }
 
-function handleAdminEmojiMessage(array $msg, string $slot): void {
+function handleAdminEmojiMessage(array $msg, string $slot, array $st = []): void {
     $uid = (int)$msg['from']['id'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? (int)$msg['chat']['id'];
+    $anchorMsg = $prompt['message_id'] ?? null;
+    $anchorPhoto = $prompt['has_photo'] ?? false;
+
     if (!in_array($slot, EMOJI_SLOTS, true)) { stateClear($uid); return; }
 
     $found = extractFirstCustomEmoji($msg);
     if (!$found) {
-        tgSendMessage((int)$msg['chat']['id'], '⚠️ ایموجیِ پریمیومی در پیام پیدا نشد؛ دوباره تلاش کنید یا انصراف بدهید.', [], ['reply_markup' => kbCancel()]);
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ ایموجی پریمیومی پیدا نشد؛ دوباره تلاش کنید.', [], kbBack());
         return;
     }
 
     emojiSet($slot, $found['custom_emoji_id'], $found['placeholder']);
     stateClear($uid);
-    tgSendMessage((int)$msg['chat']['id'], '✅ ایموجی برای «' . emojiSlotLabel($slot) . '» ذخیره شد.', [], ['reply_markup' => kbEmojiList()]);
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbEmojiList());
 }
 
-// --------------------------------------------------- عکسِ پیامِ خوش‌آمد ---
+// ---- عکس پیام خوش‌آمد ----
 
 function handleAdminStartPhoto(array $cq): void {
     if (!requireAdminCq($cq)) return;
+    $uid = (int)$cq['from']['id'];
+    $a = screenAnchorFromCq($cq);
     $cur = settingGet('start_photo_file_id');
-    $rows = [];
-    if ($cur) $rows[] = [['text' => '🗑 حذفِ عکسِ فعلی', 'callback_data' => 'startphotodel']];
-    $rows[] = [['text' => '🔙 بازگشت', 'callback_data' => 'adm:menu']];
 
-    stateSet((int)$cq['from']['id'], 'admin_await_start_photo');
-    tgSendMessage((int)$cq['message']['chat']['id'],
-        '🖼 یک عکس بفرستید تا زیرِ پیامِ خوش‌آمدگویی نمایش داده شود.' . ($cur ? "\n\nهم‌اکنون یک عکس تنظیم شده است." : ''),
-        [], ['reply_markup' => ['inline_keyboard' => $rows]]);
+    $rows = [];
+    if ($cur) $rows[] = [['text' => '🗑 حذف عکس فعلی', 'callback_data' => 'startphotodel']];
+    $rows[] = [['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'adm:menu']];
+
+    stateSet($uid, 'admin_await_start_photo', ['prompt' => $a]);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '🖼 یک عکس بفرستید.', [], ['inline_keyboard' => $rows]);
     tgAnswerCallback($cq['id']);
 }
 
-function handleAdminStartPhotoMessage(array $msg): void {
+function handleAdminStartPhotoMessage(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? (int)$msg['chat']['id'];
+    $anchorMsg = $prompt['message_id'] ?? null;
+    $anchorPhoto = $prompt['has_photo'] ?? false;
+
     if (empty($msg['photo'])) {
-        tgSendMessage((int)$msg['chat']['id'], '⚠️ لطفاً یک عکس بفرستید.', [], ['reply_markup' => kbCancel()]);
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ لطفاً یک عکس بفرستید.', [], kbBack());
         return;
     }
     $fileId = end($msg['photo'])['file_id'];
     settingSet('start_photo_file_id', $fileId);
     stateClear($uid);
-    tgSendMessage((int)$msg['chat']['id'], '✅ عکسِ پیامِ خوش‌آمد ذخیره شد.', [], ['reply_markup' => kbAdminMenu()]);
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbAdminMenu());
 }
 
 function handleAdminStartPhotoDelete(array $cq): void {
     if (!requireAdminCq($cq)) return;
     settingDel('start_photo_file_id');
     tgAnswerCallback($cq['id'], 'حذف شد.');
-    tgSendMessage((int)$cq['message']['chat']['id'], '✅ عکسِ پیامِ خوش‌آمد حذف شد.', [], ['reply_markup' => kbAdminMenu()]);
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✅ عکس پیام خوش‌آمد حذف شد.', [], kbAdminMenu());
 }
 
-// ---------------------------------------------------- متنِ پیامِ خوش‌آمد ---
+// ---- متن پیام خوش‌آمد ----
 
 function handleAdminStartText(array $cq): void {
     if (!requireAdminCq($cq)) return;
-    stateSet((int)$cq['from']['id'], 'admin_await_start_text');
-    tgSendMessage((int)$cq['message']['chat']['id'],
-        '✏️ متنِ جدیدِ پیامِ خوش‌آمد را بفرستید (فرمت‌دهی و ایموجیِ پریمیوم هم حفظ می‌شود).',
-        [], ['reply_markup' => kbCancel()]);
+    $uid = (int)$cq['from']['id'];
+    $a = screenAnchorFromCq($cq);
+    stateSet($uid, 'admin_await_start_text', ['prompt' => $a]);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✏️ متن جدید را بفرستید.', [], kbBack());
     tgAnswerCallback($cq['id']);
 }
 
-function handleAdminStartTextMessage(array $msg): void {
+function handleAdminStartTextMessage(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? (int)$msg['chat']['id'];
+    $anchorMsg = $prompt['message_id'] ?? null;
+    $anchorPhoto = $prompt['has_photo'] ?? false;
+
     $text = $msg['text'] ?? '';
     if (trim($text) === '') {
-        tgSendMessage((int)$msg['chat']['id'], '⚠️ متن خالی است.', [], ['reply_markup' => kbCancel()]);
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است.', [], kbBack());
         return;
     }
     settingSet('start_text', $text);
     settingSet('start_text_entities', json_encode($msg['entities'] ?? [], JSON_UNESCAPED_UNICODE));
     stateClear($uid);
-    tgSendMessage((int)$msg['chat']['id'], '✅ متنِ پیامِ خوش‌آمد ذخیره شد.', [], ['reply_markup' => kbAdminMenu()]);
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbAdminMenu());
 }
 
-// -------------------------------------------------- گروه/تاپیکِ گزارش ---
+// ---- گروه/تاپیک گزارش ----
 
 function handleAdminGroup(array $cq): void {
     if (!requireAdminCq($cq)) return;
     $gid = settingGet('report_group_id');
     $tid = settingGet('report_topic_id');
-    $status = $gid
-        ? "\n\nهم‌اکنون تنظیم شده:\nگروه: <code>$gid</code>" . ($tid ? "\nتاپیک: <code>$tid</code>" : "\n(بدونِ تاپیکِ مشخص)")
-        : '';
+    $status = $gid ? "\n\nگروه: $gid" . ($tid ? " · تاپیک: $tid" : '') : '';
 
-    tgSendMessage((int)$cq['message']['chat']['id'],
-        "👥 برای تنظیمِ گروه/تاپیکِ بررسیِ گزارش‌ها:\n" .
-        "۱) ربات را به گروهِ موردنظر اضافه و ادمین کنید.\n" .
-        "۲) اگر گروه تاپیک (موضوع) دارد، داخلِ همان تاپیک — وگرنه در خودِ گروه — دستورِ زیر را بفرستید:\n" .
-        "<code>/setreporttopic</code>" . $status,
-        [], ['parse_mode' => 'HTML', 'reply_markup' => kbBackToAdmin()]);
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'],
+        "👥 داخل گروه/تاپیکِ موردنظر دستور زیر را بفرستید:\n/setreporttopic$status",
+        [], kbBackToAdmin());
     tgAnswerCallback($cq['id']);
 }
 
@@ -223,7 +240,7 @@ function handleSetReportTopicCommand(array $msg): void {
 
     $chat = $msg['chat'];
     if (!in_array($chat['type'], ['group', 'supergroup'], true)) {
-        tgSendMessage($chat['id'], '⚠️ این دستور را باید داخلِ گروه بفرستید.');
+        tgSendMessage($chat['id'], '⚠️ این دستور را باید داخل گروه بفرستید.');
         return;
     }
 
@@ -235,28 +252,31 @@ function handleSetReportTopicCommand(array $msg): void {
     } else {
         settingDel('report_topic_id');
     }
-    tgSendMessage($chat['id'], '✅ این گروه/تاپیک به‌عنوانِ مقصدِ گزارش‌ها تنظیم شد.', [], $opts);
+    tgSendMessage($chat['id'], '✅ این گروه/تاپیک به‌عنوان مقصد گزارش‌ها تنظیم شد.', [], $opts);
 }
 
-// -------------------------------------------------------- کانالِ مقصد ---
+// ---- کانال مقصد ----
 
 function handleAdminChannel(array $cq): void {
     if (!requireAdminCq($cq)) return;
+    $uid = (int)$cq['from']['id'];
     $cid = settingGet('report_channel_id');
-    $status = $cid ? "\n\nهم‌اکنون تنظیم شده: <code>$cid</code>" : '';
+    $status = $cid ? "\n\nهم‌اکنون: $cid" : '';
 
-    stateSet((int)$cq['from']['id'], 'admin_await_channel');
-    tgSendMessage((int)$cq['message']['chat']['id'],
-        "📢 برای تنظیمِ کانالِ مقصد:\n" .
-        "۱) ربات را در کانالِ موردنظر ادمین کنید (با اجازه‌ی ارسالِ پیام).\n" .
-        "۲) یک پیام از همان کانال را همین‌جا فوروارد کنید — یا آیدیِ عددی/یوزرنیمِ کانال را بفرستید.$status",
-        [], ['parse_mode' => 'HTML', 'reply_markup' => kbCancel()]);
+    $a = screenAnchorFromCq($cq);
+    stateSet($uid, 'admin_await_channel', ['prompt' => $a]);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'],
+        "📢 یک پیام از کانالِ مقصد فوروارد کنید، یا آیدی/یوزرنیمِ آن را بفرستید.$status",
+        [], kbBack());
     tgAnswerCallback($cq['id']);
 }
 
-function handleAdminChannelMessage(array $msg): void {
+function handleAdminChannelMessage(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
-    $chatId = (int)$msg['chat']['id'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? (int)$msg['chat']['id'];
+    $anchorMsg = $prompt['message_id'] ?? null;
+    $anchorPhoto = $prompt['has_photo'] ?? false;
 
     $target = null;
     if (isset($msg['forward_from_chat']) && $msg['forward_from_chat']['type'] === 'channel') {
@@ -267,22 +287,22 @@ function handleAdminChannelMessage(array $msg): void {
     }
 
     if (!$target) {
-        tgSendMessage($chatId, '⚠️ پیامِ فورواردشده از کانال، یا آیدی/یوزرنیمِ کانال را بفرستید.', [], ['reply_markup' => kbCancel()]);
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ پیام فورواردشده از کانال یا آیدی/یوزرنیم را بفرستید.', [], kbBack());
         return;
     }
 
     $chat = tgGetChat($target);
     if (empty($chat['ok']) || $chat['result']['type'] !== 'channel') {
-        tgSendMessage($chatId, '⚠️ این کانال پیدا نشد یا ربات در آن ادمین نیست.', [], ['reply_markup' => kbCancel()]);
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ این کانال پیدا نشد یا ربات در آن ادمین نیست.', [], kbBack());
         return;
     }
 
     settingSet('report_channel_id', $chat['result']['id']);
     stateClear($uid);
-    tgSendMessage($chatId, '✅ کانالِ مقصد تنظیم شد: ' . ($chat['result']['title'] ?? $chat['result']['id']), [], ['reply_markup' => kbAdminMenu()]);
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد: ' . ($chat['result']['title'] ?? $chat['result']['id']), [], kbAdminMenu());
 }
 
-// ------------------------------------------------------------- وضعیت ---
+// ---- وضعیت ----
 
 function handleAdminStatus(array $cq): void {
     if (!requireAdminCq($cq)) return;
@@ -294,14 +314,14 @@ function handleAdminStatus(array $cq): void {
     foreach (EMOJI_SLOTS as $s) if (emojiGet($s)['id']) $emojiCount++;
     $photo = settingGet('start_photo_file_id') ? 'دارد' : 'ندارد';
 
-    $text = "ℹ️ وضعیتِ تنظیمات\n\n" .
-        "گروهِ گزارش: $gid\n" .
-        "تاپیکِ گزارش: $tid\n" .
-        "کانالِ مقصد: $cid\n" .
-        "تعدادِ تگ‌ها: $tags\n" .
-        "ایموجیِ پریمیومِ تنظیم‌شده: $emojiCount از " . count(EMOJI_SLOTS) . "\n" .
-        "عکسِ پیامِ خوش‌آمد: $photo";
+    $text = "ℹ️ وضعیت\n\n" .
+        "گروه: $gid · تاپیک: $tid\n" .
+        "کانال: $cid\n" .
+        "تگ‌ها: $tags\n" .
+        "ایموجی پریمیوم: $emojiCount از " . count(EMOJI_SLOTS) . "\n" .
+        "عکس خوش‌آمد: $photo";
 
-    tgSendMessage((int)$cq['message']['chat']['id'], $text, [], ['reply_markup' => kbBackToAdmin()]);
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], $text, [], kbBackToAdmin());
     tgAnswerCallback($cq['id']);
 }

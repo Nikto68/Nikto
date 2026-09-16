@@ -1,10 +1,4 @@
 <?php
-/**
- * لایه‌ی داده — یک فایلِ SQLite برای کلِ ربات گزارشات (کاربران، JSON بزرگ
- * و از این‌ها نه). migration خودکار و بی‌خطر: هر بار همان CREATE TABLE IF
- * NOT EXISTS اجرا می‌شود.
- */
-
 function reportDb(): SQLite3 {
     static $db = null;
     if ($db !== null) return $db;
@@ -38,6 +32,15 @@ function reportEnsureSchema(SQLite3 $db): void {
         updated_at INTEGER NOT NULL
     )");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        joined_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL
+    )");
+
     $db->exec("CREATE TABLE IF NOT EXISTS submissions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -54,6 +57,9 @@ function reportEnsureSchema(SQLite3 $db): void {
         group_message_id INTEGER,
         channel_chat_id INTEGER,
         channel_message_id INTEGER,
+        notify_chat_id INTEGER,
+        notify_message_id INTEGER,
+        notify_has_photo INTEGER NOT NULL DEFAULT 0,
         decided_by INTEGER,
         decided_at INTEGER,
         created_at INTEGER NOT NULL
@@ -127,6 +133,14 @@ function submissionGet(int $id): ?array {
     return $row ?: null;
 }
 
+function submissionFindByGroupMessage(int $groupChatId, int $groupMessageId): ?array {
+    $stmt = reportDb()->prepare('SELECT * FROM submissions WHERE group_chat_id = :c AND group_message_id = :m');
+    $stmt->bindValue(':c', $groupChatId, SQLITE3_INTEGER);
+    $stmt->bindValue(':m', $groupMessageId, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    return $row ?: null;
+}
+
 function submissionUpdate(int $id, array $fields): void {
     if (!$fields) return;
     $sets = [];
@@ -139,4 +153,37 @@ function submissionUpdate(int $id, array $fields): void {
         $stmt->bindValue(":$k", $v, $type);
     }
     $stmt->execute();
+}
+
+function userTouch(array $from): void {
+    $uid = (int)($from['id'] ?? 0);
+    if ($uid <= 0) return;
+    $stmt = reportDb()->prepare('INSERT INTO users (user_id, username, first_name, last_name, joined_at, last_seen_at)
+        VALUES (:u, :un, :fn, :ln, :t, :t)
+        ON CONFLICT(user_id) DO UPDATE SET username=excluded.username, first_name=excluded.first_name, last_name=excluded.last_name, last_seen_at=excluded.last_seen_at');
+    $stmt->bindValue(':u', $uid, SQLITE3_INTEGER);
+    $stmt->bindValue(':un', $from['username'] ?? null, SQLITE3_TEXT);
+    $stmt->bindValue(':fn', $from['first_name'] ?? null, SQLITE3_TEXT);
+    $stmt->bindValue(':ln', $from['last_name'] ?? null, SQLITE3_TEXT);
+    $stmt->bindValue(':t', time(), SQLITE3_INTEGER);
+    $stmt->execute();
+}
+
+function userGet(int $uid): ?array {
+    $stmt = reportDb()->prepare('SELECT * FROM users WHERE user_id = :u');
+    $stmt->bindValue(':u', $uid, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    return $row ?: null;
+}
+
+function submissionCountsFor(int $uid): array {
+    $stmt = reportDb()->prepare('SELECT status, COUNT(*) c FROM submissions WHERE user_id = :u GROUP BY status');
+    $stmt->bindValue(':u', $uid, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    $out = ['total' => 0, 'pending' => 0, 'approved' => 0, 'rejected' => 0];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $out[$row['status']] = (int)$row['c'];
+        $out['total'] += (int)$row['c'];
+    }
+    return $out;
 }

@@ -5,21 +5,15 @@
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/handlers/start.php';
+require_once __DIR__ . '/handlers/account.php';
 require_once __DIR__ . '/handlers/report.php';
 require_once __DIR__ . '/handlers/support.php';
 require_once __DIR__ . '/handlers/admin.php';
 
-/**
- * Fail-closed: بدونِ REPORT_WEBHOOK_SECRETِ تنظیم‌شده، یا بدونِ هدرِ درست،
- * هیچ آپدیتی پذیرفته نمی‌شود — همان الگویی که بقیه‌ی ربات‌های این مجموعه
- * استفاده می‌کنند، تا کسی نتواند با ساختنِ یک JSON دلخواه (uid برابرِ مدیر)
- * مستقیم به مسیرهای مدیریتی برسد.
- */
 function reportWebhookSecretOk(): bool {
     if (REPORT_WEBHOOK_SECRET === '') {
         reportAdminAlertOnce('webhook_secret_missing',
-            '🔴 REPORT_WEBHOOK_SECRET تنظیم نشده — تا وقتی تنظیم نشود هیچ آپدیتی از تلگرام پذیرفته نمی‌شود. ' .
-            'در config.local.php مقدارش را بگذارید و یک‌بار tools/set_webhook.php را اجرا کنید.', 3600);
+            '🔴 REPORT_WEBHOOK_SECRET تنظیم نشده — تا وقتی تنظیم نشود هیچ آپدیتی از تلگرام پذیرفته نمی‌شود.', 3600);
         return false;
     }
     $got = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
@@ -32,19 +26,21 @@ function reportDispatch(array $update): void {
 }
 
 function reportDispatchCallback(array $cq): void {
+    if (isset($cq['from'])) userTouch($cq['from']);
     $data = $cq['data'] ?? '';
 
     static $exact = null;
     if ($exact === null) {
         $exact = [
-            'noop'         => fn($cq) => tgAnswerCallback($cq['id']),
-            'rep:new'      => 'handleReportNew',
-            'rep:cancel'   => 'handleReportCancel',
-            'sup:new'      => 'handleSupportNew',
-            'adm:menu'     => 'handleAdminMenu',
-            'adm:tags'     => 'handleAdminTags',
-            'tagadd'       => 'handleAdminTagAdd',
-            'adm:emoji'    => 'handleAdminEmoji',
+            'noop'           => fn($cq) => tgAnswerCallback($cq['id']),
+            'rep:new'        => 'handleReportNew',
+            'sup:new'        => 'handleSupportNew',
+            'acc:view'       => 'handleAccountView',
+            'nav:back'       => 'handleNavBack',
+            'adm:menu'       => 'handleAdminMenu',
+            'adm:tags'       => 'handleAdminTags',
+            'tagadd'         => 'handleAdminTagAdd',
+            'adm:emoji'      => 'handleAdminEmoji',
             'adm:startphoto' => 'handleAdminStartPhoto',
             'startphotodel'  => 'handleAdminStartPhotoDelete',
             'adm:starttext'  => 'handleAdminStartText',
@@ -55,23 +51,27 @@ function reportDispatchCallback(array $cq): void {
     }
     if (isset($exact[$data])) { $exact[$data]($cq); return; }
 
-    if (preg_match('/^tagdel:(\d+)$/', $data, $m))          { handleAdminTagDelete($cq, (int)$m[1]); return; }
-    if (preg_match('/^emoset:([a-z_]+)$/', $data, $m))      { handleAdminEmojiSet($cq, $m[1]); return; }
-    if (preg_match('/^emoclr:([a-z_]+)$/', $data, $m))      { handleAdminEmojiClear($cq, $m[1]); return; }
-    if (preg_match('/^tg:(\d+):(\d+)$/', $data, $m))        { handleTagPick($cq, (int)$m[1], (int)$m[2]); return; }
-    if (preg_match('/^ap:(\d+)$/', $data, $m))              { handleDecision($cq, 'approve', (int)$m[1]); return; }
-    if (preg_match('/^rj:(\d+)$/', $data, $m))              { handleDecision($cq, 'reject', (int)$m[1]); return; }
+    if (preg_match('/^tagdel:(\d+)$/', $data, $m))     { handleAdminTagDelete($cq, (int)$m[1]); return; }
+    if (preg_match('/^emoset:([a-z_]+)$/', $data, $m)) { handleAdminEmojiSet($cq, $m[1]); return; }
+    if (preg_match('/^emoclr:([a-z_]+)$/', $data, $m)) { handleAdminEmojiClear($cq, $m[1]); return; }
+    if (preg_match('/^tg:(\d+):(\d+)$/', $data, $m))   { handleTagPick($cq, (int)$m[1], (int)$m[2]); return; }
+    if (preg_match('/^ap:(\d+)$/', $data, $m))         { handleDecision($cq, 'approve', (int)$m[1]); return; }
+    if (preg_match('/^rj:(\d+)$/', $data, $m))         { handleDecision($cq, 'reject', (int)$m[1]); return; }
 
     tgAnswerCallback($cq['id']);
 }
 
 function reportDispatchMessage(array $msg): void {
+    if (isset($msg['from'])) userTouch($msg['from']);
+
     $chat = $msg['chat'];
     $text = $msg['text'] ?? '';
 
-    // دستورهایی که باید داخلِ گروه/تاپیک هم کار کنند
     if ($chat['type'] !== 'private') {
-        if (strncmp($text, '/setreporttopic', 15) === 0) handleSetReportTopicCommand($msg);
+        if (strncmp($text, '/setreporttopic', 15) === 0) { handleSetReportTopicCommand($msg); return; }
+        if (isset($msg['from']) && reportIsAdmin($msg['from']['id']) && isset($msg['reply_to_message'])) {
+            handleAdminReportReply($msg);
+        }
         return;
     }
 
@@ -84,17 +84,16 @@ function reportDispatchMessage(array $msg): void {
     $st = stateGet($uid);
     if ($st['state']) {
         switch ($st['state']) {
-            case 'awaiting_report':       handleReportMedia($msg); return;
-            case 'awaiting_support':      handleSupportMessage($msg); return;
-            case 'admin_await_tag_text':  handleAdminTagText($msg); return;
-            case 'admin_await_emoji':     handleAdminEmojiMessage($msg, $st['data']['slot'] ?? ''); return;
-            case 'admin_await_start_photo': handleAdminStartPhotoMessage($msg); return;
-            case 'admin_await_start_text':  handleAdminStartTextMessage($msg); return;
-            case 'admin_await_channel':     handleAdminChannelMessage($msg); return;
+            case 'awaiting_report':         handleReportMedia($msg, $st); return;
+            case 'awaiting_support':        handleSupportMessage($msg, $st); return;
+            case 'admin_await_tag_text':    handleAdminTagText($msg, $st); return;
+            case 'admin_await_emoji':       handleAdminEmojiMessage($msg, $st['data']['slot'] ?? '', $st); return;
+            case 'admin_await_start_photo': handleAdminStartPhotoMessage($msg, $st); return;
+            case 'admin_await_start_text':  handleAdminStartTextMessage($msg, $st); return;
+            case 'admin_await_channel':     handleAdminChannelMessage($msg, $st); return;
         }
     }
 
-    // ریپلایِ مدیر روی یکی از کپی‌های پشتیبانی
     if (reportIsAdmin($uid) && handleAdminSupportReply($msg)) return;
 
     handleStartCommand($msg);

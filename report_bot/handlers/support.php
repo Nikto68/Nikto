@@ -1,19 +1,21 @@
 <?php
-/** جریانِ «ارتباط با پشتیبانی»: پیامِ کاربر برای همه‌ی مدیرها کپی می‌شود؛
- *  مدیر با ریپلای‌کردن روی همان کپی، مستقیم به کاربر پاسخ می‌دهد. */
 
 function handleSupportNew(array $cq): void {
     $uid = (int)$cq['from']['id'];
-    stateSet($uid, 'awaiting_support');
-    tgSendMessage((int)$cq['message']['chat']['id'],
-        '💬 پیامِ خود را برای پشتیبانی بفرستید (متن، عکس، فایل یا هر چیزِ دیگر).',
-        [], ['reply_markup' => kbCancel()]);
+    $a = screenAnchorFromCq($cq);
+    stateSet($uid, 'awaiting_support', ['prompt' => $a]);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '💬 پیام خود را برای پشتیبانی بفرستید.', [], kbBack());
     tgAnswerCallback($cq['id']);
 }
 
-function handleSupportMessage(array $msg): void {
+function handleSupportMessage(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
     $chatId = (int)$msg['chat']['id'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? $chatId;
+    $anchorMsg = $prompt['message_id'] ?? null;
+    $anchorPhoto = $prompt['has_photo'] ?? false;
+
     $name = trim($msg['from']['first_name'] ?? 'کاربر');
     $who = isset($msg['from']['username']) ? '@' . $msg['from']['username'] : "شناسه: $uid";
     $header = "📩 پیامِ پشتیبانیِ جدید\n👤 $name ($who)\n\nبرای پاسخ، روی همین پیام ریپلای کنید.";
@@ -35,14 +37,12 @@ function handleSupportMessage(array $msg): void {
     }
 
     stateClear($uid);
-    if ($anySent) {
-        tgSendMessage($chatId, '✅ پیامِ شما برای پشتیبانی ارسال شد؛ به‌زودی پاسخ داده می‌شود.');
-    } else {
-        tgSendMessage($chatId, '⚠️ در حال حاضر ارسالِ پیام به پشتیبانی ممکن نیست؛ بعداً دوباره تلاش کنید.');
-    }
+    $resultText = $anySent
+        ? '✅ پیام شما برای پشتیبانی ارسال شد.'
+        : '⚠️ در حال حاضر ارسال به پشتیبانی ممکن نیست؛ بعداً دوباره تلاش کنید.';
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, $resultText, [], kbStart(reportIsAdmin($uid)));
 }
 
-/** اگر پیام، ریپلایِ یک مدیر روی یکی از کپی‌های پشتیبانی باشد، به کاربر اصلی می‌رساند. */
 function handleAdminSupportReply(array $msg): bool {
     $aid = (int)$msg['from']['id'];
     if (!reportIsAdmin($aid)) return false;
