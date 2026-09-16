@@ -2638,6 +2638,130 @@ final class Ta
         }
         return $out;
     }
+
+    /**
+     * Wilder's ADX (Average Directional Index) — trend STRENGTH, not
+     * direction. Low ADX means price is chopping sideways with no real
+     * trend behind it, which is exactly the condition SMC/structure setups
+     * are least reliable in. Returns only the latest value (like
+     * SwingPivots::atr()), NAN when there isn't enough history yet.
+     *
+     * @param Candle[] $candles oldest-first
+     */
+    public static function adx(array $candles, int $period = 14): float
+    {
+        $n = count($candles);
+        if ($n < $period * 2 + 1) {
+            return NAN;
+        }
+
+        $trs = [];
+        $plusDms = [];
+        $minusDms = [];
+        for ($i = 1; $i < $n; $i++) {
+            $up = $candles[$i]->high - $candles[$i - 1]->high;
+            $down = $candles[$i - 1]->low - $candles[$i]->low;
+            $plusDms[] = ($up > $down && $up > 0) ? $up : 0.0;
+            $minusDms[] = ($down > $up && $down > 0) ? $down : 0.0;
+            $trs[] = max(
+                $candles[$i]->high - $candles[$i]->low,
+                abs($candles[$i]->high - $candles[$i - 1]->close),
+                abs($candles[$i]->low - $candles[$i - 1]->close)
+            );
+        }
+
+        // Wilder smoothing: seed with a plain sum of the first $period
+        // values, then roll forward as (prev - prev/period + current).
+        $smoothedTr = array_sum(array_slice($trs, 0, $period));
+        $smoothedPlusDm = array_sum(array_slice($plusDms, 0, $period));
+        $smoothedMinusDm = array_sum(array_slice($minusDms, 0, $period));
+
+        $dxs = [];
+        $count = count($trs);
+        for ($i = $period; $i < $count; $i++) {
+            $smoothedTr = $smoothedTr - ($smoothedTr / $period) + $trs[$i];
+            $smoothedPlusDm = $smoothedPlusDm - ($smoothedPlusDm / $period) + $plusDms[$i];
+            $smoothedMinusDm = $smoothedMinusDm - ($smoothedMinusDm / $period) + $minusDms[$i];
+
+            if ($smoothedTr <= 0) {
+                continue;
+            }
+            $plusDi = 100 * $smoothedPlusDm / $smoothedTr;
+            $minusDi = 100 * $smoothedMinusDm / $smoothedTr;
+            $diSum = $plusDi + $minusDi;
+            $dxs[] = $diSum > 0 ? 100 * abs($plusDi - $minusDi) / $diSum : 0.0;
+        }
+
+        if (count($dxs) < $period) {
+            return NAN;
+        }
+
+        // ADX itself is a Wilder-smoothed average of DX, seeded the same way.
+        $adx = array_sum(array_slice($dxs, 0, $period)) / $period;
+        for ($i = $period; $i < count($dxs); $i++) {
+            $adx = ($adx * ($period - 1) + $dxs[$i]) / $period;
+        }
+        return $adx;
+    }
+
+    /**
+     * Standard MACD: fast EMA minus slow EMA, a signal line on top of that,
+     * and the histogram (macd - signal) everything else reads for a
+     * crossover.
+     *
+     * The signal line is seeded by hand rather than through a plain
+     * self::ema($macdLine, $signal) call: ema()'s own seed step averages
+     * the first $len values of its input, which works for a raw price
+     * series but not here — the MACD line itself starts with a NaN prefix
+     * (nothing is valid before the SLOW ema warms up, at index slow-1,
+     * which sits well past signal-1). Averaging across that NaN prefix
+     * makes ema()'s seed NaN, and once its running $prev is NaN every
+     * later value stays NaN forever too, since NaN is never `=== null`
+     * and the seed branch never runs again. Seeding from the first
+     * $signal REAL values instead avoids that trap.
+     *
+     * @param float[] $closes
+     * @return array{macd:float[], signal:float[], histogram:float[]}
+     */
+    public static function macd(array $closes, int $fast = 12, int $slow = 26, int $signal = 9): array
+    {
+        $emaFast = self::ema($closes, $fast);
+        $emaSlow = self::ema($closes, $slow);
+        $n = count($closes);
+        $macdLine = [];
+        for ($i = 0; $i < $n; $i++) {
+            $f = $emaFast[$i] ?? NAN;
+            $s = $emaSlow[$i] ?? NAN;
+            $macdLine[$i] = (is_nan($f) || is_nan($s)) ? NAN : $f - $s;
+        }
+
+        $signalLine = array_fill(0, $n, NAN);
+        $validStart = null;
+        foreach ($macdLine as $i => $v) {
+            if (!is_nan($v)) {
+                $validStart = $i;
+                break;
+            }
+        }
+        if ($validStart !== null && $n - $validStart >= $signal) {
+            $seedIndex = $validStart + $signal - 1;
+            $prev = array_sum(array_slice($macdLine, $validStart, $signal)) / $signal;
+            $signalLine[$seedIndex] = $prev;
+            $k = 2 / ($signal + 1);
+            for ($i = $seedIndex + 1; $i < $n; $i++) {
+                $prev = ($macdLine[$i] - $prev) * $k + $prev;
+                $signalLine[$i] = $prev;
+            }
+        }
+
+        $histogram = [];
+        for ($i = 0; $i < $n; $i++) {
+            $m = $macdLine[$i] ?? NAN;
+            $sg = $signalLine[$i] ?? NAN;
+            $histogram[$i] = (is_nan($m) || is_nan($sg)) ? NAN : $m - $sg;
+        }
+        return ['macd' => $macdLine, 'signal' => $signalLine, 'histogram' => $histogram];
+    }
 }
 
 // ============================================================================
@@ -5553,6 +5677,18 @@ final class ConfluenceProStrategy implements Strategy
             return $this->reject('خارج از بازه‌های زمانی پرحجم (Killzone)');
         }
 
+        // Off by default, same reasoning as the killzone gate above: ADX
+        // below the floor means price is chopping with no real trend
+        // behind it, which is exactly the condition every structure-based
+        // vote below is least reliable in -- but it silences a symbol
+        // outright, so it stays opt-in until tested. See Ta::adx().
+        if (Config::requireAdxFilter()) {
+            $adx = Ta::adx($candles);
+            if (!is_nan($adx) && $adx < Config::minAdx()) {
+                return $this->reject(sprintf('روند بازار ضعیف است (ADX %.1f کمتر از حداقل %.1f)', $adx, Config::minAdx()));
+            }
+        }
+
         // -- run every module once ------------------------------------------
         $setups = $this->setups->scan($candles);
         $wave = TrendWave::analyse($candles);
@@ -5677,6 +5813,25 @@ final class ConfluenceProStrategy implements Strategy
             $reasons[$sideST][] = sprintf('سوپرترند تطبیقی هم‌جهت (%.0f%% عملکرد اخیر)', $superTrend['confidence'] * 100);
         }
 
+        // MACD: histogram sign (momentum's own direction right now) agreeing
+        // with the MACD line sitting above/below its signal line (the
+        // crossover itself). Both conditions together, not just one, so a
+        // single stale crossover from many candles ago can't vote alone.
+        $closes = array_map(static fn(Candle $c) => $c->close, $candles);
+        $macd = Ta::macd($closes);
+        $macdLast = end($macd['macd']);
+        $macdSignalLast = end($macd['signal']);
+        $macdHistLast = end($macd['histogram']);
+        if (!is_nan($macdLast) && !is_nan($macdSignalLast) && !is_nan($macdHistLast)) {
+            if ($macdLast > $macdSignalLast && $macdHistLast > 0) {
+                $vote('long', 'momentum', Config::macdWeight());
+                $reasons['long'][] = 'مکدی بالای خط سیگنال با هیستوگرام مثبت';
+            } elseif ($macdLast < $macdSignalLast && $macdHistLast < 0) {
+                $vote('short', 'momentum', Config::macdWeight());
+                $reasons['short'][] = 'مکدی زیر خط سیگنال با هیستوگرام منفی';
+            }
+        }
+
         // A body-to-body volume imbalance or a clean displacement candle
         // in the setup's own direction, right at the current bar --
         // participation showing up as it happens, not after.
@@ -5751,6 +5906,23 @@ final class ConfluenceProStrategy implements Strategy
             $score += Config::trendWeight();
             $groups[$side]['htf'] += Config::trendWeight();
             $why[] = 'هم‌جهت با روند موج و میانگین‌ها';
+        }
+
+        // EMA200: a vote only, never a gate -- the wave/EMA check just above
+        // is already the hard trend requirement, and EMA200 needs a full
+        // 200 candles to mean anything at all (NAN before that, same as
+        // every other still-warming-up indicator in this file), so it must
+        // never be able to silence a setup the existing gate already
+        // passed on a symbol with a shorter history.
+        $ema200 = Ta::ema($closes, 200);
+        $ema200Last = end($ema200);
+        if (!is_nan($ema200Last)) {
+            $aboveEma200 = $price > $ema200Last;
+            if ($aboveEma200 === $isLong) {
+                $score += Config::ema200Weight();
+                $groups[$side]['htf'] += Config::ema200Weight();
+                $why[] = $isLong ? 'قیمت بالای EMA200 (روند بلندمدت صعودی)' : 'قیمت زیر EMA200 (روند بلندمدت نزولی)';
+            }
         }
 
         // -- don't chase a move that has already run ----------------------------

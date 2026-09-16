@@ -290,6 +290,49 @@ Fragment روی کانال کار می‌کند — پریمیوم بودن خو
 
 ---
 
+## اندیکاتورهای تازه (این آپدیت)
+
+اپراتور با یک لیست پیشنهادی (Trend Filter، Entry Confirmation، Market Strength، ATR
+Stop Loss، TP ساختاری) و یک زنجیرهٔ پیشنهادی (HTF Trend → Liquidity Sweep → BOS/CHoCH
+→ FVG Retest → VWAP → Volume Confirmation → ATR SL) خواست کامل‌تر بشه. بررسی این لیست
+نشون داد **بیشترش از قبل توی ربات هست**، فقط با اسم یا شکل دیگه:
+
+| خواسته | از قبل هست؟ | کجا |
+|---|---|---|
+| HTF Trend | ✅ | `higherTimeframeBias()` + `REQUIRE_HTF_ALIGNMENT` |
+| Liquidity Sweep | ✅ | `LiquidityEngine` |
+| BOS/CHoCH | ✅ | `MarketStructure::analyse()` |
+| FVG Retest | ✅ | `nearestFvgMitigation()` + `MIN_FVG_MITIGATION_PCT` |
+| VWAP | ✅ | `SetupScanner::VWAP` (بازپس‌گیری VWAP) |
+| Volume Confirmation | ✅ | `VolumeImbalanceEngine`, `DisplacementEngine` |
+| RSI | ✅ | `RsiReversalEngine` (نسخه تطبیقی، نه فقط ۳۰/۷۰ ثابت) |
+| ATR Stop Loss | ✅ | حد ضرر همیشه `ATR × ضریب پویا` (کم‌نوسان/عادی/پرنوسان) فراتر از ناحیه محافظ اضافه می‌شه — از قبل بهتر از یک ضریب ثابت بود |
+| EMA 200 / 50 | نصفه | فقط EMA ۹/۲۱/۵۰ بود، **EMA200 اضافه شد** |
+| MACD | ❌ | **اضافه شد** |
+| ADX | ❌ | **اضافه شد** |
+
+**سه مورد واقعاً جدید** (به همون سبک رأی‌گیری/سقف‌گروهی موجود — `ConfluenceProStrategy`،
+`signal.php`؛ هیچ رأی/گیت قبلی حذف یا جایگزین نشد):
+
+- **EMA200** (`Ta::ema($closes, 200)`): وقتی قیمت بالای EMA200 و سیگنال LONG باشه
+  (یا زیرش و SHORT باشه) امتیاز می‌گیره — فقط رأی، هیچ‌وقت گیت سخت (روی نمادهای با
+  تاریخچهٔ کوتاه‌تر از ۲۰۰ کندل ساکت می‌مونه، بدون رد کردن ستاپ).
+- **MACD** (`Ta::macd()`): وقتی خط مکدی بالای خط سیگنال باشه و هیستوگرام هم مثبت
+  باشه (یا برعکس برای SHORT) رأی می‌ده — گروه momentum، کنار Squeeze/RSI/SuperTrend.
+- **ADX** (`Ta::adx()`, فرمول کلاسیک وایلدر): فیلتر قدرت روند — **پیش‌فرض خاموش**، مثل
+  Killzone، چون می‌تونه یک نماد رو کاملاً ساکت کنه و باید دستی تست بشه. از پنل
+  (`🤖 اتومات → استراتژی و فیلترها → اجبار فیلتر قدرت روند`) روشن می‌شه؛ زیر
+  `MIN_ADX` (پیش‌فرض ۲۰) سیگنال رد می‌شه.
+
+**چیزی که عمداً اضافه نشد**: Volume Delta/CVD (فشار خرید/فروش واقعی) نیاز به داده
+معاملهٔ خام (trade-by-trade) داره که از کندل معمولی OHLCV در نمیاد — صرافی‌های این
+پروژه چنین API ای در دسترس ساده ندارن، برای همین این یکی اضافه نشد.
+
+تست شد: هر دو تابع (`Ta::adx`, `Ta::macd`) روی داده‌ی مصنوعی + کل مسیر واقعی
+`ConfluenceProStrategy::evaluate()` روی یک کندل‌سری کامل اجرا شد، بدون خطا.
+
+---
+
 ## رفع باگ (این آپدیت)
 
 بدون هیچ تغییری در منطق استراتژی (S/R، Order Block، FVG، Confluence، اهرم، تارگت‌ها):

@@ -918,6 +918,44 @@ final class Config
         return max(1, $override !== null ? (int) $override : Env::getInt('STRONG_ZONE_VETO_TOUCHES', 3));
     }
 
+    /** Points for the 200-period EMA agreeing with the trade's direction (long-horizon trend context). */
+    public static function ema200Weight(): float
+    {
+        return self::weight('CONFLUENCE_EMA200_WEIGHT', 8.0);
+    }
+
+    /** Points for MACD's histogram/line agreeing with the trade's direction. */
+    public static function macdWeight(): float
+    {
+        return self::weight('CONFLUENCE_MACD_WEIGHT', 8.0);
+    }
+
+    /**
+     * Off by default, same as requireKillzone() -- a market strength gate
+     * is a meaningful behaviour change (it can silence a symbol that would
+     * otherwise have qualified), so it stays opt-in until the operator has
+     * actually turned it on and watched what it does to signal frequency.
+     */
+    public static function requireAdxFilter(): bool
+    {
+        $override = self::dbOverride('REQUIRE_ADX_FILTER');
+        if ($override !== null) {
+            return in_array(strtolower($override), ['1', 'true', 'yes', 'on'], true);
+        }
+        return Env::getBool('REQUIRE_ADX_FILTER', false);
+    }
+
+    /**
+     * Below this, ADX reads "no real trend" -- 20 is the textbook floor
+     * (20-25 emerging, 25+ trending, 40+ strong). Only enforced when
+     * requireAdxFilter() is on.
+     */
+    public static function minAdx(): float
+    {
+        $override = self::dbOverride('MIN_ADX');
+        return $override !== null ? (float) $override : Env::getFloat('MIN_ADX', 20.0);
+    }
+
     /** Points for a nearby FVG price has meaningfully retraced into (see minFvgMitigationPercent). */
     public static function fvgMitigationWeight(): float
     {

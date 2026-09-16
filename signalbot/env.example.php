@@ -399,6 +399,14 @@ return [
     'REQUIRE_APLUS_SETUP' => 'false',
     'APLUS_MIN_CONFIRMATIONS' => '3',
 
+    // Market-strength gate: below MIN_ADX, price is chopping with no real
+    // trend behind it -- the condition every structure-based vote above is
+    // least reliable in. Off by default, same as REQUIRE_KILLZONE: it can
+    // silence a symbol outright, so it stays opt-in until tested. See
+    // Ta::adx() (signal.php) / ConfluenceProStrategy::evaluate().
+    'REQUIRE_ADX_FILTER' => 'false',
+    'MIN_ADX' => '20',
+
     // A manually-entered blackout window (free text, parsed with strtotime,
     // e.g. "2026-09-20 16:00") during which no new signal is generated at
     // all -- for a known high-impact release (CPI/FOMC/NFP/rate decision)

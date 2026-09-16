@@ -1110,6 +1110,9 @@ final class AdminPanel
         ['SMC Analytics', 'ساختار داخلی iBOS، سقف/کف برابر، خط تعادل', 'SmcContext'],
         ['Dynamic Deviation Channels', 'کانال EMA±ATR با فیلتر RSI', 'DeviationChannel'],
         ['SMC Confluence Suite', 'ناحیه OTE، Premium/Discount، هم‌جهتی تایم بالاتر', 'SmcContext'],
+        ['MACD', 'تقاطع خط مکدی با خط سیگنال + جهت هیستوگرام', 'Ta'],
+        ['EMA200', 'موقعیت قیمت نسبت به میانگین متحرک ۲۰۰ کندلی (روند بلندمدت)', 'Ta'],
+        ['ADX', 'قدرت روند — فیلتر اختیاری (REQUIRE_ADX_FILTER)، پیش‌فرض خاموش', 'Ta'],
     ];
 
     // -- Indicators ---------------------------------------------------
@@ -1496,6 +1499,8 @@ final class AdminPanel
         'HTF_CONFIRM_MAP'             => ['نقشه تایید تایم‌فریم بالاتر', 'هر تایم‌فریم ورودی با کدوم تایم‌فریم بالاتر تایید بشه، با کاما. مثال: 15m:1h,30m:2h,1h:4h,2h:4h,4h:1d'],
         'REQUIRE_APLUS_SETUP'         => ['اجبار فیلتر A+ Setup', 'true یا false — علاوه بر امتیاز هم‌گرایی، حداقل چند تاییدیه مستقل (HTF، جاروی نقدینگی، CHoCH/BOS، اوردر بلاک/FVG تازه، Retest، جابجایی+حجم، فاصله تا هدف) هم لازم می‌شه.'],
         'APLUS_MIN_CONFIRMATIONS'     => ['حداقل تاییدیه‌های A+', 'از ۷ تاییدیه مستقل، حداقل چندتاش لازمه. مثال: 5'],
+        'REQUIRE_ADX_FILTER'          => ['اجبار فیلتر قدرت روند (ADX)', 'true یا false — پیش‌فرض خاموش. وقتی روشنه، اگه ADX زیر MIN_ADX باشه (بازار بدون روند واقعی) سیگنال رد می‌شه.'],
+        'MIN_ADX'                     => ['حداقل ADX', 'فقط وقتی REQUIRE_ADX_FILTER روشنه اثر داره. مثال: 20 (زیر ۲۰ یعنی روند ضعیف/بدون روند)'],
         'NEWS_BLACKOUT_START'         => ['شروع سکوت خبری', 'تاریخ و ساعت شروع توقف سیگنال (مثلاً قبل از CPI/FOMC/NFP). خالی یعنی غیرفعال. مثال: 2026-09-20 16:00'],
         'NEWS_BLACKOUT_END'           => ['پایان سکوت خبری', 'تاریخ و ساعت پایان توقف سیگنال. خالی یعنی غیرفعال. مثال: 2026-09-20 17:00'],
         'SCANNER_GAINER_SHARE'        => ['سهم بیشترین رشد', 'درصد از لیست اسکن. مثال: 40'],
@@ -1536,6 +1541,7 @@ final class AdminPanel
             'CONFLUENCE_STRUCTURE_CAP', 'CONFLUENCE_LIQUIDITY_CAP', 'CONFLUENCE_LOCATION_CAP',
             'CONFLUENCE_MOMENTUM_CAP', 'CONFLUENCE_VOLUME_CAP', 'CONFLUENCE_HTF_CAP',
             'MIN_ROOM_TO_TARGET_R', 'HTF_CONFIRM_MAP', 'REQUIRE_APLUS_SETUP', 'APLUS_MIN_CONFIRMATIONS',
+            'REQUIRE_ADX_FILTER', 'MIN_ADX',
             'NEWS_BLACKOUT_START', 'NEWS_BLACKOUT_END',
         ]],
         'scanner' => ['اسکنر', [
@@ -2528,7 +2534,7 @@ final class AdminPanel
                         'MIN_VOLUME_USDT', 'ROTATION_BUDGET_SECONDS', 'MIN_FVG_MITIGATION_PCT', 'STRONG_ZONE_VETO_TOUCHES',
                         'CONFLUENCE_STRUCTURE_CAP', 'CONFLUENCE_LIQUIDITY_CAP', 'CONFLUENCE_LOCATION_CAP',
                         'CONFLUENCE_MOMENTUM_CAP', 'CONFLUENCE_VOLUME_CAP', 'CONFLUENCE_HTF_CAP',
-                        'MIN_ROOM_TO_TARGET_R', 'SYMBOL_LOSS_COOLDOWN_SECONDS', 'APLUS_MIN_CONFIRMATIONS'];
+                        'MIN_ROOM_TO_TARGET_R', 'SYMBOL_LOSS_COOLDOWN_SECONDS', 'APLUS_MIN_CONFIRMATIONS', 'MIN_ADX'];
             if (in_array($key, $numeric, true) && !is_numeric($value)) {
                 $this->telegram->sendMessage($chatId, "این مقدار باید عدد باشه.");
                 return true;
@@ -2579,7 +2585,7 @@ final class AdminPanel
                     return true;
                 }
             }
-            if (in_array($key, ['REQUIRE_REVERSAL_CANDLE', 'REQUIRE_KILLZONE', 'REQUIRE_FRESH_REVERSAL_ZONE', 'REQUIRE_SWEEP_AT_ZONE'], true)
+            if (in_array($key, ['REQUIRE_REVERSAL_CANDLE', 'REQUIRE_KILLZONE', 'REQUIRE_FRESH_REVERSAL_ZONE', 'REQUIRE_SWEEP_AT_ZONE', 'REQUIRE_ADX_FILTER'], true)
                 && !in_array(strtolower($value), ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'], true)) {
                 $this->telegram->sendMessage($chatId, "این مقدار باید true یا false باشه.");
                 return true;
