@@ -540,7 +540,11 @@ final class PersianShaper
         $ltrRun = [];
 
         foreach ($shaped as $ch) {
-            $isLtr = (bool) preg_match('/[0-9A-Za-z%\$\.,:\-\+\/]/u', $ch);
+            // Persian (۰-۹, U+06F0-06F9) and Arabic-Indic (٠-٩, U+0660-0669)
+            // digits are number runs too — without them here, each digit of
+            // a Persian number became its own single-character "run" and the
+            // whole thing came out reversed (e.g. "۱۵۰" as "۰۵۱").
+            $isLtr = (bool) preg_match('/[0-9A-Za-z%\$\.,:\-\+\/\x{06F0}-\x{06F9}\x{0660}-\x{0669}]/u', $ch);
             if ($isLtr) {
                 $ltrRun[] = $ch;
                 continue;
@@ -1761,9 +1765,9 @@ final class CardChrome
     }
 
     /** Width a chip will occupy — needed before drawing when a row is centered. */
-    public static function chipWidth(CardCanvas $c, string $label, ?string $icon, float $textSize, float $padding): float
+    public static function chipWidth(CardCanvas $c, string $label, ?string $icon, float $textSize, float $padding, float $tracking = 1.4, float $weight = 0.125): float
     {
-        $w = $c->textWidth($label, $textSize, 1.4, 0.125) + $padding * 2;
+        $w = $c->textWidth($label, $textSize, $tracking, $weight) + $padding * 2;
         if ($icon !== null && CardIcons::has($icon)) {
             $w += $textSize * 1.05 + 9;
         }
@@ -1792,7 +1796,12 @@ final class CardChrome
         float $weight = 0.125,
         bool $solid = false,
     ): float {
-        $w = self::chipWidth($c, $label, $icon, $textSize, $padding);
+        // Sized with this same call's own tracking/weight — chipWidth()
+        // used to always measure at the 1.4/0.125 defaults regardless of
+        // what was actually passed here, so a caller using a different
+        // tracking (ResultCard's symbol chip passes 1.3) got a pill and an
+        // $x advance sized for text a bit wider than what was drawn.
+        $w = self::chipWidth($c, $label, $icon, $textSize, $padding, $tracking, $weight);
 
         // On a black card there are only two kinds of pill: one filled
         // solid white with black type — which is as loud as this design
@@ -1973,8 +1982,15 @@ final class CardChrome
     {
         $r = $h / 2;
         $c->roundRect($x, $y, $w, $h, $r, CardPalette::GLASS, $trackOpacity);
-        $fillW = max($h, $w * max(0.0, min(1.0, $pct / 100)));
-        $c->roundRect($x, $y, $fillW, $h, $r, $rgb, 0.88);
+        $pctClamped = max(0.0, min(1.0, $pct / 100));
+        // A literal 0% must draw no fill at all — flooring the width at $h
+        // unconditionally (the old behaviour) drew a solid pill-width sliver
+        // even at 0%, misleadingly implying non-zero progress. Same 0.3*h
+        // threshold ratioBar() already uses for the same reason.
+        if ($w * $pctClamped > $h * 0.3) {
+            $fillW = max($h, $w * $pctClamped);
+            $c->roundRect($x, $y, $fillW, $h, $r, $rgb, 0.88);
+        }
     }
 
     /**
