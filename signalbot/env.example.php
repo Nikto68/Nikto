@@ -137,7 +137,7 @@ return [
     'TP2_LEVERAGED_PCT' => '50',
     'TP3_LEVERAGED_PCT' => '90',
     'TP4_LEVERAGED_PCT' => '160',
-    'MAX_STOP_LEVERAGED_PCT' => '30',
+    'MAX_STOP_LEVERAGED_PCT' => '35',
 
     // On TP1: move the stop to entry and announce the trade as risk free.
     'RISK_FREE_ENABLED' => 'true',
@@ -187,12 +187,12 @@ return [
     // ---------------------------------------------------------------------
     // These coins get the high-leverage tier.
     'LEVERAGE_MAJOR_ASSETS' => 'BTC,ETH',
-    'LEVERAGE_MAJOR' => '20',
+    'LEVERAGE_MAJOR' => '15',
 
     // Everything else lands inside this band automatically, by liquidity and
     // volatility: deep + calm books earn the top, thin or wild ones the
     // bottom. Low-cap/meme pairs are additionally capped below the top.
-    'LEVERAGE_ALT_MIN' => '20',
+    'LEVERAGE_ALT_MIN' => '8',
     'LEVERAGE_ALT_MAX' => '25',
 
     // Fraction of the liquidation distance the stop is allowed to use — a
@@ -242,7 +242,7 @@ return [
     // again the same way if the vote list, the group caps, or a hard gate
     // upstream of the score check changes.
     // ---------------------------------------------------------------------
-    'MIN_CONFLUENCE_SCORE' => '75',
+    'MIN_CONFLUENCE_SCORE' => '80',
     'CONFLUENCE_SETUP_WEIGHT' => '18',      // each of the six entry setups
     'CONFLUENCE_RANGE_WEIGHT' => '16',      // qualified range breakout
     'CONFLUENCE_STRUCTURE_WEIGHT' => '14',  // BOS / CHoCH
@@ -431,7 +431,7 @@ return [
     'RISK_PER_TRADE_PCT' => '2',
     // The daily circuit breaker: after this many stop-outs, or this many
     // published signals, the bot goes quiet until tomorrow. 0 = no cap.
-    'MAX_DAILY_LOSSES' => '3',
+    'MAX_DAILY_LOSSES' => '5',
     'MAX_DAILY_SIGNALS' => '8',
 
     // ---------------------------------------------------------------------
