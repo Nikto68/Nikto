@@ -52,11 +52,18 @@ define('REPORT_WEBHOOK_SECRET', 'یک رشته‌ی تصادفیِ بلند'); /
 
 ### ۲) ثبتِ Webhook
 
-بعدِ آپلودِ پوشه روی هاست (با HTTPS معتبر):
+بعدِ آپلودِ پوشه روی هاست (با HTTPS معتبر)، یکی از این دو راه:
 
+**اگر SSH/CLI دارید:**
 ```bash
 php report_bot/tools/set_webhook.php https://yourdomain.com/report_bot/webhook.php
 ```
+
+**اگر فقط هاستِ اشتراکی/FTP دارید (بدونِ SSH):** همین آدرس را در مرورگر باز کنید (مقدارِ `key` را از `REPORT_WEBHOOK_SECRET` داخلِ `config.local.php` بردارید):
+```
+https://yourdomain.com/report_bot/tools/set_webhook.php?url=https://yourdomain.com/report_bot/webhook.php&key=REPORT_WEBHOOK_SECRETِ‌شما
+```
+خروجی باید `"ok": true` باشد. بدونِ `key`ِ درست این آدرس هیچ کاری نمی‌کند، ولی بهتر است بعدِ استفاده، پوشه‌ی `tools/` را از روی هاست پاک یا rename کنید.
 
 ### ۳) گروه و کانال
 
