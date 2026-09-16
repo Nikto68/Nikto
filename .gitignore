@@ -3,3 +3,5 @@ data_master/
 *.log
 preview_*.php
 dist/
+report_bot/config.local.php
+report_bot/data/
