@@ -45,6 +45,7 @@ function reportDispatchCallback(array $cq): void {
             'startphotodel'  => 'handleAdminStartPhotoDelete',
             'adm:starttext'  => 'handleAdminStartText',
             'adm:group'      => 'handleAdminGroup',
+            'adm:supportgroup' => 'handleAdminSupportGroup',
             'adm:channel'    => 'handleAdminChannel',
             'adm:status'     => 'handleAdminStatus',
         ];
@@ -69,8 +70,9 @@ function reportDispatchMessage(array $msg): void {
 
     if ($chat['type'] !== 'private') {
         if (strncmp($text, '/setreporttopic', 15) === 0) { handleSetReportTopicCommand($msg); return; }
+        if (strncmp($text, '/setsupporttopic', 16) === 0) { handleSetSupportTopicCommand($msg); return; }
         if (isset($msg['from']) && reportIsAdmin($msg['from']['id']) && isset($msg['reply_to_message'])) {
-            handleAdminReportReply($msg);
+            if (!handleAdminReportReply($msg)) handleAdminSupportGroupReply($msg);
         }
         return;
     }
@@ -93,8 +95,6 @@ function reportDispatchMessage(array $msg): void {
             case 'admin_await_channel':     handleAdminChannelMessage($msg, $st); return;
         }
     }
-
-    if (reportIsAdmin($uid) && handleAdminSupportReply($msg)) return;
 
     handleStartCommand($msg);
 }

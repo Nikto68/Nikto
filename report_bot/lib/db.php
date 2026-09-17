@@ -72,12 +72,12 @@ function reportEnsureSchema(SQLite3 $db): void {
         updated_at INTEGER NOT NULL
     )");
 
-    $db->exec("CREATE TABLE IF NOT EXISTS support_threads (
-        admin_chat_id INTEGER NOT NULL,
-        admin_message_id INTEGER NOT NULL,
+    $db->exec("CREATE TABLE IF NOT EXISTS support_group_threads (
+        group_chat_id INTEGER NOT NULL,
+        group_message_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
         created_at INTEGER NOT NULL,
-        PRIMARY KEY (admin_chat_id, admin_message_id)
+        PRIMARY KEY (group_chat_id, group_message_id)
     )");
 
     $db->exec("CREATE TABLE IF NOT EXISTS alert_throttle (
@@ -135,6 +135,23 @@ function submissionGet(int $id): ?array {
 
 function submissionFindByGroupMessage(int $groupChatId, int $groupMessageId): ?array {
     $stmt = reportDb()->prepare('SELECT * FROM submissions WHERE group_chat_id = :c AND group_message_id = :m');
+    $stmt->bindValue(':c', $groupChatId, SQLITE3_INTEGER);
+    $stmt->bindValue(':m', $groupMessageId, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    return $row ?: null;
+}
+
+function supportThreadCreate(int $groupChatId, int $groupMessageId, int $userId): void {
+    $stmt = reportDb()->prepare('INSERT OR REPLACE INTO support_group_threads (group_chat_id, group_message_id, user_id, created_at) VALUES (:c, :m, :u, :t)');
+    $stmt->bindValue(':c', $groupChatId, SQLITE3_INTEGER);
+    $stmt->bindValue(':m', $groupMessageId, SQLITE3_INTEGER);
+    $stmt->bindValue(':u', $userId, SQLITE3_INTEGER);
+    $stmt->bindValue(':t', time(), SQLITE3_INTEGER);
+    $stmt->execute();
+}
+
+function supportThreadFindByGroupMessage(int $groupChatId, int $groupMessageId): ?array {
+    $stmt = reportDb()->prepare('SELECT * FROM support_group_threads WHERE group_chat_id = :c AND group_message_id = :m');
     $stmt->bindValue(':c', $groupChatId, SQLITE3_INTEGER);
     $stmt->bindValue(':m', $groupMessageId, SQLITE3_INTEGER);
     $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);

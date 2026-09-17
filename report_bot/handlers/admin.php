@@ -35,7 +35,7 @@ function kbTagsList(): array {
         ];
     }
     $rows[] = [['text' => '➕ افزودن تگ', 'callback_data' => 'tagadd']];
-    $rows[] = [['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'adm:menu']];
+    $rows[] = [emojiBtn('btn_back', 'بازگشت', 'adm:menu')];
     return ['inline_keyboard' => $rows];
 }
 
@@ -100,7 +100,7 @@ function kbEmojiList(): array {
             ['text' => '↩️ پیش‌فرض', 'callback_data' => 'emoclr:' . $slot],
         ];
     }
-    $rows[] = [['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'adm:menu']];
+    $rows[] = [emojiBtn('btn_back', 'بازگشت', 'adm:menu')];
     return ['inline_keyboard' => $rows];
 }
 
@@ -158,7 +158,7 @@ function handleAdminStartPhoto(array $cq): void {
 
     $rows = [];
     if ($cur) $rows[] = [['text' => '🗑 حذف عکس فعلی', 'callback_data' => 'startphotodel']];
-    $rows[] = [['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'adm:menu']];
+    $rows[] = [emojiBtn('btn_back', 'بازگشت', 'adm:menu')];
 
     stateSet($uid, 'admin_await_start_photo', ['prompt' => $a]);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '🖼 یک عکس بفرستید.', [], ['inline_keyboard' => $rows]);
@@ -255,6 +255,42 @@ function handleSetReportTopicCommand(array $msg): void {
     tgSendMessage($chat['id'], '✅ این گروه/تاپیک به‌عنوان مقصد گزارش‌ها تنظیم شد.', [], $opts);
 }
 
+// ---- گروه/تاپیک پشتیبانی ----
+
+function handleAdminSupportGroup(array $cq): void {
+    if (!requireAdminCq($cq)) return;
+    $gid = settingGet('support_group_id');
+    $tid = settingGet('support_topic_id');
+    $status = $gid ? "\n\nگروه: $gid" . ($tid ? " · تاپیک: $tid" : '') : '';
+
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'],
+        "📨 داخل گروه/تاپیکِ موردنظر دستور زیر را بفرستید:\n/setsupporttopic$status",
+        [], kbBackToAdmin());
+    tgAnswerCallback($cq['id']);
+}
+
+function handleSetSupportTopicCommand(array $msg): void {
+    $uid = isset($msg['from']) ? (int)$msg['from']['id'] : 0;
+    if (!reportIsAdmin($uid)) return;
+
+    $chat = $msg['chat'];
+    if (!in_array($chat['type'], ['group', 'supergroup'], true)) {
+        tgSendMessage($chat['id'], '⚠️ این دستور را باید داخل گروه بفرستید.');
+        return;
+    }
+
+    settingSet('support_group_id', $chat['id']);
+    $opts = [];
+    if (isset($msg['message_thread_id'])) {
+        settingSet('support_topic_id', $msg['message_thread_id']);
+        $opts['message_thread_id'] = $msg['message_thread_id'];
+    } else {
+        settingDel('support_topic_id');
+    }
+    tgSendMessage($chat['id'], '✅ این گروه/تاپیک به‌عنوان مقصد پشتیبانی تنظیم شد.', [], $opts);
+}
+
 // ---- کانال مقصد ----
 
 function handleAdminChannel(array $cq): void {
@@ -308,6 +344,8 @@ function handleAdminStatus(array $cq): void {
     if (!requireAdminCq($cq)) return;
     $gid = settingGet('report_group_id', '—');
     $tid = settingGet('report_topic_id', '—');
+    $sgid = settingGet('support_group_id', '—');
+    $stid = settingGet('support_topic_id', '—');
     $cid = settingGet('report_channel_id', '—');
     $tags = count(tagGetAll());
     $emojiCount = 0;
@@ -315,7 +353,8 @@ function handleAdminStatus(array $cq): void {
     $photo = settingGet('start_photo_file_id') ? 'دارد' : 'ندارد';
 
     $text = "ℹ️ وضعیت\n\n" .
-        "گروه: $gid · تاپیک: $tid\n" .
+        "گروه گزارش: $gid · تاپیک: $tid\n" .
+        "گروه پشتیبانی: $sgid · تاپیک: $stid\n" .
         "کانال: $cid\n" .
         "تگ‌ها: $tags\n" .
         "ایموجی پریمیوم: $emojiCount از " . count(EMOJI_SLOTS) . "\n" .

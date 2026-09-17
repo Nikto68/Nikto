@@ -3,19 +3,19 @@
 function kbStart(bool $isAdmin): array {
     $rows = [
         [
-            ['text' => trim(emojiButtonChar('btn_report') . ' ارسال گزارش'), 'callback_data' => 'rep:new'],
-            ['text' => trim(emojiButtonChar('btn_support') . ' ارتباط با پشتیبانی'), 'callback_data' => 'sup:new'],
+            emojiBtn('btn_report', 'ارسال گزارش', 'rep:new', 'primary'),
+            emojiBtn('btn_support', 'ارتباط با پشتیبانی', 'sup:new', 'primary'),
         ],
-        [['text' => trim(emojiButtonChar('btn_account') . ' حساب کاربری'), 'callback_data' => 'acc:view']],
+        [emojiBtn('btn_account', 'حساب کاربری', 'acc:view', 'primary')],
     ];
     if ($isAdmin) {
-        $rows[] = [['text' => trim(emojiButtonChar('admin_prefix') . ' پنل مدیریت'), 'callback_data' => 'adm:menu']];
+        $rows[] = [emojiBtn('admin_prefix', 'پنل مدیریت', 'adm:menu')];
     }
     return ['inline_keyboard' => $rows];
 }
 
 function kbBack(): array {
-    return ['inline_keyboard' => [[['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'nav:back']]]];
+    return ['inline_keyboard' => [[emojiBtn('btn_back', 'بازگشت', 'nav:back')]]];
 }
 
 function kbReview(int $submissionId, array $tags, ?int $selectedTagId, bool $decided): array {
@@ -30,8 +30,8 @@ function kbReview(int $submissionId, array $tags, ?int $selectedTagId, bool $dec
 
     if (!$decided) {
         $rows[] = [
-            ['text' => trim(emojiButtonChar('btn_approve') . ' تایید'), 'callback_data' => "ap:$submissionId"],
-            ['text' => trim(emojiButtonChar('btn_reject') . ' رد'), 'callback_data' => "rj:$submissionId"],
+            emojiBtn('btn_approve', 'تایید', "ap:$submissionId", 'success'),
+            emojiBtn('btn_reject', 'رد', "rj:$submissionId", 'danger'),
         ];
     }
     return ['inline_keyboard' => $rows];
@@ -44,11 +44,12 @@ function kbAdminMenu(): array {
         [['text' => '🖼 عکس پیام خوش‌آمد', 'callback_data' => 'adm:startphoto']],
         [['text' => '✏️ متن پیام خوش‌آمد', 'callback_data' => 'adm:starttext']],
         [['text' => '👥 گروه/تاپیک گزارش', 'callback_data' => 'adm:group']],
+        [['text' => '📨 گروه/تاپیک پشتیبانی', 'callback_data' => 'adm:supportgroup']],
         [['text' => '📢 کانال مقصد', 'callback_data' => 'adm:channel']],
         [['text' => 'ℹ️ وضعیت تنظیمات', 'callback_data' => 'adm:status']],
     ]];
 }
 
 function kbBackToAdmin(): array {
-    return ['inline_keyboard' => [[['text' => trim(emojiButtonChar('btn_back') . ' بازگشت'), 'callback_data' => 'adm:menu']]]];
+    return ['inline_keyboard' => [[emojiBtn('btn_back', 'بازگشت', 'adm:menu')]]];
 }

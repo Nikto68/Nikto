@@ -1,5 +1,9 @@
 <?php
-/** روی متنِ دکمه‌ها تلگرام entity قبول نمی‌کند؛ گرافیکِ پریمیوم فقط در متن/کپشن دیده می‌شود. */
+/**
+ * از Bot API 9.4، آیکونِ ایموجیِ پریمیوم روی دکمه هم با icon_custom_emoji_id
+ * قابل‌نمایشه — اما فقط وقتی مالکِ ربات پریمیوم داره یا ربات یوزرنیمِ
+ * خریداری‌شده از Fragment داره؛ وگرنه تلگرام آیکون را نشان نمی‌دهد.
+ */
 
 const REPORT_EMOJI_DEFAULTS = [
     'btn_report'   => '📮',
@@ -61,6 +65,14 @@ function emojiTextPart(string $slot): array {
     return ['text' => $e['char'], 'entities' => []];
 }
 
-function emojiButtonChar(string $slot): string {
-    return emojiGet($slot)['char'];
+function emojiBtn(string $slot, string $label, string $callbackData, ?string $style = null): array {
+    $e = emojiGet($slot);
+    $btn = ['text' => $label, 'callback_data' => $callbackData];
+    if ($e['id']) {
+        $btn['icon_custom_emoji_id'] = $e['id'];
+    } else {
+        $btn['text'] = trim($e['char'] . ' ' . $label);
+    }
+    if ($style) $btn['style'] = $style;
+    return $btn;
 }

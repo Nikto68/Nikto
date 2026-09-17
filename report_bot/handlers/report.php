@@ -4,7 +4,7 @@ function handleReportNew(array $cq): void {
     $uid = (int)$cq['from']['id'];
     $a = screenAnchorFromCq($cq);
     stateSet($uid, 'awaiting_report', ['prompt' => $a]);
-    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '📎 عکس یا ویدیوی گزارش را ارسال کنید.', [], kbBack());
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '📎 متن، عکس یا ویدیوی گزارش را ارسال کنید.', [], kbBack());
     tgAnswerCallback($cq['id']);
 }
 
@@ -21,7 +21,31 @@ function extractReportMedia(array $msg): ?array {
             return ['type' => 'document', 'file_id' => $msg['document']['file_id']];
         }
     }
+    if (!empty($msg['text'])) return ['type' => 'text', 'file_id' => null];
     return null;
+}
+
+/** پستِ گروه را ویرایش می‌کند — برایِ گزارشِ متنی editMessageText لازم است، نه editMessageCaption. */
+function editGroupPost(array $sub, string $text, array $entities, array $opts = []) {
+    if ($sub['media_type'] === 'text') {
+        return tgEditMessageText((int)$sub['group_chat_id'], (int)$sub['group_message_id'], $text, $entities, $opts);
+    }
+    return tgEditCaption((int)$sub['group_chat_id'], (int)$sub['group_message_id'], $text, $entities, $opts);
+}
+
+/** محتوایِ یک submission را (متن یا رسانه) به یک چت می‌فرستد؛ متن‌ها sendMessage می‌شوند چون copyMessage کپشن را فقط روی رسانه می‌پذیرد. */
+function postSubmissionContent(array $sub, int $toChatId, array $capBuilt, array $extraOpts = []) {
+    if ($sub['media_type'] === 'text') {
+        return tgCall('sendMessage', array_merge([
+            'chat_id' => $toChatId,
+            'text' => $capBuilt['text'] !== '' ? $capBuilt['text'] : '.',
+            'entities' => $capBuilt['entities'] ?: null,
+        ], $extraOpts));
+    }
+    return tgCopyMessage($toChatId, (int)$sub['src_chat_id'], (int)$sub['src_message_id'], array_merge([
+        'caption' => $capBuilt['text'] !== '' ? $capBuilt['text'] : null,
+        'caption_entities' => $capBuilt['entities'] ?: null,
+    ], $extraOpts));
 }
 
 function handleReportMedia(array $msg, array $st = []): void {
@@ -34,7 +58,7 @@ function handleReportMedia(array $msg, array $st = []): void {
 
     $media = extractReportMedia($msg);
     if (!$media) {
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ فقط عکس یا ویدیو ارسال کنید.', [], kbBack());
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ فقط متن، عکس یا ویدیو ارسال کنید.', [], kbBack());
         return;
     }
 
@@ -46,8 +70,8 @@ function handleReportMedia(array $msg, array $st = []): void {
         return;
     }
 
-    $caption = $msg['caption'] ?? '';
-    $captionEntities = $msg['caption_entities'] ?? [];
+    $caption = $msg['caption'] ?? ($msg['text'] ?? '');
+    $captionEntities = $msg['caption_entities'] ?? ($msg['entities'] ?? []);
 
     $db = reportDb();
     $stmt = $db->prepare('INSERT INTO submissions
@@ -70,14 +94,10 @@ function handleReportMedia(array $msg, array $st = []): void {
     $kb = kbReview($subId, tagGetAll(), null, false);
 
     $topicId = settingGet('report_topic_id');
-    $copyOpts = [
-        'caption' => $capBuilt['text'] !== '' ? $capBuilt['text'] : null,
-        'caption_entities' => $capBuilt['entities'] ?: null,
-        'reply_markup' => $kb,
-    ];
-    if ($topicId) $copyOpts['message_thread_id'] = (int)$topicId;
+    $postOpts = ['reply_markup' => $kb];
+    if ($topicId) $postOpts['message_thread_id'] = (int)$topicId;
 
-    $res = tgCopyMessage((int)$groupId, $chatId, $msg['message_id'], $copyOpts);
+    $res = postSubmissionContent($sub, (int)$groupId, $capBuilt, $postOpts);
 
     if (empty($res['ok'])) {
         screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ ثبتِ گزارش ناموفق بود؛ دوباره تلاش کنید.', [], kbStart(reportIsAdmin($uid)));
@@ -116,7 +136,7 @@ function handleTagPick(array $cq, int $subId, int $tagId): void {
     $sub['tag_id'] = $newTag;
 
     $cap = buildGroupCaption($sub);
-    tgEditCaption((int)$sub['group_chat_id'], (int)$sub['group_message_id'], $cap['text'], $cap['entities'], [
+    editGroupPost($sub, $cap['text'], $cap['entities'], [
         'reply_markup' => kbReview($subId, tagGetAll(), $newTag, false),
     ]);
     tgAnswerCallback($cq['id'], $newTag ? 'برچسب ثبت شد.' : 'برچسب برداشته شد.');
@@ -153,10 +173,7 @@ function handleDecision(array $cq, string $action, int $subId): void {
         }
 
         $cap = buildChannelCaption($sub);
-        $res = tgCopyMessage((int)$channelId, (int)$sub['src_chat_id'], (int)$sub['src_message_id'], [
-            'caption' => $cap['text'] !== '' ? $cap['text'] : null,
-            'caption_entities' => $cap['entities'] ?: null,
-        ]);
+        $res = postSubmissionContent($sub, (int)$channelId, $cap);
 
         if (empty($res['ok'])) {
             tgAnswerCallback($cq['id'], 'ارسال به کانال ناموفق بود.', true);
@@ -179,7 +196,7 @@ function handleDecision(array $cq, string $action, int $subId): void {
     }
 
     $cap = buildGroupCaption($sub);
-    tgEditCaption((int)$sub['group_chat_id'], (int)$sub['group_message_id'], $cap['text'], $cap['entities'], [
+    editGroupPost($sub, $cap['text'], $cap['entities'], [
         'reply_markup' => kbReview($subId, tagGetAll(), $sub['tag_id'] ? (int)$sub['tag_id'] : null, true),
     ]);
 }
