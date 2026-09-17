@@ -5,6 +5,7 @@ function reportDb(): SQLite3 {
 
     if (!is_dir(REPORT_DATA_DIR)) mkdir(REPORT_DATA_DIR, 0775, true);
     $db = new SQLite3(REPORT_DATA_DIR . '/report.sqlite3');
+    $db->enableExceptions(true);
     $db->busyTimeout(5000);
     $db->exec('PRAGMA journal_mode = WAL');
     reportEnsureSchema($db);
@@ -29,6 +30,12 @@ function reportEnsureSchema(SQLite3 $db): void {
         slot TEXT PRIMARY KEY,
         custom_emoji_id TEXT NOT NULL,
         placeholder TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS button_style (
+        slot TEXT PRIMARY KEY,
+        style TEXT NOT NULL,
         updated_at INTEGER NOT NULL
     )");
 

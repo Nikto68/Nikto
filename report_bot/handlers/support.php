@@ -4,7 +4,8 @@ function handleSupportNew(array $cq): void {
     $uid = (int)$cq['from']['id'];
     $a = screenAnchorFromCq($cq);
     stateSet($uid, 'awaiting_support', ['prompt' => $a]);
-    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '💬 پیام خود را برای پشتیبانی بفرستید.', [], kbBack());
+    $t = botText('support_prompt');
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], $t['text'], $t['entities'], kbBack());
     tgAnswerCallback($cq['id']);
 }
 
@@ -18,7 +19,8 @@ function handleSupportMessage(array $msg, array $st = []): void {
 
     $groupId = settingGet('support_group_id');
     if (!$groupId) {
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⛔️ پشتیبانی موقتاً در دسترس نیست.', [], kbStart(reportIsAdmin($uid)));
+        $t = botText('support_disabled');
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
         reportAdminAlertOnce('no_support_group', '⚠️ گروه/تاپیکِ پشتیبانی تنظیم نشده.');
         stateClear($uid);
         return;
@@ -37,13 +39,15 @@ function handleSupportMessage(array $msg, array $st = []): void {
 
     stateClear($uid);
     if (empty($res['ok'])) {
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ ارسالِ پیام ناموفق بود؛ دوباره تلاش کنید.', [], kbStart(reportIsAdmin($uid)));
+        $t = botText('support_send_failed');
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
         reportAdminAlertOnce('support_copy_fail', '⚠️ ارسالِ پیامِ پشتیبانی به گروه ناموفق بود: ' . ($res['description'] ?? ''));
         return;
     }
 
     supportThreadCreate((int)$groupId, (int)$res['result']['message_id'], $uid);
-    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ پیام شما برای پشتیبانی ارسال شد.', [], kbStart(reportIsAdmin($uid)));
+    $t = botText('support_sent');
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
 }
 
 function handleAdminSupportGroupReply(array $msg): bool {
@@ -56,7 +60,8 @@ function handleAdminSupportGroupReply(array $msg): bool {
     if (!$thread) return false;
 
     $userId = (int)$thread['user_id'];
-    tgSendMessage($userId, '👨‍💻 پاسخ پشتیبانی:');
+    $t = botText('support_reply_prefix');
+    tgSendMessage($userId, $t['text'], $t['entities']);
     tgCopyMessage($userId, (int)$msg['chat']['id'], $msg['message_id']);
     return true;
 }

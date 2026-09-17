@@ -1,6 +1,7 @@
 <?php
 
-const EMOJI_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_back', 'btn_approve', 'btn_reject', 'start_prefix', 'admin_prefix'];
+const EMOJI_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_guide', 'btn_back', 'btn_approve', 'btn_reject', 'start_prefix', 'admin_prefix'];
+const BUTTON_STYLE_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_guide', 'btn_approve', 'btn_reject', 'admin_prefix'];
 
 function requireAdminCq(array $cq): bool {
     if (!reportIsAdmin($cq['from']['id'])) {
@@ -217,6 +218,146 @@ function handleAdminStartTextMessage(array $msg, array $st = []): void {
     settingSet('start_text_entities', json_encode($msg['entities'] ?? [], JSON_UNESCAPED_UNICODE));
     stateClear($uid);
     screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbAdminMenu());
+}
+
+// ---- عکس راهنما ----
+
+function handleAdminGuidePhoto(array $cq): void {
+    if (!requireAdminCq($cq)) return;
+    $uid = (int)$cq['from']['id'];
+    $a = screenAnchorFromCq($cq);
+    $cur = settingGet('guide_photo_file_id');
+
+    $rows = [];
+    if ($cur) $rows[] = [['text' => '🗑 حذف عکس فعلی', 'callback_data' => 'guidephotodel']];
+    $rows[] = [emojiBtn('btn_back', 'بازگشت', 'adm:menu')];
+
+    stateSet($uid, 'admin_await_guide_photo', ['prompt' => $a]);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '📖 یک عکس بفرستید.', [], ['inline_keyboard' => $rows]);
+    tgAnswerCallback($cq['id']);
+}
+
+function handleAdminGuidePhotoMessage(array $msg, array $st = []): void {
+    $uid = (int)$msg['from']['id'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? (int)$msg['chat']['id'];
+    $anchorMsg = $prompt['message_id'] ?? null;
+    $anchorPhoto = $prompt['has_photo'] ?? false;
+
+    if (empty($msg['photo'])) {
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ لطفاً یک عکس بفرستید.', [], kbBack());
+        return;
+    }
+    $fileId = end($msg['photo'])['file_id'];
+    settingSet('guide_photo_file_id', $fileId);
+    stateClear($uid);
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbAdminMenu());
+}
+
+function handleAdminGuidePhotoDelete(array $cq): void {
+    if (!requireAdminCq($cq)) return;
+    settingDel('guide_photo_file_id');
+    tgAnswerCallback($cq['id'], 'حذف شد.');
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✅ عکسِ راهنما حذف شد.', [], kbAdminMenu());
+}
+
+// ---- متن‌های ربات ----
+
+function kbTextsList(): array {
+    $rows = [];
+    $rows[] = [
+        ['text' => '👋 پیام خوش‌آمد', 'callback_data' => 'noop'],
+        ['text' => '✏️ تغییر', 'callback_data' => 'adm:starttext'],
+    ];
+    foreach (REPORT_TEXT_KEYS as $key) {
+        $rows[] = [['text' => REPORT_TEXT_LABELS[$key] ?? $key, 'callback_data' => 'noop']];
+        $rows[] = [
+            ['text' => '✏️ تغییر', 'callback_data' => 'txted:' . $key],
+            ['text' => '↩️ پیش‌فرض', 'callback_data' => 'txtclr:' . $key],
+        ];
+    }
+    $rows[] = [emojiBtn('btn_back', 'بازگشت', 'adm:menu')];
+    return ['inline_keyboard' => $rows];
+}
+
+function handleAdminTexts(array $cq): void {
+    if (!requireAdminCq($cq)) return;
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✏️ متن‌های ربات', [], kbTextsList());
+    tgAnswerCallback($cq['id']);
+}
+
+function handleAdminTextEdit(array $cq, string $key): void {
+    if (!requireAdminCq($cq)) return;
+    if (!in_array($key, REPORT_TEXT_KEYS, true)) { tgAnswerCallback($cq['id'], 'نامعتبر.', true); return; }
+    $uid = (int)$cq['from']['id'];
+    $a = screenAnchorFromCq($cq);
+    stateSet($uid, 'admin_await_text', ['key' => $key, 'prompt' => $a]);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✏️ متن جدید را بفرستید.', [], kbBack());
+    tgAnswerCallback($cq['id']);
+}
+
+function handleAdminTextEditMessage(array $msg, string $key, array $st = []): void {
+    $uid = (int)$msg['from']['id'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? (int)$msg['chat']['id'];
+    $anchorMsg = $prompt['message_id'] ?? null;
+    $anchorPhoto = $prompt['has_photo'] ?? false;
+
+    if (!in_array($key, REPORT_TEXT_KEYS, true)) { stateClear($uid); return; }
+
+    $text = $msg['text'] ?? '';
+    if (trim($text) === '') {
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است.', [], kbBack());
+        return;
+    }
+    textSet($key, $text, $msg['entities'] ?? []);
+    stateClear($uid);
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbTextsList());
+}
+
+function handleAdminTextClear(array $cq, string $key): void {
+    if (!requireAdminCq($cq)) return;
+    if (!in_array($key, REPORT_TEXT_KEYS, true)) { tgAnswerCallback($cq['id'], 'نامعتبر.', true); return; }
+    textClear($key);
+    tgAnswerCallback($cq['id'], 'به پیش‌فرض برگشت.');
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✏️ متن‌های ربات', [], kbTextsList());
+}
+
+// ---- رنگ دکمه‌ها ----
+
+function kbColorsList(): array {
+    $rows = [];
+    foreach (BUTTON_STYLE_SLOTS as $slot) {
+        $cur = styleGet($slot);
+        $curLabel = REPORT_STYLE_CHOICES[$cur ?? ''] ?? 'پیش‌فرضِ کد';
+        $rows[] = [['text' => emojiSlotLabel($slot) . ' — ' . $curLabel, 'callback_data' => 'noop']];
+        $row = [];
+        foreach (REPORT_STYLE_CHOICES as $val => $label) {
+            $row[] = ['text' => $label, 'callback_data' => 'stset:' . $slot . ':' . ($val === '' ? 'none' : $val)];
+        }
+        $rows[] = $row;
+    }
+    $rows[] = [emojiBtn('btn_back', 'بازگشت', 'adm:menu')];
+    return ['inline_keyboard' => $rows];
+}
+
+function handleAdminColors(array $cq): void {
+    if (!requireAdminCq($cq)) return;
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '🎨 رنگ دکمه‌ها', [], kbColorsList());
+    tgAnswerCallback($cq['id']);
+}
+
+function handleAdminColorSet(array $cq, string $slot, string $val): void {
+    if (!requireAdminCq($cq)) return;
+    if (!in_array($slot, BUTTON_STYLE_SLOTS, true)) { tgAnswerCallback($cq['id'], 'نامعتبر.', true); return; }
+    styleSet($slot, $val === 'none' ? '' : $val);
+    tgAnswerCallback($cq['id'], 'ذخیره شد.');
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '🎨 رنگ دکمه‌ها', [], kbColorsList());
 }
 
 // ---- گروه/تاپیک گزارش ----

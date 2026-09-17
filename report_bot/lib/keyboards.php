@@ -2,6 +2,7 @@
 
 function kbStart(bool $isAdmin): array {
     $rows = [
+        [emojiBtn('btn_guide', 'راهنما', 'gd:view')],
         [
             emojiBtn('btn_report', 'ارسال گزارش', 'rep:new', 'primary'),
             emojiBtn('btn_support', 'ارتباط با پشتیبانی', 'sup:new', 'primary'),
@@ -16,6 +17,13 @@ function kbStart(bool $isAdmin): array {
 
 function kbBack(): array {
     return ['inline_keyboard' => [[emojiBtn('btn_back', 'بازگشت', 'nav:back')]]];
+}
+
+function kbReportConfirm(): array {
+    return ['inline_keyboard' => [[
+        ['text' => '✅ ارسال', 'callback_data' => 'rc:send', 'style' => 'success'],
+        ['text' => '❌ انصراف', 'callback_data' => 'nav:back', 'style' => 'danger'],
+    ]]];
 }
 
 function kbReview(int $submissionId, array $tags, ?int $selectedTagId, bool $decided): array {
@@ -41,8 +49,10 @@ function kbAdminMenu(): array {
     return ['inline_keyboard' => [
         [['text' => '🏷 مدیریت تگ‌ها', 'callback_data' => 'adm:tags']],
         [['text' => '⭐ ایموجی‌های پریمیوم', 'callback_data' => 'adm:emoji']],
+        [['text' => '🎨 رنگ دکمه‌ها', 'callback_data' => 'adm:colors']],
+        [['text' => '✏️ متن‌های ربات', 'callback_data' => 'adm:texts']],
         [['text' => '🖼 عکس پیام خوش‌آمد', 'callback_data' => 'adm:startphoto']],
-        [['text' => '✏️ متن پیام خوش‌آمد', 'callback_data' => 'adm:starttext']],
+        [['text' => '📖 عکس راهنما', 'callback_data' => 'adm:guidephoto']],
         [['text' => '👥 گروه/تاپیک گزارش', 'callback_data' => 'adm:group']],
         [['text' => '📨 گروه/تاپیک پشتیبانی', 'callback_data' => 'adm:supportgroup']],
         [['text' => '📢 کانال مقصد', 'callback_data' => 'adm:channel']],

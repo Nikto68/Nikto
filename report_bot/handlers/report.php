@@ -4,7 +4,8 @@ function handleReportNew(array $cq): void {
     $uid = (int)$cq['from']['id'];
     $a = screenAnchorFromCq($cq);
     stateSet($uid, 'awaiting_report', ['prompt' => $a]);
-    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '📎 متن، عکس یا ویدیوی گزارش را ارسال کنید.', [], kbBack());
+    $t = botText('report_prompt');
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], $t['text'], $t['entities'], kbBack());
     tgAnswerCallback($cq['id']);
 }
 
@@ -48,6 +49,7 @@ function postSubmissionContent(array $sub, int $toChatId, array $capBuilt, array
     ], $extraOpts));
 }
 
+/** بعدِ ارسالِ محتوا، قبل از رفتن به گروه، از خودِ کاربر تاییدِ نهایی می‌گیرد. */
 function handleReportMedia(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
     $chatId = (int)$msg['chat']['id'];
@@ -58,13 +60,41 @@ function handleReportMedia(array $msg, array $st = []): void {
 
     $media = extractReportMedia($msg);
     if (!$media) {
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ فقط متن، عکس یا ویدیو ارسال کنید.', [], kbBack());
+        $t = botText('report_invalid');
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbBack());
         return;
     }
 
+    stateSet($uid, 'report_confirm', ['msg' => $msg, 'prompt' => $prompt]);
+    $t = botText('report_confirm_prompt');
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbReportConfirm());
+}
+
+function handleReportConfirmSend(array $cq): void {
+    $uid = (int)$cq['from']['id'];
+    $st = stateGet($uid);
+    if ($st['state'] !== 'report_confirm' || empty($st['data']['msg'])) {
+        tgAnswerCallback($cq['id'], 'این درخواست منقضی شده؛ دوباره تلاش کنید.', true);
+        return;
+    }
+    $msg = $st['data']['msg'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? (int)$cq['message']['chat']['id'];
+    $anchorMsg = $prompt['message_id'] ?? (int)$cq['message']['message_id'];
+    $anchorPhoto = $prompt['has_photo'] ?? false;
+
+    tgAnswerCallback($cq['id']);
+    finalizeReportSubmission($msg, $uid, $anchorChat, $anchorMsg, $anchorPhoto);
+}
+
+function finalizeReportSubmission(array $msg, int $uid, int $anchorChat, ?int $anchorMsg, bool $anchorPhoto): void {
+    $chatId = (int)$msg['chat']['id'];
+    $media = extractReportMedia($msg);
+
     $groupId = settingGet('report_group_id');
     if (!$groupId) {
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⛔️ ارسال گزارش موقتاً غیرفعال است.', [], kbStart(reportIsAdmin($uid)));
+        $t = botText('report_disabled');
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
         reportAdminAlertOnce('no_report_group', '⚠️ گروه/تاپیکِ گزارش‌ها تنظیم نشده.');
         stateClear($uid);
         return;
@@ -100,7 +130,8 @@ function handleReportMedia(array $msg, array $st = []): void {
     $res = postSubmissionContent($sub, (int)$groupId, $capBuilt, $postOpts);
 
     if (empty($res['ok'])) {
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ ثبتِ گزارش ناموفق بود؛ دوباره تلاش کنید.', [], kbStart(reportIsAdmin($uid)));
+        $t = botText('report_submit_failed');
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
         reportAdminAlertOnce('group_copy_fail', '⚠️ ارسالِ گزارش به گروه ناموفق بود: ' . ($res['description'] ?? ''));
         stateClear($uid);
         return;
@@ -111,8 +142,8 @@ function handleReportMedia(array $msg, array $st = []): void {
         'group_message_id' => (int)$res['result']['message_id'],
     ]);
 
-    $anchor = screenRender($anchorChat, $anchorMsg, $anchorPhoto,
-        '✅ گزارش شما ثبت شد؛ نتیجه همین‌جا اطلاع داده می‌شود.', [], kbStart(reportIsAdmin($uid)));
+    $t = botText('report_submitted');
+    $anchor = screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
 
     submissionUpdate($subId, [
         'notify_chat_id' => $anchor['chat_id'],
@@ -186,12 +217,12 @@ function handleDecision(array $cq, string $action, int $subId): void {
             'channel_chat_id' => (int)$channelId, 'channel_message_id' => (int)$res['result']['message_id'],
         ]);
         $sub = submissionGet($subId);
-        notifySubmitter($sub, '✅ گزارش شما تایید و منتشر شد.');
+        notifySubmitter($sub, botText('report_approved')['text']);
         tgAnswerCallback($cq['id'], 'تایید شد ✅');
     } else {
         submissionUpdate($subId, ['status' => 'rejected', 'decided_by' => $uid, 'decided_at' => time()]);
         $sub = submissionGet($subId);
-        notifySubmitter($sub, '❌ گزارش شما رد شد.');
+        notifySubmitter($sub, botText('report_rejected')['text']);
         tgAnswerCallback($cq['id'], 'رد شد ❌');
     }
 
@@ -210,7 +241,8 @@ function handleAdminReportReply(array $msg): bool {
     $sub = submissionFindByGroupMessage((int)$msg['chat']['id'], (int)$reply['message_id']);
     if (!$sub) return false;
 
-    tgSendMessage((int)$sub['src_chat_id'], '💬 پیامی درباره‌ی گزارش شما:');
+    $t = botText('report_admin_note_prefix');
+    tgSendMessage((int)$sub['src_chat_id'], $t['text'], $t['entities']);
     tgCopyMessage((int)$sub['src_chat_id'], (int)$msg['chat']['id'], $msg['message_id']);
     return true;
 }

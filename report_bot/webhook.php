@@ -6,6 +6,7 @@
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/handlers/start.php';
 require_once __DIR__ . '/handlers/account.php';
+require_once __DIR__ . '/handlers/guide.php';
 require_once __DIR__ . '/handlers/report.php';
 require_once __DIR__ . '/handlers/support.php';
 require_once __DIR__ . '/handlers/admin.php';
@@ -34,15 +35,21 @@ function reportDispatchCallback(array $cq): void {
         $exact = [
             'noop'           => fn($cq) => tgAnswerCallback($cq['id']),
             'rep:new'        => 'handleReportNew',
+            'rc:send'        => 'handleReportConfirmSend',
             'sup:new'        => 'handleSupportNew',
             'acc:view'       => 'handleAccountView',
+            'gd:view'        => 'handleGuideView',
             'nav:back'       => 'handleNavBack',
             'adm:menu'       => 'handleAdminMenu',
             'adm:tags'       => 'handleAdminTags',
             'tagadd'         => 'handleAdminTagAdd',
             'adm:emoji'      => 'handleAdminEmoji',
+            'adm:colors'     => 'handleAdminColors',
+            'adm:texts'      => 'handleAdminTexts',
             'adm:startphoto' => 'handleAdminStartPhoto',
             'startphotodel'  => 'handleAdminStartPhotoDelete',
+            'adm:guidephoto' => 'handleAdminGuidePhoto',
+            'guidephotodel'  => 'handleAdminGuidePhotoDelete',
             'adm:starttext'  => 'handleAdminStartText',
             'adm:group'      => 'handleAdminGroup',
             'adm:supportgroup' => 'handleAdminSupportGroup',
@@ -52,12 +59,15 @@ function reportDispatchCallback(array $cq): void {
     }
     if (isset($exact[$data])) { $exact[$data]($cq); return; }
 
-    if (preg_match('/^tagdel:(\d+)$/', $data, $m))     { handleAdminTagDelete($cq, (int)$m[1]); return; }
-    if (preg_match('/^emoset:([a-z_]+)$/', $data, $m)) { handleAdminEmojiSet($cq, $m[1]); return; }
-    if (preg_match('/^emoclr:([a-z_]+)$/', $data, $m)) { handleAdminEmojiClear($cq, $m[1]); return; }
-    if (preg_match('/^tg:(\d+):(\d+)$/', $data, $m))   { handleTagPick($cq, (int)$m[1], (int)$m[2]); return; }
-    if (preg_match('/^ap:(\d+)$/', $data, $m))         { handleDecision($cq, 'approve', (int)$m[1]); return; }
-    if (preg_match('/^rj:(\d+)$/', $data, $m))         { handleDecision($cq, 'reject', (int)$m[1]); return; }
+    if (preg_match('/^tagdel:(\d+)$/', $data, $m))       { handleAdminTagDelete($cq, (int)$m[1]); return; }
+    if (preg_match('/^emoset:([a-z_]+)$/', $data, $m))   { handleAdminEmojiSet($cq, $m[1]); return; }
+    if (preg_match('/^emoclr:([a-z_]+)$/', $data, $m))   { handleAdminEmojiClear($cq, $m[1]); return; }
+    if (preg_match('/^stset:([a-z_]+):([a-z]+)$/', $data, $m)) { handleAdminColorSet($cq, $m[1], $m[2]); return; }
+    if (preg_match('/^txted:([a-z_]+)$/', $data, $m))    { handleAdminTextEdit($cq, $m[1]); return; }
+    if (preg_match('/^txtclr:([a-z_]+)$/', $data, $m))   { handleAdminTextClear($cq, $m[1]); return; }
+    if (preg_match('/^tg:(\d+):(\d+)$/', $data, $m))     { handleTagPick($cq, (int)$m[1], (int)$m[2]); return; }
+    if (preg_match('/^ap:(\d+)$/', $data, $m))           { handleDecision($cq, 'approve', (int)$m[1]); return; }
+    if (preg_match('/^rj:(\d+)$/', $data, $m))           { handleDecision($cq, 'reject', (int)$m[1]); return; }
 
     tgAnswerCallback($cq['id']);
 }
@@ -87,12 +97,15 @@ function reportDispatchMessage(array $msg): void {
     if ($st['state']) {
         switch ($st['state']) {
             case 'awaiting_report':         handleReportMedia($msg, $st); return;
+            case 'report_confirm':          handleReportMedia($msg, $st); return;
             case 'awaiting_support':        handleSupportMessage($msg, $st); return;
             case 'admin_await_tag_text':    handleAdminTagText($msg, $st); return;
             case 'admin_await_emoji':       handleAdminEmojiMessage($msg, $st['data']['slot'] ?? '', $st); return;
             case 'admin_await_start_photo': handleAdminStartPhotoMessage($msg, $st); return;
             case 'admin_await_start_text':  handleAdminStartTextMessage($msg, $st); return;
+            case 'admin_await_guide_photo': handleAdminGuidePhotoMessage($msg, $st); return;
             case 'admin_await_channel':     handleAdminChannelMessage($msg, $st); return;
+            case 'admin_await_text':        handleAdminTextEditMessage($msg, $st['data']['key'] ?? '', $st); return;
         }
     }
 

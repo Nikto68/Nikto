@@ -9,6 +9,7 @@ const REPORT_EMOJI_DEFAULTS = [
     'btn_report'   => '📮',
     'btn_support'  => '🎧',
     'btn_account'  => '👤',
+    'btn_guide'    => '📖',
     'btn_back'     => '🔙',
     'btn_approve'  => '✅',
     'btn_reject'   => '❌',
@@ -21,6 +22,7 @@ function emojiSlotLabel(string $slot): string {
         'btn_report'   => 'دکمه‌ی «ارسال گزارش»',
         'btn_support'  => 'دکمه‌ی «ارتباط با پشتیبانی»',
         'btn_account'  => 'دکمه‌ی «حساب کاربری»',
+        'btn_guide'    => 'دکمه‌ی «راهنما»',
         'btn_back'     => 'دکمه‌ی «بازگشت»',
         'btn_approve'  => 'دکمه‌ی «تایید»',
         'btn_reject'   => 'دکمه‌ی «رد»',
@@ -65,7 +67,7 @@ function emojiTextPart(string $slot): array {
     return ['text' => $e['char'], 'entities' => []];
 }
 
-function emojiBtn(string $slot, string $label, string $callbackData, ?string $style = null): array {
+function emojiBtn(string $slot, string $label, string $callbackData, ?string $defaultStyle = null): array {
     $e = emojiGet($slot);
     $btn = ['text' => $label, 'callback_data' => $callbackData];
     if ($e['id']) {
@@ -73,6 +75,8 @@ function emojiBtn(string $slot, string $label, string $callbackData, ?string $st
     } else {
         $btn['text'] = trim($e['char'] . ' ' . $label);
     }
+    $style = styleGet($slot);
+    if ($style === null) $style = $defaultStyle;
     if ($style) $btn['style'] = $style;
     return $btn;
 }
