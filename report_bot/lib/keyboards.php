@@ -37,6 +37,7 @@ function kbReview(int $submissionId, array $tags, ?int $selectedTagId, bool $dec
     if ($row) $rows[] = $row;
 
     if (!$decided) {
+        $rows[] = [['text' => '✏️ ویرایش متن', 'callback_data' => "ge:$submissionId"]];
         $rows[] = [
             emojiBtn('btn_approve', 'تایید', "ap:$submissionId", 'success'),
             emojiBtn('btn_reject', 'رد', "rj:$submissionId", 'danger'),

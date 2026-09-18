@@ -71,6 +71,7 @@ function reportDispatchCallback(array $cq): void {
     if (preg_match('/^tg:(\d+):(\d+)$/', $data, $m))     { handleTagPick($cq, (int)$m[1], (int)$m[2]); return; }
     if (preg_match('/^ap:(\d+)$/', $data, $m))           { handleDecision($cq, 'approve', (int)$m[1]); return; }
     if (preg_match('/^rj:(\d+)$/', $data, $m))           { handleDecision($cq, 'reject', (int)$m[1]); return; }
+    if (preg_match('/^ge:(\d+)$/', $data, $m))           { handleGroupEditStart($cq, (int)$m[1]); return; }
 
     tgAnswerCallback($cq['id']);
 }
@@ -84,8 +85,16 @@ function reportDispatchMessage(array $msg): void {
     if ($chat['type'] !== 'private') {
         if (strncmp($text, '/setreporttopic', 15) === 0) { handleSetReportTopicCommand($msg); return; }
         if (strncmp($text, '/setsupporttopic', 16) === 0) { handleSetSupportTopicCommand($msg); return; }
-        if (isset($msg['from']) && reportIsAdmin($msg['from']['id']) && isset($msg['reply_to_message'])) {
-            if (!handleAdminReportReply($msg)) handleAdminSupportGroupReply($msg);
+        if (isset($msg['from']) && reportIsAdmin($msg['from']['id'])) {
+            $auid = (int)$msg['from']['id'];
+            $ast = stateGet($auid);
+            if ($ast['state'] === 'admin_await_group_edit' && !empty($ast['data']['subId'])) {
+                handleGroupEditMessage($msg, (int)$ast['data']['subId']);
+                return;
+            }
+            if (isset($msg['reply_to_message'])) {
+                if (!handleAdminReportReply($msg)) handleAdminSupportGroupReply($msg);
+            }
         }
         return;
     }

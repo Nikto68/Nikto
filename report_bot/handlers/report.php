@@ -170,18 +170,15 @@ function handleTagPick(array $cq, int $subId, int $tagId): void {
     tgAnswerCallback($cq['id'], $newTag ? 'برچسب ثبت شد.' : 'برچسب برداشته شد.');
 }
 
-function notifySubmitter(array $sub, string $text): void {
-    $chatId = (int)($sub['notify_chat_id'] ?: $sub['src_chat_id']);
-    $msgId = $sub['notify_message_id'] ? (int)$sub['notify_message_id'] : null;
-    $hasPhoto = (bool)$sub['notify_has_photo'];
+/**
+ * پیامِ تایید/ردِ نهایی همیشه پیامِ تازه است، نه ادیتِ «ثبت شد»ی که قبلاً
+ * فرستاده بودیم — چون ادیت برایِ کاربر نوتیفیکیشن/هایلایتِ تازه نمی‌سازد و
+ * ممکن است دیده نشود؛ پیامِ تازه او را واقعاً مطلع می‌کند.
+ */
+function notifySubmitter(array $sub, array $textPart): void {
+    $chatId = (int)$sub['src_chat_id'];
     $kb = kbStart(reportIsAdmin((int)$sub['user_id']));
-
-    $anchor = screenRender($chatId, $msgId, $hasPhoto, $text, [], $kb);
-    submissionUpdate((int)$sub['id'], [
-        'notify_chat_id' => $anchor['chat_id'],
-        'notify_message_id' => $anchor['message_id'],
-        'notify_has_photo' => $anchor['has_photo'] ? 1 : 0,
-    ]);
+    tgSendMessage($chatId, $textPart['text'], $textPart['entities'], ['reply_markup' => $kb]);
 }
 
 function handleDecision(array $cq, string $action, int $subId): void {
@@ -214,18 +211,53 @@ function handleDecision(array $cq, string $action, int $subId): void {
             'channel_chat_id' => (int)$channelId, 'channel_message_id' => (int)$res['result']['message_id'],
         ]);
         $sub = submissionGet($subId);
-        notifySubmitter($sub, botText('report_approved')['text']);
+        notifySubmitter($sub, botText('report_approved'));
         tgAnswerCallback($cq['id'], 'تایید شد ✅');
     } else {
         submissionUpdate($subId, ['status' => 'rejected', 'decided_by' => $uid, 'decided_at' => time()]);
         $sub = submissionGet($subId);
-        notifySubmitter($sub, botText('report_rejected')['text']);
+        notifySubmitter($sub, botText('report_rejected'));
         tgAnswerCallback($cq['id'], 'رد شد ❌');
     }
 
     $cap = buildGroupCaption($sub);
     editGroupPost($sub, $cap['text'], $cap['entities'], [
         'reply_markup' => kbReview($subId, tagGetAll(), $sub['tag_id'] ? (int)$sub['tag_id'] : null, true),
+    ]);
+}
+
+function handleGroupEditStart(array $cq, int $subId): void {
+    $uid = (int)$cq['from']['id'];
+    if (!reportIsAdmin($uid)) { tgAnswerCallback($cq['id'], 'اجازه‌ی این کار را ندارید.', true); return; }
+
+    $sub = submissionGet($subId);
+    if (!$sub) { tgAnswerCallback($cq['id'], 'یافت نشد.', true); return; }
+    if ($sub['status'] !== 'pending') { tgAnswerCallback($cq['id'], 'قبلاً بررسی شده است.', true); return; }
+
+    stateSet($uid, 'admin_await_group_edit', ['subId' => $subId]);
+    tgAnswerCallback($cq['id'], 'پیامِ بعدیِ شما در همین گروه، متنِ جدیدِ این گزارش می‌شود.', true);
+}
+
+/** پیامِ بعدیِ ادمین در گروه (بعدِ زدنِ «ویرایش متن») را به‌عنوانِ متنِ محتوایِ همین submission ذخیره می‌کند. */
+function handleGroupEditMessage(array $msg, int $subId): void {
+    $uid = (int)$msg['from']['id'];
+    stateClear($uid);
+
+    $sub = submissionGet($subId);
+    if (!$sub || $sub['status'] !== 'pending') return;
+
+    $newText = $msg['text'] ?? '';
+    if (trim($newText) === '') return;
+
+    submissionUpdate($subId, [
+        'orig_caption' => $newText,
+        'orig_caption_entities' => json_encode($msg['entities'] ?? [], JSON_UNESCAPED_UNICODE),
+    ]);
+
+    $sub = submissionGet($subId);
+    $cap = buildGroupCaption($sub);
+    editGroupPost($sub, $cap['text'], $cap['entities'], [
+        'reply_markup' => kbReview($subId, tagGetAll(), $sub['tag_id'] ? (int)$sub['tag_id'] : null, false),
     ]);
 }
 
