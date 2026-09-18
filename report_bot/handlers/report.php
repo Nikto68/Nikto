@@ -3,7 +3,7 @@
 function handleReportNew(array $cq): void {
     $uid = (int)$cq['from']['id'];
     $a = screenAnchorFromCq($cq);
-    stateSet($uid, 'awaiting_report', ['prompt' => $a]);
+    stateSet($uid, 'awaiting_report');
     $t = botText('report_prompt');
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], $t['text'], $t['entities'], kbBack());
     tgAnswerCallback($cq['id']);
@@ -49,25 +49,25 @@ function postSubmissionContent(array $sub, int $toChatId, array $capBuilt, array
     ], $extraOpts));
 }
 
-/** بعدِ ارسالِ محتوا، قبل از رفتن به گروه، از خودِ کاربر تاییدِ نهایی می‌گیرد. */
+/**
+ * بعدِ ارسالِ محتوا، قبل از رفتن به گروه، از خودِ کاربر تاییدِ نهایی می‌گیرد.
+ * این تاییدیه پیامِ تازه است، نه ادیتِ پرامپتِ قبلی — چون آن پرامپت الان
+ * بالایِ همین محتوایی که کاربر فرستاده مانده و ادیتش آنجا دیده نمی‌شود.
+ */
 function handleReportMedia(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
     $chatId = (int)$msg['chat']['id'];
-    $prompt = $st['data']['prompt'] ?? null;
-    $anchorChat = $prompt['chat_id'] ?? $chatId;
-    $anchorMsg = $prompt['message_id'] ?? null;
-    $anchorPhoto = $prompt['has_photo'] ?? false;
 
     $media = extractReportMedia($msg);
     if (!$media) {
         $t = botText('report_invalid');
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbBack());
+        tgSendMessage($chatId, $t['text'], $t['entities'], ['reply_markup' => kbBack()]);
         return;
     }
 
-    stateSet($uid, 'report_confirm', ['msg' => $msg, 'prompt' => $prompt]);
     $t = botText('report_confirm_prompt');
-    screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbReportConfirm());
+    tgSendMessage($chatId, $t['text'], $t['entities'], ['reply_markup' => kbReportConfirm()]);
+    stateSet($uid, 'report_confirm', ['msg' => $msg]);
 }
 
 function handleReportConfirmSend(array $cq): void {
@@ -78,13 +78,10 @@ function handleReportConfirmSend(array $cq): void {
         return;
     }
     $msg = $st['data']['msg'];
-    $prompt = $st['data']['prompt'] ?? null;
-    $anchorChat = $prompt['chat_id'] ?? (int)$cq['message']['chat']['id'];
-    $anchorMsg = $prompt['message_id'] ?? (int)$cq['message']['message_id'];
-    $anchorPhoto = $prompt['has_photo'] ?? false;
+    $a = screenAnchorFromCq($cq);
 
     tgAnswerCallback($cq['id']);
-    finalizeReportSubmission($msg, $uid, $anchorChat, $anchorMsg, $anchorPhoto);
+    finalizeReportSubmission($msg, $uid, $a['chat_id'], $a['message_id'], $a['has_photo']);
 }
 
 function finalizeReportSubmission(array $msg, int $uid, int $anchorChat, ?int $anchorMsg, bool $anchorPhoto): void {

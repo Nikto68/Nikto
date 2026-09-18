@@ -2,6 +2,17 @@
 
 const EMOJI_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_guide', 'btn_back', 'btn_approve', 'btn_reject', 'start_prefix', 'admin_prefix'];
 const BUTTON_STYLE_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_guide', 'btn_approve', 'btn_reject', 'admin_prefix'];
+const BUTTON_LABEL_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_guide', 'btn_back', 'btn_approve', 'btn_reject', 'admin_prefix'];
+const BUTTON_LABEL_DEFAULTS = [
+    'btn_report'   => 'ارسال گزارش',
+    'btn_support'  => 'ارتباط با پشتیبانی',
+    'btn_account'  => 'حساب کاربری',
+    'btn_guide'    => 'راهنما',
+    'btn_back'     => 'بازگشت',
+    'btn_approve'  => 'تایید',
+    'btn_reject'   => 'رد',
+    'admin_prefix' => 'پنل مدیریت',
+];
 
 function requireAdminCq(array $cq): bool {
     if (!reportIsAdmin($cq['from']['id'])) {
@@ -358,6 +369,67 @@ function handleAdminColorSet(array $cq, string $slot, string $val): void {
     tgAnswerCallback($cq['id'], 'ذخیره شد.');
     $a = screenAnchorFromCq($cq);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '🎨 رنگ دکمه‌ها', [], kbColorsList());
+}
+
+// ---- متن دکمه‌ها ----
+
+function kbButtonLabelsList(): array {
+    $rows = [];
+    foreach (BUTTON_LABEL_SLOTS as $slot) {
+        $cur = buttonLabelGet($slot) ?? BUTTON_LABEL_DEFAULTS[$slot];
+        $rows[] = [['text' => emojiSlotLabel($slot) . ' — ' . $cur, 'callback_data' => 'noop']];
+        $rows[] = [
+            ['text' => '✏️ تغییر', 'callback_data' => 'btled:' . $slot],
+            ['text' => '↩️ پیش‌فرض', 'callback_data' => 'btlclr:' . $slot],
+        ];
+    }
+    $rows[] = [emojiBtn('btn_back', 'بازگشت', 'adm:menu')];
+    return ['inline_keyboard' => $rows];
+}
+
+function handleAdminButtonLabels(array $cq): void {
+    if (!requireAdminCq($cq)) return;
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '📝 متن دکمه‌ها', [], kbButtonLabelsList());
+    tgAnswerCallback($cq['id']);
+}
+
+function handleAdminButtonLabelEdit(array $cq, string $slot): void {
+    if (!requireAdminCq($cq)) return;
+    if (!in_array($slot, BUTTON_LABEL_SLOTS, true)) { tgAnswerCallback($cq['id'], 'نامعتبر.', true); return; }
+    $uid = (int)$cq['from']['id'];
+    $a = screenAnchorFromCq($cq);
+    stateSet($uid, 'admin_await_btn_label', ['slot' => $slot, 'prompt' => $a]);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✏️ متنِ جدیدِ دکمه را بفرستید.', [], kbBack());
+    tgAnswerCallback($cq['id']);
+}
+
+function handleAdminButtonLabelMessage(array $msg, string $slot, array $st = []): void {
+    $uid = (int)$msg['from']['id'];
+    $prompt = $st['data']['prompt'] ?? null;
+    $anchorChat = $prompt['chat_id'] ?? (int)$msg['chat']['id'];
+    $anchorMsg = $prompt['message_id'] ?? null;
+    $anchorPhoto = $prompt['has_photo'] ?? false;
+
+    if (!in_array($slot, BUTTON_LABEL_SLOTS, true)) { stateClear($uid); return; }
+
+    $text = trim($msg['text'] ?? '');
+    if ($text === '') {
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است.', [], kbBack());
+        return;
+    }
+    buttonLabelSet($slot, $text);
+    stateClear($uid);
+    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbButtonLabelsList());
+}
+
+function handleAdminButtonLabelClear(array $cq, string $slot): void {
+    if (!requireAdminCq($cq)) return;
+    if (!in_array($slot, BUTTON_LABEL_SLOTS, true)) { tgAnswerCallback($cq['id'], 'نامعتبر.', true); return; }
+    buttonLabelClear($slot);
+    tgAnswerCallback($cq['id'], 'به پیش‌فرض برگشت.');
+    $a = screenAnchorFromCq($cq);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '📝 متن دکمه‌ها', [], kbButtonLabelsList());
 }
 
 // ---- گروه/تاپیک گزارش ----

@@ -45,6 +45,7 @@ function reportDispatchCallback(array $cq): void {
             'tagadd'         => 'handleAdminTagAdd',
             'adm:emoji'      => 'handleAdminEmoji',
             'adm:colors'     => 'handleAdminColors',
+            'adm:btnlabels'  => 'handleAdminButtonLabels',
             'adm:texts'      => 'handleAdminTexts',
             'adm:startphoto' => 'handleAdminStartPhoto',
             'startphotodel'  => 'handleAdminStartPhotoDelete',
@@ -65,6 +66,8 @@ function reportDispatchCallback(array $cq): void {
     if (preg_match('/^stset:([a-z_]+):([a-z]+)$/', $data, $m)) { handleAdminColorSet($cq, $m[1], $m[2]); return; }
     if (preg_match('/^txted:([a-z_]+)$/', $data, $m))    { handleAdminTextEdit($cq, $m[1]); return; }
     if (preg_match('/^txtclr:([a-z_]+)$/', $data, $m))   { handleAdminTextClear($cq, $m[1]); return; }
+    if (preg_match('/^btled:([a-z_]+)$/', $data, $m))    { handleAdminButtonLabelEdit($cq, $m[1]); return; }
+    if (preg_match('/^btlclr:([a-z_]+)$/', $data, $m))   { handleAdminButtonLabelClear($cq, $m[1]); return; }
     if (preg_match('/^tg:(\d+):(\d+)$/', $data, $m))     { handleTagPick($cq, (int)$m[1], (int)$m[2]); return; }
     if (preg_match('/^ap:(\d+)$/', $data, $m))           { handleDecision($cq, 'approve', (int)$m[1]); return; }
     if (preg_match('/^rj:(\d+)$/', $data, $m))           { handleDecision($cq, 'reject', (int)$m[1]); return; }
@@ -106,6 +109,7 @@ function reportDispatchMessage(array $msg): void {
             case 'admin_await_guide_photo': handleAdminGuidePhotoMessage($msg, $st); return;
             case 'admin_await_channel':     handleAdminChannelMessage($msg, $st); return;
             case 'admin_await_text':        handleAdminTextEditMessage($msg, $st['data']['key'] ?? '', $st); return;
+            case 'admin_await_btn_label':   handleAdminButtonLabelMessage($msg, $st['data']['slot'] ?? '', $st); return;
         }
     }
 

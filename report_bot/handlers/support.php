@@ -3,24 +3,21 @@
 function handleSupportNew(array $cq): void {
     $uid = (int)$cq['from']['id'];
     $a = screenAnchorFromCq($cq);
-    stateSet($uid, 'awaiting_support', ['prompt' => $a]);
+    stateSet($uid, 'awaiting_support');
     $t = botText('support_prompt');
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], $t['text'], $t['entities'], kbBack());
     tgAnswerCallback($cq['id']);
 }
 
+/** پاسخ به پیامِ ارسالی، پیامِ تازه است — نه ادیتِ پرامپتِ قبلی که الان بالایِ همین پیام مانده. */
 function handleSupportMessage(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
     $chatId = (int)$msg['chat']['id'];
-    $prompt = $st['data']['prompt'] ?? null;
-    $anchorChat = $prompt['chat_id'] ?? $chatId;
-    $anchorMsg = $prompt['message_id'] ?? null;
-    $anchorPhoto = $prompt['has_photo'] ?? false;
 
     $groupId = settingGet('support_group_id');
     if (!$groupId) {
         $t = botText('support_disabled');
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
+        tgSendMessage($chatId, $t['text'], $t['entities'], ['reply_markup' => kbStart(reportIsAdmin($uid))]);
         reportAdminAlertOnce('no_support_group', '⚠️ گروه/تاپیکِ پشتیبانی تنظیم نشده.');
         stateClear($uid);
         return;
@@ -40,14 +37,14 @@ function handleSupportMessage(array $msg, array $st = []): void {
     stateClear($uid);
     if (empty($res['ok'])) {
         $t = botText('support_send_failed');
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
+        tgSendMessage($chatId, $t['text'], $t['entities'], ['reply_markup' => kbStart(reportIsAdmin($uid))]);
         reportAdminAlertOnce('support_copy_fail', '⚠️ ارسالِ پیامِ پشتیبانی به گروه ناموفق بود: ' . ($res['description'] ?? ''));
         return;
     }
 
     supportThreadCreate((int)$groupId, (int)$res['result']['message_id'], $uid);
     $t = botText('support_sent');
-    screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
+    tgSendMessage($chatId, $t['text'], $t['entities'], ['reply_markup' => kbStart(reportIsAdmin($uid))]);
 }
 
 function handleAdminSupportGroupReply(array $msg): bool {

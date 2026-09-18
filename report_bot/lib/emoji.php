@@ -67,7 +67,20 @@ function emojiTextPart(string $slot): array {
     return ['text' => $e['char'], 'entities' => []];
 }
 
-function emojiBtn(string $slot, string $label, string $callbackData, ?string $defaultStyle = null): array {
+function buttonLabelGet(string $slot): ?string {
+    return settingGet("btnlabel:$slot");
+}
+
+function buttonLabelSet(string $slot, string $label): void {
+    settingSet("btnlabel:$slot", $label);
+}
+
+function buttonLabelClear(string $slot): void {
+    settingDel("btnlabel:$slot");
+}
+
+function emojiBtn(string $slot, string $defaultLabel, string $callbackData, ?string $defaultStyle = null): array {
+    $label = buttonLabelGet($slot) ?? $defaultLabel;
     $e = emojiGet($slot);
     $btn = ['text' => $label, 'callback_data' => $callbackData];
     if ($e['id']) {

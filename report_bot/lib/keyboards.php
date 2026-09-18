@@ -50,6 +50,7 @@ function kbAdminMenu(): array {
         [['text' => '🏷 مدیریت تگ‌ها', 'callback_data' => 'adm:tags']],
         [['text' => '⭐ ایموجی‌های پریمیوم', 'callback_data' => 'adm:emoji']],
         [['text' => '🎨 رنگ دکمه‌ها', 'callback_data' => 'adm:colors']],
+        [['text' => '📝 متن دکمه‌ها', 'callback_data' => 'adm:btnlabels']],
         [['text' => '✏️ متن‌های ربات', 'callback_data' => 'adm:texts']],
         [['text' => '🖼 عکس پیام خوش‌آمد', 'callback_data' => 'adm:startphoto']],
         [['text' => '📖 عکس راهنما', 'callback_data' => 'adm:guidephoto']],
