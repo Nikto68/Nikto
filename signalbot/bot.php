@@ -1342,43 +1342,42 @@ final class AdminPanel
         )->execute([':k' => $key, ':v' => $value, ':now' => date('Y-m-d H:i:s')]);
     }
 
-    // -- Channel buttons (the two glass buttons under every channel post) --
+    // -- Channel button (the glass button under every channel post) --
 
     private const BUTTON_STYLE_LABELS = ['success' => '🟢 سبز', 'primary' => '🔵 آبی', 'danger' => '🔴 قرمز'];
 
     private function renderButtons(int $chatId, int $messageId, array $parts, int $userId): void
     {
         $action = $parts[2] ?? null;
-        $slot = isset($parts[3]) ? (int) $parts[3] : 0;
-        $validSlot = in_array($slot, [1, 2], true);
+        $slot = 1;
 
-        if ($action === 'edit_text' && $validSlot) {
+        if ($action === 'edit_text') {
             $this->states->set($userId, 'awaiting_button_text', ['slot' => $slot]);
             $this->render(
                 $chatId,
                 $messageId,
-                "متن جدید دکمه {$slot} را بفرستید.\n\nبرای بازگشت به مقدار پیش‌فرض، «حذف» بفرستید.",
+                "متن جدید دکمه را بفرستید.\n\nبرای بازگشت به مقدار پیش‌فرض، «حذف» بفرستید.",
                 ['inline_keyboard' => [$this->backRow('admin:buttons')]]
             );
             return;
         }
 
-        if ($action === 'edit_url' && $validSlot) {
+        if ($action === 'edit_url') {
             $this->states->set($userId, 'awaiting_button_url', ['slot' => $slot]);
             $this->render(
                 $chatId,
                 $messageId,
-                "لینک جدید دکمه {$slot} را بفرستید (باید با http:// یا https:// یا tg:// شروع بشه).\n\nبرای بازگشت به مقدار پیش‌فرض، «حذف» بفرستید.",
+                "لینک جدید دکمه را بفرستید (باید با http:// یا https:// یا tg:// شروع بشه).\n\nبرای بازگشت به مقدار پیش‌فرض، «حذف» بفرستید.",
                 ['inline_keyboard' => [$this->backRow('admin:buttons')]]
             );
             return;
         }
 
-        if ($action === 'edit_emoji' && $validSlot) {
+        if ($action === 'edit_emoji') {
             $this->states->set($userId, 'awaiting_button_emoji', ['slot' => $slot]);
             $current = Config::channelButtonEmojiId($slot);
             $lines = [
-                "آیکون ایموجی پریمیوم دکمه {$slot}",
+                'آیکون ایموجی پریمیوم دکمه',
                 '',
                 'یک پیام حاوی دقیقاً همون ایموجی اختصاصی/پریمیومی که می‌خواید روی دکمه باشه بفرستید (از پنل ایموجی تلگرام انتخاب کنید، نه با کیبورد معمولی تایپ کنید).',
                 '',
@@ -1394,42 +1393,42 @@ final class AdminPanel
             return;
         }
 
-        if ($action === 'setstyle' && $validSlot && isset($parts[4]) && in_array($parts[4], Config::channelButtonStyles(), true)) {
-            $this->setSetting("BUTTON{$slot}_STYLE", $parts[4]);
+        if ($action === 'setstyle' && isset($parts[3]) && in_array($parts[3], Config::channelButtonStyles(), true)) {
+            $this->setSetting("BUTTON{$slot}_STYLE", $parts[3]);
         }
 
-        $lines = ['دکمه‌های شیشه‌ای زیر پست‌های کانال', '', 'این دکمه‌ها زیر همه پیام‌هایی که ربات به کانال می‌فرسته (سیگنال، شات سود، اعلام ریسک‌فری/بسته شدن، هشدارها) نمایش داده می‌شن.', ''];
-        foreach ([1, 2] as $s) {
-            $style = Config::channelButtonStyle($s);
-            $emoji = Config::channelButtonEmojiId($s);
-            $lines[] = sprintf(
-                "دکمه %d: «%s»\nرنگ: %s\nلینک: %s%s",
-                $s,
-                Config::channelButtonText($s),
+        $style = Config::channelButtonStyle($slot);
+        $emoji = Config::channelButtonEmojiId($slot);
+        $lines = [
+            'دکمه شیشه‌ای زیر پست‌های کانال',
+            '',
+            'این دکمه زیر همه پیام‌هایی که ربات به کانال می‌فرسته (سیگنال، شات سود، اعلام ریسک‌فری/بسته شدن، هشدارها) نمایش داده می‌شه.',
+            '',
+            sprintf(
+                "«%s»\nرنگ: %s\nلینک: %s%s",
+                Config::channelButtonText($slot),
                 self::BUTTON_STYLE_LABELS[$style] ?? $style,
-                Config::channelButtonUrl($s),
+                Config::channelButtonUrl($slot),
                 $emoji !== null ? "\nآیکون پریمیوم: ثبت شده" : ''
-            );
-            $lines[] = '';
-        }
+            ),
+        ];
 
-        $keyboard = [];
-        foreach ([1, 2] as $s) {
-            $keyboard[] = [
-                ['text' => "✏️ متن دکمه {$s}", 'callback_data' => "admin:buttons:edit_text:{$s}"],
-                ['text' => "🔗 لینک دکمه {$s}", 'callback_data' => "admin:buttons:edit_url:{$s}"],
-            ];
-            $styleRow = [];
-            foreach (Config::channelButtonStyles() as $styleOption) {
-                $label = self::BUTTON_STYLE_LABELS[$styleOption] ?? $styleOption;
-                if ($styleOption === Config::channelButtonStyle($s)) {
-                    $label = '✅ ' . $label;
-                }
-                $styleRow[] = ['text' => $label, 'callback_data' => "admin:buttons:setstyle:{$s}:{$styleOption}"];
+        $keyboard = [
+            [
+                ['text' => '✏️ متن دکمه', 'callback_data' => 'admin:buttons:edit_text'],
+                ['text' => '🔗 لینک دکمه', 'callback_data' => 'admin:buttons:edit_url'],
+            ],
+        ];
+        $styleRow = [];
+        foreach (Config::channelButtonStyles() as $styleOption) {
+            $label = self::BUTTON_STYLE_LABELS[$styleOption] ?? $styleOption;
+            if ($styleOption === $style) {
+                $label = '✅ ' . $label;
             }
-            $keyboard[] = $styleRow;
-            $keyboard[] = [['text' => "✨ ایموجی پریمیوم دکمه {$s}", 'callback_data' => "admin:buttons:edit_emoji:{$s}"]];
+            $styleRow[] = ['text' => $label, 'callback_data' => "admin:buttons:setstyle:{$styleOption}"];
         }
+        $keyboard[] = $styleRow;
+        $keyboard[] = [['text' => '✨ ایموجی پریمیوم دکمه', 'callback_data' => 'admin:buttons:edit_emoji']];
         $keyboard[] = $this->backRow();
 
         $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => $keyboard]);
@@ -2657,13 +2656,13 @@ final class AdminPanel
         if ($state['state'] === 'awaiting_button_text') {
             $this->states->clear($userId);
             $slot = (int) ($state['payload']['slot'] ?? 0);
-            if (!in_array($slot, [1, 2], true)) {
+            if ($slot !== 1) {
                 return true;
             }
             $value = trim($text);
             if ($value === 'حذف') {
                 Database::pdo()->prepare('DELETE FROM bot_settings WHERE setting_key = :k')->execute([':k' => "BUTTON{$slot}_TEXT"]);
-                $this->telegram->sendMessage($chatId, "متن دکمه {$slot} به مقدار پیش‌فرض برگشت.");
+                $this->telegram->sendMessage($chatId, "متن دکمه به مقدار پیش‌فرض برگشت.");
                 return true;
             }
             if ($value === '') {
@@ -2671,20 +2670,20 @@ final class AdminPanel
                 return true;
             }
             $this->setSetting("BUTTON{$slot}_TEXT", $value);
-            $this->telegram->sendMessage($chatId, "متن دکمه {$slot} ذخیره شد.");
+            $this->telegram->sendMessage($chatId, "متن دکمه ذخیره شد.");
             return true;
         }
 
         if ($state['state'] === 'awaiting_button_url') {
             $this->states->clear($userId);
             $slot = (int) ($state['payload']['slot'] ?? 0);
-            if (!in_array($slot, [1, 2], true)) {
+            if ($slot !== 1) {
                 return true;
             }
             $value = trim($text);
             if ($value === 'حذف') {
                 Database::pdo()->prepare('DELETE FROM bot_settings WHERE setting_key = :k')->execute([':k' => "BUTTON{$slot}_URL"]);
-                $this->telegram->sendMessage($chatId, "لینک دکمه {$slot} به مقدار پیش‌فرض برگشت.");
+                $this->telegram->sendMessage($chatId, "لینک دکمه به مقدار پیش‌فرض برگشت.");
                 return true;
             }
             if (!preg_match('#^(https?://|tg://)\S+$#i', $value)) {
@@ -2692,19 +2691,19 @@ final class AdminPanel
                 return true;
             }
             $this->setSetting("BUTTON{$slot}_URL", $value);
-            $this->telegram->sendMessage($chatId, "لینک دکمه {$slot} ذخیره شد.");
+            $this->telegram->sendMessage($chatId, "لینک دکمه ذخیره شد.");
             return true;
         }
 
         if ($state['state'] === 'awaiting_button_emoji') {
             $this->states->clear($userId);
             $slot = (int) ($state['payload']['slot'] ?? 0);
-            if (!in_array($slot, [1, 2], true)) {
+            if ($slot !== 1) {
                 return true;
             }
             if (trim($text) === 'حذف') {
                 Database::pdo()->prepare('DELETE FROM bot_settings WHERE setting_key = :k')->execute([':k' => "BUTTON{$slot}_EMOJI_ID"]);
-                $this->telegram->sendMessage($chatId, "آیکون دکمه {$slot} حذف شد.");
+                $this->telegram->sendMessage($chatId, "آیکون دکمه حذف شد.");
                 return true;
             }
             $emojiId = null;
@@ -2721,7 +2720,7 @@ final class AdminPanel
             $this->setSetting("BUTTON{$slot}_EMOJI_ID", $emojiId);
             $this->telegram->sendMessage(
                 $chatId,
-                "آیکون دکمه {$slot} ذخیره شد.\n\nیادآوری: این آیکون روی پست‌های کانال فقط وقتی نشون داده می‌شه که ربات یوزرنیم خریداری‌شده از Fragment داشته باشه. اگه نداشته باشه، ربات خودکار بدون آیکون می‌فرسته — از «تست روی کانال» می‌تونید همین الان چک کنید."
+                "آیکون دکمه ذخیره شد.\n\nیادآوری: این آیکون روی پست‌های کانال فقط وقتی نشون داده می‌شه که ربات یوزرنیم خریداری‌شده از Fragment داشته باشه. اگه نداشته باشه، ربات خودکار بدون آیکون می‌فرسته — از «تست روی کانال» می‌تونید همین الان چک کنید."
             );
             return true;
         }

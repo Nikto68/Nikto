@@ -1684,20 +1684,19 @@ final class Config
         return max(0, Env::getInt('LOG_RETENTION_DAYS', 3));
     }
 
-    // -- Channel post buttons (inline "glass" buttons under every send) ----
+    // -- Channel post button (inline "glass" button under every send) ----
     /**
-     * Two inline keyboard buttons shown under every message the bot posts
+     * One inline keyboard button shown under every message the bot posts
      * to a channel — the signal card, the profit-shot/close notices, the
      * advisory warnings. Purely presentational: nothing here feeds back
      * into signal.php's strategy engine. `style` is Bot API 9.4's
      * (February 2026) button color field: primary=blue, success=green,
      * danger=red. Admin-editable from /panel → دکمه‌های کانال; a row in
-     * bot_settings always wins over the defaults below.
+     * bot_settings always wins over the default below.
      */
     private const CHANNEL_BUTTON_STYLES = ['primary', 'success', 'danger'];
     private const CHANNEL_BUTTON_DEFAULTS = [
         1 => ['text' => '📢 کانال ما', 'url' => 'https://t.me', 'style' => 'success'],
-        2 => ['text' => '💬 پشتیبانی', 'url' => 'https://t.me', 'style' => 'primary'],
     ];
 
     public static function channelButtonText(int $slot): string
@@ -1734,30 +1733,26 @@ final class Config
     }
 
     /**
-     * Builds the `reply_markup` for every channel send: one row with both
-     * buttons. A slot is skipped only if its text or URL somehow ends up
+     * Builds the `reply_markup` for every channel send: one row with the
+     * single button. Returns null only if its text or URL somehow ends up
      * empty (there is always a built-in default for both, so in practice
-     * this returns null only if both were explicitly cleared).
+     * this only happens if it was explicitly cleared).
      *
      * @return array{inline_keyboard: array<int, array<int, array<string,mixed>>>}|null
      */
     public static function channelButtonsKeyboard(): ?array
     {
-        $row = [];
-        for ($slot = 1; $slot <= 2; $slot++) {
-            $text = trim(self::channelButtonText($slot));
-            $url = trim(self::channelButtonUrl($slot));
-            if ($text === '' || $url === '') {
-                continue;
-            }
-            $button = ['text' => $text, 'url' => $url, 'style' => self::channelButtonStyle($slot)];
-            $emojiId = self::channelButtonEmojiId($slot);
-            if ($emojiId !== null && $emojiId !== '') {
-                $button['icon_custom_emoji_id'] = $emojiId;
-            }
-            $row[] = $button;
+        $text = trim(self::channelButtonText(1));
+        $url = trim(self::channelButtonUrl(1));
+        if ($text === '' || $url === '') {
+            return null;
         }
-        return empty($row) ? null : ['inline_keyboard' => [$row]];
+        $button = ['text' => $text, 'url' => $url, 'style' => self::channelButtonStyle(1)];
+        $emojiId = self::channelButtonEmojiId(1);
+        if ($emojiId !== null && $emojiId !== '') {
+            $button['icon_custom_emoji_id'] = $emojiId;
+        }
+        return ['inline_keyboard' => [[$button]]];
     }
 }
 
