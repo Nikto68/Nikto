@@ -79,10 +79,11 @@ function handleAdminTagText(array $msg, array $st = []): void {
         screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است؛ دوباره بفرستید.', [], kbBack());
         return;
     }
+    $parsed = parseEmojiBrackets($text, $msg['entities'] ?? []);
 
     $stmt = reportDb()->prepare('INSERT INTO tags (text, entities, sort_order, created_at) VALUES (:t, :e, :o, :c)');
-    $stmt->bindValue(':t', $text, SQLITE3_TEXT);
-    $stmt->bindValue(':e', json_encode($msg['entities'] ?? [], JSON_UNESCAPED_UNICODE), SQLITE3_TEXT);
+    $stmt->bindValue(':t', $parsed['text'], SQLITE3_TEXT);
+    $stmt->bindValue(':e', json_encode($parsed['entities'], JSON_UNESCAPED_UNICODE), SQLITE3_TEXT);
     $stmt->bindValue(':o', time(), SQLITE3_INTEGER);
     $stmt->bindValue(':c', time(), SQLITE3_INTEGER);
     $stmt->execute();
@@ -225,8 +226,9 @@ function handleAdminStartTextMessage(array $msg, array $st = []): void {
         screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است.', [], kbBack());
         return;
     }
-    settingSet('start_text', $text);
-    settingSet('start_text_entities', json_encode($msg['entities'] ?? [], JSON_UNESCAPED_UNICODE));
+    $parsed = parseEmojiBrackets($text, $msg['entities'] ?? []);
+    settingSet('start_text', $parsed['text']);
+    settingSet('start_text_entities', json_encode($parsed['entities'], JSON_UNESCAPED_UNICODE));
     stateClear($uid);
     screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbAdminMenu());
 }
@@ -323,7 +325,8 @@ function handleAdminTextEditMessage(array $msg, string $key, array $st = []): vo
         screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است.', [], kbBack());
         return;
     }
-    textSet($key, $text, $msg['entities'] ?? []);
+    $parsed = parseEmojiBrackets($text, $msg['entities'] ?? []);
+    textSet($key, $parsed['text'], $parsed['entities']);
     stateClear($uid);
     screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbTextsList());
 }

@@ -30,6 +30,38 @@ function entityConcat(array $parts): array {
     return ['text' => $text, 'entities' => $entities];
 }
 
+/**
+ * راهِ دومِ تعیینِ ایموجیِ پریمیوم در متن‌هایی که مدیر می‌نویسد: به‌جایِ
+ * فرستادنِ خودِ ایموجی (که نیاز به تلگرامِ پریمیوم دارد)، کافی‌ست آیدیِ
+ * عددی‌اش را (که از جایی مثل یک کانالِ پکِ ایموجی به دست آمده) داخلِ
+ * کروشه بنویسد؛ مثلاً «سلام [5985379274524202415] خوش اومدی».
+ * اگر متن هیچ الگویی نداشته باشد، entities ورودی دست‌نخورده برمی‌گردد.
+ */
+function parseEmojiBrackets(string $text, array $entities = []): array {
+    if (strpos($text, '[') === false) return ['text' => $text, 'entities' => $entities];
+
+    $parts = preg_split('/\[(\d{5,25})\]/', $text, -1, PREG_SPLIT_DELIM_CAPTURE);
+    if (count($parts) === 1) return ['text' => $text, 'entities' => $entities];
+
+    $placeholder = '⭐';
+    $newText = '';
+    $newEntities = [];
+    foreach ($parts as $i => $part) {
+        if ($i % 2 === 1) {
+            $newEntities[] = [
+                'type' => 'custom_emoji',
+                'offset' => utf16Len($newText),
+                'length' => utf16Len($placeholder),
+                'custom_emoji_id' => $part,
+            ];
+            $newText .= $placeholder;
+        } else {
+            $newText .= $part;
+        }
+    }
+    return ['text' => $newText, 'entities' => $newEntities];
+}
+
 /** اولین ایموجیِ پریمیومِ داخلِ متن/کپشنِ یک پیام را برمی‌گرداند (یا null) */
 function extractFirstCustomEmoji(array $message): ?array {
     $entities = $message['entities'] ?? ($message['caption_entities'] ?? []);
