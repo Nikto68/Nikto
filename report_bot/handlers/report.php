@@ -248,10 +248,11 @@ function handleGroupEditMessage(array $msg, int $subId): void {
 
     $newText = $msg['text'] ?? '';
     if (trim($newText) === '') return;
+    $parsed = parseEmojiBrackets($newText, $msg['entities'] ?? []);
 
     submissionUpdate($subId, [
-        'orig_caption' => $newText,
-        'orig_caption_entities' => json_encode($msg['entities'] ?? [], JSON_UNESCAPED_UNICODE),
+        'orig_caption' => $parsed['text'],
+        'orig_caption_entities' => json_encode($parsed['entities'], JSON_UNESCAPED_UNICODE),
     ]);
 
     $sub = submissionGet($subId);
