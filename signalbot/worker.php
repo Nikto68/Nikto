@@ -1091,12 +1091,25 @@ final class Worker
         }
         $this->dailyStop = null;
 
+        // The open-position cap. Resolve what's already running before
+        // opening anything new — this is what keeps a burst of qualifying
+        // candidates from turning into a pile of simultaneous trades; the
+        // bot waits for a slot to free up (a close) instead.
+        $maxOpen = Config::maxOpenTrades();
+        $openNow = $this->signalRepo->countOpen();
+        if ($maxOpen > 0 && $openNow >= $maxOpen) {
+            $this->recordGateStatus('max_open');
+            return;
+        }
+
         // How many of this pass's qualifying candidates may go out. Room
-        // is left for the daily cap, the real risk limit here — this only
-        // decides how much of a good pass is used.
+        // is left for the daily cap and the open-position cap, the real
+        // risk limits here — this only decides how much of a good pass is
+        // used.
         $room = min(
             Config::signalsPerPass(),
-            $maxSignals > 0 ? max(0, $maxSignals - $today['published']) : PHP_INT_MAX
+            $maxSignals > 0 ? max(0, $maxSignals - $today['published']) : PHP_INT_MAX,
+            $maxOpen > 0 ? max(0, $maxOpen - $openNow) : PHP_INT_MAX
         );
         if ($room < 1) {
             return;

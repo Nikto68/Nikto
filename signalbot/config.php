@@ -1476,6 +1476,19 @@ final class Config
     }
 
     /**
+     * Trades allowed open at the same time. While the live count is at or
+     * above this, maybeEmitSignal() (worker.php) will not publish another
+     * one, no matter how many qualifying candidates a pass finds -- new
+     * signals resume only once an open trade closes and frees a slot.
+     * 0 = no cap.
+     */
+    public static function maxOpenTrades(): int
+    {
+        $override = self::dbOverride('MAX_OPEN_TRADES');
+        return max(0, $override !== null ? (int) $override : Env::getInt('MAX_OPEN_TRADES', 3));
+    }
+
+    /**
      * How many of a pass's qualifying candidates may be published at once.
      * Default 1 -- exactly one signal per pass, never a burst of several
      * qualifying candidates dispatched together. The daily caps still

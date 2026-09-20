@@ -440,7 +440,11 @@ return [
     // The daily circuit breaker: after this many stop-outs, or this many
     // published signals, the bot goes quiet until tomorrow. 0 = no cap.
     'MAX_DAILY_LOSSES' => '5',
-    'MAX_DAILY_SIGNALS' => '8',
+    'MAX_DAILY_SIGNALS' => '10',
+    // Trades allowed open at once. While this many are already running,
+    // no new signal is published, even if the daily quota above still has
+    // room — the bot waits for one to close first. 0 = no cap.
+    'MAX_OPEN_TRADES' => '3',
 
     // ---------------------------------------------------------------------
     // Signal cards (the images posted with every signal)

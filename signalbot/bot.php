@@ -1474,6 +1474,7 @@ final class AdminPanel
         'MAX_DAILY_LOSSES'            => ['سقف ضرر روزانه', 'بعد از این تعداد باخت، تا فردا سیگنال نمی‌دهد. مثال: 3'],
         'SYMBOL_LOSS_COOLDOWN_SECONDS' => ['استراحت ارز بعد از استاپ', 'بعد از استاپ خوردن یک ارز، تا این‌قدر ثانیه دیگه روی همون ارز سیگنال نمی‌ده — حتی اگه ستاپ جدید پیدا کنه. صفر یعنی خاموش. مثال: 10800 (۳ ساعت)'],
         'MAX_DAILY_SIGNALS'           => ['سقف سیگنال روزانه', '۰ یعنی بدون سقف. مثال: 8'],
+        'MAX_OPEN_TRADES'             => ['حداکثر معامله باز هم‌زمان', 'وقتی تعداد معاملات باز الان به این عدد برسه، سیگنال جدید منتشر نمی‌شه تا یکی از اونا بسته بشه. ۰ یعنی بدون سقف. مثال: 3'],
         'MIN_CONFLUENCE_SCORE'        => ['حداقل امتیاز هم‌گرایی', 'مجموع امتیاز سقف‌خورده شش گروه مستقل باید از این عدد بیشتر باشه. مثال: 90'],
         'ZONE_REACH_ATR'              => ['حداکثر فاصله ناحیه حمایتی', 'بر حسب ATR. مثال: 2.5'],
         'SETUP_VOLUME_MULT'           => ['حجم لازم ستاپ‌ها', 'چند برابر میانگین ۲۰. مثال: 1'],
@@ -1528,7 +1529,7 @@ final class AdminPanel
             'ADVISORY_STOP_WARN_PCT', 'ADVISORY_STALL_RETRACE_PCT',
         ]],
         'capital' => ['مدیریت سرمایه', [
-            'ACCOUNT_BALANCE', 'RISK_PER_TRADE_PCT', 'MAX_DAILY_LOSSES', 'MAX_DAILY_SIGNALS',
+            'ACCOUNT_BALANCE', 'RISK_PER_TRADE_PCT', 'MAX_DAILY_LOSSES', 'MAX_DAILY_SIGNALS', 'MAX_OPEN_TRADES',
             'SYMBOL_LOSS_COOLDOWN_SECONDS',
         ]],
         'strategy' => ['استراتژی و فیلترها', [
@@ -1600,6 +1601,16 @@ final class AdminPanel
                 $when,
                 $today['published'],
                 $maxSignals
+            );
+        }
+        $maxOpen = Config::maxOpenTrades();
+        $openNow = $this->signalRepo->countOpen();
+        if ($maxOpen > 0 && $openNow >= $maxOpen) {
+            return sprintf(
+                "همین الان (%s): تعداد معاملات باز (%d از %d) به سقف رسیده — ربات صبر می‌کند تا یکی از اونا بسته بشه، بعد سراغ سیگنال بعدی می‌رود.\nبرای تغییر: اتومات → مدیریت سرمایه.",
+                $when,
+                $openNow,
+                $maxOpen
             );
         }
 
@@ -2526,7 +2537,7 @@ final class AdminPanel
                         'MAX_STOP_LEVERAGED_PCT', 'LEVERAGE_MAJOR',
                         'LEVERAGE_ALT_MIN', 'LEVERAGE_ALT_MAX', 'LEVERAGE_LIQUIDATION_BUFFER',
                         'SIGNAL_MAX_SYMBOLS_PER_PASS', 'MIN_SIGNAL_SCORE',
-                        'ACCOUNT_BALANCE', 'RISK_PER_TRADE_PCT', 'MAX_DAILY_LOSSES', 'MAX_DAILY_SIGNALS',
+                        'ACCOUNT_BALANCE', 'RISK_PER_TRADE_PCT', 'MAX_DAILY_LOSSES', 'MAX_DAILY_SIGNALS', 'MAX_OPEN_TRADES',
                         'BREAK_VOLUME_RATIO', 'MAX_CHASE_ATR', 'REVERSAL_RUN_PCT', 'BASE_RANGE_PCT',
                         'SCANNER_GAINER_SHARE', 'SCANNER_LOSER_SHARE', 'SCANNER_MIN_MOVE_PCT',
                         'SIGNALS_PER_PASS', 'MIN_CONFLUENCE_SCORE', 'ZONE_REACH_ATR', 'SETUP_VOLUME_MULT',
