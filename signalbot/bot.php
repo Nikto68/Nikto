@@ -1151,7 +1151,7 @@ final class AdminPanel
         $action = $parts[2] ?? null;
         if ($action === 'edit') {
             $this->states->set($userId, 'awaiting_text_input', ['key' => 'signal_template']);
-            $this->render($chatId, $messageId, "قالب سیگنال\n\nپیام جدید قالب را ارسال کنید (می‌توانید از Bold/Italic/Emoji اختصاصی/Spoiler و placeholder های {symbol} {exchange} {direction} {entry} {sl} {tp1} {tp2} {tp3} {score} {timeframe} {strategy} {reasons} استفاده کنید).", ['inline_keyboard' => [$this->backRow('admin:template')]]);
+            $this->render($chatId, $messageId, "قالب سیگنال\n\nپیام جدید قالب را ارسال کنید (می‌توانید از Bold/Italic/Emoji اختصاصی/Spoiler و placeholder های {symbol} {exchange} {direction} {entry} {sl} {tp1} {tp2} {tp3} {score} {timeframe} {strategy} {reasons} استفاده کنید). ایموجی اختصاصی/پریمیوم رو هم می‌تونید مستقیم بفرستید، هم با شناسه‌اش به شکل [123456789] هرجای متن.", ['inline_keyboard' => [$this->backRow('admin:template')]]);
             return;
         }
 
@@ -1270,7 +1270,7 @@ final class AdminPanel
                 }
                 $lines[] = '';
             }
-            $lines[] = 'پیام جدید را بفرستید.';
+            $lines[] = 'پیام جدید را بفرستید — ایموجی اختصاصی/پریمیوم هم می‌تونید مستقیم بفرستید، هم با گذاشتن شناسه‌اش به شکل [123456789] هرجای متن (لازم نیست خودتون واقعاً اون ایموجی رو داشته باشید).';
 
             $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => [$this->backRow('admin:texts')]]);
 
@@ -1379,7 +1379,7 @@ final class AdminPanel
             $lines = [
                 'آیکون ایموجی پریمیوم دکمه',
                 '',
-                'یک پیام حاوی دقیقاً همون ایموجی اختصاصی/پریمیومی که می‌خواید روی دکمه باشه بفرستید (از پنل ایموجی تلگرام انتخاب کنید، نه با کیبورد معمولی تایپ کنید).',
+                'یک پیام حاوی دقیقاً همون ایموجی اختصاصی/پریمیومی که می‌خواید روی دکمه باشه بفرستید (از پنل ایموجی تلگرام انتخاب کنید، نه با کیبورد معمولی تایپ کنید) — یا اگه فقط شناسه‌ی عددیش رو دارید (مثلاً از یک کانال پک ایموجی)، همون رو به شکل [123456789] بفرستید.',
                 '',
                 'توجه: طبق قوانین تلگرام، آیکون سفارشی روی دکمه‌های زیر پست‌های کانال فقط وقتی نشون داده می‌شه که ربات یک یوزرنیم خریداری‌شده از Fragment داشته باشه — پرمیوم بودن خود مالک ربات فقط روی چت خصوصی/گروه/سوپرگروه اثر داره، نه کانال. اگه تلگرام درخواست رو رد کنه، ربات خودکار بدون آیکون (ولی با همون متن و لینک) دوباره می‌فرسته تا سیگنال از دست نره.',
                 '',
@@ -2031,6 +2031,7 @@ final class AdminPanel
 
         $signalTemplate = $this->texts->get('signal_template');
         $signalRendered = $formatter->format($dummy, $signalTemplate['text'], $signalTemplate['entities']);
+        $signalRendered = TelegramEntityUtils::applyEmojiPlaceholders($signalRendered['text'], $signalRendered['entities']);
         $signalCard = SignalCardFactory::entry($dummy);
         $sentEmoji = $this->countCustomEmoji($signalRendered['entities']);
 
@@ -2038,6 +2039,7 @@ final class AdminPanel
         $exit = (float) $dummy->tp1;
         $resultTemplate = $this->texts->get('result_tp1');
         $resultRendered = $formatter->formatResult($row, 'tp1', $exit, $resultTemplate['text'], $resultTemplate['entities']);
+        $resultRendered = TelegramEntityUtils::applyEmojiPlaceholders($resultRendered['text'], $resultRendered['entities']);
         $resultCard = SignalCardFactory::result($row, 'tp1', $exit);
 
         $buttons = Config::channelButtonsKeyboard();
@@ -2724,8 +2726,11 @@ final class AdminPanel
                     break;
                 }
             }
+            if ($emojiId === null && preg_match('/\[(\d{5,20})\]/', trim($text), $bracketMatch)) {
+                $emojiId = $bracketMatch[1];
+            }
             if ($emojiId === null) {
-                $this->telegram->sendMessage($chatId, "توی این پیام ایموجی اختصاصی/پریمیومی پیدا نشد. از پنل ایموجی تلگرام یک ایموجی انتخاب و مستقیم بفرستید (نه تایپ با کیبورد معمولی).");
+                $this->telegram->sendMessage($chatId, "توی این پیام ایموجی اختصاصی/پریمیومی پیدا نشد. یا از پنل ایموجی تلگرام یک ایموجی مستقیم بفرستید، یا شناسه‌اش رو به شکل [123456789] بفرستید.");
                 return true;
             }
             $this->setSetting("BUTTON{$slot}_EMOJI_ID", $emojiId);

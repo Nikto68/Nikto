@@ -371,6 +371,14 @@ final class TelegramDispatcher
      */
     private function deliver(int $chatId, string $text, array $entities, ?string $card, array $opts, int $signalId, int $channelId): ?int
     {
+        // [digits] anywhere in the text becomes a real custom_emoji entity
+        // before anything else runs — this is what lets an id typed straight
+        // into a template or advisory text turn into a premium emoji on
+        // every channel send, regardless of where that text came from.
+        $rendered = TelegramEntityUtils::applyEmojiPlaceholders($text, $entities);
+        $text = $rendered['text'];
+        $entities = $rendered['entities'];
+
         // The two admin-configurable "glass" buttons go under every single
         // message this bot posts to a channel — signal card, profit shot,
         // risk-free/close notice, advisory warning alike. A caller-supplied
