@@ -2092,8 +2092,43 @@ final class AdminPanel
                 $report[] = $echoed >= $sentEmoji
                     ? sprintf('   ایموجی پریمیوم قبول شد (%d از %d)', $echoed, $sentEmoji)
                     : sprintf('   ایموجی پریمیوم در کانال حذف شد (%d از %d باقی ماند)', $echoed, $sentEmoji);
+
+                if ($echoed < $sentEmoji && $messageId > 0) {
+                    // The "ارسال ساده، بعد ویرایش" trick some bot operators
+                    // report: the send above just stripped the emoji, so try
+                    // putting it back with an edit on the SAME message and
+                    // see whether Telegram treats that call differently.
+                    // editMessageCaption for the photo card, editMessageText
+                    // for a plain message — whichever this send actually was.
+                    // TEST-ONLY: this does not change the real delivery path
+                    // (worker.php) yet. If this comes back accepted, it gets
+                    // wired into TelegramDispatcher next.
+                    $editRes = $signalCard !== null
+                        ? $this->telegram->request('editMessageCaption', [
+                            'chat_id' => $chat,
+                            'message_id' => $messageId,
+                            'caption' => $signalRendered['text'],
+                            'caption_entities' => $signalRendered['entities'],
+                        ])
+                        : $this->telegram->request('editMessageText', [
+                            'chat_id' => $chat,
+                            'message_id' => $messageId,
+                            'text' => $signalRendered['text'],
+                            'entities' => $signalRendered['entities'],
+                        ]);
+                    if ($editRes['ok'] ?? false) {
+                        $echoedAfterEdit = $this->countCustomEmoji(
+                            $editRes['result']['caption_entities'] ?? $editRes['result']['entities'] ?? []
+                        );
+                        $report[] = $echoedAfterEdit >= $sentEmoji
+                            ? sprintf('   ترفند «ارسال ساده بعد ویرایش» جواب داد — با ادیت قبول شد (%d از %d)', $echoedAfterEdit, $sentEmoji)
+                            : sprintf('   ترفند ادیت هم جواب نداد — همچنان حذف شد (%d از %d باقی ماند)', $echoedAfterEdit, $sentEmoji);
+                    } else {
+                        $report[] = sprintf('   تلاش برای ترفند ادیت رد شد: %s', (string) ($editRes['description'] ?? 'خطای نامشخص'));
+                    }
+                }
             } else {
-                $report[] = '   در قالب فعلی هیچ ایموجی پریمیومی نیست';
+                $report[] = '   در قالب فعلی هیچ ایموجی پریمیومی نیست — برای تست این بخش، یه ایموجی اختصاصی/پریمیوم رو توی «قالب سیگنال» بذار (یا شناسه‌اش رو به شکل [123456789])';
             }
 
             // The announcement replies to the signal, exactly like the live
@@ -2118,6 +2153,7 @@ final class AdminPanel
         }
 
         $report[] = 'اگر ایموجی پریمیوم حذف شده باشد، ربات در ارسال واقعی هم خودکار بدون آن می‌فرستد تا سیگنال از دست نرود. همین قانون برای آیکون پریمیوم روی دکمه‌ها هم برقرار است.';
+        $report[] = 'ترفند «ادیت» فقط همینجا تست می‌شود — اگر بالا نوشته «جواب داد»، به من بگو تا همین رفتار را روی ارسال واقعی سیگنال‌ها هم وصل کنم.';
         $this->telegram->sendMessage($chatId, implode("\n", $report));
     }
 
