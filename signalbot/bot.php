@@ -5,17 +5,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/signal.php';
 
-/**
- * ============================================================================
- * bot.php — Telegram bot: API client, admin panel, channel management,
- * text/entity management (Premium emoji-safe), quote/reply, webhook router.
- * ============================================================================
- */
-
-// ============================================================================
-// SECTION 1 — TELEGRAM CLIENT
-// ============================================================================
-
 final class TelegramClient
 {
     private string $apiBase;
@@ -25,7 +14,6 @@ final class TelegramClient
         $this->apiBase = 'https://api.telegram.org/bot' . ($token ?? Config::telegramBotToken());
     }
 
-    /** @param array<string,mixed> $params @return array<string,mixed> */
     public function request(string $method, array $params = []): array
     {
         $url = $this->apiBase . '/' . $method;
@@ -54,10 +42,6 @@ final class TelegramClient
         }
     }
 
-    /**
-     * @param array<int,array<string,mixed>> $entities
-     * @param array<string,mixed> $opts extra API params: reply_markup, disable_notification, message_thread_id, reply_parameters, etc.
-     */
     public function sendMessage(int|string $chatId, string $text, array $entities = [], array $opts = []): array
     {
         $params = array_merge([
@@ -68,17 +52,6 @@ final class TelegramClient
         return $this->request('sendMessage', $params);
     }
 
-    /**
-     * sendPhoto with the image uploaded inline as multipart/form-data — the
-     * card is generated in memory and never written to disk, so there is no
-     * public URL for Telegram to fetch and nothing to clean up afterwards.
-     *
-     * Telegram caps a caption at 1024 characters; callers that may exceed
-     * that should send the photo bare and follow it with a text message.
-     *
-     * @param array<int,array<string,mixed>> $captionEntities
-     * @param array<string,mixed> $opts extra API params (reply_parameters, disable_notification, ...)
-     */
     public function sendPhoto(int|string $chatId, string $photo, string $caption = '', array $captionEntities = [], array $opts = []): array
     {
         $fields = ['chat_id' => (string) $chatId];
@@ -94,11 +67,6 @@ final class TelegramClient
         return $this->requestMultipart('sendPhoto', $fields, ['photo' => ['filename' => 'signal.png', 'type' => 'image/png', 'content' => $photo]]);
     }
 
-    /**
-     * @param array<string,string> $fields
-     * @param array<string,array{filename:string,type:string,content:string}> $files
-     * @return array<string,mixed>
-     */
     private function requestMultipart(string $method, array $fields, array $files): array
     {
         $boundary = '----SignalBot' . bin2hex(random_bytes(12));
@@ -226,15 +194,8 @@ final class TelegramClient
     }
 }
 
-// ============================================================================
-// SECTION 2 — TEXT FORMAT MANAGER (Premium Emoji / entity-preserving store)
-// ============================================================================
-
 final class TextFormatManager
 {
-    /**
-     * @return array{text:string, entities:array<int,array<string,mixed>>}
-     */
     public function get(string $key): array
     {
         $stmt = Database::pdo()->prepare('SELECT text_value, entities FROM text_formats WHERE text_key = :k LIMIT 1');
@@ -247,14 +208,6 @@ final class TextFormatManager
         return ['text' => (string) $row['text_value'], 'entities' => is_array($entities) ? $entities : []];
     }
 
-    /**
-     * Persists raw Telegram $text + $entities exactly as received from
-     * getUpdates/webhook — never re-derived from Markdown, so
-     * custom_emoji/bold/italic/underline/strikethrough/spoiler/code/pre/
-     * text_link/mention all survive verbatim.
-     *
-     * @param array<int,array<string,mixed>> $entities
-     */
     public function set(string $key, string $text, array $entities, ?int $updatedBy = null): void
     {
         $stmt = Database::pdo()->prepare(
@@ -269,12 +222,6 @@ final class TextFormatManager
         ]);
     }
 
-    /**
-     * Renders a stored text with {placeholder} substitution while keeping
-     * every entity's offset/length correct (see TelegramEntityUtils).
-     * @param array<string,string> $placeholders
-     * @return array{text:string, entities:array<int,array<string,mixed>>}
-     */
     public function render(string $key, array $placeholders = []): array
     {
         $stored = $this->get($key);
@@ -284,17 +231,12 @@ final class TextFormatManager
         return TelegramEntityUtils::renderTemplate($stored['text'], $stored['entities'], $placeholders);
     }
 
-    /** @return string[] all known text keys, for the admin panel list */
     public function listKeys(): array
     {
         $stmt = Database::pdo()->query('SELECT text_key FROM text_formats ORDER BY text_key ASC');
         return array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     }
 }
-
-// ============================================================================
-// SECTION 3 — CHANNEL MANAGER
-// ============================================================================
 
 final class ChannelManager
 {
@@ -312,11 +254,8 @@ final class ChannelManager
         );
         $stmt->execute([':cid' => $chatId, ':by' => $addedBy, ':now1' => $now, ':now2' => $now]);
 
-        $id = (int) Database::pdo()->lastInsertId();
-        if ($id === 0) {
-            $row = $this->findByChatId($chatId);
-            $id = $row !== null ? (int) $row['id'] : 0;
-        }
+        $row = $this->findByChatId($chatId);
+        $id = $row !== null ? (int) $row['id'] : 0;
         if ($id > 0) {
             $this->ensureSettings($id);
         }
@@ -359,11 +298,6 @@ final class ChannelManager
         return (bool) $new;
     }
 
-    /**
-     * Verifies the bot's own membership/admin status in the target chat
-     * before it may be activated. Persists bot_status/can_post.
-     * @return array{ok:bool, status:string, can_post:bool, reason?:string}
-     */
     public function checkBotAccess(int $chatId): array
     {
         $me = $this->telegram->getMe();
@@ -421,13 +355,11 @@ final class ChannelManager
         return $row === false ? null : $row;
     }
 
-    /** @return array<int,array<string,mixed>> */
     public function listAll(): array
     {
         return Database::pdo()->query('SELECT * FROM channels ORDER BY created_at DESC')->fetchAll();
     }
 
-    /** @return array<int,array<string,mixed>> active + accessible channels, joined with their settings */
     public function listActiveWithSettings(): array
     {
         $sql = 'SELECT c.*, cs.template_key, cs.min_signal_score, cs.allowed_strategies, cs.allowed_exchanges,
@@ -480,13 +412,8 @@ final class ChannelManager
     }
 }
 
-// ============================================================================
-// SECTION 4 — QUOTE / REPLY MANAGER
-// ============================================================================
-
 final class QuoteManager
 {
-    /** @param array<int,array<string,mixed>> $entities */
     public function store(string $refType, string $refId, int $chatId, int $messageId, string $quoteText = '', array $entities = []): void
     {
         $stmt = Database::pdo()->prepare(
@@ -509,11 +436,6 @@ final class QuoteManager
         return $row === false ? null : $row;
     }
 
-    /**
-     * Builds the `reply_parameters` (+ optional quote) payload for
-     * sendMessage, from a stored ref — used so a Signal can be delivered
-     * as a reply/quote to an earlier bot or admin message.
-     */
     public function buildReplyParameters(array $ref): array
     {
         $params = [
@@ -531,10 +453,6 @@ final class QuoteManager
         return $params;
     }
 }
-
-// ============================================================================
-// SECTION 5 — ADMIN AUTH + STATE
-// ============================================================================
 
 final class AdminAuth
 {
@@ -576,10 +494,6 @@ final class AdminStateStore
         Database::pdo()->prepare('DELETE FROM admin_states WHERE telegram_user_id = :id')->execute([':id' => $userId]);
     }
 }
-
-// ============================================================================
-// SECTION 6 — ADMIN PANEL (inline keyboard tree + callback router)
-// ============================================================================
 
 final class AdminPanel
 {
@@ -623,10 +537,6 @@ final class AdminPanel
         return [['text' => 'بازگشت', 'callback_data' => $to]];
     }
 
-    /**
-     * Central callback router. $callbackQuery is the raw Telegram
-     * callback_query update payload.
-     */
     public function routeCallback(array $callbackQuery): void
     {
         $userId = (int) ($callbackQuery['from']['id'] ?? 0);
@@ -672,7 +582,6 @@ final class AdminPanel
         $this->telegram->editMessageText($chatId, $messageId, $text, [], ['reply_markup' => $keyboard]);
     }
 
-    // -- Exchanges ------------------------------------------------------
     private function renderExchanges(int $chatId, int $messageId, array $parts, int $userId): void
     {
         $action = $parts[2] ?? null;
@@ -723,7 +632,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
     }
 
-    // -- Channels ---------------------------------------------------------
     private function renderChannels(int $chatId, int $messageId, array $parts, int $userId): void
     {
         $action = $parts[2] ?? null;
@@ -828,7 +736,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
     }
 
-    // -- Scanner ------------------------------------------------------
     private function renderScanner(int $chatId, int $messageId, array $parts, int $userId): void
     {
         $action = $parts[2] ?? null;
@@ -860,7 +767,6 @@ final class AdminPanel
             $this->renderScannerFilters($chatId, $messageId, $parts);
             return;
         }
-
 
         if ($action === 'filter_set' && isset($parts[3])) {
             $this->states->set($userId, 'awaiting_scanner_filter', ['setting' => $parts[3]]);
@@ -896,12 +802,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
     }
 
-    /**
-     * Which exchanges the reader trades on, and whether their listings
-     * actually loaded. This screen exists because the tradability filter
-     * fails open: without it, "the filter is off because Ourbit did not
-     * answer" is invisible and looks like the filter working.
-     */
     private function renderVenues(int $chatId, int $messageId, array $parts): void
     {
         $refresh = ($parts[3] ?? null) === 'refresh';
@@ -981,15 +881,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
     }
 
-    /**
-     * Raw one-shot pings against each exchange's REST base (bypassing both
-     * the circuit breaker and the adapters' own error-swallowing parse
-     * logic — `?? []` on a malformed/error response silently looks like
-     * "zero symbols", hiding the actual HTTP status and error body). This
-     * surfaces the real reason a scan finds nothing: a blocked/rate-limited
-     * host IP (very common — exchanges frequently reject shared-hosting
-     * datacenter IP ranges), an auth error, or a genuinely empty response.
-     */
     private function testExchangeConnections(): string
     {
         $pingUrls = [
@@ -1015,7 +906,7 @@ final class AdminPanel
             }
 
             $start = microtime(true);
-            $res = HttpClient::request('GET', $url, [], null, 0); // 0 retries: one honest attempt
+            $res = HttpClient::request('GET', $url, [], null, 0);
             $elapsed = round((microtime(true) - $start) * 1000);
 
             if ($res['status'] === 0) {
@@ -1033,9 +924,6 @@ final class AdminPanel
                 $count = is_array($res['json']) ? (count($res['json']['symbols'] ?? $res['json']['result']['symbols'] ?? $res['json']['Data'] ?? $res['json']) ) : 0;
                 $lines[] = "HTTP {$res['status']} ({$elapsed}ms), آیتم‌ها: $count";
 
-                // Connection is fine -- run the real filter funnel to see
-                // exactly which stage (quote asset / stablecoin / ticker
-                // match / min volume / max spread) eliminates candidates.
                 $diag = (new MarketScanner())->diagnoseExchange($name, $adapter);
                 if ($diag['ok'] ?? false) {
                     $f = $diag['funnel'];
@@ -1064,7 +952,6 @@ final class AdminPanel
         return implode("\n", $lines);
     }
 
-    // -- Strategies ---------------------------------------------------
     private function renderStrategies(int $chatId, int $messageId, array $parts): void
     {
         $action = $parts[2] ?? null;
@@ -1072,7 +959,6 @@ final class AdminPanel
             Database::pdo()->prepare('UPDATE strategies SET is_enabled = 1 - is_enabled WHERE id = :id')->execute([':id' => (int) $parts[3]]);
         }
 
-        // Lazily seed the known strategy names from StrategyEngine into DB so they're manageable.
         $engine = new StrategyEngine();
         foreach ($engine->names() as $name) {
             Database::pdo()->prepare(
@@ -1090,15 +976,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, "استراتژی‌ها\n\nاستراتژی‌های غیرفعال در تولید سیگنال استفاده نمی‌شوند.", ['inline_keyboard' => $keyboard]);
     }
 
-    /**
-     * The modules the active strategy actually runs.
-     *
-     * This screen used to report IndicatorEngine's plugin registry, which is
-     * a different thing entirely and has always been empty — so it announced
-     * "no indicator registered" while ten of them were running the whole
-     * time. The ported indicators are engines the strategy calls directly,
-     * not registry entries, so the panel now reports those.
-     */
     private const PORTED_INDICATORS = [
         ['MTF Liquidity Stack', 'سطوح نقدینگی، سقف/کف روز قبل، تشخیص جارو شدن', 'LiquidityEngine'],
         ['Order Block Detector', 'اوردر بلاک روی پیوت حجم', 'OrderBlockEngine'],
@@ -1115,7 +992,6 @@ final class AdminPanel
         ['ADX', 'قدرت روند — فیلتر اختیاری (REQUIRE_ADX_FILTER)، پیش‌فرض خاموش', 'Ta'],
     ];
 
-    // -- Indicators ---------------------------------------------------
     private function renderIndicators(int $chatId, int $messageId): void
     {
         $lines = ['موتور اندیکاتورها', ''];
@@ -1145,7 +1021,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => [$this->backRow()]]);
     }
 
-    // -- Signal Template ------------------------------------------------
     private function renderTemplate(int $chatId, int $messageId, array $parts, int $userId): void
     {
         $action = $parts[2] ?? null;
@@ -1162,20 +1037,16 @@ final class AdminPanel
         ]);
     }
 
-    // -- Text Management ------------------------------------------------
-    /**
-     * Human names for the editable texts. The stop/target announcements are
-     * ordinary rows in text_formats, so they were always editable — but
-     * "result_be" tells nobody what it is.
-     *
-     * @var array<string,string>
-     */
     private const TEXT_LABELS = [
         'signal_template' => 'متن سیگنال',
         'result_tp1'      => 'متن تارگت ۱ + ریسک‌فری',
         'result_tp2'      => 'متن تارگت ۲',
+        'result_tp3'      => 'متن تارگت ۳',
+        'result_tp4'      => 'متن تارگت ۴ (نهایی)',
+        'result_trail'    => 'متن بسته شدن با سود قفل‌شده',
         'result_sl'       => 'متن حد ضرر',
         'result_be'       => 'متن بسته شدن بدون ضرر',
+        'result_timeout'  => 'متن بسته شدن به‌خاطر طول کشیدن',
         'advisory_stop_warning' => 'متن هشدار نزدیکی به حد ضرر',
         'advisory_stall_warning' => 'متن هشدار توقف بعد از تارگت ۳',
         'welcome'         => 'خوش‌آمدگویی (/start)',
@@ -1187,12 +1058,6 @@ final class AdminPanel
         'signal_short'    => 'عنوان SHORT',
     ];
 
-    /**
-     * Placeholders each text understands, with what they mean. Shown on the
-     * edit screen so the tokens are visible at the moment they are needed.
-     *
-     * @return array<string,string>
-     */
     private static function placeholdersFor(string $key): array
     {
         $signal = [
@@ -1237,6 +1102,8 @@ final class AdminPanel
             '{sl}' => 'حد ضرر اولیه',
             '{tp1}' => 'تارگت ۱',
             '{tp2}' => 'تارگت ۲',
+            '{tp3}' => 'تارگت ۳',
+            '{tp4}' => 'تارگت ۴',
             '{timeframe}' => 'تایم‌فریم',
             '{exchange}' => 'صرافی',
             '{time}' => 'زمان',
@@ -1244,7 +1111,7 @@ final class AdminPanel
 
         return match ($key) {
             'signal_template' => $signal,
-            'result_tp1', 'result_tp2', 'result_sl', 'result_be' => $result,
+            'result_tp1', 'result_tp2', 'result_tp3', 'result_tp4', 'result_trail', 'result_sl', 'result_be', 'result_timeout' => $result,
             'signal_long', 'signal_short' => ['{symbol}' => 'نماد ارز'],
             'scanner_status' => ['{status}' => 'وضعیت اسکنر'],
             'advisory_stop_warning', 'advisory_stall_warning' => ['{symbol}' => 'نماد ارز — مثل BTC/USDT'],
@@ -1274,9 +1141,6 @@ final class AdminPanel
 
             $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => [$this->backRow('admin:texts')]]);
 
-            // The current text, sent as its own message so it can be copied,
-            // edited and sent straight back with its formatting intact —
-            // otherwise every edit means retyping the whole thing.
             $current = $this->texts->get($key);
             if ($current['text'] !== '') {
                 $this->telegram->sendMessage($chatId, $current['text'], $current['entities']);
@@ -1284,11 +1148,6 @@ final class AdminPanel
             return;
         }
 
-        // Every known text is listed even before it's ever been customized
-        // (edited, it just starts from the built-in default) — otherwise a
-        // template nobody has touched yet, like a freshly added one, would
-        // stay invisible in this menu forever. Anything unrecognised in the
-        // DB (a key from an older version of this list) is appended after.
         $keys = $this->texts->listKeys();
         $ordered = array_keys(self::TEXT_LABELS);
         $ordered = array_merge($ordered, array_values(array_diff($keys, $ordered)));
@@ -1301,7 +1160,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, "مدیریت متن‌ها\n\nیکی از متن‌ها را برای ویرایش انتخاب کنید:", ['inline_keyboard' => $keyboard]);
     }
 
-    // -- Signal Settings -----------------------------------------------
     private function renderSignalSettings(int $chatId, int $messageId, array $parts): void
     {
         $action = $parts[2] ?? null;
@@ -1341,8 +1199,6 @@ final class AdminPanel
              ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = excluded.updated_at'
         )->execute([':k' => $key, ':v' => $value, ':now' => date('Y-m-d H:i:s')]);
     }
-
-    // -- Channel button (the glass button under every channel post) --
 
     private const BUTTON_STYLE_LABELS = ['success' => '🟢 سبز', 'primary' => '🔵 آبی', 'danger' => '🔴 قرمز'];
 
@@ -1434,17 +1290,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => $keyboard]);
     }
 
-    // -- Automatic mode -------------------------------------------------
-
-    /**
-     * Every knob that governs the unattended behaviour, in one screen:
-     * how often the bot may speak, how many trades it may run, which
-     * timeframes it trades, where the targets sit, and how leverage is
-     * chosen per coin. Each writes to bot_settings, which Config:: reads
-     * in preference to env.php — so nothing here needs a redeploy.
-     *
-     * @var array<string,array{0:string,1:string}> setting key => [label, hint]
-     */
     private const AUTO_SETTINGS = [
         'SIGNALS_PER_PASS'            => ['سیگنال در هر پاس', 'چند تا از بهترین‌های هر اسکن منتشر شوند. روی 1 یعنی دقیقاً یک سیگنال هر بار، نه چندتا با هم. مثال: 1'],
         'MIN_VOLUME_USDT'             => ['حداقل حجم ۲۴ ساعته', 'به دلار. مثال: 300000'],
@@ -1475,6 +1320,10 @@ final class AdminPanel
         'SYMBOL_LOSS_COOLDOWN_SECONDS' => ['استراحت ارز بعد از استاپ', 'بعد از استاپ خوردن یک ارز، تا این‌قدر ثانیه دیگه روی همون ارز سیگنال نمی‌ده — حتی اگه ستاپ جدید پیدا کنه. صفر یعنی خاموش. مثال: 10800 (۳ ساعت)'],
         'MAX_DAILY_SIGNALS'           => ['سقف سیگنال روزانه', '۰ یعنی بدون سقف. مثال: 8'],
         'MAX_OPEN_TRADES'             => ['حداکثر معامله باز هم‌زمان', 'وقتی تعداد معاملات باز الان به این عدد برسه، سیگنال جدید منتشر نمی‌شه تا یکی از اونا بسته بشه. ۰ یعنی بدون سقف. مثال: 3'],
+        'MIN_SIGNAL_GAP_MINUTES'      => ['حداقل فاصله بین سیگنال‌ها', 'به دقیقه. ۰ یعنی بدون فاصله. مثال: 30'],
+        'MAX_TRADE_HOURS'             => ['حداکثر عمر معامله قبل از تارگت ۱', 'به ساعت. اگه تا این مدت به تارگت ۱ نرسه، با قیمت فعلی بسته می‌شه. ۰ یعنی خاموش. مثال: 24'],
+        'MAX_OPPOSING_VOTE_RATIO'     => ['سقف شواهد خلاف جهت', 'بین 0.1 تا 1. اگه امتیاز جهت مخالف به این نسبت از جهت برنده برسه، سیگنال رد می‌شه. 1 یعنی خاموش. مثال: 0.6'],
+        'REQUIRE_BREAKOUT_MOMENTUM'   => ['اجبار تایید مومنتوم برای شکست', 'true یا false. شکست بدون تایید مومنتوم/حجم رد می‌شه.'],
         'MIN_CONFLUENCE_SCORE'        => ['حداقل امتیاز هم‌گرایی', 'مجموع امتیاز سقف‌خورده شش گروه مستقل باید از این عدد بیشتر باشه. مثال: 90'],
         'ZONE_REACH_ATR'              => ['حداکثر فاصله ناحیه حمایتی', 'بر حسب ATR. مثال: 2.5'],
         'SETUP_VOLUME_MULT'           => ['حجم لازم ستاپ‌ها', 'چند برابر میانگین ۲۰. مثال: 1'],
@@ -1508,14 +1357,6 @@ final class AdminPanel
         'SCANNER_MIN_MOVE_PCT'        => ['حداقل حرکت ۲۴ ساعته', 'درصد. مثال: 4'],
     ];
 
-    /**
-     * The 34 AUTO_SETTINGS keys grouped into five topics, so the automatic
-     * mode screen shows five buttons instead of dumping every knob (and its
-     * current value) onto one screen at once. catKey => [label, [setting
-     * keys...]].
-     *
-     * @var array<string,array{0:string,1:array<int,string>}>
-     */
     private const AUTO_CATEGORIES = [
         'timing' => ['زمان‌بندی و اسکن', [
             'SIGNALS_PER_PASS', 'MIN_VOLUME_USDT',
@@ -1530,7 +1371,7 @@ final class AdminPanel
         ]],
         'capital' => ['مدیریت سرمایه', [
             'ACCOUNT_BALANCE', 'RISK_PER_TRADE_PCT', 'MAX_DAILY_LOSSES', 'MAX_DAILY_SIGNALS', 'MAX_OPEN_TRADES',
-            'SYMBOL_LOSS_COOLDOWN_SECONDS',
+            'MIN_SIGNAL_GAP_MINUTES', 'MAX_TRADE_HOURS', 'SYMBOL_LOSS_COOLDOWN_SECONDS',
         ]],
         'strategy' => ['استراتژی و فیلترها', [
             'REQUIRE_HTF_ALIGNMENT', 'REQUIRE_DISCOUNT_PREMIUM', 'MIN_SIGNAL_SCORE', 'MIN_CONFLUENCE_SCORE',
@@ -1541,7 +1382,7 @@ final class AdminPanel
             'CONFLUENCE_STRUCTURE_CAP', 'CONFLUENCE_LIQUIDITY_CAP', 'CONFLUENCE_LOCATION_CAP',
             'CONFLUENCE_MOMENTUM_CAP', 'CONFLUENCE_VOLUME_CAP', 'CONFLUENCE_HTF_CAP',
             'MIN_ROOM_TO_TARGET_R', 'HTF_CONFIRM_MAP', 'REQUIRE_APLUS_SETUP', 'APLUS_MIN_CONFIRMATIONS',
-            'REQUIRE_ADX_FILTER', 'MIN_ADX',
+            'REQUIRE_ADX_FILTER', 'MIN_ADX', 'MAX_OPPOSING_VOTE_RATIO', 'REQUIRE_BREAKOUT_MOMENTUM',
             'NEWS_BLACKOUT_START', 'NEWS_BLACKOUT_END',
         ]],
         'scanner' => ['اسکنر', [
@@ -1549,15 +1390,6 @@ final class AdminPanel
         ]],
     ];
 
-    /**
-     * Why the bot is quiet, in plain terms.
-     *
-     * "No signal yet" has half a dozen causes that look identical from the
-     * outside — no symbols, not enough candles, a market with no direction,
-     * or setups that are simply weaker than the threshold. The worker
-     * records what each pass saw; this turns that into one readable line and
-     * a number the operator can act on.
-     */
     private function scanVerdict(): string
     {
         $raw = $this->getSetting('last_scan_report', '');
@@ -1578,13 +1410,6 @@ final class AdminPanel
             return sprintf('آخرین پاس (%s): سیگنال منتشر شد.', $when);
         }
 
-        // A deliberate pause is not a fault, and must not be reported as
-        // one — but it must be checked against the CURRENT numbers, not the
-        // cached 'daily_stop' the last pass happened to record: a cached
-        // verdict here would freeze on "quota full" or "daily loss cap
-        // hit" long after a setting was raised or the day rolled over,
-        // and make a bot that's working exactly as configured look
-        // broken or stuck.
         $today = $this->signalRepo->todayTally();
         if ($today['losses'] >= Config::maxDailyLosses()) {
             return sprintf(
@@ -1613,16 +1438,22 @@ final class AdminPanel
                 $maxOpen
             );
         }
+        $gapMinutes = Config::minSignalGapMinutes();
+        $lastPublished = $this->signalRepo->lastPublishedAt();
+        if ($gapMinutes > 0 && $lastPublished !== null && time() - $lastPublished < $gapMinutes * 60) {
+            return sprintf(
+                "همین الان (%s): از آخرین سیگنال کمتر از %d دقیقه گذشته — سیگنال بعدی حدود %d دقیقه دیگر مجاز است.\nبرای تغییر: اتومات → مدیریت سرمایه.",
+                $when,
+                $gapMinutes,
+                (int) ceil(($gapMinutes * 60 - (time() - $lastPublished)) / 60)
+            );
+        }
 
         $symbols = (int) ($report['symbols'] ?? 0);
         if ($symbols === 0) {
             return sprintf("آخرین پاس (%s): هیچ نماد فعالی نبود.\nاسکنر چیزی پیدا نکرده — از Scanner اتصال صرافی‌ها را تست کنید.", $when);
         }
 
-        // A pass that found setups but published none is a different
-        // situation from one that found nothing, and says so.
-        // The rotation's position, so "it did not look at my coin yet" is a
-        // visible fact rather than a suspicion.
         $visited = (int) ($report['visited'] ?? 0);
         $symbolsTotal = (int) ($report['symbols'] ?? 0);
         $rotation = '';
@@ -1672,12 +1503,6 @@ final class AdminPanel
         return $verdict;
     }
 
-    /**
-     * The automatic-mode screen. Kept to the status the operator actually
-     * needs at a glance (why it's quiet, what's open, the track record) —
-     * the 34 tunable knobs live one tap away, grouped into five topics by
-     * AUTO_CATEGORIES, instead of all being dumped onto this one screen.
-     */
     private function renderAuto(int $chatId, int $messageId, array $parts, int $userId): void
     {
         $action = $parts[2] ?? null;
@@ -1756,7 +1581,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => $keyboard]);
     }
 
-    /** One AUTO_CATEGORIES topic: its current values, then a button per setting to change one. */
     private function renderAutoCategory(int $chatId, int $messageId, string $catKey): void
     {
         if (!isset(self::AUTO_CATEGORIES[$catKey])) {
@@ -1785,14 +1609,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => $keyboard]);
     }
 
-    /**
-     * Manual panic close: every open position, at whatever price the store
-     * last saw for it (the same cached ticker/candle price worker.php's own
-     * monitorOpenPositions() uses — no live exchange call needed here).
-     * Marked with result 'manual' so it never counts toward the automated
-     * win/loss/breakeven tally, which is meant to measure the strategy
-     * itself, not an admin override.
-     */
     private function closeAllOpenPositions(int $chatId): void
     {
         $positions = $this->signalRepo->openPositions();
@@ -1808,8 +1624,8 @@ final class AdminPanel
             $symbol = (string) $row['symbol'];
             $price = $store->latestPrice($exchange, $symbol);
             if ($price <= 0) {
-                $lines[] = sprintf('%s: قیمت لحظه‌ای در دسترس نبود — بسته نشد.', SignalCardFactory::displaySymbol($symbol));
-                continue;
+                $price = (float) $row['entry_price'];
+                $lines[] = sprintf('%s: قیمت لحظه‌ای در دسترس نبود — با قیمت ورود بسته شد.', SignalCardFactory::displaySymbol($symbol));
             }
             $this->signalRepo->close((int) $row['id'], 'manual', $price);
             $stats = SignalFormatter::resultStats($row, $price);
@@ -1825,7 +1641,6 @@ final class AdminPanel
         $this->telegram->sendMessage($chatId, implode("\n", $lines));
     }
 
-    /** @return string[] current values for one AUTO_CATEGORIES topic. */
     private function autoCategoryStatusLines(string $catKey): array
     {
         return match ($catKey) {
@@ -1859,6 +1674,10 @@ final class AdminPanel
                 sprintf('سقف روزانه: %d باخت | %s سیگنال',
                     Config::maxDailyLosses(),
                     Config::maxDailySignals() > 0 ? (string) Config::maxDailySignals() : 'بدون سقف'),
+                sprintf('حداکثر معامله باز: %s | فاصله بین سیگنال‌ها: %s | عمر معامله تا تارگت ۱: %s',
+                    Config::maxOpenTrades() > 0 ? (string) Config::maxOpenTrades() : 'بدون سقف',
+                    Config::minSignalGapMinutes() > 0 ? Config::minSignalGapMinutes() . ' دقیقه' : 'خاموش',
+                    Config::maxTradeHours() > 0 ? Config::maxTradeHours() . ' ساعت' : 'خاموش'),
             ],
             'strategy' => [
                 sprintf('استراتژی: %s (حداقل امتیاز هم‌گرایی %.0f)', Config::strategyName(), Config::minConfluenceScore()),
@@ -1871,6 +1690,9 @@ final class AdminPanel
                 sprintf('Killzone (بازه‌های پرحجم): %s', Config::requireKillzone() ? 'فعال' : 'خاموش (پیش‌فرض — کریپتو ۲۴ساعته است)'),
                 sprintf('وتوی سطح قوی: اگه نزدیک‌ترین حمایت/مقاومت حداقل %d بار لمس شده باشه و برخلاف جهت معامله باشه، سیگنال رد می‌شه — حتی اگه بقیه ماژول‌ها موافق باشن (جلوگیری از شورت رو حمایت/لانگ رو مقاومت قوی).',
                     Config::strongZoneVetoTouches()),
+                sprintf('سقف شواهد خلاف جهت: %s | تایید مومنتوم برای شکست: %s | تحلیل فقط روی کندل بسته‌شده',
+                    Config::maxOpposingVoteRatio() < 1.0 ? number_format(Config::maxOpposingVoteRatio(), 2) : 'خاموش',
+                    Config::requireBreakoutMomentum() ? 'فعال' : 'خاموش'),
             ],
             'scanner' => [
                 sprintf('سهم بیشترین رشد/ضرر در لیست اسکن: %.0f%% / %.0f%%', Config::scannerGainerShare(), Config::scannerLoserShare()),
@@ -1880,7 +1702,6 @@ final class AdminPanel
         };
     }
 
-    // -- Test Signal ---------------------------------------------------
     private function renderTestSignal(int $chatId, int $messageId, array $parts): void
     {
         $action = $parts[2] ?? null;
@@ -1906,20 +1727,6 @@ final class AdminPanel
         ]);
     }
 
-    /**
-     * Sends the current signal_template through the exact same
-     * SignalFormatter/TelegramEntityUtils pipeline a real signal would use,
-     * with made-up values — so premium emoji/entity survival can be
-     * checked immediately, without depending on the scanner having found
-     * any symbols yet.
-     */
-    /**
-     * A stand-in signal with numbers shaped like a real BTC trade at the
-     * configured major leverage, so a preview shows the true stop distance
-     * and the true leveraged profit each target is worth — not a cosmetic
-     * sample. Shared by the private preview and the channel test so the two
-     * can never disagree about what they are demonstrating.
-     */
     private function previewSignal(): Signal
     {
         $leverage = Config::leverageMajor();
@@ -1949,7 +1756,6 @@ final class AdminPanel
         );
     }
 
-    /** The same stand-in trade shaped as a signals-table row, for result rendering. */
     private function previewRow(Signal $signal): array
     {
         return [
@@ -1983,8 +1789,6 @@ final class AdminPanel
             $this->telegram->sendMessage($chatId, $rendered['text'], $rendered['entities']);
         }
 
-        // Second half of the preview: what a TP1 fill will look like, so the
-        // "profit shot" and the risk-free wording can be checked too.
         $exit = (float) $dummy->tp1;
         $row = $this->previewRow($dummy);
         $resultTemplate = $this->texts->get('result_tp1');
@@ -2002,19 +1806,6 @@ final class AdminPanel
         }
     }
 
-    /**
-     * Sends the current templates to the real channels and reports what
-     * Telegram did with them.
-     *
-     * The useful part is the verdict on premium emoji: Telegram echoes the
-     * message it stored back in the sendPhoto response, so counting the
-     * custom_emoji entities that come back says whether the channel kept
-     * them — which the docs and the community disagree about, and which no
-     * amount of reading settles for a particular bot and channel.
-     *
-     * It also sends the target announcement as a reply to the signal, so the
-     * reply chain the live bot uses is visible end to end.
-     */
     private function runChannelTest(int $chatId): void
     {
         $channels = $this->channels->listActiveWithSettings();
@@ -2056,10 +1847,6 @@ final class AdminPanel
 
             $buttonIconAccepted = $hasButtonIcon ? true : null;
             if ($hasButtonIcon && !($res['ok'] ?? false)) {
-                // The whole send may have failed only because of the
-                // button's icon (Fragment-username restriction) — retry
-                // once without it so the test still shows whether the rest
-                // of the card/buttons work.
                 $opts = ['reply_markup' => TelegramEntityUtils::stripButtonEmojiIcons($buttons)];
                 $res = $signalCard !== null
                     ? $this->telegram->sendPhoto($chat, $signalCard, $signalRendered['text'], $signalRendered['entities'], $opts)
@@ -2083,7 +1870,6 @@ final class AdminPanel
             }
 
             if ($sentEmoji > 0) {
-                // Telegram returns the message as it stored it.
                 $echoed = $this->countCustomEmoji(
                     $res['result']['caption_entities'] ?? $res['result']['entities'] ?? []
                 );
@@ -2094,9 +1880,6 @@ final class AdminPanel
                 $report[] = '   در قالب فعلی هیچ ایموجی پریمیومی نیست';
             }
 
-            // The announcement replies to the signal, exactly like the live
-            // bot — and carries the same buttons (icon dropped too, if the
-            // signal send above already found it gets rejected on this chat).
             $opts = $messageId > 0
                 ? ['reply_parameters' => ['message_id' => $messageId, 'allow_sending_without_reply' => true]]
                 : [];
@@ -2119,7 +1902,6 @@ final class AdminPanel
         $this->telegram->sendMessage($chatId, implode("\n", $report));
     }
 
-    /** @param array<int,array<string,mixed>> $entities */
     private function countCustomEmoji(array $entities): int
     {
         $n = 0;
@@ -2133,8 +1915,6 @@ final class AdminPanel
 
     private function runTestSignal(int $chatId): void
     {
-        // universe() puts BTC/ETH first, so a manual test lands on a major
-        // rather than on whatever alt happened to rank first.
         $symbols = (new SymbolRepository())->universe(1);
         if (empty($symbols)) {
             $this->telegram->sendMessage($chatId, "هیچ نماد فعالی برای تست وجود ندارد. ابتدا Scanner را اجرا کنید.");
@@ -2149,9 +1929,7 @@ final class AdminPanel
 
         $store = new MarketDataStore();
         $timeframes = Config::timeframes();
-        // The HTF confirmation cascade (15m checks 1h, 30m checks 2h, ...)
-        // needs its own candles too, so this manual test sees the same HTF
-        // read the live scanner would. See Config::htfConfirmTimeframe().
+
         foreach (Config::signalTimeframes() as $tf) {
             $htfTf = Config::htfConfirmTimeframe($tf);
             if ($htfTf !== null && !in_array($htfTf, $timeframes, true)) {
@@ -2171,16 +1949,11 @@ final class AdminPanel
         }
 
         $snapshot = $store->buildSnapshot($target['exchange'], $target['symbol'], $timeframes);
-        // Diagnose on a timeframe the bot is actually allowed to trade
-        // (SIGNAL_TIMEFRAMES), not simply the last of the candle-collection
-        // list — otherwise the test reports on 1D while the bot trades 4h.
+
         $signalTfs = Config::signalTimeframes();
         $mainTf = $signalTfs[array_key_last($signalTfs)] ?? '1h';
         $candles = $snapshot->candlesFor($mainTf);
 
-        // Walk the exact same pipeline SignalGenerator uses, stage by
-        // stage, with a diagnostic line at each point -- so "no signal"
-        // says WHY instead of leaving it a mystery every single time.
         $diag = [];
         $diag[] = "تست تشخیصی: {$target['symbol']} ({$target['exchange']}, {$mainTf})";
         $diag[] = "قیمت: {$snapshot->price} | کندل: " . count($candles);
@@ -2283,7 +2056,6 @@ final class AdminPanel
         $this->telegram->sendMessage($chatId, $rendered['text'], $rendered['entities']);
     }
 
-    // -- Signal History --------------------------------------------------
     private function renderHistory(int $chatId, int $messageId): void
     {
         $rows = $this->signalRepo->recent(10);
@@ -2317,7 +2089,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => [$this->backRow()]]);
     }
 
-    // -- System Health --------------------------------------------------
     private function renderHealth(int $chatId, int $messageId, array $parts): void
     {
         if (($parts[2] ?? null) === 'errors') {
@@ -2357,13 +2128,6 @@ final class AdminPanel
         $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
     }
 
-    /**
-     * Shows the last 10 error/critical log rows directly from Telegram —
-     * added after a masked-error bug (Logger fataling on undefined
-     * STDERR/STDOUT under the web SAPI, inside the webhook's own error
-     * handler) made silent failures very hard to diagnose without raw
-     * server log access.
-     */
     private function renderRecentErrors(int $chatId, int $messageId): void
     {
         $rows = Database::pdo()->query(
@@ -2387,12 +2151,6 @@ final class AdminPanel
         ]]);
     }
 
-    /**
-     * Worker liveness, said in terms of what to do about it. A bare
-     * "unknown" is the least useful thing this screen can print: it is the
-     * symptom of the single most common deployment mistake — the cron job
-     * not running — and it should say so.
-     */
     private function workerHeartbeatStatus(): string
     {
         $v = $this->getSetting('worker_heartbeat', '');
@@ -2412,11 +2170,6 @@ final class AdminPanel
         return sprintf("%d ساعت پیش — کرون متوقف شده\n   php %s/worker.php را هر دقیقه اجرا کنید.", (int) round($ago / 3600), __DIR__);
     }
 
-    /**
-     * Handles free-text input while an admin is mid-flow (e.g. entering a
-     * channel ID or editing a text/template). Returns true if the message
-     * was consumed as state input.
-     */
     public function handleStateInput(int $userId, int $chatId, array $message): bool
     {
         $state = $this->states->get($userId);
@@ -2469,13 +2222,6 @@ final class AdminPanel
                 return true;
             }
 
-            // Same reset word the automatic-mode settings use — typing it
-            // here used to just get stored as the literal setting value
-            // (ALLOWED_QUOTE_ASSETS had no format check at all), which
-            // silently turned "حذف" into the one and only allowed quote
-            // asset and blocked every single symbol on every exchange with
-            // no error shown. Handling it here, before anything is written,
-            // is the actual fix for that.
             if ($value === 'حذف') {
                 Database::pdo()->prepare('DELETE FROM bot_settings WHERE setting_key = :k')->execute([':k' => $setting]);
                 $this->telegram->sendMessage($chatId, "به مقدار پیش‌فرض (env.php) برگشت.");
@@ -2491,13 +2237,6 @@ final class AdminPanel
                 return true;
             }
             if ($setting === 'ALLOWED_QUOTE_ASSETS' && $value !== '' && $value !== '*') {
-                // Each token must look like an actual currency ticker
-                // (USDT, USDC, ...). Without this check, any typo or stray
-                // word got saved as-is and became the entire allow-list —
-                // since a real exchange symbol never quotes in "حذف" or
-                // "usdc " (trailing space) or whatever was mistyped, that
-                // one bad save silently zeroed out every symbol on every
-                // exchange, with the panel still saying "ذخیره شد".
                 $tokens = array_map(static fn($x) => strtoupper(trim($x)), explode(',', $value));
                 $invalid = array_filter($tokens, static fn($x) => $x !== '' && !preg_match('/^[A-Z0-9]{2,10}$/', $x));
                 if (!empty($invalid)) {
@@ -2505,10 +2244,7 @@ final class AdminPanel
                     return true;
                 }
             }
-            // An empty ALLOWED_QUOTE_ASSETS means "no filter at all" -- but
-            // the DB-override lookup treats a stored empty string as "not
-            // set" (falls back to env's default), so that intent needs a
-            // sentinel instead of a literal empty value.
+
             if ($setting === 'ALLOWED_QUOTE_ASSETS' && $value === '') {
                 $value = '*';
             }
@@ -2544,7 +2280,8 @@ final class AdminPanel
                         'MIN_VOLUME_USDT', 'ROTATION_BUDGET_SECONDS', 'MIN_FVG_MITIGATION_PCT', 'STRONG_ZONE_VETO_TOUCHES',
                         'CONFLUENCE_STRUCTURE_CAP', 'CONFLUENCE_LIQUIDITY_CAP', 'CONFLUENCE_LOCATION_CAP',
                         'CONFLUENCE_MOMENTUM_CAP', 'CONFLUENCE_VOLUME_CAP', 'CONFLUENCE_HTF_CAP',
-                        'MIN_ROOM_TO_TARGET_R', 'SYMBOL_LOSS_COOLDOWN_SECONDS', 'APLUS_MIN_CONFIRMATIONS', 'MIN_ADX'];
+                        'MIN_ROOM_TO_TARGET_R', 'SYMBOL_LOSS_COOLDOWN_SECONDS', 'APLUS_MIN_CONFIRMATIONS', 'MIN_ADX',
+                        'MIN_SIGNAL_GAP_MINUTES', 'MAX_TRADE_HOURS', 'MAX_OPPOSING_VOTE_RATIO'];
             if (in_array($key, $numeric, true) && !is_numeric($value)) {
                 $this->telegram->sendMessage($chatId, "این مقدار باید عدد باشه.");
                 return true;
@@ -2569,6 +2306,10 @@ final class AdminPanel
                 $this->telegram->sendMessage($chatId, "این مقدار باید بین 1 تا 100 باشه.");
                 return true;
             }
+            if ($key === 'MAX_OPPOSING_VOTE_RATIO' && ((float) $value < 0.1 || (float) $value > 1)) {
+                $this->telegram->sendMessage($chatId, "این مقدار باید بین 0.1 تا 1 باشه.");
+                return true;
+            }
             if ($key === 'LEVERAGE_ALT_MAX' && (int) $value < Config::leverageAltMin()) {
                 $this->telegram->sendMessage($chatId, "حداکثر اهرم نمی‌تواند کمتر از حداقل اهرم (" . Config::leverageAltMin() . ") باشد.");
                 return true;
@@ -2581,8 +2322,7 @@ final class AdminPanel
                     $this->telegram->sendMessage($chatId, "تایم‌فریم نامعتبر. فقط از این‌ها استفاده کنید: " . implode(', ', $known));
                     return true;
                 }
-                // A signal timeframe with no candles behind it produces
-                // nothing, so make sure the collector is fetching it too.
+
                 $missing = array_diff($given, Config::timeframes());
                 if (!empty($missing)) {
                     $this->telegram->sendMessage($chatId, "توجه: تایم‌فریم(های) " . implode(', ', $missing) . " در TIMEFRAMES فایل env.php نیست، پس کندلی برایشان جمع نمی‌شود و سیگنالی هم نمی‌دهند.");
@@ -2595,7 +2335,7 @@ final class AdminPanel
                     return true;
                 }
             }
-            if (in_array($key, ['REQUIRE_REVERSAL_CANDLE', 'REQUIRE_KILLZONE', 'REQUIRE_FRESH_REVERSAL_ZONE', 'REQUIRE_SWEEP_AT_ZONE', 'REQUIRE_ADX_FILTER'], true)
+            if (in_array($key, ['REQUIRE_REVERSAL_CANDLE', 'REQUIRE_KILLZONE', 'REQUIRE_FRESH_REVERSAL_ZONE', 'REQUIRE_SWEEP_AT_ZONE', 'REQUIRE_ADX_FILTER', 'REQUIRE_BREAKOUT_MOMENTUM'], true)
                 && !in_array(strtolower($value), ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'], true)) {
                 $this->telegram->sendMessage($chatId, "این مقدار باید true یا false باشه.");
                 return true;
@@ -2605,14 +2345,7 @@ final class AdminPanel
             if ($key === 'TRADABLE_VENUES') {
                 VenueListings::forget();
             }
-            // These four are only ever read inside a scanner pass
-            // (MarketScanner::rank()/bucketRank()), which the worker itself
-            // only re-runs once an hour (SCANNER_INTERVAL_SECONDS, not
-            // admin-editable). Telling the admin it's "live now" here was
-            // the actual bug behind "من تنظیمات رو عوض کردم ولی همون قبلی
-            // موند" — the value WAS saved, it just had nothing to apply it
-            // until the next scan. Same message the scanner-filter flow
-            // already uses for exactly this reason.
+
             $scanOnly = ['SCANNER_GAINER_SHARE', 'SCANNER_LOSER_SHARE', 'SCANNER_MIN_MOVE_PCT', 'MIN_VOLUME_USDT'];
             $this->telegram->sendMessage($chatId, in_array($key, $scanOnly, true)
                 ? "ذخیره شد. برای اعمال، «اسکن الان» رو بزنید."
@@ -2739,7 +2472,6 @@ final class AdminPanel
         return false;
     }
 
-    /** @return array{chat_id:int, message_id:int}|null */
     private function extractForwardOrigin(array $message): ?array
     {
         if (isset($message['forward_origin']['chat']['id'], $message['forward_origin']['message_id'])) {
@@ -2751,10 +2483,6 @@ final class AdminPanel
         return null;
     }
 }
-
-// ============================================================================
-// SECTION 7 — BOT APPLICATION (update router)
-// ============================================================================
 
 final class BotApplication
 {
@@ -2795,17 +2523,19 @@ final class BotApplication
             return;
         }
 
-        if ($text === '/start') {
+        $command = preg_match('~^/([a-z]+)(?:@\w+)?(?:\s|$)~i', $text, $m) ? strtolower($m[1]) : '';
+
+        if ($command === 'start') {
             $this->replyWithText($chatId, 'welcome');
             return;
         }
 
-        if ($text === '/help') {
+        if ($command === 'help') {
             $this->replyWithText($chatId, 'help');
             return;
         }
 
-        if ($text === '/panel' || $text === '/admin') {
+        if ($command === 'panel' || $command === 'admin') {
             if (!AdminAuth::isAdmin($userId)) {
                 $this->replyWithText($chatId, 'error');
                 return;
@@ -2834,7 +2564,7 @@ final class BotApplication
         }
         $existing = $this->channels->findByChatId($chatId);
         if ($existing === null) {
-            return; // Only track chats an admin explicitly added.
+            return;
         }
         try {
             $this->channels->checkBotAccess($chatId);
@@ -2861,13 +2591,6 @@ final class BotApplication
         ]);
     }
 }
-
-// ============================================================================
-// SECTION 8 — WEBHOOK ENTRYPOINT
-// (Only active when this file is hit directly by Telegram's webhook, i.e.
-//  served by php-fpm/nginx. When required from worker.php this section is
-//  inert — worker.php drives its own loop and never receives webhooks.)
-// ============================================================================
 
 if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === 'bot.php') {
     try {
@@ -2898,7 +2621,7 @@ if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === 'bot.p
         echo 'OK';
     } catch (Throwable $e) {
         Logger::critical('bot', 'webhook fatal error', ['error' => $e->getMessage()]);
-        http_response_code(200); // Ack to Telegram regardless, to avoid retry storms; error is logged.
+        http_response_code(200);
         echo 'OK';
     }
 }

@@ -2,53 +2,15 @@
 
 declare(strict_types=1);
 
-/**
- * ============================================================================
- * setup.php — self-check / installer page.
- *
- * Exists because every failure on the webhook path is deliberately silent:
- * bot.php answers Telegram with 200 OK no matter what goes wrong (otherwise
- * Telegram retries in a storm), so a bot that does not respond to /start
- * gives you exactly nothing to go on. This page turns that silence into an
- * answer — PHP version, extensions, env.php, storage permissions, whether
- * the token is valid, and above all what getWebhookInfo() says, since a
- * missing or broken webhook is by far the most common cause.
- *
- * Open it in a browser:  https://YOURDOMAIN/setup.php
- *
- * The environment checks are open (they expose nothing an attacker could
- * use). Anything Telegram-related, the error log, and the "register
- * webhook" action are locked behind pasting the bot token, which proves
- * ownership. The token is posted, never put in the URL, so it does not end
- * up in the server's access log.
- *
- * DELETE THIS FILE once the bot works.
- * ============================================================================
- */
-
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/signal.php';
 require_once __DIR__ . '/bot.php';
 
-// ============================================================================
-// Checks
-// ============================================================================
-
-/** @return array{0:string,1:bool,2:string} [label, ok, detail] */
 function check(string $label, bool $ok, string $detail = ''): array
 {
     return [$label, $ok, $detail];
 }
 
-/**
- * One-way stand-in for the bot token, used only so the "register webhook"
- * button can re-prove ownership on its own POST without the page ever
- * echoing the real token back into the HTML (view-source, a shared screen,
- * or a proxy log would otherwise see it in plain text). Leaking this value
- * only lets someone re-submit the harmless "register webhook to this exact
- * URL" action — nowhere near as sensitive as the real token, which grants
- * full control of the bot account.
- */
 function setupConfirmNonce(string $token): string
 {
     return hash_hmac('sha256', 'signalbot_setup_confirm', $token);
@@ -60,7 +22,6 @@ try {
     $configuredToken = Config::telegramBotToken();
     $tokenConfigured = true;
 } catch (Throwable) {
-    // Left false — reported as a failed check below.
 }
 
 $unlocked = false;
@@ -74,7 +35,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $tokenConfigured) {
     }
 }
 
-// -- environment -------------------------------------------------------------
 $env = [];
 $env[] = check(
     'نسخه PHP (حداقل 8.1)',
@@ -97,7 +57,6 @@ $env[] = check(
         : 'فایل Vazirmatn-Regular.ttf پیدا نشد؛ برچسب کارت‌ها انگلیسی می‌شود'
 );
 
-// -- configuration -----------------------------------------------------------
 $conf = [];
 $conf[] = check(
     'فایل env.php',
@@ -124,7 +83,6 @@ $conf[] = check(
         : 'تنظیم شده — باید دقیقاً همین مقدار موقع setWebhook ثبت شده باشد'
 );
 
-// -- storage + database ------------------------------------------------------
 $storage = [];
 $storageDir = Config::storageDir();
 $storageOk = false;
@@ -132,10 +90,7 @@ if (!is_dir($storageDir)) {
     @mkdir($storageDir, 0755, true);
 }
 $storageOk = is_dir($storageDir) && is_writable($storageDir);
-// The full server path is only shown once the token has proven ownership —
-// this whole environment section is intentionally reachable without a
-// token, so printing an absolute filesystem path here to anyone who opens
-// the page would leak the server layout for free.
+
 $storage[] = check('پوشه storage قابل نوشتن', $storageOk, $unlocked ? $storageDir : '');
 
 $migrated = false;
@@ -150,7 +105,6 @@ if ($storageOk) {
 }
 $storage[] = check('ساخت جدول‌های دیتابیس', $migrated, $migrateError);
 
-// -- telegram (locked) -------------------------------------------------------
 $me = null;
 $hook = null;
 $hookActionMessage = '';
@@ -178,7 +132,6 @@ if ($unlocked) {
     $hook = ($hookRes['ok'] ?? false) ? ($hookRes['result'] ?? null) : null;
 }
 
-// -- recent errors (locked) --------------------------------------------------
 $recentErrors = [];
 if ($unlocked && $migrated) {
     try {
@@ -194,7 +147,6 @@ if ($unlocked && $migrated) {
 $allOk = true;
 foreach ([$env, $conf, $storage] as $group) {
     foreach ($group as [$label, $ok, $detail]) {
-        // The two optional rows must not turn the overall verdict red.
         if (!$ok && !str_contains($label, 'اختیاری')) {
             $allOk = false;
         }

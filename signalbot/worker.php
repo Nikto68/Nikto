@@ -12,46 +12,8 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/signal.php';
 require_once __DIR__ . '/bot.php';
 
-/**
- * ============================================================================
- * worker.php — runs the whole Load Symbols -> Market Data -> Scan ->
- * Indicators -> S/R -> OB -> FVG -> Strategy -> Confluence -> Validate ->
- * Queue -> Send Telegram cycle. Two execution modes, chosen by WORKER_MODE:
- *
- *   daemon  php worker.php   loops forever until SIGTERM/SIGINT — the
- *           original "no cron, ever" model. Needs a host that allows a
- *           persistent background process (SSH + nohup/screen, a VPS, ...).
- *
- *   cron    php worker.php   runs ONE bounded pass (up to
- *           WORKER_MAX_RUNTIME_SECONDS, default 50s) and exits cleanly.
- *           A cPanel Cron Job re-invokes it (every 1 minute — cPanel's
- *           minimum granularity) to approximate continuous operation. This
- *           is the default: it's the only mode plain shared hosting with
- *           just File Manager + Cron Jobs (no SSH, no persistent process)
- *           can actually run. A lock file prevents two invocations
- *           overlapping if one runs long; scanner/timeframe due-times are
- *           persisted to the database (not kept in memory) so scheduling
- *           survives across the process restarting every single minute.
- *           In this mode there is no persistent WebSocket connection (a
- *           connection that lives ~50s and dies is pointless) — market
- *           data is REST-polled, same as the fallback path in daemon mode.
- *
- * One exchange failing (rate limit, outage, bad response) never stops the
- * others — every exchange call goes through ExchangeManager::withIsolation
- * (signal.php), which owns per-exchange circuit breaking.
- * ============================================================================
- */
-
-// ============================================================================
-// SECTION 0 — LOCK FILE
-// Stops two overlapping invocations (a slow cron run still finishing when
-// the next minute's cron fires) from touching market data / the signal
-// queue at the same time.
-// ============================================================================
-
 final class LockFile
 {
-    /** @var resource|null */
     private $handle = null;
 
     public function acquire(string $path): bool
@@ -73,10 +35,6 @@ final class LockFile
         }
     }
 }
-
-// ============================================================================
-// SECTION 1 — BACKOFF HELPER
-// ============================================================================
 
 final class Backoff
 {
@@ -103,15 +61,8 @@ final class Backoff
     }
 }
 
-// ============================================================================
-// SECTION 2 — SIGNAL QUEUE (internal, in-process)
-// Decouples signal generation from Telegram delivery, so a slow/failing
-// Telegram API call never blocks the scanner from moving to the next symbol.
-// ============================================================================
-
 final class SignalQueue
 {
-    /** @var array<int,Signal> */
     private array $items = [];
 
     public function push(Signal $signal): void
@@ -137,15 +88,8 @@ final class SignalQueue
     }
 }
 
-// ============================================================================
-// SECTION 3 — TELEGRAM DISPATCHER
-// Fans one Signal out to every eligible channel (per-channel template,
-// minimum score, strategy allow-list, enabled flag), with per-send retry.
-// ============================================================================
-
 final class TelegramDispatcher
 {
-    /** Telegram's hard limit on a photo caption, in UTF-16 code units. */
     private const CAPTION_LIMIT = 1024;
 
     private SignalFormatter $formatter;
@@ -173,18 +117,7 @@ final class TelegramDispatcher
         $dryRun = $this->currentRunMode() === 'DRY_RUN';
         $anySent = false;
 
-        // try/finally so the row's status ALWAYS ends up reflecting
-        // reality, even if something throws partway through (card
-        // rendering, a bad channel, a pin call). Without this, an
-        // exception after channel 1 had already gone out but before
-        // channel 2 finished left the row stuck at its 'pending' insert
-        // default forever — invisible to countOpen() (which only counts
-        // 'sent'/'queued') despite being a real, live trade users were
-        // already trading.
         try {
-            // Rendered once and reused for every channel — the card costs
-            // about a second of CPU, and a broadcast to five channels
-            // should not cost five of them.
             $card = $dryRun ? null : SignalCardFactory::entry($signal);
 
             foreach ($eligible as $channel) {
@@ -213,8 +146,6 @@ final class TelegramDispatcher
                 if ($sent !== null) {
                     $anySent = true;
                     if ((int) $channel['pin_signal'] === 1 && $sent > 0) {
-                        // A failed pin must never undo an already-successful
-                        // send by throwing past the status update below.
                         try {
                             $this->telegram->pinChatMessage((int) $channel['chat_id'], $sent);
                         } catch (Throwable $e) {
@@ -228,16 +159,6 @@ final class TelegramDispatcher
         }
     }
 
-    /**
-     * Announces a trade event as a reply to the original signal message, in
-     * every channel that actually received it — TP1 (the risk-free "profit
-     * shot"), TP2, a stop out, or a breakeven close. LIVE sends only: a
-     * DRY_RUN "queued" row was never really posted, so there is nothing to
-     * reply to.
-     *
-     * @param array<string,mixed> $signalRow
-     * @param string $kind tp1|tp2|sl|be
-     */
     public function announceResult(array $signalRow, string $kind, float $price): void
     {
         $template = $this->texts->get('result_' . $kind);
@@ -261,13 +182,6 @@ final class TelegramDispatcher
         foreach ($targets as $target) {
             $opts = [];
             if ($target['message_id'] > 0) {
-                // Reply to the signal itself. chat_id is deliberately omitted
-                // — in reply_parameters it means "the message lives in a
-                // DIFFERENT chat", and passing the current chat can make
-                // Telegram fail to find it. allow_sending_without_reply
-                // keeps a deleted or unreachable original from swallowing the
-                // result entirely: the announcement matters more than the
-                // thread it hangs off.
                 $opts['reply_parameters'] = [
                     'message_id' => $target['message_id'],
                     'allow_sending_without_reply' => true,
@@ -289,12 +203,6 @@ final class TelegramDispatcher
         }
     }
 
-    /**
-     * A one-off, non-closing "trade management" reply — momentum turning
-     * before TP1, or a post-TP3 run stalling before TP4 (see
-     * Worker::monitorOpenPositions()). Plain text, no card: the trade is
-     * still open, so there is no final PnL to put on a share card yet.
-     */
     public function announceAdvisory(array $signalRow, string $text): void
     {
         $targets = $this->announcementTargets((int) $signalRow['id']);
@@ -314,22 +222,10 @@ final class TelegramDispatcher
         }
     }
 
-    /**
-     * Where a trade result should be announced.
-     *
-     * Normally: as a reply to the message that carried the signal, in each
-     * channel that received it. But if those events are missing — an older
-     * signal, a wiped database, a send that succeeded while its event row
-     * did not — the outcome must still reach the channel. Silence there is
-     * the worst possible failure: subscribers are left holding a position
-     * with no word on it. So fall back to the active channels with no reply.
-     *
-     * @return array<int,array{chat_id:int, channel_id:int, message_id:int}>
-     */
     private function announcementTargets(int $signalId): array
     {
         $stmt = Database::pdo()->prepare(
-            "SELECT se.channel_id, MAX(se.message_id) AS message_id, c.chat_id
+            "SELECT se.channel_id, MIN(se.message_id) AS message_id, c.chat_id
              FROM signal_events se
              JOIN channels c ON c.id = se.channel_id
              WHERE se.signal_id = :sid AND se.event_type = 'sent' AND se.message_id IS NOT NULL
@@ -360,22 +256,8 @@ final class TelegramDispatcher
         return $targets;
     }
 
-    /**
-     * Sends one message, as a captioned photo when a card was rendered and
-     * the text fits inside Telegram's caption limit, otherwise as a photo
-     * plus a follow-up text message (or plain text when there is no card).
-     *
-     * Returns the message id the rest of the thread should reply to — the
-     * photo's, when there is one, so later TP/SL announcements hang off the
-     * card rather than off a trailing text message.
-     */
     private function deliver(int $chatId, string $text, array $entities, ?string $card, array $opts, int $signalId, int $channelId): ?int
     {
-        // The two admin-configurable "glass" buttons go under every single
-        // message this bot posts to a channel — signal card, profit shot,
-        // risk-free/close notice, advisory warning alike. A caller-supplied
-        // reply_markup (there is none today, but this stays defensive)
-        // always wins over the default row.
         if (!isset($opts['reply_markup'])) {
             $buttons = Config::channelButtonsKeyboard();
             if ($buttons !== null) {
@@ -393,8 +275,6 @@ final class TelegramDispatcher
 
         $messageId = $this->sendPhotoWithRetry($chatId, $card, $caption, $captionEntities, $opts, $signalId, $channelId);
         if ($messageId === null) {
-            // The image failed (upload error, Telegram rejecting the file,
-            // ...) — the signal itself still has to reach the channel.
             return $this->sendWithRetry($chatId, $text, $entities, $opts, $signalId, $channelId);
         }
 
@@ -444,20 +324,6 @@ final class TelegramDispatcher
         return null;
     }
 
-    /**
-     * Drops custom emoji from a message Telegram just refused, so the retry
-     * goes out as plain text rather than failing again for the same reason.
-     *
-     * A bot may only use custom emoji if it bought a username on Fragment,
-     * or when writing to a private/group/supergroup chat and its owner has
-     * Premium — CHANNELS are not covered by the owner-Premium route. Since
-     * this bot's whole job is posting to a channel, a premium emoji set is
-     * exactly the kind of setting that could silently stop every signal.
-     * Losing the fancy emoji is always better than losing the signal.
-     *
-     * @param array<int,array<string,mixed>> $entities
-     * @return array<int,array<string,mixed>>
-     */
     private function degradeEntities(array $entities, string $error, int $chatId): array
     {
         if (!TelegramEntityUtils::hasCustomEmoji($entities)) {
@@ -467,19 +333,6 @@ final class TelegramDispatcher
         return TelegramEntityUtils::stripCustomEmoji($entities);
     }
 
-    /**
-     * Same restriction, for the channel buttons' icon_custom_emoji_id
-     * instead of a text entity: a bot may only put a custom emoji icon on
-     * a button if it bought a Fragment username, or when writing to a
-     * private/group/supergroup chat whose owner has Premium — CHANNELS
-     * are not covered by that owner-Premium route. Since this bot's whole
-     * job is posting to a channel, an admin-set icon is exactly the kind
-     * of setting that could silently stop every signal. Losing the icon
-     * is always better than losing the signal.
-     *
-     * @param array<string,mixed> $opts
-     * @return array<string,mixed>
-     */
     private function degradeButtonEmoji(array $opts, string $error, int $chatId): array
     {
         $keyboard = $opts['reply_markup'] ?? null;
@@ -502,7 +355,6 @@ final class TelegramDispatcher
         ]);
     }
 
-    /** @return array<int,array<string,mixed>> */
     private function eligibleChannels(Signal $signal): array
     {
         $channels = $this->channels->listActiveWithSettings();
@@ -524,16 +376,12 @@ final class TelegramDispatcher
 
     private function currentRunMode(): string
     {
-        $stmt = Database::pdo()->prepare('SELECT setting_value FROM bot_settings WHERE setting_key = "run_mode"');
+        $stmt = Database::pdo()->prepare("SELECT setting_value FROM bot_settings WHERE setting_key = 'run_mode'");
         $stmt->execute();
         $v = $stmt->fetchColumn();
         return $v !== false && $v !== '' ? (string) $v : Config::runMode()->value;
     }
 }
-
-// ============================================================================
-// SECTION 4 — WORKER (main loop)
-// ============================================================================
 
 final class Worker
 {
@@ -550,19 +398,14 @@ final class Worker
     private bool $running = true;
     private int $lastScanAt = 0;
 
-    /** Unix time this invocation must be finished by (cron mode); PHP_INT_MAX in daemon mode. */
     private int $deadline = PHP_INT_MAX;
 
-    /** Seconds held back from market-data collection so the tick loop always runs. */
     private const TICK_RESERVE_SECONDS = 15;
 
-    /** @var array<string,int> timeframe => unix timestamp of next due scan */
     private array $nextTimeframeRun = [];
 
-    /** Why publishing is paused for the rest of today, if it is: 'losses' | 'quota' | null. */
     private ?string $dailyStop = null;
 
-    /** @var array<string,Backoff> per-exchange backoff state for the outer loop */
     private array $exchangeBackoff = [];
 
     private ScannerRunRepository $scannerRunRepo;
@@ -588,12 +431,6 @@ final class Worker
             $this->exchangeBackoff[$name] = new Backoff();
         }
 
-        // Cron mode restarts this whole process every ~1 minute, so "last
-        // run" state can't live in memory (it would reset every restart and
-        // make every symbol/timeframe look due on every single invocation,
-        // hammering exchange APIs). Load it from the database instead;
-        // daemon mode reads the same state once and then keeps it in memory
-        // for the life of the process, same as before.
         $lastScan = $this->scannerRunRepo->lastRunAt();
         $this->lastScanAt = $lastScan !== null ? (int) strtotime($lastScan) : 0;
         $seedTimeframes = array_unique(array_merge(Config::timeframes(), [Config::reversalConfirmTimeframe()]));
@@ -615,12 +452,7 @@ final class Worker
         };
         pcntl_signal(SIGTERM, $handler);
         pcntl_signal(SIGINT, $handler);
-        // SIGALRM drives the cron-mode hard deadline below (pcntl_alarm) —
-        // same handler as SIGTERM/SIGINT, so it interrupts an in-flight
-        // HTTP retry storm exactly the same way (ShutdownFlag is what
-        // HttpClient actually polls; a deadline check in the tick loop
-        // alone would NOT catch a retry storm stuck inside the very first,
-        // pre-loop scanner/priming calls — confirmed by testing).
+
         pcntl_signal(SIGALRM, $handler);
     }
 
@@ -643,7 +475,7 @@ final class Worker
             $this->runLoop($mode);
         } finally {
             if (function_exists('pcntl_alarm')) {
-                pcntl_alarm(0); // cancel any pending alarm — we're exiting on our own
+                pcntl_alarm(0);
             }
             $lock->release();
         }
@@ -651,22 +483,9 @@ final class Worker
 
     private function runLoop(string $mode): void
     {
-        // daemon: no deadline, runs until SIGTERM/SIGINT flips $this->running.
-        // cron: exit on our own before the host's cron/process limits would
-        // kill us anyway, so the next minute's invocation starts clean. The
-        // real enforcement is the SIGALRM set in run(); this time-based
-        // check is just what keeps the *tick loop itself* from starting
-        // another full cycle once the budget is spent.
         $deadline = $mode === 'daemon' ? PHP_INT_MAX : (time() + Config::workerMaxRuntimeSeconds());
         $this->deadline = $deadline;
 
-        // Load Symbols (whatever the last scan produced) + Fetch Initial
-        // Market Data before entering the steady-state loop. Gated the same
-        // way as every later tick, so a cron invocation doesn't re-scan or
-        // re-prime data that's already fresh from the previous minute.
-        // Written before the expensive work, so the panel can tell "the
-        // worker is running" apart from "cron never fired" even while an
-        // invocation is still busy collecting data.
         $this->heartbeat();
 
         $this->maybeRunScanner();
@@ -683,7 +502,6 @@ final class Worker
                 $this->processQueue();
                 $this->heartbeat();
             } catch (Throwable $e) {
-                // The loop itself must never die — log and continue.
                 Logger::critical('worker', 'unhandled error in tick', ['error' => $e->getMessage()]);
             }
 
@@ -717,7 +535,6 @@ final class Worker
         )->execute([':v' => (string) time(), ':now' => date('Y-m-d H:i:s')]);
     }
 
-    /** @return array<string,int> timeframe => unix timestamp of next due run, as of the last saved state */
     private function loadTimeframeSchedule(): array
     {
         $stmt = Database::pdo()->prepare('SELECT setting_value FROM bot_settings WHERE setting_key = \'tf_schedule\'');
@@ -727,7 +544,6 @@ final class Worker
         return is_array($data) ? array_map('intval', $data) : [];
     }
 
-    /** @param array<string,int> $schedule */
     private function saveTimeframeSchedule(array $schedule): void
     {
         Database::pdo()->prepare(
@@ -752,21 +568,8 @@ final class Worker
         Logger::info('worker', 'scanner completed', ['symbols_selected' => $selected]);
     }
 
-    /**
-     * Fetches history only for symbol/timeframe pairs that have none yet.
-     * In daemon mode this only ever matters once, right after start. In
-     * cron mode this method runs at the top of every single invocation
-     * (every ~1 minute) — the hasAny() check is what stops that from
-     * re-fetching all candles for every symbol on every invocation once
-     * the database is actually populated.
-     */
     private function primeMarketData(): void
     {
-        // Only the symbols holding open trades are primed up front. Every
-        // other coin is primed by the rotation at the moment it is visited,
-        // because the universe is now the whole perpetual market and a
-        // pre-loop sweep of it would consume every invocation forever —
-        // which is exactly the failure this bot has already had once.
         $candleManager = $this->marketData->candleManager();
         foreach ($this->signalRepo->openPositionSymbols() as $open) {
             if (!$this->running || $this->outOfDataBudget()) {
@@ -782,11 +585,6 @@ final class Worker
         }
     }
 
-    /**
-     * Market-data collection stops early enough to leave the tick loop room
-     * to run. Publishing a signal matters more than having one more symbol
-     * primed.
-     */
     private function outOfDataBudget(): bool
     {
         if ($this->deadline === PHP_INT_MAX) {
@@ -795,20 +593,8 @@ final class Worker
         return time() >= ($this->deadline - self::TICK_RESERVE_SECONDS);
     }
 
-    /**
-     * REST-based incremental update every tick (cheap: only timeframes
-     * whose candle would plausibly have closed since the last check), plus
-     * best-effort WebSocket polling for exchanges that support it. A given
-     * exchange failing here only affects that exchange (per-exchange
-     * Backoff); the exchanges are otherwise fully independent.
-     */
     private function updateMarketData(): void
     {
-        // Candles are fetched by the rotation, at the moment it visits each
-        // symbol. What has to happen on EVERY tick regardless is the price
-        // feed for coins holding an open trade: TP and SL are decided from
-        // the ticker alone, and a target hit between two visits would
-        // otherwise go unnoticed.
         $tickerCache = [];
         foreach ($this->signalRepo->openPositionSymbols() as $open) {
             if (!$this->running || $this->outOfDataBudget()) {
@@ -818,16 +604,10 @@ final class Worker
         }
     }
 
-    /**
-     * Stores the latest ticker for one symbol, fetching that exchange's
-     * whole ticker list at most once per tick.
-     *
-     * @param array<string,array<string,array<string,float>>> $cache
-     */
     private function refreshTicker(array &$cache, string $exchange, string $symbol): void
     {
         if (!$this->exchangeManager->isHealthy($exchange)) {
-            return; // circuit open — skip this tick for this exchange only
+            return;
         }
         if (!array_key_exists($exchange, $cache)) {
             $fetched = $this->exchangeManager->withIsolation($exchange, fn(ExchangeAdapter $a) => $a->fetchTicker24h());
@@ -852,54 +632,23 @@ final class Worker
 
     private function timeframeSeconds(string $timeframe): int
     {
-        return match ($timeframe) {
-            '1m' => 60, '5m' => 300, '15m' => 900, '30m' => 1800,
-            '1h' => 3600, '2h' => 7200, '4h' => 14400, '1D' => 86400,
-            default => 300,
-        };
+        return Candle::timeframeSeconds($timeframe);
     }
 
-    /**
-     * Drives the lifecycle of every open trade against the latest known
-     * price, using whatever updateMarketData() already fetched this tick —
-     * no extra API calls.
-     *
-     *   open         -> stop hit    : closed as a loss
-     *   open         -> TP1 hit     : "profit shot" + stop moved to entry
-     *                                 (risk free), stays open
-     *   risk_free    -> TP2 hit     : stop trails up to the TP1 price, stays open
-     *   risk_free    -> back to entry        : closed at breakeven, no loss
-     *   trailing_tp2 -> TP3 hit     : stop trails up to the TP2 price, stays open
-     *   trailing_tp2 -> back to TP1 price    : closed with the TP1-level profit locked in
-     *   trailing_tp3 -> TP4 hit     : closed as the full win, slot freed
-     *   trailing_tp3 -> back to TP2 price    : closed with the TP2-level profit locked in
-     *
-     * A jump straight through several targets between two polls always
-     * reports the FARTHEST one actually reached, rather than claiming a
-     * stage the trade never spent real time in.
-     *
-     * Two "trade management" advisories are layered on top, each sent at
-     * most once per trade as a plain reply — never a forced close, just a
-     * heads-up: before TP1, if price has given back most of the original
-     * stop distance without ever reaching it (see
-     * Config::advisoryStopWarnPercent()); and after TP3, if the run stalls
-     * and retraces without reaching TP4 (see
-     * Config::advisoryStallRetracePercent()).
-     *
-     * Freeing the slot is what lets the next signal go out: the
-     * per-symbol cooldown gate reads from here.
-     */
     private function monitorOpenPositions(): void
     {
         foreach ($this->signalRepo->openPositions() as $row) {
             $price = $this->marketData->latestPrice((string) $row['exchange'], (string) $row['symbol']);
+            $expired = (string) ($row['stage'] ?? 'open') === 'open' && $this->tradeExpired($row);
             if ($price <= 0) {
+                if ($expired) {
+                    $this->closeTrade($row, 'timeout', (float) $row['entry_price']);
+                }
                 continue;
             }
 
             $isLong = (string) $row['direction'] === 'LONG';
             $entry = (float) $row['entry_price'];
-            // active_stop is NULL on rows written before this column existed.
             $stop = $row['active_stop'] !== null ? (float) $row['active_stop'] : (float) $row['stop_loss'];
             $tp1 = $row['tp1'] !== null ? (float) $row['tp1'] : null;
             $tp2 = $row['tp2'] !== null ? (float) $row['tp2'] : null;
@@ -957,8 +706,6 @@ final class Worker
             }
 
             if ($stage === 'risk_free') {
-                // The stop is sitting at entry now, so "stop hit" here means
-                // a breakeven exit, not a loss.
                 if ($stopHit) {
                     $this->closeTrade($row, 'be', $price);
                     continue;
@@ -974,7 +721,6 @@ final class Worker
                 continue;
             }
 
-            // stage === 'open'
             if ($stopHit) {
                 $this->closeTrade($row, 'sl', $price);
                 continue;
@@ -987,6 +733,11 @@ final class Worker
                 } else {
                     $this->closeTrade($row, 'tp1', $price);
                 }
+                continue;
+            }
+
+            if ($expired) {
+                $this->closeTrade($row, 'timeout', $price);
                 continue;
             }
 
@@ -1004,19 +755,22 @@ final class Worker
         }
     }
 
-    /** @param array<string,mixed> $row */
     private function closeTrade(array $row, string $result, float $price): void
     {
         $this->signalRepo->close((int) $row['id'], $result, $price);
         $this->announce($row, $result, $price);
     }
 
-    /**
-     * Renders one of the two advisory templates — admin-editable via
-     * ✏️ مدیریت متن‌ها (text-formats panel), same mechanism as every other
-     * bot text — falling back to the built-in Persian default when the
-     * admin hasn't touched it. $default carries the {symbol} placeholder.
-     */
+    private function tradeExpired(array $row): bool
+    {
+        $hours = Config::maxTradeHours();
+        if ($hours <= 0) {
+            return false;
+        }
+        $opened = strtotime((string) ($row['created_at'] ?? ''));
+        return $opened !== false && time() - $opened >= $hours * 3600;
+    }
+
     private function advisoryText(string $key, string $default, string $symbol): string
     {
         $template = $this->texts->get($key);
@@ -1027,20 +781,6 @@ final class Worker
         return $rendered['text'];
     }
 
-    /**
-     * Marks the one-shot advisory as sent BEFORE attempting delivery: if the
-     * send itself then fails, the trade quietly loses that one heads-up
-     * rather than risking the same warning firing on every remaining pass
-     * for the rest of the trade's life.
-     *
-     * $kind picks which of the two independent one-shot budgets this
-     * advisory spends -- 'early' (pre-TP1, going-wrong warning) or 'stall'
-     * (post-TP3, stuck-before-TP4 warning). They are tracked separately so
-     * a trade that got the early warning and recovered all the way to TP3
-     * still gets the later, different one.
-     *
-     * @param array<string,mixed> $row
-     */
     private function sendAdvisory(array $row, string $text, string $kind = 'early'): void
     {
         if ($kind === 'stall') {
@@ -1055,7 +795,6 @@ final class Worker
         }
     }
 
-    /** @param array<string,mixed> $row */
     private function announce(array $row, string $kind, float $price): void
     {
         try {
@@ -1065,18 +804,8 @@ final class Worker
         }
     }
 
-    /**
-     * The pacing gate plus the search for what to publish. Every active
-     * symbol is evaluated on every signal timeframe (15m/1h/4h) and only
-     * the single highest-scoring candidate of the whole pass is saved and
-     * sent — the daily loss/quota circuit breakers below are the only
-     * caps on top of that.
-     */
     private function maybeEmitSignal(): void
     {
-        // The daily circuit breaker. Nothing about a bad day makes the next
-        // setup better, and a bot that keeps firing through a losing streak
-        // is how an account is lost — so it stops until tomorrow instead.
         $today = $this->signalRepo->todayTally();
         if ($today['losses'] >= Config::maxDailyLosses()) {
             $this->dailyStop = 'losses';
@@ -1091,10 +820,6 @@ final class Worker
         }
         $this->dailyStop = null;
 
-        // The open-position cap. Resolve what's already running before
-        // opening anything new — this is what keeps a burst of qualifying
-        // candidates from turning into a pile of simultaneous trades; the
-        // bot waits for a slot to free up (a close) instead.
         $maxOpen = Config::maxOpenTrades();
         $openNow = $this->signalRepo->countOpen();
         if ($maxOpen > 0 && $openNow >= $maxOpen) {
@@ -1102,10 +827,15 @@ final class Worker
             return;
         }
 
-        // How many of this pass's qualifying candidates may go out. Room
-        // is left for the daily cap and the open-position cap, the real
-        // risk limits here — this only decides how much of a good pass is
-        // used.
+        $gapMinutes = Config::minSignalGapMinutes();
+        if ($gapMinutes > 0) {
+            $lastPublished = $this->signalRepo->lastPublishedAt();
+            if ($lastPublished !== null && time() - $lastPublished < $gapMinutes * 60) {
+                $this->recordGateStatus('pacing');
+                return;
+            }
+        }
+
         $room = min(
             Config::signalsPerPass(),
             $maxSignals > 0 ? max(0, $maxSignals - $today['published']) : PHP_INT_MAX,
@@ -1127,41 +857,13 @@ final class Worker
         }
     }
 
-    /**
-     * The pass's best candidates, highest score first, at most one per
-     * symbol.
-     *
-     * This walks the universe on a ROTATION rather than from the top every
-     * time. The universe is now every perpetual above the volume floor —
-     * several hundred coins — and a cron minute cannot sweep that. Starting
-     * at the top each invocation would mean the first sixty coins are
-     * checked every minute and the rest are never checked at all.
-     *
-     * So each invocation resumes where the last one stopped, visits as far
-     * as its time budget allows, and persists the cursor. Every coin gets
-     * looked at in turn, a few minutes apart, which is what "check them all,
-     * about one a second" actually requires.
-     *
-     * Each symbol is synced and evaluated in one visit, so the HTTP call for
-     * its candles is paid once and used immediately.
-     *
-     * @return Signal[]
-     */
     private function findBestCandidates(int $limit): array
     {
         $timeframes = Config::signalTimeframes();
-        // Not an extra signal timeframe of its own — just the fast candle
-        // the strategies confirm a pullback/reversal entry against (see
-        // ReversalCandleEngine). Loaded into the snapshot here so it is
-        // there when the strategy asks for it, without evaluating it as an
-        // independent pass.
+
         $confirmTf = Config::reversalConfirmTimeframe();
         $snapshotTimeframes = in_array($confirmTf, $timeframes, true) ? $timeframes : [...$timeframes, $confirmTf];
-        // Same idea for the higher-timeframe confirmation cascade (15m
-        // checks 1h, 30m checks 2h, 1h checks 4h, ...) -- its candles need
-        // to be in the snapshot too, even for a target timeframe that is
-        // not itself one of the scanned entry timeframes. See
-        // Config::htfConfirmTimeframe().
+
         foreach ($timeframes as $tf) {
             $htfTf = Config::htfConfirmTimeframe($tf);
             if ($htfTf !== null && !in_array($htfTf, $snapshotTimeframes, true)) {
@@ -1186,7 +888,6 @@ final class Worker
 
         $evaluated = 0;
         $visited = 0;
-        /** @var array<string,Signal> $bySymbol */
         $bySymbol = [];
 
         while ($visited < $maxSymbols) {
@@ -1205,19 +906,6 @@ final class Worker
             }
 
             try {
-                // Sync then evaluate, in one visit.
-                //
-                // The due-schedule is global (one next-run time per
-                // timeframe), so it answers "is a refresh owed" — not "does
-                // THIS coin have any candles". On a rotation those are very
-                // different questions: the first invocation marks 15m as
-                // refreshed for the next quarter hour, and every coin the
-                // rotation reaches after that would be evaluated against an
-                // empty candle table and silently skipped. Most of the
-                // market would never get a first fetch at all.
-                //
-                // So a timeframe is synced when it is due OR when this
-                // symbol has none of it yet.
                 $sync = $dueTimeframes;
                 foreach ($snapshotTimeframes as $tf) {
                     if (!in_array($tf, $sync, true) && !$candleManager->hasAny($exchange, $symbol, $tf)) {
@@ -1243,8 +931,7 @@ final class Worker
                     if ($candidate === null) {
                         continue;
                     }
-                    // One per symbol: the same setup seen on 15m and on 1h
-                    // is one trade, not two.
+
                     $key = $exchange . '|' . $candidate->symbol;
                     if (!isset($bySymbol[$key]) || $candidate->score > $bySymbol[$key]->score) {
                         $bySymbol[$key] = $candidate;
@@ -1265,23 +952,19 @@ final class Worker
         return $chosen;
     }
 
-    /**
-     * Which timeframes are due a candle refresh this invocation. Pulled out
-     * of updateMarketData() so the rotation can sync a symbol at the moment
-     * it visits it instead of in a separate sweep.
-     *
-     * @return string[]
-     */
     private function dueTimeframes(): array
     {
         $now = time();
         $due = [];
-        // The reversal-candle confirm timeframe rides along here too — it
-        // needs its own refresh schedule (every 5m, not every 15m) or its
-        // "last closed candle" would go stale between the slower signal
-        // timeframes' own refreshes.
-        $tracked = array_unique(array_merge(Config::signalTimeframes(), [Config::reversalConfirmTimeframe()]));
-        foreach ($tracked as $tf) {
+
+        $tracked = array_merge(Config::signalTimeframes(), [Config::reversalConfirmTimeframe()]);
+        foreach (Config::signalTimeframes() as $tf) {
+            $htfTf = Config::htfConfirmTimeframe($tf);
+            if ($htfTf !== null) {
+                $tracked[] = $htfTf;
+            }
+        }
+        foreach (array_unique($tracked) as $tf) {
             if ($now >= ($this->nextTimeframeRun[$tf] ?? 0)) {
                 $due[] = $tf;
                 $this->nextTimeframeRun[$tf] = $now + $this->timeframeSeconds($tf);
@@ -1293,7 +976,6 @@ final class Worker
         return $due;
     }
 
-    /** Where the rotation stopped last invocation. */
     private function loadCursor(): int
     {
         try {
@@ -1318,10 +1000,6 @@ final class Worker
         }
     }
 
-    /**
-     * Records what the pass saw, so a bot that is simply not finding setups
-     * can say so with numbers instead of staying silent and looking broken.
-     */
     private function saveScanReport(
         int $evaluated,
         int $symbolCount,
@@ -1349,20 +1027,6 @@ final class Worker
         )->execute([':v' => json_encode($report, JSON_UNESCAPED_UNICODE), ':now' => date('Y-m-d H:i:s')]);
     }
 
-    /**
-     * Records why this tick did not even attempt to scan — the open-position
-     * cap, the interval pacing gate, or the daily circuit breaker.
-     *
-     * Without this, `last_scan_report` (and the "🤖 حالت اتومات" verdict
-     * built from it) only ever gets touched by a full findBestCandidates()
-     * pass — so the moment one of these three gates holds the bot back, the
-     * report freezes on whatever the last real pass said and never updates
-     * again until the gate lifts. The panel then goes on claiming "آخرین
-     * پاس: سیگنال منتشر شد" from hours ago while the bot sits there quiet
-     * and working exactly as configured, which reads as broken or frozen.
-     * Keeping 'at' current and adding 'gate' lets scanVerdict() (bot.php)
-     * say the true, current reason instead.
-     */
     private function recordGateStatus(string $gate): void
     {
         $stmt = Database::pdo()->prepare("SELECT setting_value FROM bot_settings WHERE setting_key = 'last_scan_report'");
@@ -1404,13 +1068,6 @@ final class Worker
         }
     }
 }
-
-// ============================================================================
-// SECTION 5 — ENTRYPOINT
-//
-// Guarded so the file can also be require()d for inspection (tests, tooling)
-// without starting a worker. Running `php worker.php` is unaffected.
-// ============================================================================
 
 if (!defined('WORKER_BOOTSTRAP_ONLY')) {
     (new Worker())->run();

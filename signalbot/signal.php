@@ -5,27 +5,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/card.php';
 
-/**
- * ============================================================================
- * signal.php — Core analysis engine.
- *
- * Exchange Manager / per-exchange Adapters -> MarketSnapshot
- *   -> Candle/Ticker/Orderbook managers
- *   -> Indicator Engine (empty registry, plug-in point)
- *   -> Support/Resistance, Order Block, FVG engines
- *   -> Confluence Engine -> Strategy Engine -> Signal Validator
- *   -> Signal Deduplication -> Signal Formatter / Generator
- *   -> Market Scanner (ranks ~200 symbols)
- *
- * No file here talks Telegram. bot.php/worker.php consume SignalGenerator
- * and MarketScanner; nothing in here knows a channel or a chat_id exists.
- * ============================================================================
- */
-
-// ============================================================================
-// SECTION 0 — ENUMS & VALUE OBJECTS
-// ============================================================================
-
 enum Direction: string
 {
     case LONG = 'LONG';
@@ -78,16 +57,20 @@ final class Candle
         return $this->high - $this->low;
     }
 
-    /**
-     * Whether this candle is internally consistent.
-     *
-     * Every adapter maps a different response shape onto these six fields,
-     * and the shapes are not consistent between exchanges — Gate.io returns
-     * [time, quoteVolume, close, high, low, open, baseVolume], which is not
-     * OHLCV at all. A mis-mapped feed does not throw; it produces
-     * plausible-looking numbers in the wrong slots and quietly poisons every
-     * signal derived from them. Cheaper to refuse the candle.
-     */
+    public static function timeframeSeconds(string $timeframe): int
+    {
+        if (!preg_match('/^(\d+)([mhdw])$/i', trim($timeframe), $m)) {
+            return 300;
+        }
+        $unit = match (strtolower($m[2])) {
+            'm' => 60,
+            'h' => 3600,
+            'd' => 86400,
+            'w' => 604800,
+        };
+        return max(60, (int) $m[1] * $unit);
+    }
+
     public function isSane(): bool
     {
         foreach ([$this->open, $this->high, $this->low, $this->close] as $price) {
@@ -104,14 +87,12 @@ final class Candle
         if ($this->high < max($this->open, $this->close) || $this->low > min($this->open, $this->close)) {
             return false;
         }
-        // Milliseconds since 2010, and not implausibly far in the future.
         return $this->openTime > 1_262_304_000_000 && $this->openTime < (time() + 86_400) * 1000;
     }
 }
 
 final class MarketSnapshot
 {
-    /** @param array<string, Candle[]> $candles keyed by timeframe */
     public function __construct(
         public readonly string $exchange,
         public readonly string $symbol,
@@ -125,7 +106,6 @@ final class MarketSnapshot
     ) {
     }
 
-    /** @return Candle[] */
     public function candlesFor(string $timeframe): array
     {
         return $this->candles[$timeframe] ?? [];
@@ -184,7 +164,6 @@ final class Fvg
 
 final class Signal
 {
-    /** @param string[] $reasons */
     public function __construct(
         public readonly string $uuid,
         public readonly string $exchange,
@@ -206,21 +185,13 @@ final class Signal
         public string $status = 'pending',
         public ?int $id = null,
         public readonly int $createdAt = 0,
-        /** Announced leverage for this trade, chosen by LeverageEngine. */
         public readonly int $leverage = 1,
-        /** Liquidity/volatility bucket the leverage was derived from. */
         public readonly string $tier = 'alt',
-        /**
-         * The stop currently in force. Starts equal to $stopLoss and is
-         * raised to $entry once TP1 is hit (the risk-free move), while
-         * $stopLoss keeps the original level the card was published with.
-         */
         public ?float $activeStop = null,
     ) {
         $this->activeStop ??= $stopLoss;
     }
 
-    /** Profit/loss at $price as a percentage of margin, i.e. including leverage. */
     public function leveragedPnlPercent(float $price): float
     {
         if ($this->entry <= 0) {
@@ -233,13 +204,8 @@ final class Signal
     }
 }
 
-// ============================================================================
-// SECTION 1 — HTTP CLIENT + RATE LIMITER (shared by all adapters)
-// ============================================================================
-
 final class RateLimiter
 {
-    /** @var array<string, array{count:int, windowStart:int}> */
     private static array $buckets = [];
 
     public static function acquire(string $key, int $maxPerMinute): void
@@ -266,10 +232,6 @@ final class RateLimiter
 
 final class HttpClient
 {
-    /**
-     * @param array<string,string> $headers
-     * @return array{status:int, body:string, json:?array}
-     */
     public static function request(string $method, string $url, array $headers = [], ?string $body = null, ?int $retries = null): array
     {
         $retries ??= Config::maxRetries();
@@ -335,9 +297,7 @@ final class HttpClient
     private static function backoffSleep(int $attempt): void
     {
         $delayUs = min(1_000_000 * (2 ** $attempt), 8_000_000);
-        // Sleep in short slices so a ShutdownFlag request (worker.php's
-        // SIGTERM/SIGINT handler) interrupts a long backoff immediately
-        // instead of after the full delay.
+
         $sliceUs = 200_000;
         $slept = 0;
         while ($slept < $delayUs) {
@@ -356,26 +316,8 @@ final class HttpClient
     }
 }
 
-// ============================================================================
-// SECTION 1.5 — COINALYZE CLIENT (free-tier liquidation/OI data)
-//
-// Free CoinGlass alternative: coinalyze.net/account gives a free API key,
-// no payment. Wired in for the "📰 اخبار و لیکویید" panel's real-data
-// liquidation card. The exact shape of a liquidation-history entry hasn't
-// been confirmed against a live response yet (this environment cannot
-// reach api.coinalyze.net to test) — liquidationTotals() below reads it
-// defensively and reports what it actually saw rather than guessing
-// silently, so the first real tap of the panel button either works or
-// says exactly what came back.
-// ============================================================================
-
 final class CoinalyzeClient
 {
-    /**
-     * @return array<int,array<string,mixed>>|null the "history" array for
-     *   the first (only) requested symbol, or null on any failure —
-     *   missing key, HTTP error, or an unrecognized response shape.
-     */
     public function liquidationHistory(string $symbol, int $fromUnix, int $toUnix, string $interval = 'daily'): ?array
     {
         $apiKey = Config::coinalyzeApiKey();
@@ -405,20 +347,6 @@ final class CoinalyzeClient
         return $row['history'];
     }
 
-    /**
-     * Sums a liquidation-history array into long/short USD totals.
-     *
-     * The exact field names in a Coinalyze liquidation-history entry are
-     * unconfirmed (see class docblock), so this tries the field-name
-     * patterns their other "-history" endpoints are known to use (short
-     * OHLCV-style keys) before falling back to summing anything that looks
-     * like a long-side or short-side notional. If NONE of that matches,
-     * it returns null with the raw first entry attached so the caller can
-     * show it instead of a wrong number.
-     *
-     * @param array<int,array<string,mixed>> $history
-     * @return array{long:float, short:float}|null
-     */
     public function liquidationTotals(array $history): ?array
     {
         if (empty($history)) {
@@ -437,16 +365,6 @@ final class CoinalyzeClient
         return ['long' => $long, 'short' => $short];
     }
 
-    /**
-     * Which fields in a liquidation-history row hold the long/short
-     * amounts. Exposed (not just used internally by liquidationTotals())
-     * so a caller building CardChrome::liquidationChart()'s input — the
-     * real per-bucket chart, not just the totals — can pass the same key
-     * names through instead of re-detecting them.
-     *
-     * @param array<int,array<string,mixed>> $history
-     * @return array{long:string, short:string}|null
-     */
     public function detectKeys(array $history): ?array
     {
         if (empty($history)) {
@@ -463,8 +381,7 @@ final class CoinalyzeClient
             }
             return null;
         };
-        // "l"/"s" matches Coinalyze's OHLCV-style short keys; the rest are
-        // the plainer names other liquidation APIs tend to use.
+
         $longKey = $findKey($keys, ['l', 'long', 'longs', 'buy', 'b']);
         $shortKey = $findKey($keys, ['s', 'short', 'shorts', 'sell']);
         if ($longKey === null || $shortKey === null) {
@@ -474,14 +391,8 @@ final class CoinalyzeClient
     }
 }
 
-// ============================================================================
-// SECTION 2 — WEBSOCKET CLIENT (raw RFC6455, no external dependencies)
-// Used by adapters that expose a raw (non Socket.IO) public WS feed.
-// ============================================================================
-
 final class WebSocketClient
 {
-    /** @var resource|null */
     private $socket = null;
     private bool $connected = false;
 
@@ -566,10 +477,6 @@ final class WebSocketClient
         return @fwrite($this->socket, $frame) !== false;
     }
 
-    /**
-     * Non-blocking-ish poll: waits up to $timeoutSeconds for data, returns
-     * the decoded text payload, or null if nothing arrived / connection closed.
-     */
     public function receive(float $timeoutSeconds = 0.5): ?string
     {
         if (!is_resource($this->socket)) {
@@ -630,15 +537,15 @@ final class WebSocketClient
             $payload = $unmasked;
         }
 
-        if ($opcode === 0x8) { // close
+        if ($opcode === 0x8) {
             $this->connected = false;
             return null;
         }
-        if ($opcode === 0x9) { // ping -> pong
+        if ($opcode === 0x9) {
             $this->send($payload, 0xA);
             return null;
         }
-        if ($opcode === 0xA) { // pong
+        if ($opcode === 0xA) {
             return null;
         }
 
@@ -677,29 +584,20 @@ final class WebSocketClient
     }
 }
 
-// ============================================================================
-// SECTION 3 — EXCHANGE ADAPTER INTERFACE
-// ============================================================================
-
 interface ExchangeAdapter
 {
     public function name(): string;
 
-    /** @return array<int,array{symbol:string,base:string,quote:string,status:string}> */
     public function fetchExchangeSymbols(): array;
 
-    /** @return array<string,array{volume:float,lastPrice:float,bid:float,ask:float,priceChangePercent:float}> keyed by symbol */
     public function fetchTicker24h(): array;
 
-    /** @return Candle[] */
     public function fetchCandles(string $symbol, string $timeframe, int $limit): array;
 
-    /** @return array{bids:array<int,array{0:float,1:float}>, asks:array<int,array{0:float,1:float}>} */
     public function fetchOrderBook(string $symbol, int $depth): array;
 
     public function supportsWebSocket(): bool;
 
-    /** @param string[] $symbols @param string[] $timeframes */
     public function connectWebSocket(array $symbols, array $timeframes): ?WebSocketClient;
 
     public function handleWebSocketMessage(string $raw, MarketDataStore $store): void;
@@ -707,15 +605,8 @@ interface ExchangeAdapter
 
 abstract class AbstractExchangeAdapter implements ExchangeAdapter
 {
-    /** @var array<string,string> maps internal timeframe -> exchange-native interval */
     protected array $timeframeMap = [];
 
-    /**
-     * The exchange's own name for a timeframe, or null when it does not
-     * offer one. Not every venue has every interval — HTX has no 2h, for
-     * instance — and passing our name through would just spend a request to
-     * be told so.
-     */
     protected function mapTimeframe(string $timeframe): ?string
     {
         if (empty($this->timeframeMap)) {
@@ -736,13 +627,8 @@ abstract class AbstractExchangeAdapter implements ExchangeAdapter
 
     public function handleWebSocketMessage(string $raw, MarketDataStore $store): void
     {
-        // No-op by default; overridden by adapters that support streaming.
     }
 }
-
-// ============================================================================
-// SECTION 4 — BINANCE ADAPTER
-// ============================================================================
 
 final class BinanceAdapter extends AbstractExchangeAdapter
 {
@@ -799,7 +685,7 @@ final class BinanceAdapter extends AbstractExchangeAdapter
     {
         $interval = $this->mapTimeframe($timeframe);
         if ($interval === null) {
-            return []; // this exchange has no such interval
+            return [];
         }
         RateLimiter::acquire('binance', 1000);
         $interval = $this->mapTimeframe($timeframe);
@@ -858,8 +744,7 @@ final class BinanceAdapter extends AbstractExchangeAdapter
         if (empty($streams)) {
             return null;
         }
-        // Binance combined streams are capped; callers are expected to shard
-        // symbol batches across multiple WebSocketClient instances.
+
         $url = Config::binanceWsBase() . '/stream?streams=' . implode('/', $streams);
         $client = new WebSocketClient();
         return $client->connect($url) ? $client : null;
@@ -895,10 +780,6 @@ final class BinanceAdapter extends AbstractExchangeAdapter
         }
     }
 }
-
-// ============================================================================
-// SECTION 5 — MEXC ADAPTER
-// ============================================================================
 
 final class MexcAdapter extends AbstractExchangeAdapter
 {
@@ -959,7 +840,7 @@ final class MexcAdapter extends AbstractExchangeAdapter
     {
         $interval = $this->mapTimeframe($timeframe);
         if ($interval === null) {
-            return []; // this exchange has no such interval
+            return [];
         }
         RateLimiter::acquire('mexc', 500);
         $interval = $this->mapTimeframe($timeframe);
@@ -1007,10 +888,7 @@ final class MexcAdapter extends AbstractExchangeAdapter
         if (!$client->connect(Config::mexcWsBase() . '/ws')) {
             return null;
         }
-        // MEXC v3 WS: subscribe via a JSON control message per channel.
-        // Channel names below follow MEXC's documented spot v3 WS schema at
-        // time of writing; if MEXC revises channel naming this call fails
-        // soft (no messages arrive) and the adapter keeps working over REST.
+
         foreach ($symbols as $symbol) {
             foreach ($timeframes as $tf) {
                 $mapped = $this->mapTimeframe($tf);
@@ -1049,17 +927,6 @@ final class MexcAdapter extends AbstractExchangeAdapter
         $store->upsertCandle('mexc', $symbol, $timeframe, $candle, true);
     }
 }
-
-// ============================================================================
-// SECTION 6 — GATE.IO / BITGET / HTX ADAPTERS
-//
-// Three large spot venues whose public market-data endpoints need no API
-// key. Response shapes were taken from ccxt's parsers rather than from
-// memory, which matters most for Gate: its candlestick array is NOT in
-// OHLCV order — it is [time, quoteVolume, close, high, low, open,
-// baseVolume]. Reading it as OHLCV would have produced plausible-looking
-// but completely wrong candles, which is worse than having no exchange.
-// ============================================================================
 
 final class GateAdapter extends AbstractExchangeAdapter
 {
@@ -1120,7 +987,7 @@ final class GateAdapter extends AbstractExchangeAdapter
     {
         $interval = $this->mapTimeframe($timeframe);
         if ($interval === null) {
-            return []; // this exchange has no such interval
+            return [];
         }
         RateLimiter::acquire('gate', 600);
         $url = Config::gateRestBase() . '/api/v4/spot/candlesticks?' . http_build_query([
@@ -1134,7 +1001,6 @@ final class GateAdapter extends AbstractExchangeAdapter
             if (!is_array($row) || count($row) < 7) {
                 continue;
             }
-            // [0] seconds, [1] quote vol, [2] close, [3] high, [4] low, [5] open, [6] base vol
             $out[] = new Candle(
                 openTime: ((int) $row[0]) * 1000,
                 open: (float) $row[5],
@@ -1221,7 +1087,7 @@ final class BitgetAdapter extends AbstractExchangeAdapter
     {
         $interval = $this->mapTimeframe($timeframe);
         if ($interval === null) {
-            return []; // this exchange has no such interval
+            return [];
         }
         RateLimiter::acquire('bitget', 600);
         $url = Config::bitgetRestBase() . '/api/v2/spot/market/candles?' . http_build_query([
@@ -1269,7 +1135,6 @@ final class HtxAdapter extends AbstractExchangeAdapter
         return 'htx';
     }
 
-    /** HTX symbol ids are lowercase throughout its public API. */
     public function fetchExchangeSymbols(): array
     {
         RateLimiter::acquire('htx', 600);
@@ -1305,7 +1170,6 @@ final class HtxAdapter extends AbstractExchangeAdapter
             $bid = (float) ($t['bid'] ?? 0);
             $ask = (float) ($t['ask'] ?? 0);
             $out[$symbol] = [
-                // "vol" is turnover in the quote currency; "amount" is base volume.
                 'volume' => (float) ($t['vol'] ?? 0),
                 'lastPrice' => $last,
                 'bid' => $bid > 0 ? $bid : $last,
@@ -1320,7 +1184,7 @@ final class HtxAdapter extends AbstractExchangeAdapter
     {
         $interval = $this->mapTimeframe($timeframe);
         if ($interval === null) {
-            return []; // this exchange has no such interval
+            return [];
         }
         RateLimiter::acquire('htx', 600);
         $url = Config::htxRestBase() . '/market/history/kline?' . http_build_query([
@@ -1330,7 +1194,6 @@ final class HtxAdapter extends AbstractExchangeAdapter
         ]);
         $res = HttpClient::request('GET', $url);
         $out = [];
-        // HTX returns newest-first; reverse to chronological order like every other adapter.
         foreach (array_reverse($res['json']['data'] ?? []) as $row) {
             if (!is_array($row)) {
                 continue;
@@ -1358,17 +1221,6 @@ final class HtxAdapter extends AbstractExchangeAdapter
         ];
     }
 }
-
-// ============================================================================
-// SECTION 6.5 — CRYPTOCOMPARE ADAPTER
-// A market-data aggregator, not an exchange with its own trading/compliance
-// obligations -- a realistic route around a host's IP being blocked by an
-// exchange directly (see WallexAdapter above for the same REST-only
-// reasoning; CryptoCompare additionally has no per-exchange WS to plug in).
-// Symbols are synthesized as "{coin}USDT" since CryptoCompare is coin-
-// centric (fsym/tsym pairs against its aggregated feed) rather than
-// organized around one exchange's own tradeable pairs.
-// ============================================================================
 
 final class CryptoCompareAdapter extends AbstractExchangeAdapter
 {
@@ -1424,9 +1276,7 @@ final class CryptoCompareAdapter extends AbstractExchangeAdapter
             $out[$base . 'USDT'] = [
                 'volume' => (float) ($d['VOLUME24HOURTO'] ?? 0),
                 'lastPrice' => $price,
-                // CryptoCompare's aggregated feed has no real bid/ask
-                // (it's not one order book) -- collapsing both to price
-                // gives a 0% spread rather than fabricating a number.
+
                 'bid' => $price,
                 'ask' => $price,
                 'priceChangePercent' => (float) ($d['CHANGEPCT24HOUR'] ?? 0),
@@ -1439,7 +1289,7 @@ final class CryptoCompareAdapter extends AbstractExchangeAdapter
     {
         $interval = $this->mapTimeframe($timeframe);
         if ($interval === null) {
-            return []; // this exchange has no such interval
+            return [];
         }
         [$base, $quote] = $this->splitSymbol($symbol);
         $endpoint = match ($interval) {
@@ -1469,8 +1319,6 @@ final class CryptoCompareAdapter extends AbstractExchangeAdapter
 
     public function fetchOrderBook(string $symbol, int $depth): array
     {
-        // The free aggregation API doesn't expose real order-book depth;
-        // an empty book is the honest answer, not a fabricated one.
         return ['bids' => [], 'asks' => []];
     }
 
@@ -1490,11 +1338,6 @@ final class CryptoCompareAdapter extends AbstractExchangeAdapter
         return [$symbol, 'USDT'];
     }
 }
-
-// ============================================================================
-// SECTION 6b — BYBIT ADAPTER (public spot market data, no API key needed;
-// not one of the exchanges known to geo-block this host)
-// ============================================================================
 
 final class BybitAdapter extends AbstractExchangeAdapter
 {
@@ -1554,7 +1397,7 @@ final class BybitAdapter extends AbstractExchangeAdapter
     {
         $interval = $this->mapTimeframe($timeframe);
         if ($interval === null) {
-            return []; // this exchange has no such interval
+            return [];
         }
         RateLimiter::acquire('bybit', 600);
         $url = Config::bybitRestBase() . '/v5/market/kline?' . http_build_query([
@@ -1562,7 +1405,6 @@ final class BybitAdapter extends AbstractExchangeAdapter
         ]);
         $res = HttpClient::request('GET', $url);
         $out = [];
-        // Bybit returns newest-first; reverse to chronological order like every other adapter.
         foreach (array_reverse($res['json']['result']['list'] ?? []) as $row) {
             if (!is_array($row) || count($row) < 6) {
                 continue;
@@ -1588,10 +1430,6 @@ final class BybitAdapter extends AbstractExchangeAdapter
         ];
     }
 }
-
-// ============================================================================
-// SECTION 6c — OKX ADAPTER (public spot market data, no API key needed)
-// ============================================================================
 
 final class OkxAdapter extends AbstractExchangeAdapter
 {
@@ -1652,7 +1490,7 @@ final class OkxAdapter extends AbstractExchangeAdapter
     {
         $interval = $this->mapTimeframe($timeframe);
         if ($interval === null) {
-            return []; // this exchange has no such interval
+            return [];
         }
         RateLimiter::acquire('okx', 600);
         $url = Config::okxRestBase() . '/api/v5/market/candles?' . http_build_query([
@@ -1660,7 +1498,6 @@ final class OkxAdapter extends AbstractExchangeAdapter
         ]);
         $res = HttpClient::request('GET', $url);
         $out = [];
-        // OKX returns newest-first; reverse to chronological order like every other adapter.
         foreach (array_reverse($res['json']['data'] ?? []) as $row) {
             if (!is_array($row) || count($row) < 6) {
                 continue;
@@ -1685,10 +1522,6 @@ final class OkxAdapter extends AbstractExchangeAdapter
         ];
     }
 }
-
-// ============================================================================
-// SECTION 6d — KUCOIN ADAPTER (public spot market data, no API key needed)
-// ============================================================================
 
 final class KucoinAdapter extends AbstractExchangeAdapter
 {
@@ -1752,7 +1585,7 @@ final class KucoinAdapter extends AbstractExchangeAdapter
     {
         $interval = $this->mapTimeframe($timeframe);
         if ($interval === null) {
-            return []; // this exchange has no such interval
+            return [];
         }
         RateLimiter::acquire('kucoin', 600);
         $intervalSeconds = self::INTERVAL_SECONDS[$timeframe] ?? 3600;
@@ -1763,7 +1596,6 @@ final class KucoinAdapter extends AbstractExchangeAdapter
         ]);
         $res = HttpClient::request('GET', $url);
         $out = [];
-        // KuCoin returns newest-first rows shaped [time, open, close, high, low, volume, turnover].
         foreach (array_reverse($res['json']['data'] ?? []) as $row) {
             if (!is_array($row) || count($row) < 6) {
                 continue;
@@ -1788,16 +1620,10 @@ final class KucoinAdapter extends AbstractExchangeAdapter
     }
 }
 
-// ============================================================================
-// SECTION 7 — EXCHANGE MANAGER (isolation + circuit breaker)
-// ============================================================================
-
 final class ExchangeManager
 {
-    /** @var array<string,ExchangeAdapter> */
     private array $adapters = [];
 
-    /** @var array<string,array{failures:int, openUntil:int}> */
     private array $health = [];
 
     private const FAILURE_THRESHOLD = 3;
@@ -1842,7 +1668,6 @@ final class ExchangeManager
         $this->health[$adapter->name()] = ['failures' => 0, 'openUntil' => 0];
     }
 
-    /** @return array<string,ExchangeAdapter> */
     public function adapters(): array
     {
         return $this->adapters;
@@ -1858,11 +1683,6 @@ final class ExchangeManager
         return time() >= ($this->health[$name]['openUntil'] ?? 0);
     }
 
-    /**
-     * Runs $fn(adapter) with per-exchange failure isolation. A failing
-     * exchange opens its own circuit (exponential backoff) without
-     * affecting calls against any other exchange.
-     */
     public function withIsolation(string $name, callable $fn): mixed
     {
         $adapter = $this->adapters[$name] ?? null;
@@ -1888,7 +1708,6 @@ final class ExchangeManager
         }
     }
 
-    /** @return array<string,string> exchange => open/degraded/ok status for the health panel */
     public function healthSnapshot(): array
     {
         $out = [];
@@ -1900,13 +1719,8 @@ final class ExchangeManager
     }
 }
 
-// ============================================================================
-// SECTION 8 — MARKET DATA (Candle / Ticker / Orderbook managers)
-// ============================================================================
-
 final class ExchangeRepository
 {
-    /** @var array<string,int> */
     private static array $cache = [];
 
     public static function idForName(string $name): ?int
@@ -1929,7 +1743,6 @@ final class CandleManager
 {
     public function upsertMany(string $exchange, string $symbol, string $timeframe, array $candles): void
     {
-        // Single choke point for every adapter's output — see Candle::isSane().
         $total = count($candles);
         $candles = array_values(array_filter($candles, static fn(Candle $c) => $c->isSane()));
         if ($total > 0 && count($candles) < $total) {
@@ -1960,7 +1773,6 @@ final class CandleManager
         $pdo->beginTransaction();
         try {
             foreach ($candles as $candle) {
-                /** @var Candle $candle */
                 $stmt->execute([
                     ':eid' => $exchangeId, ':symbol' => $symbol, ':tf' => $timeframe, ':ot' => $candle->openTime,
                     ':o' => $candle->open, ':h' => $candle->high, ':l' => $candle->low, ':c' => $candle->close, ':v' => $candle->volume,
@@ -1973,7 +1785,6 @@ final class CandleManager
         }
     }
 
-    /** @return Candle[] most recent first turned oldest-first */
     public function recent(string $exchange, string $symbol, string $timeframe, int $limit): array
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -1996,11 +1807,6 @@ final class CandleManager
         ), $rows);
     }
 
-    /**
-     * Cheap existence check (no row hydration) — lets a cron-bounded worker
-     * invocation skip re-priming a symbol/timeframe that already has history,
-     * instead of re-fetching everything on every single invocation.
-     */
     public function hasAny(string $exchange, string $symbol, string $timeframe): bool
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -2052,7 +1858,6 @@ final class TickerManager
 
 final class OrderbookManager
 {
-    /** @var array<string,array> in-process cache only (best-effort, high churn) */
     private array $cache = [];
 
     public function set(string $exchange, string $symbol, array $book): void
@@ -2076,12 +1881,6 @@ final class OrderbookManager
     }
 }
 
-/**
- * Aggregation point that WebSocket handlers and REST sync both write
- * through, and that SignalGenerator reads MarketSnapshot from. Backed by
- * DB (candles / market_data tables) so bot.php (a separate process/webhook)
- * sees the same state worker.php produces.
- */
 final class MarketDataStore
 {
     private CandleManager $candles;
@@ -2112,8 +1911,6 @@ final class MarketDataStore
 
     public function upsertCandle(string $exchange, string $symbol, string $timeframe, Candle $candle, bool $closed): void
     {
-        // Only persist closed candles from the stream to avoid writing a
-        // half-formed bar into the shared table on every tick.
         if ($closed) {
             $this->candles->upsertMany($exchange, $symbol, $timeframe, [$candle]);
         }
@@ -2124,18 +1921,6 @@ final class MarketDataStore
         $this->tickers->upsert($exchange, $symbol, $price, $bid, $ask, $volume24h);
     }
 
-    /**
-     * Last known price, preferring the 24h ticker and falling back to the
-     * most recent candle close.
-     *
-     * The fallback matters more than it looks: a price of 0 makes a symbol
-     * invisible to the signal pass AND freezes every open position on it
-     * (monitorOpenPositions() skips a zero price, so TP/SL would never
-     * resolve and the slot would never free). A missing ticker — one
-     * exchange keying its ticker map differently, a thin pair absent from
-     * the 24h feed, a single failed fetch — should not be able to do that
-     * while good candle data is sitting right there.
-     */
     public function latestPrice(string $exchange, string $symbol): float
     {
         $ticker = $this->tickers->get($exchange, $symbol);
@@ -2146,7 +1931,6 @@ final class MarketDataStore
         return $this->lastCandleClose($exchange, $symbol);
     }
 
-    /** Most recent close across the configured timeframes, or 0 if there is no candle at all. */
     private function lastCandleClose(string $exchange, string $symbol): float
     {
         $best = 0.0;
@@ -2162,18 +1946,21 @@ final class MarketDataStore
         return $best;
     }
 
-    /** @param string[] $timeframes */
     public function buildSnapshot(string $exchange, string $symbol, array $timeframes, int $candleLimit = 200): MarketSnapshot
     {
         $ticker = $this->tickers->get($exchange, $symbol);
+        $now = time();
         $candlesByTf = [];
         foreach ($timeframes as $tf) {
-            $candlesByTf[$tf] = $this->candles->recent($exchange, $symbol, $tf, $candleLimit);
+            $series = $this->candles->recent($exchange, $symbol, $tf, $candleLimit + 1);
+            $last = end($series);
+            if ($last instanceof Candle && intdiv($last->openTime, 1000) + Candle::timeframeSeconds($tf) > $now) {
+                array_pop($series);
+            }
+            $candlesByTf[$tf] = count($series) > $candleLimit ? array_slice($series, -$candleLimit) : $series;
         }
         $price = (float) ($ticker['price'] ?? 0);
         if ($price <= 0) {
-            // Same reasoning as latestPrice(): candles present but no ticker
-            // must not silently take the symbol out of circulation.
             $lastTfCandles = $candlesByTf[array_key_last($candlesByTf)] ?? [];
             $lastClose = empty($lastTfCandles) ? null : $lastTfCandles[count($lastTfCandles) - 1];
             if ($lastClose instanceof Candle) {
@@ -2197,24 +1984,15 @@ final class MarketDataStore
     }
 }
 
-// ============================================================================
-// SECTION 9 — INDICATOR ENGINE (modular, intentionally empty registry)
-// ============================================================================
-
 interface Indicator
 {
     public function name(): string;
 
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array<string,mixed> indicator-specific output (values, signal, etc.)
-     */
     public function calculate(array $candles): array;
 }
 
 final class IndicatorEngine
 {
-    /** @var array<string,Indicator> */
     private array $registry = [];
 
     public function register(Indicator $indicator): void
@@ -2227,19 +2005,11 @@ final class IndicatorEngine
         unset($this->registry[$name]);
     }
 
-    /** @return string[] */
     public function registeredNames(): array
     {
         return array_keys($this->registry);
     }
 
-    /**
-     * @param Candle[] $candles
-     * @return array<string,array<string,mixed>> results keyed by indicator name.
-     *   Empty array when no indicators are registered yet — this is expected
-     *   until concrete indicator rules are supplied; ConfluenceEngine treats
-     *   an empty result set as a neutral contribution, never a fabricated one.
-     */
     public function runAll(array $candles): array
     {
         $out = [];
@@ -2254,16 +2024,8 @@ final class IndicatorEngine
     }
 }
 
-// ============================================================================
-// SECTION 10 — SWING PIVOT DETECTION (shared primitive for S/R, OB, trend)
-// ============================================================================
-
 final class SwingPivots
 {
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{highs: array<int,array{index:int, candle:Candle}>, lows: array<int,array{index:int, candle:Candle}>}
-     */
     public static function detect(array $candles, int $lookback = 5): array
     {
         $highs = [];
@@ -2293,7 +2055,6 @@ final class SwingPivots
         return ['highs' => $highs, 'lows' => $lows];
     }
 
-    /** @param Candle[] $candles */
     public static function atr(array $candles, int $period = 14): float
     {
         $n = count($candles);
@@ -2313,10 +2074,6 @@ final class SwingPivots
         return empty($trs) ? 0.0 : array_sum($trs) / count($trs);
     }
 
-    /**
-     * Structural trend from swing highs/lows: HH+HL -> bullish, LH+LL -> bearish, else neutral.
-     * @param Candle[] $candles
-     */
     public static function structuralTrend(array $candles, int $lookback = 5): string
     {
         $pivots = self::detect($candles, $lookback);
@@ -2342,30 +2099,8 @@ final class SwingPivots
     }
 }
 
-// ============================================================================
-// SECTION 10.4 — TA TOOLBOX
-//
-// The Pine built-ins the ported indicators lean on. Everything returns a full
-// series (oldest-first, aligned with the candle array) so a caller can look
-// back, but the strategy layer only ever reads the last few values: Pine
-// recomputes on every bar because it draws history, while this engine only
-// needs to know what is true right now.
-// ============================================================================
-
 final class Ta
 {
-    /**
-     * @param float[] $src
-     * @return float[]
-     *
-     * NaN-safe on purpose. Indicators are composed here — an SMA of an RSI,
-     * of an ATR, of anything with a warm-up — and every one of those sources
-     * starts with NaN. A naive running sum takes one NaN and stays NaN for
-     * the rest of the series, which silently kills the indicator built on
-     * top of it rather than delaying it. So NaNs are kept out of the sum and
-     * counted instead: the window reports NaN only while it still contains
-     * one.
-     */
     public static function sma(array $src, int $len): array
     {
         $out = [];
@@ -2391,7 +2126,6 @@ final class Ta
         return $out;
     }
 
-    /** @param float[] $src @return float[] */
     public static function ema(array $src, int $len): array
     {
         $out = [];
@@ -2399,7 +2133,6 @@ final class Ta
         $prev = null;
         foreach ($src as $i => $v) {
             if ($prev === null) {
-                // Pine seeds the EMA with an SMA of the first `len` values.
                 if ($i < $len - 1) {
                     $out[$i] = NAN;
                     continue;
@@ -2414,14 +2147,6 @@ final class Ta
         return $out;
     }
 
-    /**
-     * Arnaud Legoux MA — the "trend wave" of the SMC indicator. Gaussian
-     * weights offset toward the recent end, which is what makes it hug price
-     * more tightly than an EMA without the lag.
-     *
-     * @param float[] $src
-     * @return float[]
-     */
     public static function alma(array $src, int $len, float $offset = 0.85, float $sigma = 6.0): array
     {
         $n = count($src);
@@ -2451,7 +2176,6 @@ final class Ta
         return $out;
     }
 
-    /** Wilder's RSI. @param float[] $src @return float[] */
     public static function rsi(array $src, int $len = 14): array
     {
         $n = count($src);
@@ -2478,7 +2202,6 @@ final class Ta
         return $out;
     }
 
-    /** @param float[] $src */
     public static function stdev(array $src, int $len): float
     {
         $slice = array_slice($src, -$len);
@@ -2494,13 +2217,6 @@ final class Ta
         return sqrt($sum / $n);
     }
 
-    /**
-     * Session-anchored VWAP. Crypto has no session, so the anchor is UTC
-     * midnight — the same boundary the funding and daily candle use.
-     *
-     * @param Candle[] $candles
-     * @return float[]
-     */
     public static function vwap(array $candles): array
     {
         $out = [];
@@ -2522,7 +2238,6 @@ final class Ta
         return $out;
     }
 
-    /** Slope of a linear regression over the last $len values. @param float[] $src */
     public static function slope(array $src, int $len): float
     {
         $slice = array_slice($src, -$len);
@@ -2541,7 +2256,6 @@ final class Ta
         return $den == 0.0 ? 0.0 : ($n * $sxy - $sx * $sy) / $den;
     }
 
-    /** Linear-interpolated percentile of the last $len values. @param float[] $src */
     public static function percentile(array $src, int $len, float $pct): float
     {
         $slice = array_slice($src, -$len);
@@ -2559,7 +2273,6 @@ final class Ta
         return $slice[$lo] + ($slice[$hi] - $slice[$lo]) * ($rank - $lo);
     }
 
-    /** Where $value ranks inside $series, as a percentage. @param float[] $series */
     public static function percentRank(array $series, float $value): float
     {
         $n = count($series);
@@ -2575,7 +2288,6 @@ final class Ta
         return ($below / $n) * 100;
     }
 
-    /** @param Candle[] $candles */
     public static function highest(array $candles, int $len, int $offset = 0): float
     {
         $slice = array_slice($candles, -($len + $offset), $len);
@@ -2586,7 +2298,6 @@ final class Ta
         return $out === -INF ? NAN : $out;
     }
 
-    /** @param Candle[] $candles */
     public static function lowest(array $candles, int $len, int $offset = 0): float
     {
         $slice = array_slice($candles, -($len + $offset), $len);
@@ -2597,26 +2308,16 @@ final class Ta
         return $out === INF ? NAN : $out;
     }
 
-    /** @param Candle[] $candles @return float[] */
     public static function closes(array $candles): array
     {
         return array_map(static fn(Candle $c) => $c->close, $candles);
     }
 
-    /** @param Candle[] $candles @return float[] */
     public static function volumes(array $candles): array
     {
         return array_map(static fn(Candle $c) => $c->volume, $candles);
     }
 
-    /**
-     * Pine's ta.pivothigh/ta.pivotlow over an arbitrary series: index $i is a
-     * pivot when it is the strict extreme of the $left+$right window centred
-     * on it.
-     *
-     * @param float[] $src
-     * @return array<int,int> pivot indices, oldest first
-     */
     public static function pivots(array $src, int $left, int $right, bool $high): array
     {
         $out = [];
@@ -2639,15 +2340,6 @@ final class Ta
         return $out;
     }
 
-    /**
-     * Wilder's ADX (Average Directional Index) — trend STRENGTH, not
-     * direction. Low ADX means price is chopping sideways with no real
-     * trend behind it, which is exactly the condition SMC/structure setups
-     * are least reliable in. Returns only the latest value (like
-     * SwingPivots::atr()), NAN when there isn't enough history yet.
-     *
-     * @param Candle[] $candles oldest-first
-     */
     public static function adx(array $candles, int $period = 14): float
     {
         $n = count($candles);
@@ -2670,8 +2362,6 @@ final class Ta
             );
         }
 
-        // Wilder smoothing: seed with a plain sum of the first $period
-        // values, then roll forward as (prev - prev/period + current).
         $smoothedTr = array_sum(array_slice($trs, 0, $period));
         $smoothedPlusDm = array_sum(array_slice($plusDms, 0, $period));
         $smoothedMinusDm = array_sum(array_slice($minusDms, 0, $period));
@@ -2696,7 +2386,6 @@ final class Ta
             return NAN;
         }
 
-        // ADX itself is a Wilder-smoothed average of DX, seeded the same way.
         $adx = array_sum(array_slice($dxs, 0, $period)) / $period;
         for ($i = $period; $i < count($dxs); $i++) {
             $adx = ($adx * ($period - 1) + $dxs[$i]) / $period;
@@ -2704,25 +2393,6 @@ final class Ta
         return $adx;
     }
 
-    /**
-     * Standard MACD: fast EMA minus slow EMA, a signal line on top of that,
-     * and the histogram (macd - signal) everything else reads for a
-     * crossover.
-     *
-     * The signal line is seeded by hand rather than through a plain
-     * self::ema($macdLine, $signal) call: ema()'s own seed step averages
-     * the first $len values of its input, which works for a raw price
-     * series but not here — the MACD line itself starts with a NaN prefix
-     * (nothing is valid before the SLOW ema warms up, at index slow-1,
-     * which sits well past signal-1). Averaging across that NaN prefix
-     * makes ema()'s seed NaN, and once its running $prev is NaN every
-     * later value stays NaN forever too, since NaN is never `=== null`
-     * and the seed branch never runs again. Seeding from the first
-     * $signal REAL values instead avoids that trap.
-     *
-     * @param float[] $closes
-     * @return array{macd:float[], signal:float[], histogram:float[]}
-     */
     public static function macd(array $closes, int $fast = 12, int $slow = 26, int $signal = 9): array
     {
         $emaFast = self::ema($closes, $fast);
@@ -2764,36 +2434,8 @@ final class Ta
     }
 }
 
-// ============================================================================
-// SECTION 10.5 — MARKET STRUCTURE (CHoCH / BOS / range break / basing)
-//
-// The swing sequence read the way a price-action trader reads it:
-//
-//   BOS   — a break in the SAME direction as the prevailing swing sequence.
-//           Continuation.
-//   CHoCH — a break AGAINST it: the first higher high after a run of lower
-//           highs, or the first lower low after a run of higher lows. This
-//           is the change of character, and it is the earliest structural
-//           evidence that the previous move is over.
-//   BREAK — the same event out of a sideways range: no trend to continue
-//           or reverse, price simply leaves the box.
-//
-// Pivots are found with a SMALL lookback on purpose: the setups asked for
-// here are "a little ceiling breaks" and "a little floor breaks", which a
-// 5-bar swing filter would smooth away entirely.
-// ============================================================================
-
 final class MarketStructure
 {
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{
-     *   trend:string, event:?string, direction:?string, level:?float,
-     *   swing_high:?float, swing_low:?float, break_index:?int,
-     *   range_position:float, basing:bool, run_pct:float, drop_pct:float,
-     *   break_volume_ratio:float
-     * }
-     */
     public static function analyse(array $candles, int $lookback = 3, int $maxAge = 3): array
     {
         $empty = [
@@ -2830,17 +2472,12 @@ final class MarketStructure
             $trend = 'bearish';
         }
 
-        // The break itself, in the last few closed candles only — an event
-        // from twenty bars ago is history, not a signal.
         $event = null;
         $direction = null;
         $level = null;
         $breakIndex = null;
         $volumeRatio = 0.0;
 
-        // Newest first: when a window contains both a break up and a break
-        // back down — which is exactly what a reversal looks like — the
-        // later one is the one that is still true.
         for ($i = $n - 1; $i >= max($lookback, $n - $maxAge); $i--) {
             $c = $candles[$i];
             if ($i > $hLast['index'] && $c->close > $swingHigh) {
@@ -2867,10 +2504,6 @@ final class MarketStructure
             }
         }
 
-        // Walk back to the candle that actually did the breaking. Follow-
-        // through bars also close beyond the level, and taking the newest
-        // of them would measure the volume of the follow-through and read
-        // the pre-break context one bar too late.
         if ($breakIndex !== null && $level !== null) {
             $floor = ($direction === 'bullish' ? $hLast['index'] : $lLast['index']) + 1;
             while ($breakIndex > $floor) {
@@ -2889,17 +2522,10 @@ final class MarketStructure
             $volumeRatio = $avg > 0 ? $candles[$breakIndex]->volume / $avg : 0.0;
         }
 
-        // Everything below describes the market AS IT WAS GOING INTO the
-        // break, so the context window stops at the breaking candle. Measured
-        // to the last candle instead, a breakout always looks "extended" and
-        // a base never looks like one — the break itself moved price to the
-        // top of its own range.
         $contextEnd = $breakIndex ?? $n;
         $contextEnd = max(12, $contextEnd);
         $close = $candles[$contextEnd - 1]->close;
 
-        // Tight, quiet range = a base, whatever part of the bigger picture
-        // it sits in.
         $baseWindow = array_slice($candles, max(0, $contextEnd - 40), min(40, $contextEnd));
         $baseHigh = max(array_map(static fn(Candle $c) => $c->high, $baseWindow));
         $baseLow = min(array_map(static fn(Candle $c) => $c->low, $baseWindow));
@@ -2908,8 +2534,6 @@ final class MarketStructure
         $spanPct = $close > 0 ? (($baseHigh - $baseLow) / $close) * 100 : 100.0;
         $basing = $spanPct <= Config::baseRangePercent() && $priorAtr > 0 && $recentAtr <= $priorAtr * 0.9;
 
-        // Where the break started from, measured against a much longer
-        // window: "am I buying the bottom of the picture or the top of it".
         $wide = array_slice($candles, max(0, $contextEnd - 120), min(120, $contextEnd));
         $winHigh = max(array_map(static fn(Candle $c) => $c->high, $wide));
         $winLow = min(array_map(static fn(Candle $c) => $c->low, $wide));
@@ -2936,37 +2560,14 @@ final class MarketStructure
     }
 }
 
-// ============================================================================
-// SECTION 10.65 — REVERSAL CANDLE CONFIRMATION (hammer / shooting star)
-//
-// A pullback or counter-trend entry (buying a demand zone after a drop,
-// selling a supply zone after a rally) is exactly the trade that catches a
-// falling knife when nothing on the chart has actually turned yet — a coin
-// that dropped 50% does not become a long just because price is now "cheap".
-// Before such an entry is allowed, the fast confirmation timeframe (see
-// Config::reversalConfirmTimeframe(), 5m by default — fast enough that the
-// signal is not held up waiting on it) must show a real reversal candle: a
-// hammer for a long, a shooting star for a short, checked against four
-// independent criteria rather than just "the wick looks long."
-// ============================================================================
-
 final class ReversalCandleEngine
 {
-    /** Body no more than this share of the candle's own high-low range. */
     private const MAX_BODY_RATIO = 0.35;
-    /** The rejection wick must be at least this many times the body. */
     private const MIN_WICK_TO_BODY = 2.0;
-    /** The wick on the opposite side must stay under this share of the range. */
     private const MAX_OPPOSITE_WICK_RATIO = 0.25;
-    /** Candles of prior context to check for the move the reversal is supposed to end. */
     private const CONTEXT_LOOKBACK = 8;
-    /** That prior move must be at least this many ATRs, or it is chop, not a leg to reverse. */
     private const MIN_CONTEXT_ATR = 1.0;
 
-    /**
-     * @param Candle[] $candles oldest-first, on the confirmation timeframe
-     * @return array{confirmed:bool, checklist:array<string,bool>, reason:string}
-     */
     public static function check(array $candles, bool $isLong): array
     {
         $n = count($candles);
@@ -3016,7 +2617,6 @@ final class ReversalCandleEngine
         };
     }
 
-    /** @param Candle[] $candles oldest-first */
     private static function hadPriorMove(array $candles, bool $isLong): bool
     {
         $atr = SwingPivots::atr($candles);
@@ -3024,7 +2624,6 @@ final class ReversalCandleEngine
             return false;
         }
         $n = count($candles);
-        // The move leading INTO the reversal candle, not including it.
         $window = array_slice($candles, $n - 1 - self::CONTEXT_LOOKBACK, self::CONTEXT_LOOKBACK);
         $from = $window[0]->open;
         $to = $window[count($window) - 1]->close;
@@ -3032,38 +2631,16 @@ final class ReversalCandleEngine
         return $moved >= $atr * self::MIN_CONTEXT_ATR;
     }
 
-    /** @param array<string,bool> $checklist */
     private static function result(bool $confirmed, array $checklist, string $reason): array
     {
         return ['confirmed' => $confirmed, 'checklist' => $checklist, 'reason' => $reason];
     }
 }
 
-/**
- * A breaker block: a liquidity sweep (a swing high/low taken out, trapping
- * whoever traded the continuation) immediately followed by a structure
- * shift the other way. The swept level's origin flips role -- a supply
- * candle that failed becomes support, and vice versa.
- *
- * What makes this worth its own module rather than just reading the sweep
- * and structure votes separately: this is one of the few tells on the
- * chart that shows up AT the start of a move instead of confirming it
- * after the fact -- the sweep traps the wrong side, the flip proves it,
- * and the real move (the pump or dump the trap was hiding) is usually
- * still ahead of it, not behind it. Composed entirely from
- * LiquidityEngine's sweep and MarketStructure's break -- no new zone
- * detection, no new state, so nothing here can disagree with either.
- */
 final class BreakerBlockEngine
 {
-    /** How many candles old the confirming break may be and still count as "just happened", not stale history. */
     private const MAX_AGE_CANDLES = 6;
 
-    /**
-     * @param array{recent_sweep:?array{price:float,is_high:bool,index:int,origin:string}} $liquidity
-     * @param array{event:?string,direction:?string,break_index:?int} $structure
-     * @return array{direction:string,fresh:bool,age:int}|null
-     */
     public static function detect(int $totalCandles, array $liquidity, array $structure): ?array
     {
         $sweep = $liquidity['recent_sweep'] ?? null;
@@ -3072,15 +2649,12 @@ final class BreakerBlockEngine
             return null;
         }
 
-        // A swept high trapped longs -- the flip that proves it is a
-        // bearish one, and vice versa.
         $wantsBullish = !$sweep['is_high'];
         $isBullish = $structure['direction'] === 'bullish';
         if ($wantsBullish !== $isBullish) {
             return null;
         }
-        // The break has to come from the sweep, not from some earlier,
-        // unrelated structure event that happened to also be on the books.
+
         if ($breakIndex < $sweep['index']) {
             return null;
         }
@@ -3093,23 +2667,6 @@ final class BreakerBlockEngine
         ];
     }
 
-    /**
-     * The other, equally standard definition of a breaker block (the one
-     * LuxAlgo's own ICT toolkit uses): an order block price has already
-     * traded straight through -- not just approached -- flips role and
-     * stays live as the opposite kind of level until price closes back
-     * beyond its far side, at which point it is spent and no longer means
-     * anything.
-     *
-     * A mitigated bullish block (price already broke its low) that price
-     * has NOT since reclaimed above its high is an active bearish level;
-     * the mirror is a bullish one. Reads straight off OrderBlockEngine's
-     * own output plus the current price -- no separate zone tracking to
-     * fall out of sync with it.
-     *
-     * @param OrderBlock[] $orderBlocks
-     * @return array{direction:string,level:float}|null the single nearest active flip, if any
-     */
     public static function detectFlip(float $price, array $orderBlocks): ?array
     {
         $best = null;
@@ -3118,9 +2675,6 @@ final class BreakerBlockEngine
                 continue;
             }
             if ($ob->type === OrderBlockType::BULLISH && $price < $ob->high) {
-                // Broke its low already (that is what mitigated means here)
-                // and hasn't reclaimed back above its high -- still an
-                // active bearish flip.
                 if ($best === null || $ob->high < $best['level']) {
                     $best = ['direction' => 'bearish', 'level' => $ob->high];
                 }
@@ -3134,35 +2688,14 @@ final class BreakerBlockEngine
     }
 }
 
-/**
- * RSI reversal probability, ported from the kernel-density approach in
- * "RSI (Kernel Optimized)" [Flux Charts]: instead of a fixed 30/70
- * overbought/oversold line, this asks "of every swing high and swing low
- * this coin has actually printed recently, which ones happened with RSI
- * near where it is right now?" A coin that reverses its lows at RSI 42
- * needs a different read than one that reverses at RSI 28, and a fixed
- * threshold cannot tell the two apart.
- *
- * Deliberately windowed to the candles already loaded for this pass rather
- * than kept as persistent chart-wide state (unlike the original indicator)
- * -- this runs stateless, once per evaluation, same as every other engine
- * here.
- */
 final class RsiReversalEngine
 {
     private const PIVOT_LEN = 21;
     private const RSI_LEN = 14;
-    /** Same default smoothing the original indicator ships with. */
     private const BANDWIDTH = 2.71828;
-    /** Below this many historical pivots, the read is noise, not statistics. */
     private const MIN_PIVOTS = 5;
-    /** How much of the combined bull/bear density has to sit on one side to call it. */
     private const CONFIDENCE_THRESHOLD = 0.65;
 
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{signal:?string, confidence:float}
-     */
     public static function detect(array $candles): array
     {
         $none = ['signal' => null, 'confidence' => 0.0];
@@ -3217,7 +2750,6 @@ final class RsiReversalEngine
         return $none;
     }
 
-    /** Gaussian kernel density of $x against a small sample of historical pivot RSIs. */
     private static function density(float $x, array $points): float
     {
         $sum = 0.0;
@@ -3229,35 +2761,14 @@ final class RsiReversalEngine
     }
 }
 
-/**
- * SuperTrend AI (Clustering) [LuxAlgo], ported.
- *
- * A single ATR-multiple SuperTrend is a fixed guess at how wide this
- * coin's noise band is; the original indicator's actual idea is to try
- * several multiples (1.0 to 5.0) at once, score each by how well it would
- * have called the last few bars' direction, and trade the one that has
- * actually been working -- adapting to the coin instead of a fixed
- * setting doing the same thing on a dead-quiet altcoin and a violent one.
- *
- * The original re-runs a K-means clustering step over that scoreboard on
- * every single bar, which makes sense for a chart redrawing live but is
- * pure waste here: with only nine candidate multiples, sorting them by
- * score and averaging the top third lands on the same "best cluster" the
- * clustering converges to, without an iterative loop repeated forever.
- */
 final class SuperTrendAiEngine
 {
     private const ATR_LEN = 10;
     private const MIN_FACTOR = 1.0;
     private const MAX_FACTOR = 5.0;
     private const STEP = 0.5;
-    /** Smoothing period for the performance and denominator EMAs. */
     private const PERF_ALPHA = 10.0;
 
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{direction:?string, confidence:float}
-     */
     public static function detect(array $candles): array
     {
         $none = ['direction' => null, 'confidence' => 0.0];
@@ -3294,14 +2805,6 @@ final class SuperTrendAiEngine
         ];
     }
 
-    /**
-     * One full SuperTrend + performance pass at a single ATR factor.
-     *
-     * @param float[] $hl2
-     * @param float[] $closes
-     * @param float[] $atr
-     * @return array{perf:float, den:float, trend:int, output:float}
-     */
     private static function runPass(array $hl2, array $closes, array $atr, float $factor): array
     {
         $n = count($closes);
@@ -3342,7 +2845,6 @@ final class SuperTrendAiEngine
         return $x > 0 ? 1.0 : ($x < 0 ? -1.0 : 0.0);
     }
 
-    /** @param Candle[] $candles @return float[] ATR at each index (0.0 at index 0) */
     private static function atrSeries(array $candles, int $period): array
     {
         $n = count($candles);
@@ -3362,19 +2864,8 @@ final class SuperTrendAiEngine
     }
 }
 
-/**
- * Volume imbalance: a body-to-body gap (open/close), as distinct from an
- * FVG's wick-to-wick one -- the ICT Concepts [LuxAlgo] definition. Requires
- * the middle candle to be an actual displacement bar (a big, clean body),
- * because a body gap left by an ordinary small candle is not the same
- * signal as one left by an impulsive one.
- */
 final class VolumeImbalanceEngine
 {
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{present:bool, direction:?string}
-     */
     public static function detect(array $candles): array
     {
         $none = ['present' => false, 'direction' => null];
@@ -3388,10 +2879,6 @@ final class VolumeImbalanceEngine
         $lastBodyTop = max($last->open, $last->close);
         $lastBodyBottom = min($last->open, $last->close);
 
-        // Bullish: this candle's body opened clear of the prior candle's
-        // close AND its high (the prior candle's whole range sits below
-        // this one's body) -- but the wicks still overlap, or this would
-        // be a plain FVG instead of a body-only gap.
         $bull = $last->open > $prev->close
             && $prev->high > $last->low
             && $last->close > $prev->close
@@ -3414,21 +2901,11 @@ final class VolumeImbalanceEngine
     }
 }
 
-/**
- * Displacement candle [LuxAlgo ICT Concepts]: a body bigger than its own
- * recent average with wicks small relative to that body -- an impulsive,
- * institutional-looking bar rather than an ordinary one, on the theory
- * that a real move starts with one of these, not a doji.
- */
 final class DisplacementEngine
 {
     private const BODY_AVG_LEN = 5;
     private const MAX_WICK_RATIO = 0.36;
 
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{present:bool, direction:?string}
-     */
     public static function detect(array $candles): array
     {
         $none = ['present' => false, 'direction' => null];
@@ -3459,13 +2936,6 @@ final class DisplacementEngine
     }
 }
 
-/**
- * How much of a Fair Value Gap price has actually traded back into, as a
- * percentage of its height -- the "Volumatic FVG" strategy's entry signal
- * is this crossing a threshold, rather than FvgEngine's plain filled/
- * unfilled boolean. A pullback that has barely dipped a toe into a gap is
- * a much weaker read than one that has retraced deep into it.
- */
 final class FvgMitigation
 {
     public static function percent(Fvg $fvg, float $price): float
@@ -3494,22 +2964,13 @@ final class FvgMitigation
     }
 }
 
-/**
- * ICT "killzones": the UTC-hour windows around the Asian, London and New
- * York session opens/closes where forex/index liquidity concentrates.
- * Crypto trades 24/7 with no exchange open/close of its own, so this is
- * off by default (see Config::requireKillzone()) -- it is here as an
- * optional filter for whoever wants to test whether these hours also
- * carry more real volume on crypto, not a default assumption that they do.
- * Deliberately DST-naive: a fixed, cheap hour check, not a timezone system.
- */
 final class KillzoneEngine
 {
     private const ZONES = [
-        [0, 4],   // Asian
-        [7, 10],  // London open
-        [12, 15], // New York
-        [15, 17], // London close
+        [0, 4],
+        [7, 10],
+        [12, 15],
+        [15, 17],
     ];
 
     public static function isActive(int $unixTime): bool
@@ -3524,29 +2985,13 @@ final class KillzoneEngine
     }
 }
 
-/**
- * A volatility squeeze: price coiled tighter than almost anywhere else in
- * recent history, the setup that precedes an explosive move far more often
- * than a random bar does. On its own that only says a big move is coming,
- * not which way -- so this also requires the first candle out of the
- * squeeze to already be an expansion candle, and reads its direction from
- * that, rather than guessing ahead of it.
- */
 final class SqueezeEngine
 {
-    /** Bollinger-style band length. */
     private const BAND_LEN = 20;
-    /** How many prior band-width readings the current one is ranked against. */
     private const LOOKBACK = 100;
-    /** The current width must rank at or below this percentile of that history to count as a squeeze. */
     private const SQUEEZE_PERCENTILE = 0.20;
-    /** The breakout candle's range must be at least this many ATRs to count as a real expansion, not noise. */
     private const EXPANSION_ATR_MULT = 1.5;
 
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{squeezing:bool,expanding:bool,direction:?string}
-     */
     public static function detect(array $candles): array
     {
         $none = ['squeezing' => false, 'expanding' => false, 'direction' => null];
@@ -3557,10 +3002,6 @@ final class SqueezeEngine
 
         $closes = array_map(static fn(Candle $c) => $c->close, $candles);
 
-        // Band-width history up to and including the candle BEFORE the
-        // last one -- the squeeze has to already be there before the
-        // expansion candle prints, not measured off the candle that just
-        // broke it open.
         $widths = [];
         for ($i = $n - 1 - self::LOOKBACK; $i < $n - 1; $i++) {
             $slice = array_slice($closes, $i - self::BAND_LEN + 1, self::BAND_LEN);
@@ -3593,23 +3034,12 @@ final class SqueezeEngine
     }
 }
 
-// ============================================================================
-// SECTION 10.7 — LIQUIDITY, SUPPLY/DEMAND, RANGES AND THE TREND WAVE
-//
-// Ports of the six indicators supplied, reduced to what a signal actually
-// needs. Pine recalculates on every bar because it draws a chart; these run
-// one pass over the candle array and report the state that is true NOW —
-// which is the only state a trade is taken from, and the difference between
-// a pass that fits in a cron minute and one that does not.
-// ============================================================================
-
-/** A resting pool of stop orders: a swing high/low, session extreme or PDH/PDL. */
 final class LiquidityLevel
 {
     public function __construct(
         public readonly float $price,
         public readonly bool $isHigh,
-        public readonly string $origin,   // '1h' | 'Asia' | 'PDH' | ...
+        public readonly string $origin,
         public readonly int $bornIndex,
         public bool $swept = false,
         public int $sweptIndex = -1,
@@ -3617,20 +3047,8 @@ final class LiquidityLevel
     }
 }
 
-/**
- * MTF Liquidity Stack (Zeiierman), ported.
- *
- * Liquidity is where stops sit: under swing lows, over swing highs, at the
- * previous day's extremes and at session highs/lows. Two things matter to a
- * trade — untapped liquidity ahead is where price is drawn (a target), and a
- * level that has just been swept and rejected is a reversal trigger.
- */
 final class LiquidityEngine
 {
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{levels:LiquidityLevel[], recent_sweep:?array{price:float,is_high:bool,index:int,origin:string}}
-     */
     public function detect(array $candles, int $keepPerSide = 6, int $pivotLen = 3, int $sweepAge = 4): array
     {
         $n = count($candles);
@@ -3641,7 +3059,6 @@ final class LiquidityEngine
         $highs = array_map(static fn(Candle $c) => $c->high, $candles);
         $lows = array_map(static fn(Candle $c) => $c->low, $candles);
 
-        /** @var LiquidityLevel[] $levels */
         $levels = [];
         foreach (Ta::pivots($highs, $pivotLen, $pivotLen, true) as $i) {
             $levels[] = new LiquidityLevel($candles[$i]->high, true, 'swing', $i);
@@ -3653,9 +3070,6 @@ final class LiquidityEngine
             $levels[] = $level;
         }
 
-        // Sweep detection: a level is taken once price trades through it
-        // AFTER it formed. The original marks these "mitigated" and stops
-        // drawing them; here the sweep itself is the interesting event.
         $recentSweep = null;
         foreach ($levels as $level) {
             for ($i = $level->bornIndex + $pivotLen + 1; $i < $n; $i++) {
@@ -3668,9 +3082,6 @@ final class LiquidityEngine
                 break;
             }
             if ($level->swept && $level->sweptIndex >= $n - $sweepAge) {
-                // A sweep only counts as a reversal cue if the candle CLOSED
-                // back on the right side of the level: through and gone is a
-                // break, through and rejected is a sweep.
                 $c = $candles[$level->sweptIndex];
                 $rejected = $level->isHigh ? $c->close < $level->price : $c->close > $level->price;
                 if ($rejected && ($recentSweep === null || $level->sweptIndex > $recentSweep['index'])) {
@@ -3684,7 +3095,6 @@ final class LiquidityEngine
             }
         }
 
-        // Only untapped levels are worth keeping as targets, newest first.
         $live = array_values(array_filter($levels, static fn(LiquidityLevel $l) => !$l->swept));
         usort($live, static fn(LiquidityLevel $a, LiquidityLevel $b) => $b->bornIndex <=> $a->bornIndex);
 
@@ -3702,14 +3112,6 @@ final class LiquidityEngine
         return ['levels' => $kept, 'recent_sweep' => $recentSweep];
     }
 
-    /**
-     * Previous day's high and low. The original also tracks Asia / London /
-     * New York sessions; on a 24h crypto market the daily extremes are the
-     * levels that actually hold stops, and they cost one pass to find.
-     *
-     * @param Candle[] $candles
-     * @return LiquidityLevel[]
-     */
     private function dailyLevels(array $candles): array
     {
         $byDay = [];
@@ -3741,7 +3143,6 @@ final class LiquidityEngine
     }
 }
 
-/** A momentum-born supply or demand zone. */
 final class SupplyDemandZone
 {
     public function __construct(
@@ -3764,15 +3165,6 @@ final class SupplyDemandZone
     }
 }
 
-/**
- * Supply & Demand (MTF) — Flux Charts, ported.
- *
- * A zone is born where a run of momentum candles left from: several
- * consecutive bodies at least half the average size, all in one direction.
- * The zone is the candle that started the run, clamped to 1.5 ATR so one
- * outsized bar cannot claim half the chart, and it dies when price closes
- * through the far side.
- */
 final class SupplyDemandEngine
 {
     public function __construct(
@@ -3784,10 +3176,6 @@ final class SupplyDemandEngine
     ) {
     }
 
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return SupplyDemandZone[] newest first, unbroken only
-     */
     public function detect(array $candles): array
     {
         $n = count($candles);
@@ -3802,7 +3190,6 @@ final class SupplyDemandEngine
             return [];
         }
 
-        /** @var SupplyDemandZone[] $zones */
         $zones = [];
         $lastDemand = -PHP_INT_MAX;
         $lastSupply = -PHP_INT_MAX;
@@ -3842,8 +3229,6 @@ final class SupplyDemandEngine
             }
         }
 
-        // Invalidation: a demand zone dies when price closes below its
-        // bottom, supply when price closes above its top.
         foreach ($zones as $zone) {
             for ($i = $zone->startIndex + 1; $i < $n; $i++) {
                 $c = $candles[$i];
@@ -3875,18 +3260,6 @@ final class SupplyDemandEngine
     }
 }
 
-/**
- * Auto Range Detector (QuantAlgo), ported.
- *
- * A range is not "price went sideways for a bit" — it has to pass five
- * tests: the band is compressed relative to ATR, price rotated across the
- * midpoint often enough, both boundaries were touched, the band has little
- * drift, and price was actually contained inside it. That is what separates
- * a tradable box from a slow trend, and it is why the breakout of one is
- * worth taking.
- *
- * @phpstan-type RangeState array{qualified:bool, top:float, bottom:float, bars:int, broke:?string}
- */
 final class RangeEngine
 {
     public function __construct(
@@ -3902,10 +3275,6 @@ final class RangeEngine
     ) {
     }
 
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{qualified:bool, top:?float, bottom:?float, length:int, break:?string, position:float}
-     */
     public function detect(array $candles): array
     {
         $none = ['qualified' => false, 'top' => null, 'bottom' => null, 'length' => 0, 'break' => null, 'position' => 0.5];
@@ -3915,22 +3284,12 @@ final class RangeEngine
             return $none;
         }
 
-        // The box is measured from a window that STOPS SHORT of the last few
-        // candles, and the break is then tested against those.
-        //
-        // The original carries the range forward as state: it is established
-        // first, and price leaves it later. Re-deriving the box from a
-        // window that already contains the breakout is not the same thing —
-        // the impulse widens the band and ruins the containment, so the one
-        // moment the range matters is the one moment it stops qualifying.
         $hold = Config::rangeBreakLookback();
         $body = array_slice($candles, 0, $n - $hold);
         if (count($body) < $this->baseLength + 5) {
             return $none;
         }
 
-        // The original scans three nested windows and prefers the widest that
-        // qualifies — a big slow box beats the small one inside it.
         foreach ([3, 2, 1] as $scale) {
             $len = $this->baseLength * $scale;
             if (count($body) < $len + 5) {
@@ -3966,10 +3325,6 @@ final class RangeEngine
         return $none;
     }
 
-    /**
-     * @param Candle[] $candles
-     * @return array{qualified:bool, top:float, bottom:float}
-     */
     private function scan(array $candles, int $len, float $atr): array
     {
         $n = count($candles);
@@ -3984,9 +3339,6 @@ final class RangeEngine
             return ['qualified' => false, 'top' => 0.0, 'bottom' => 0.0];
         }
 
-        // Compression: band height against what ATR says a random walk of
-        // this length would cover. Ranked against the recent past, because
-        // "tight" only means anything relative to this symbol's own history.
         $compression = $height / ($atr * sqrt($len));
         $history = [];
         $step = max(1, (int) floor($len / 4));
@@ -4001,15 +3353,7 @@ final class RangeEngine
                 break;
             }
         }
-        // Two ways to be compressed, and either will do.
-        //
-        // The rank is the original's test: tight COMPARED TO this symbol's
-        // recent past. On its own it has a blind spot — a coin that has been
-        // ranging for the whole lookback ranks every window the same, so
-        // nothing ever qualifies and the most obvious box on the chart is
-        // invisible. The absolute measure has no such problem: height over
-        // ATR*sqrt(len) is ~1.0 for a random walk by construction, so
-        // anything well under that is a range whatever came before it.
+
         $rank = empty($history) ? 100.0 : Ta::percentRank($history, $compression);
         if ($rank > $this->compressionPercentile && $compression > Config::rangeAbsoluteCompression()) {
             return ['qualified' => false, 'top' => $top, 'bottom' => $bottom];
@@ -4047,25 +3391,8 @@ final class RangeEngine
     }
 }
 
-/**
- * SMC Institutional Clean Wave, ported.
- *
- * The ALMA wave gives a trend read that is not a lagging crossover, and the
- * BOS/CHoCH engine is the same idea as MarketStructure's but anchored on the
- * LAST pivot rather than the last two: it fires on the crossover itself,
- * which is earlier, and it tracks its own direction so it can tell a
- * continuation from a change of character.
- */
 final class TrendWave
 {
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{
-     *   direction:string, wave:?float, distance_atr:float,
-     *   event:?string, event_dir:?string, event_index:?int,
-     *   sd_target:?float, inside_bar:bool, structure_trend:?string
-     * }
-     */
     public static function analyse(array $candles, int $waveLength = 21, int $sensitivity = 7, int $sdLength = 20): array
     {
         $n = count($candles);
@@ -4090,16 +3417,12 @@ final class TrendWave
             $out['distance_atr'] = $atr > 0 ? abs($closes[$last] - $waveNow) / $atr : 0.0;
         }
 
-        // Inside bar / consolidation, the indicator's "smart candle" colour.
         $out['inside_bar'] = $candles[$last]->high <= $candles[$last - 1]->high
             && $candles[$last]->low >= $candles[$last - 1]->low;
 
-        // -2.5 standard deviations below the mean: the original's "next
-        // target" line, useful as a downside objective.
         $mean = array_sum(array_slice($closes, -$sdLength)) / $sdLength;
         $out['sd_target'] = $mean - Ta::stdev($closes, $sdLength) * 2.5;
 
-        // BOS / CHoCH by crossover of the most recent confirmed pivot.
         $highs = array_map(static fn(Candle $c) => $c->high, $candles);
         $lows = array_map(static fn(Candle $c) => $c->low, $candles);
         $ph = Ta::pivots($highs, $sensitivity, $sensitivity, true);
@@ -4147,24 +3470,8 @@ final class TrendWave
     }
 }
 
-/**
- * Dynamic Deviation Channels (RSI Trigger) [ChartPrime], ported.
- *
- * An EMA midline with ATR-scaled bands around it, and a smoothed RSI that
- * decides which side of the channel is live: above 50 the market is working
- * the upper bands, below 50 the lower ones. The trade is a cross back
- * through the first band — mean reversion with a momentum filter on it,
- * rather than "price touched a band".
- */
 final class DeviationChannel
 {
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{
-     *   mid:?float, upper1:?float, lower1:?float, rsi:?float,
-     *   signal:?string, mid_rising:bool, mid_falling:bool
-     * }
-     */
     public static function analyse(array $candles, int $length = 20, int $rsiLength = 20): array
     {
         $out = ['mid' => null, 'upper1' => null, 'lower1' => null, 'rsi' => null, 'signal' => null, 'mid_rising' => false, 'mid_falling' => false];
@@ -4180,8 +3487,6 @@ final class DeviationChannel
             return $out;
         }
 
-        // The original's volatility measure: a long ATR, deliberately slow,
-        // so the bands describe the regime rather than the last few bars.
         $stDev = SwingPivots::atr($candles, 100) * 1.5;
         if ($stDev <= 0) {
             return $out;
@@ -4205,8 +3510,6 @@ final class DeviationChannel
         $out['mid_rising'] = $mid[$last] > ($mid[$last - 3] ?? $mid[$last]);
         $out['mid_falling'] = $mid[$last] < ($mid[$last - 3] ?? $mid[$last]);
 
-        // RSI gates which side is even eligible, exactly as the original
-        // only plots one set of bands at a time.
         if ($rsiNow < 50 && $closes[$last] > $lower1 && $closes[$last - 1] <= $lowerPrev) {
             $out['signal'] = 'long';
         } elseif ($rsiNow >= 50 && $closes[$last] < $upper1 && $closes[$last - 1] >= $upperPrev) {
@@ -4217,27 +3520,8 @@ final class DeviationChannel
     }
 }
 
-/**
- * The SMC vocabulary the two Smart-Money suites share: the dealing range and
- * where price sits in it, the optimal-trade-entry pocket, equal highs and
- * lows, and the micro structure inside the macro one.
- *
- * These are not triggers. They are the context that decides whether a
- * trigger is worth taking — buying in premium and selling in discount is
- * the single most common way a good entry signal still loses.
- */
 final class SmcContext
 {
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{
-     *   range_high:?float, range_low:?float, equilibrium:?float,
-     *   zone:string, position:float,
-     *   ote_high:?float, ote_low:?float, in_ote:bool, leg:?string,
-     *   eqh:?float, eql:?float,
-     *   internal_event:?string, internal_dir:?string
-     * }
-     */
     public static function analyse(array $candles, int $swingLen = 8, int $internalLen = 3, int $rangeLookback = 40): array
     {
         $out = [
@@ -4258,7 +3542,6 @@ final class SmcContext
         $close = $closes[$n - 1];
         $atr = SwingPivots::atr($candles);
 
-        // -- the dealing range, and which half of it price is in -----------
         $window = array_slice($candles, -$rangeLookback);
         $rangeHigh = max(array_map(static fn(Candle $c) => $c->high, $window));
         $rangeLow = min(array_map(static fn(Candle $c) => $c->low, $window));
@@ -4269,7 +3552,6 @@ final class SmcContext
         $out['position'] = $span > 0 ? ($close - $rangeLow) / $span : 0.5;
         $out['zone'] = $out['position'] > 0.5 ? 'premium' : 'discount';
 
-        // -- OTE: the 62-79% retracement of the most recent leg -------------
         $phs = Ta::pivots($highs, $swingLen, $swingLen, true);
         $pls = Ta::pivots($lows, $swingLen, $swingLen, false);
         $lastPh = empty($phs) ? null : $phs[count($phs) - 1];
@@ -4277,16 +3559,12 @@ final class SmcContext
 
         if ($lastPh !== null && $lastPl !== null) {
             if ($lastPl > $lastPh) {
-                // Down leg: high then low. The retracement to sell is
-                // measured back UP from the low.
                 $legHigh = $highs[$lastPh];
                 $legLow = $lows[$lastPl];
                 $out['leg'] = 'down';
                 $out['ote_low'] = $legLow + ($legHigh - $legLow) * 0.62;
                 $out['ote_high'] = $legLow + ($legHigh - $legLow) * 0.79;
             } else {
-                // Up leg: low then high. The retracement to buy is measured
-                // back DOWN from the high.
                 $legHigh = $highs[$lastPh];
                 $legLow = $lows[$lastPl];
                 $out['leg'] = 'up';
@@ -4299,7 +3577,6 @@ final class SmcContext
             }
         }
 
-        // -- equal highs / lows: stop pools that have been built twice -------
         $tolerance = $atr * 0.10;
         if (count($phs) >= 2 && abs($highs[$phs[count($phs) - 1]] - $highs[$phs[count($phs) - 2]]) <= $tolerance) {
             $out['eqh'] = max($highs[$phs[count($phs) - 1]], $highs[$phs[count($phs) - 2]]);
@@ -4308,10 +3585,6 @@ final class SmcContext
             $out['eql'] = min($lows[$pls[count($pls) - 1]], $lows[$pls[count($pls) - 2]]);
         }
 
-        // -- internal (micro) structure -------------------------------------
-        // The same crossover engine on a much smaller pivot: an iBOS is the
-        // first evidence a macro leg is resuming, and it fires well before
-        // the swing structure confirms.
         $iph = Ta::pivots($highs, $internalLen, $internalLen, true);
         $ipl = Ta::pivots($lows, $internalLen, $internalLen, false);
         $recent = static fn(array $piv, array $src, bool $up): ?array => (function () use ($piv, $src, $up, $closes, $n, $internalLen) {
@@ -4343,19 +3616,6 @@ final class SmcContext
     }
 }
 
-/**
- * Setup Scanner [GBB], ported.
- *
- * Six independent entry triggers. Each answers one question — has price
- * reclaimed VWAP, pulled back into the EMA band, retested a broken level,
- * swept a stop pool and rejected, diverged from RSI, or broken the opening
- * range — and each is reported separately so the strategy above can require
- * agreement rather than trusting any single one.
- *
- * The original's volume gate is kept where the original had it: on the
- * setups where participation is part of the thesis (VWAP, EMA, sweep) and
- * deliberately not on the others, where a quiet bar is normal.
- */
 final class SetupScanner
 {
     public const VWAP = 'vwap_reclaim';
@@ -4367,13 +3627,6 @@ final class SetupScanner
     public const BIG_MOVE = 'sweep_big_move';
     public const CHANNEL = 'deviation_channel';
 
-    /**
-     * @param Candle[] $candles oldest-first
-     * @return array{
-     *   long:array<int,string>, short:array<int,string>,
-     *   trend:string, atr:float, rsi:float, vwap:?float, volume_ok:bool
-     * }
-     */
     public function scan(array $candles): array
     {
         $n = count($candles);
@@ -4411,15 +3664,12 @@ final class SetupScanner
         $bullBar = $c->close > $c->open;
         $bearBar = $c->close < $c->open;
 
-        // -- trend, by the 21/50 relationship -------------------------------
         $trendUp = !is_nan($ema21[$last]) && !is_nan($ema50[$last])
             && $ema21[$last] > $ema50[$last] && $ema50[$last] > ($ema50[$last - 3] ?? $ema50[$last]);
         $trendDown = !is_nan($ema21[$last]) && !is_nan($ema50[$last])
             && $ema21[$last] < $ema50[$last] && $ema50[$last] < ($ema50[$last - 3] ?? $ema50[$last]);
         $out['trend'] = $trendUp ? 'bullish' : ($trendDown ? 'bearish' : 'neutral');
 
-        // -- 1. VWAP reclaim -------------------------------------------------
-        // Price spent real time on one side of VWAP, then closed back across.
         if ($out['vwap'] !== null && $volumeOk) {
             $away = Config::vwapAwayBars();
             $belowRun = 0;
@@ -4450,7 +3700,6 @@ final class SetupScanner
             }
         }
 
-        // -- 2. EMA pullback --------------------------------------------------
         if ($volumeOk && !is_nan($ema9[$last])) {
             $window = Config::emaTouchWindow();
             $touchedUp = false;
@@ -4471,7 +3720,6 @@ final class SetupScanner
             }
         }
 
-        // -- 3. Break and retest ----------------------------------------------
         $retest = $this->breakAndRetest($candles, $atr);
         if ($retest === 'long') {
             $out['long'][] = self::BREAK_RETEST;
@@ -4479,9 +3727,6 @@ final class SetupScanner
             $out['short'][] = self::BREAK_RETEST;
         }
 
-        // -- 4. Liquidity sweep reversal ---------------------------------------
-        // A wick takes out a recent extreme and the body closes back inside,
-        // with the rejection wick larger than the body's own follow-through.
         if ($volumeOk) {
             $len = Config::sweepLookback();
             $swLow = Ta::lowest($candles, $len, 1);
@@ -4496,7 +3741,6 @@ final class SetupScanner
             }
         }
 
-        // -- 5. RSI divergence --------------------------------------------------
         $divergence = $this->divergence($candles, $rsi);
         if ($divergence === 'long') {
             $out['long'][] = self::DIVERGENCE;
@@ -4504,7 +3748,6 @@ final class SetupScanner
             $out['short'][] = self::DIVERGENCE;
         }
 
-        // -- 6. Sweep, then the big move ----------------------------------------
         $bigMove = $this->sweepBigMove($candles);
         if ($bigMove === 'long') {
             $out['long'][] = self::BIG_MOVE;
@@ -4512,7 +3755,6 @@ final class SetupScanner
             $out['short'][] = self::BIG_MOVE;
         }
 
-        // -- 7. Deviation channel reversion --------------------------------------
         $channel = DeviationChannel::analyse($candles);
         if ($channel['signal'] === 'long') {
             $out['long'][] = self::CHANNEL;
@@ -4523,20 +3765,6 @@ final class SetupScanner
         return $out;
     }
 
-    /**
-     * Liquidity Sweep Before The Big Move, ported.
-     *
-     * Two separate events, in order: price takes out the N-bar extreme and
-     * closes back inside it leaving a real wick, and THEN, within a few
-     * bars, a strong-bodied candle closes beyond the previous bar's range.
-     *
-     * The sweep alone is where most people enter and get run over again;
-     * requiring the second candle is what makes it the start of a move
-     * rather than a guess at one.
-     *
-     * @param Candle[] $candles
-     * @return string|null 'long'|'short'|null
-     */
     private function sweepBigMove(array $candles): ?string
     {
         $n = count($candles);
@@ -4553,16 +3781,12 @@ final class SetupScanner
         $range = max($c->high - $c->low, 1e-12);
         $bodyRatio = abs($c->close - $c->open) / $range;
 
-        // The confirmation candle has to be doing the work itself.
         $strongBull = $c->close > $c->open && $bodyRatio >= $bodyStrength && $c->close > $prev->high;
         $strongBear = $c->close < $c->open && $bodyRatio >= $bodyStrength && $c->close < $prev->low;
         if (!$strongBull && !$strongBear) {
             return null;
         }
 
-        // Look back through the confirmation window for the sweep that set
-        // this up, measuring each candidate against the extreme as it stood
-        // BEFORE that candle.
         for ($i = $n - 2; $i >= max(1, $n - 1 - $window); $i--) {
             $sweep = $candles[$i];
             $priorHigh = -INF;
@@ -4591,13 +3815,6 @@ final class SetupScanner
         return null;
     }
 
-    /**
-     * A confirmed swing is broken, price returns to it within the window,
-     * holds, and closes away again.
-     *
-     * @param Candle[] $candles
-     * @return string|null 'long'|'short'|null
-     */
     private function breakAndRetest(array $candles, float $atr): ?string
     {
         $n = count($candles);
@@ -4611,7 +3828,6 @@ final class SetupScanner
         $pl = Ta::pivots($lows, $pivotLen, $pivotLen, false);
         $c = $candles[$n - 1];
 
-        // The most recent confirmed swing high that price has already broken.
         for ($k = count($ph) - 1; $k >= 0; $k--) {
             $idx = $ph[$k];
             $level = $highs[$idx];
@@ -4653,14 +3869,6 @@ final class SetupScanner
         return null;
     }
 
-    /**
-     * Regular RSI divergence between the last two confirmed pivots. Late by
-     * construction — the pivot needs its right-hand bars to confirm — which
-     * is exactly why it is one vote and never the whole decision.
-     *
-     * @param Candle[] $candles
-     * @param float[] $rsi
-     */
     private function divergence(array $candles, array $rsi): ?string
     {
         $pivotLen = Config::setupPivotLength();
@@ -4672,7 +3880,6 @@ final class SetupScanner
         $ph = Ta::pivots($highs, $pivotLen, $pivotLen, true);
         $pl = Ta::pivots($lows, $pivotLen, $pivotLen, false);
 
-        // Only a divergence confirmed in the last few bars is actionable.
         $fresh = static fn(int $idx): bool => ($n - 1 - ($idx + $pivotLen)) <= 2;
 
         if (count($pl) >= 2) {
@@ -4699,12 +3906,6 @@ final class SetupScanner
     }
 }
 
-// ============================================================================
-// SECTION 11 — SUPPORT / RESISTANCE ENGINE
-// (generic swing-high/low + repeated-rejection clustering; exact scoring
-//  rules to be refined later per user spec — architecture is final)
-// ============================================================================
-
 final class SupportResistanceEngine
 {
     public function __construct(
@@ -4713,7 +3914,6 @@ final class SupportResistanceEngine
     ) {
     }
 
-    /** @param Candle[] $candles oldest-first @return Zone[] */
     public function detect(array $candles, string $timeframe): array
     {
         if (count($candles) < $this->lookback * 2 + 5) {
@@ -4729,10 +3929,6 @@ final class SupportResistanceEngine
         return array_merge($resistanceZones, $supportZones);
     }
 
-    /**
-     * @param array<int,array{index:int,candle:Candle}> $pivots
-     * @return Zone[]
-     */
     private function clusterPivots(array $pivots, float $tolerance, ZoneType $type, string $timeframe, bool $useHigh): array
     {
         if (empty($pivots)) {
@@ -4784,23 +3980,6 @@ final class SupportResistanceEngine
     }
 }
 
-// ============================================================================
-// SECTION 12 — ORDER BLOCK ENGINE
-// (generic: last opposite candle before an impulsive/displacement move;
-//  exact OB rules to be refined later — architecture is final)
-// ============================================================================
-
-/**
- * Order Block Detector [LuxAlgo], ported, replacing the earlier
- * displacement-candle rule.
- *
- * The difference that matters: a block is anchored to a pivot in VOLUME, not
- * in price. The candle that printed a local volume peak is where the size
- * actually traded, and the directional state (has the market since made a
- * new extreme, or given one up) decides whether that candle left demand or
- * supply behind. A big candle with no volume behind it is displacement
- * without participation, and that is what the old rule kept finding.
- */
 final class OrderBlockEngine
 {
     public function __construct(
@@ -4809,7 +3988,6 @@ final class OrderBlockEngine
     ) {
     }
 
-    /** @param Candle[] $candles oldest-first @return OrderBlock[] */
     public function detect(array $candles, string $timeframe): array
     {
         $n = count($candles);
@@ -4826,10 +4004,9 @@ final class OrderBlockEngine
 
         $atr = SwingPivots::atr($candles);
         $blocks = [];
-        $state = 0;   // 0 = market gave up a high, 1 = market gave up a low
+        $state = 0;
 
         for ($i = $len; $i < $n; $i++) {
-            // Rolling extremes of the window ending at $i.
             $upper = -INF;
             $lower = INF;
             for ($k = $i - $len + 1; $k <= $i; $k++) {
@@ -4844,8 +4021,6 @@ final class OrderBlockEngine
                 $state = 1;
             }
 
-            // A volume pivot confirms $len bars after the fact, so the block
-            // it marks is the candle at $i - $len.
             if (!isset($volumePivots[$i - $len])) {
                 continue;
             }
@@ -4881,21 +4056,10 @@ final class OrderBlockEngine
 
         $blocks = $this->markMitigated($blocks, $candles);
 
-        // Newest first and capped, the way the original only ever draws its
-        // last few: an order block from 300 candles ago that price has not
-        // returned to is not what the next trade is taken against.
         usort($blocks, static fn(OrderBlock $a, OrderBlock $b) => $b->createdAt <=> $a->createdAt);
         return array_slice($blocks, 0, 12);
     }
 
-    /**
-     * A bullish block dies when price trades (or closes) below its low, a
-     * bearish one when price takes out its high.
-     *
-     * @param OrderBlock[] $blocks
-     * @param Candle[] $candles
-     * @return OrderBlock[]
-     */
     private function markMitigated(array $blocks, array $candles): array
     {
         foreach ($blocks as $block) {
@@ -4914,7 +4078,6 @@ final class OrderBlockEngine
         return $blocks;
     }
 
-    /** @param float[] $volumes */
     private function averageVolume(array $volumes, int $upTo): float
     {
         $slice = array_slice($volumes, max(0, $upTo - 20), 20);
@@ -4924,7 +4087,6 @@ final class OrderBlockEngine
 
 final class FvgEngine
 {
-    /** @param Candle[] $candles oldest-first @return Fvg[] */
     public function detect(array $candles, string $timeframe): array
     {
         $n = count($candles);
@@ -4969,7 +4131,6 @@ final class FvgEngine
         return array_slice($fvgs, -30);
     }
 
-    /** @param Candle[] $candles */
     private function isFilled(array $candles, int $fromIndex, float $low, float $high): bool
     {
         for ($i = $fromIndex; $i < count($candles); $i++) {
@@ -4981,39 +4142,8 @@ final class FvgEngine
     }
 }
 
-// ============================================================================
-// SECTION 14 — CONFLUENCE ENGINE
-// ============================================================================
-
 final class ConfluenceEngine
 {
-    /**
-     * Produces TWO separate numbers, which the previous version conflated
-     * into one — and that conflation made short signals impossible.
-     *
-     *   directional  0..100, where 0 is maximally bearish, 50 neutral and
-     *                100 maximally bullish. This is what picks LONG vs SHORT.
-     *   score        0..100 conviction: how strong the setup is, in either
-     *                direction. This is what MIN_SIGNAL_SCORE gates on.
-     *
-     * Before, `bias` was read off the same value that `score` was gated on:
-     * bearish meant score <= 40, while publishing required score >= 45, so
-     * with any realistic threshold the bot could only ever go long. Now a
-     * strong short scores exactly as high as an equally strong long.
-     *
-     * The directional factors were also made genuinely directional: sitting
-     * on support now reads bullish and sitting under resistance reads
-     * bearish (both used to push the score the same way, upwards), and
-     * order blocks and FVGs are weighted by their own bullish/bearish type.
-     * Volume no longer votes on direction at all — a volume spike is
-     * conviction, and it says nothing about which way price is about to go.
-     *
-     * @param Zone[] $zones
-     * @param OrderBlock[] $orderBlocks
-     * @param Fvg[] $fvgs
-     * @param array<string,array<string,mixed>> $indicatorResults
-     * @return array{score:float, directional:float, coverage:float, breakdown:array<string,float>, reasons:string[], bias:string}
-     */
     public function score(
         MarketSnapshot $snapshot,
         string $timeframe,
@@ -5028,7 +4158,6 @@ final class ConfluenceEngine
         $breakdown = [];
         $price = $snapshot->price;
 
-        // -- trend ---------------------------------------------------------
         $breakdown['trend'] = match ($trend) {
             'bullish' => 100.0,
             'bearish' => 0.0,
@@ -5038,7 +4167,6 @@ final class ConfluenceEngine
             $reasons[] = 'روند ساختاری: ' . ($trend === 'bullish' ? 'صعودی' : 'نزولی');
         }
 
-        // -- support: near support is bullish --------------------------------
         $nearestSupport = $this->nearestZone($zones, ZoneType::SUPPORT, $price);
         $supportPull = $nearestSupport !== null ? $this->proximityScore($price, $nearestSupport->mid(), $nearestSupport->strength) / 100 : 0.0;
         $breakdown['support'] = 50.0 + 50.0 * $supportPull;
@@ -5046,7 +4174,6 @@ final class ConfluenceEngine
             $reasons[] = sprintf('نزدیک به ناحیه حمایت %s (قدرت %.0f)', number_format($nearestSupport->mid(), 6), $nearestSupport->strength);
         }
 
-        // -- resistance: near resistance is bearish --------------------------
         $nearestResistance = $this->nearestZone($zones, ZoneType::RESISTANCE, $price);
         $resistancePull = $nearestResistance !== null ? $this->proximityScore($price, $nearestResistance->mid(), $nearestResistance->strength) / 100 : 0.0;
         $breakdown['resistance'] = 50.0 - 50.0 * $resistancePull;
@@ -5054,7 +4181,6 @@ final class ConfluenceEngine
             $reasons[] = sprintf('نزدیک به ناحیه مقاومت %s (قدرت %.0f)', number_format($nearestResistance->mid(), 6), $nearestResistance->strength);
         }
 
-        // -- order blocks the price is currently inside ----------------------
         $activeObs = array_values(array_filter(
             $orderBlocks,
             static fn(OrderBlock $ob) => !$ob->mitigated && $price >= $ob->low && $price <= $ob->high
@@ -5070,7 +4196,6 @@ final class ConfluenceEngine
             );
         }
 
-        // -- unfilled FVGs the price is currently inside ---------------------
         $activeFvgs = array_values(array_filter(
             $fvgs,
             static fn(Fvg $f) => !$f->filled && $price >= $f->low && $price <= $f->high
@@ -5086,7 +4211,6 @@ final class ConfluenceEngine
             );
         }
 
-        // -- registered indicators (neutral while the registry is empty) -----
         $indicatorScore = 50.0;
         $votes = [];
         foreach ($indicatorResults as $result) {
@@ -5103,25 +4227,12 @@ final class ConfluenceEngine
         }
         $breakdown['indicators'] = $indicatorScore;
 
-        // -- volume: conviction only, deliberately not part of direction -----
         $volumeScore = $this->volumeScore($snapshot->candlesFor($timeframe));
         $breakdown['volume'] = $volumeScore;
         if ($volumeScore > 60) {
             $reasons[] = 'حجم معاملات بالاتر از میانگین';
         }
 
-        // A factor sitting exactly at 50 has NO evidence — price is not
-        // inside any order block, no zone is within range, no indicator is
-        // registered. Averaging those in as if they were readings pulls the
-        // result toward neutral and caps how strong any setup can look:
-        // measured over a sweep of trending markets, a clean trend with no
-        // other factor in range could never score above ~42 no matter how
-        // clean it was, purely because four silent factors outvoted it.
-        //
-        // So abstaining factors are excluded from the direction, and the
-        // share of weight that DID have something to say becomes a separate
-        // conviction multiplier — which is what "confluence" should mean:
-        // several independent factors agreeing beats one factor shouting.
         $directionalFactors = ['trend', 'support', 'resistance', 'order_block', 'fvg', 'indicators'];
         $weighted = 0.0;
         $evidenceWeight = 0.0;
@@ -5138,12 +4249,6 @@ final class ConfluenceEngine
         $directional = $evidenceWeight > 0 ? round($weighted / $evidenceWeight, 2) : 50.0;
         $coverage = $totalWeight > 0 ? $evidenceWeight / $totalWeight : 0.0;
 
-        // Conviction: how far from neutral the evidence points, discounted
-        // by how little of the picture that evidence covers, plus volume as
-        // a supporting (never deciding) contribution. The 0.75 exponent is
-        // the deliberate part: one lone factor on ordinary volume lands
-        // below a sensible threshold, while two or three agreeing factors
-        // clear it comfortably.
         $strength = abs($directional - 50.0) * 2;
         $finalScore = round(0.75 * $strength * pow($coverage, 0.75) + 0.25 * $volumeScore, 2);
 
@@ -5159,7 +4264,6 @@ final class ConfluenceEngine
         ];
     }
 
-    /** 50 when there is nothing (or it is balanced), 100 all-bullish, 0 all-bearish. */
     private function directionalRatio(int $bullish, int $bearish): float
     {
         $total = $bullish + $bearish;
@@ -5169,7 +4273,6 @@ final class ConfluenceEngine
         return 50.0 + 50.0 * (($bullish - $bearish) / $total);
     }
 
-    /** @param Zone[] $zones */
     private function nearestZone(array $zones, ZoneType $type, float $price): ?Zone
     {
         $candidates = array_filter($zones, static fn(Zone $z) => $z->type === $type);
@@ -5186,11 +4289,10 @@ final class ConfluenceEngine
             return 0.0;
         }
         $distancePct = abs($price - $zoneMid) / $zoneMid * 100;
-        $proximity = max(0.0, 1 - min($distancePct / 2, 1)); // within ~2% fades to 0
+        $proximity = max(0.0, 1 - min($distancePct / 2, 1));
         return round($proximity * $strength, 2);
     }
 
-    /** @param Candle[] $candles */
     private function volumeScore(array $candles): float
     {
         $n = count($candles);
@@ -5208,20 +4310,10 @@ final class ConfluenceEngine
     }
 }
 
-// ============================================================================
-// SECTION 15 — STRATEGY ENGINE
-// ============================================================================
-
 interface Strategy
 {
     public function name(): string;
 
-    /**
-     * @param Zone[] $zones
-     * @param OrderBlock[] $orderBlocks
-     * @param Fvg[] $fvgs
-     * @param array{score:float, directional:float, coverage:float, breakdown:array<string,float>, reasons:string[], bias:string} $confluence
-     */
     public function evaluate(
         MarketSnapshot $snapshot,
         string $timeframe,
@@ -5229,22 +4321,11 @@ interface Strategy
         array $orderBlocks,
         array $fvgs,
         array $confluence,
-    ): ?array; // returns ['direction'=>Direction,'entry'=>..,'stop_loss'=>..,'tp1'=>..,'tp2'=>..,'tp3'=>..] or null
+    ): ?array;
 
-    /**
-     * Why the last evaluate() returned null, in Persian, for the panel's
-     * "why is there no signal" report. A strict strategy that never says
-     * which of its gates it failed is impossible to tune.
-     */
     public function lastRejection(): ?string;
 }
 
-/**
- * Default reference strategy built only from the structural inputs this
- * project explicitly commissions (S/R, Order Blocks, FVG, Confluence).
- * Swappable/disable-able per `strategies.is_enabled` — final strategy
- * rules are pending the user's exact specification.
- */
 final class DefaultStructureStrategy implements Strategy
 {
     private ?string $rejection = null;
@@ -5346,19 +4427,6 @@ final class DefaultStructureStrategy implements Strategy
         ];
     }
 
-    /**
-     * Targets come from real opposing structure (the next S/R zones and
-     * unmitigated order blocks in the trade's direction) when available --
-     * the same thing a trader eyeballs on a chart with a manual RR tool --
-     * instead of a fixed risk multiple. That's why realised RR now varies
-     * signal to signal rather than always landing on the same number.
-     * Falls back to fixed multiples (2R/3.5R/5R) only when structure gives
-     * nothing usable, so a thin market never blocks a signal outright.
-     *
-     * @param Zone[] $zones
-     * @param OrderBlock[] $obs
-     * @return array{0:float,1:float,2:float}
-     */
     private static function structuralTargets(float $price, float $risk, array $zones, array $obs, bool $ascending): array
     {
         $levels = [];
@@ -5397,10 +4465,7 @@ final class DefaultStructureStrategy implements Strategy
             }
             $candidate = $price + $sign * $risk * $fallback[$i];
             $prevLevel = $i > 0 ? $kept[$i - 1] : $price;
-            // A structural level already claiming tp1/tp2 can sit closer or
-            // farther than the fixed-multiple fallback would -- always push
-            // the fallback past whatever came before it so tp1<tp2<tp3 (or
-            // the mirror for SHORT) holds even when the two are mixed.
+
             $kept[$i] = $ascending
                 ? max($candidate, $prevLevel + $minGap)
                 : min($candidate, $prevLevel - $minGap);
@@ -5410,22 +4475,6 @@ final class DefaultStructureStrategy implements Strategy
     }
 }
 
-/**
- * The operator's own playbook, in two named setups.
- *
- *   BREAKOUT  a coin sitting on its floor, quiet, that takes out a small
- *             ceiling — accumulation ending. Long.
- *   REVERSAL  a coin (memecoins especially) that has already run hard and
- *             then prints a CHoCH down or loses a small floor —
- *             distribution starting. Short.
- *
- * Both are the same structural event read in opposite contexts, which is
- * why they share one detector. What separates a tradable one from a trap
- * is the gate underneath: the break must carry volume, must not already be
- * extended, must have an order block or FVG behind it to put the stop
- * against, and must have clear air to the first target. Every one of those
- * rejections is recorded, so "why no signal" stays answerable.
- */
 final class StructureBreakStrategy implements Strategy
 {
     private ?string $rejection = null;
@@ -5440,7 +4489,6 @@ final class StructureBreakStrategy implements Strategy
         return $this->rejection;
     }
 
-    /** Records why this candidate was dropped and returns null, in one step. */
     private function reject(string $why): null
     {
         $this->rejection = $why;
@@ -5471,7 +4519,6 @@ final class StructureBreakStrategy implements Strategy
         $isLong = $ms['direction'] === 'bullish';
         $direction = $isLong ? Direction::LONG : Direction::SHORT;
 
-        // -- context: which of the two setups is this? ---------------------
         $setup = null;
         if ($isLong && ($ms['basing'] || $ms['range_position'] <= 0.55)) {
             $setup = 'breakout';
@@ -5479,16 +4526,11 @@ final class StructureBreakStrategy implements Strategy
             $setup = 'reversal';
         }
         if ($setup === null) {
-            // A long bought at the top of the range, or a short sold at the
-            // bottom of one. Both are the wrong end of the move.
             return $this->reject($isLong
                 ? 'شکست رو به بالا ولی قیمت در سقف محدوده است، نه در کف'
                 : 'برگشت نزولی ولی ارز رشد قابل‌توجهی نکرده بود');
         }
 
-        // Buying a base or selling a blown-off top is exactly the trade
-        // that catches a falling knife if nothing on the chart has actually
-        // turned yet — see ReversalCandleEngine / ConfluenceProStrategy.
         if (Config::requireReversalCandle()) {
             $confirmation = ReversalCandleEngine::check($snapshot->candlesFor(Config::reversalConfirmTimeframe()), $isLong);
             if (!$confirmation['confirmed']) {
@@ -5496,7 +4538,6 @@ final class StructureBreakStrategy implements Strategy
             }
         }
 
-        // -- the gate ------------------------------------------------------
         if ($ms['break_volume_ratio'] < Config::breakVolumeRatio()) {
             return $this->reject(sprintf(
                 'حجم پشت شکست کم بود (%.1f برابر میانگین، حداقل %.1f)',
@@ -5504,21 +4545,15 @@ final class StructureBreakStrategy implements Strategy
                 Config::breakVolumeRatio()
             ));
         }
-        // Chasing: price has already travelled too far past the level for
-        // the stop that level implies to still be worth the target.
+
         if (abs($price - $ms['level']) > $atr * Config::maxChaseAtr()) {
             return $this->reject('قیمت از سطح شکست خیلی دور شده — ورود در این نقطه دنبال‌کردن بازار است');
         }
-        // Confluence may abstain, but it may not disagree.
         $wanted = $isLong ? 'bullish' : 'bearish';
         if ($confluence['bias'] !== 'neutral' && $confluence['bias'] !== $wanted) {
             return $this->reject('جهت شکست با مجموع اندیکاتورها و ساختار هم‌خوان نیست');
         }
 
-        // -- where the stop goes -------------------------------------------
-        // Behind the structure that produced the break, and behind any
-        // order block or FVG guarding it — that zone is the level the
-        // market has to give back for the idea to be wrong.
         $guard = $this->guardLevel($isLong, $price, $orderBlocks, $fvgs);
         if ($guard === null && Config::requireZoneConfluence()) {
             return $this->reject('اوردر بلاک یا FVG معتبری برای گذاشتن حد ضرر پشت آن نبود');
@@ -5539,7 +4574,7 @@ final class StructureBreakStrategy implements Strategy
             'direction' => $direction,
             'entry' => $price,
             'stop_loss' => $stop,
-            'tp1' => null,   // the planner sets both targets from the risk budget
+            'tp1' => null,
             'tp2' => null,
             'tp3' => null,
             'setup' => $setup,
@@ -5547,13 +4582,6 @@ final class StructureBreakStrategy implements Strategy
         ];
     }
 
-    /**
-     * The nearest unmitigated order block or FVG on the protective side of
-     * price — the zone a stop can legitimately hide behind.
-     *
-     * @param OrderBlock[] $orderBlocks
-     * @param Fvg[] $fvgs
-     */
     private function guardLevel(bool $isLong, float $price, array $orderBlocks, array $fvgs): ?float
     {
         $best = null;
@@ -5583,34 +4611,8 @@ final class StructureBreakStrategy implements Strategy
     }
 }
 
-/**
- * The combination strategy: every indicated module gets a vote, and a trade
- * is only taken when enough independent ones agree.
- *
- * The six ported indicators answer different questions, and that is the
- * point — a break with no volume behind it, a pullback with no zone under
- * it, or a sweep against the higher-timeframe trend are each the kind of
- * setup that looks perfect alone and loses in a series. So:
- *
- *   TRIGGER   at least one of the six entry setups, a qualified range
- *             breakout, or a structure shift (BOS / CHoCH) fires.
- *   ZONE      the entry sits at an order block or a supply/demand zone, so
- *             the stop has something real to hide behind.  [required]
- *   TREND     the ALMA wave and the 21/50 relationship are not against it.
- *   LIQUIDITY a stop pool was just swept in our favour, or there is untapped
- *             liquidity ahead for price to run at.
- *
- * The score is the weighted sum of what agreed. It is reported, so the panel
- * can say exactly which votes a rejected setup was missing.
- */
 final class ConfluenceProStrategy implements Strategy
 {
-    /**
-     * Every vote belongs to exactly one of these independent evidence
-     * groups. Five correlated structure-ish votes should not be able to
-     * outscore two genuinely different reasons agreeing — see the group
-     * caps in evaluate() and Config::confluence*Cap().
-     */
     private const GROUPS = ['structure', 'liquidity', 'location', 'momentum', 'volume', 'htf'];
 
     private ?string $rejection = null;
@@ -5619,7 +4621,6 @@ final class ConfluenceProStrategy implements Strategy
     private RangeEngine $ranges;
     private SetupScanner $setups;
 
-    /** @var array<string,mixed> the last evaluation's vote breakdown, for the panel */
     private array $lastVotes = [];
 
     public function __construct()
@@ -5640,7 +4641,6 @@ final class ConfluenceProStrategy implements Strategy
         return $this->rejection;
     }
 
-    /** @return array<string,mixed> */
     public function lastVotes(): array
     {
         return $this->lastVotes;
@@ -5670,18 +4670,10 @@ final class ConfluenceProStrategy implements Strategy
             return $this->reject('کندل کافی برای تحلیل ترکیبی نیست');
         }
 
-        // Off by default -- crypto has no session open/close of its own,
-        // so this only applies when the operator has explicitly turned it
-        // on to test whether it helps. See KillzoneEngine.
         if (Config::requireKillzone() && !KillzoneEngine::isActive($snapshot->timestamp)) {
             return $this->reject('خارج از بازه‌های زمانی پرحجم (Killzone)');
         }
 
-        // Off by default, same reasoning as the killzone gate above: ADX
-        // below the floor means price is chopping with no real trend
-        // behind it, which is exactly the condition every structure-based
-        // vote below is least reliable in -- but it silences a symbol
-        // outright, so it stays opt-in until tested. See Ta::adx().
         if (Config::requireAdxFilter()) {
             $adx = Ta::adx($candles);
             if (!is_nan($adx) && $adx < Config::minAdx()) {
@@ -5689,7 +4681,6 @@ final class ConfluenceProStrategy implements Strategy
             }
         }
 
-        // -- run every module once ------------------------------------------
         $setups = $this->setups->scan($candles);
         $wave = TrendWave::analyse($candles);
         $range = $this->ranges->detect($candles);
@@ -5699,15 +4690,9 @@ final class ConfluenceProStrategy implements Strategy
         $smc = SmcContext::analyse($candles);
         $htf = $this->higherTimeframeBias($snapshot, $timeframe);
 
-        // -- who wants to be long, who wants to be short? --------------------
         $reasons = ['long' => [], 'short' => []];
         $votes = ['long' => 0.0, 'short' => 0.0];
-        // Twin-written alongside $votes: same amounts, bucketed by which of
-        // the six independent evidence groups each source belongs to. Which
-        // side wins is still decided from the raw, uncapped $votes total
-        // below -- $groups only feeds the published score computed further
-        // down, so five correlated structure-ish votes can no longer count
-        // as five independent reasons.
+
         $groups = ['long' => array_fill_keys(self::GROUPS, 0.0), 'short' => array_fill_keys(self::GROUPS, 0.0)];
         $vote = function (string $side, string $group, float $amount) use (&$votes, &$groups): void {
             $votes[$side] += $amount;
@@ -5752,17 +4737,11 @@ final class ConfluenceProStrategy implements Strategy
 
         $sweep = $liquidity['recent_sweep'];
         if ($sweep !== null) {
-            // A swept high traps late longs and is a SHORT cue, and vice
-            // versa — the pool is gone and price rejected away from it.
             $side = $sweep['is_high'] ? 'short' : 'long';
             $vote($side, 'liquidity', Config::liquidityWeight());
             $reasons[$side][] = 'جاروی نقدینگی روی ' . ($sweep['is_high'] ? 'سقف' : 'کف') . ' و برگشت';
         }
 
-        // A fresh breaker block — the same sweep, but immediately followed
-        // by a structure shift the other way — is one of the few tells
-        // that shows up at the START of a move instead of confirming it
-        // after. See BreakerBlockEngine.
         $breaker = BreakerBlockEngine::detect(count($candles), $liquidity, $structure);
         if ($breaker !== null && $breaker['fresh']) {
             $sideB = $breaker['direction'] === 'bullish' ? 'long' : 'short';
@@ -5770,9 +4749,6 @@ final class ConfluenceProStrategy implements Strategy
             $reasons[$sideB][] = 'بریکر بلاک تازه تایید شده (جارو + برگشت ساختار) — نشانه زودهنگام قبل از حرکت اصلی';
         }
 
-        // A volatility squeeze whose first candle out already leans a
-        // direction is the other early tell: the market coiled tight and
-        // broke, before the rest of the structure has had time to agree.
         $squeeze = SqueezeEngine::detect($candles);
         if ($squeeze['squeezing'] && $squeeze['expanding'] && $squeeze['direction'] !== null) {
             $sideS = $squeeze['direction'] === 'bullish' ? 'long' : 'short';
@@ -5780,11 +4756,6 @@ final class ConfluenceProStrategy implements Strategy
             $reasons[$sideS][] = 'فشردگی نوسان و شروع انفجار حرکت';
         }
 
-        // A canonical breaker: an order block price has already traded
-        // straight through and not reclaimed, so it now works as the
-        // opposite kind of level. Different evidence from the sweep-based
-        // breaker above (this one needs no liquidity sweep at all), so both
-        // are checked and both can vote.
         $flip = BreakerBlockEngine::detectFlip($price, $orderBlocks);
         if ($flip !== null) {
             $sideF = $flip['direction'] === 'bullish' ? 'long' : 'short';
@@ -5792,9 +4763,6 @@ final class ConfluenceProStrategy implements Strategy
             $reasons[$sideF][] = 'بریکر بلاک (اوردر بلاک شکسته و برگشت‌نکرده) فعال است';
         }
 
-        // RSI's own reversal history for this coin: does the current RSI
-        // sit where its swing highs/lows have actually formed recently,
-        // rather than at a fixed 30/70 line that fits no two coins alike.
         $rsiReversal = RsiReversalEngine::detect($candles);
         if ($rsiReversal['signal'] !== null) {
             $sideR = $rsiReversal['signal'] === 'bullish' ? 'long' : 'short';
@@ -5802,10 +4770,6 @@ final class ConfluenceProStrategy implements Strategy
             $reasons[$sideR][] = sprintf('احتمال برگشت RSI (%.0f%% اطمینان آماری)', $rsiReversal['confidence'] * 100);
         }
 
-        // SuperTrend AI: whichever ATR multiple has actually been calling
-        // this coin's last moves correctly, not a fixed one. Additive only
-        // -- the wave/EMA trend check below is already the hard gate, this
-        // just adds weight when a third, adaptive read agrees with it.
         $superTrend = SuperTrendAiEngine::detect($candles);
         if ($superTrend['direction'] !== null && $superTrend['confidence'] >= 0.5) {
             $sideST = $superTrend['direction'] === 'bullish' ? 'long' : 'short';
@@ -5813,10 +4777,6 @@ final class ConfluenceProStrategy implements Strategy
             $reasons[$sideST][] = sprintf('سوپرترند تطبیقی هم‌جهت (%.0f%% عملکرد اخیر)', $superTrend['confidence'] * 100);
         }
 
-        // MACD: histogram sign (momentum's own direction right now) agreeing
-        // with the MACD line sitting above/below its signal line (the
-        // crossover itself). Both conditions together, not just one, so a
-        // single stale crossover from many candles ago can't vote alone.
         $closes = array_map(static fn(Candle $c) => $c->close, $candles);
         $macd = Ta::macd($closes);
         $macdLast = end($macd['macd']);
@@ -5832,9 +4792,6 @@ final class ConfluenceProStrategy implements Strategy
             }
         }
 
-        // A body-to-body volume imbalance or a clean displacement candle
-        // in the setup's own direction, right at the current bar --
-        // participation showing up as it happens, not after.
         $volumeImbalance = VolumeImbalanceEngine::detect($candles);
         if ($volumeImbalance['present']) {
             $sideV = $volumeImbalance['direction'] === 'bullish' ? 'long' : 'short';
@@ -5848,16 +4805,12 @@ final class ConfluenceProStrategy implements Strategy
             $reasons[$sideD][] = 'کندل جابجایی (Displacement) با بدنه بزرگ';
         }
 
-        // The zone nearest price that has actually been tested the most --
-        // SRv2's premise: a level three pivots have respected is a
-        // different thing from one that has only ever seen one touch.
         $strongZone = $this->nearestStrongZone($price, $atr, $zones);
         if ($strongZone !== null) {
             $vote($strongZone['side'], 'location', Config::strongZoneWeight());
             $reasons[$strongZone['side']][] = sprintf('نزدیک قوی‌ترین سطح حمایت/مقاومت (%d بار لمس شده)', $strongZone['touches']);
         }
 
-        // -- pick a side ------------------------------------------------------
         $direction = null;
         if ($votes['long'] > $votes['short'] && $votes['long'] > 0) {
             $direction = Direction::LONG;
@@ -5872,19 +4825,19 @@ final class ConfluenceProStrategy implements Strategy
 
         $isLong = $direction === Direction::LONG;
         $side = $isLong ? 'long' : 'short';
+        $otherSide = $isLong ? 'short' : 'long';
         $score = $votes[$side];
         $why = $reasons[$side];
 
-        // -- refuse to fight the strongest level on the chart [hard veto] -------
-        // nearestStrongZone() above only ever ADDS votes when it agrees with
-        // a side -- a well-tested support/resistance that disagrees was free
-        // to be outvoted by several weaker, correlated signals (structure +
-        // wave + a sweep can easily out-total one zone's weight). That is
-        // exactly how a SHORT gets published straight into a support line
-        // the chart has respected for months: nothing else in the vote ever
-        // had to answer for standing against it. A level tested enough times
-        // to count as "strong" is a hard no instead, regardless of how many
-        // other things line up against it.
+        $opposingRatio = Config::maxOpposingVoteRatio();
+        if ($opposingRatio < 1.0 && $votes[$otherSide] >= $votes[$side] * $opposingRatio) {
+            return $this->reject(sprintf(
+                'شواهد خلاف جهت خیلی قوی بود (%.0f در برابر %.0f) — بازار دوطرفه است',
+                $votes[$otherSide],
+                $votes[$side]
+            ));
+        }
+
         if ($strongZone !== null && $strongZone['side'] !== $side
             && $strongZone['touches'] >= Config::strongZoneVetoTouches()) {
             return $this->reject(sprintf(
@@ -5893,11 +4846,9 @@ final class ConfluenceProStrategy implements Strategy
             ));
         }
 
-        // -- the trend must not be against us ---------------------------------
         $waveAgainst = $wave['direction'] !== 'neutral' && $wave['direction'] !== ($isLong ? 'bullish' : 'bearish');
         $emaAgainst = $setups['trend'] !== 'neutral' && $setups['trend'] !== ($isLong ? 'bullish' : 'bearish');
-        // A sweep reversal is ALLOWED to trade against the wave — that is
-        // what a reversal is. Everything else is not.
+
         $reversal = $sweep !== null && ($sweep['is_high'] !== $isLong);
         if (($waveAgainst || $emaAgainst) && !$reversal) {
             return $this->reject('جهت ستاپ برخلاف روند موج/میانگین‌هاست');
@@ -5908,12 +4859,6 @@ final class ConfluenceProStrategy implements Strategy
             $why[] = 'هم‌جهت با روند موج و میانگین‌ها';
         }
 
-        // EMA200: a vote only, never a gate -- the wave/EMA check just above
-        // is already the hard trend requirement, and EMA200 needs a full
-        // 200 candles to mean anything at all (NAN before that, same as
-        // every other still-warming-up indicator in this file), so it must
-        // never be able to silence a setup the existing gate already
-        // passed on a symbol with a shorter history.
         $ema200 = Ta::ema($closes, 200);
         $ema200Last = end($ema200);
         if (!is_nan($ema200Last)) {
@@ -5925,19 +4870,11 @@ final class ConfluenceProStrategy implements Strategy
             }
         }
 
-        // -- don't chase a move that has already run ----------------------------
-        // A reversal is SUPPOSED to fight the wave from its extreme -- that
-        // is what a sweep-and-reverse at a stretched high/low means. What
-        // this refuses is the other case: a continuation trade opened after
-        // price is already this far from its own trend average, i.e. buying
-        // well after a pump or shorting well after a dump instead of at
-        // the swing that started it.
         if (!$reversal && $wave['direction'] !== 'neutral' && $wave['direction'] === ($isLong ? 'bullish' : 'bearish')
             && $wave['distance_atr'] > Config::maxChaseAtr()) {
             return $this->reject('قیمت خیلی از میانگین حرکت فاصله گرفته — تعقیب حرکت تمام‌شده است، نه ورود در نقطه شروع آن');
         }
 
-        // -- a zone to put the stop behind [required] --------------------------
         $guard = $this->guardLevel($isLong, $price, $atr, $orderBlocks, $fvgs, $sdZones, $candles);
         if ($guard === null) {
             return $this->reject('اوردر بلاک، FVG یا ناحیه عرضه/تقاضایی نزدیک قیمت نبود');
@@ -5946,10 +4883,6 @@ final class ConfluenceProStrategy implements Strategy
         $groups[$side]['location'] += Config::zoneWeight();
         $why[] = $guard['label'];
 
-        // -- how deep has price actually retraced into a nearby FVG? -----------
-        // A gap barely touched is a much weaker read than one price has
-        // traded well back into ("Volumatic FVG" strategy's own entry
-        // signal is exactly this mitigation % crossing a threshold).
         $mitigation = $this->nearestFvgMitigation($isLong, $price, $atr, $fvgs);
         if ($mitigation !== null && $mitigation >= Config::minFvgMitigationPercent()) {
             $score += Config::fvgMitigationWeight();
@@ -5957,10 +4890,8 @@ final class ConfluenceProStrategy implements Strategy
             $why[] = sprintf('بازگشت %.0f%% به داخل FVG', $mitigation);
         }
 
-        // -- untapped liquidity ahead ------------------------------------------
         $target = $this->liquidityTarget($isLong, $price, $liquidity['levels']);
-        // Equal highs and lows are liquidity built twice over — the strongest
-        // magnets on the chart, so they outrank an ordinary swing as a target.
+
         $equal = $isLong ? $smc['eqh'] : $smc['eql'];
         if ($equal !== null && ($isLong ? $equal > $price : $equal < $price)) {
             $target = $target === null
@@ -5974,27 +4905,16 @@ final class ConfluenceProStrategy implements Strategy
             $why[] = 'نقدینگی دست‌نخورده در مسیر هدف';
         }
 
-        // -- premium / discount ---------------------------------------------
-        //
-        // Buying in the top half of the dealing range is the classic way a
-        // good trigger still loses — but only for a PULLBACK entry. A
-        // breakout is in the top half by definition: that is what breaking
-        // out means. Applying the rule to both trade families would refuse
-        // every continuation trade the engine can find.
-        //
-        // So the trade is classified first, and the rule is applied to the
-        // family it actually belongs to.
         $continuation = $this->isContinuation($setups[$side], $range, $structure, $smc);
 
-        // -- the stop's own zone must belong to THIS reversal ------------------
-        // A pullback/reversal trade's whole premise is one specific chain: a
-        // liquidity pool gets swept, price reverses, and the reversal leg
-        // itself leaves behind the order block / FVG / supply-demand zone the
-        // trade is now retracing into. That zone is born DURING the reversal,
-        // not before it -- one that already existed ahead of the sweep is
-        // real, but it is evidence for a different move, not this one. A
-        // continuation/breakout entry has no such narrative to keep coherent
-        // and is not affected.
+        if ($continuation && Config::requireBreakoutMomentum()) {
+            $momentumWith = $groups[$side]['momentum'] + $groups[$side]['volume'];
+            $momentumAgainst = $groups[$otherSide]['momentum'] + $groups[$otherSide]['volume'];
+            if ($momentumWith <= 0 || $momentumWith < $momentumAgainst) {
+                return $this->reject('شکست بدون تایید مومنتوم و حجم — احتمال شکست فیک بالاست');
+            }
+        }
+
         if (!$continuation && $sweep !== null && Config::requireFreshReversalZone()) {
             $sweepTime = (float) $candles[$sweep['index']]->openTime;
             if ($guard['origin'] < $sweepTime) {
@@ -6002,29 +4922,12 @@ final class ConfluenceProStrategy implements Strategy
             }
         }
 
-        // -- the violent sweep must have happened AT this exact zone -----------
-        // requireFreshReversalZone() above only checks the zone was born
-        // AFTER the sweep (time order). It says nothing about WHERE: a
-        // sweep at 65,000 and a guard zone that happens to be the nearest
-        // one to CURRENT price could really be two unrelated events that
-        // just landed close together in time. This adds the missing
-        // spatial check -- a sharp, liquidity-grabbing move (the kind a
-        // funding/liquidation squeeze produces) only counts as "reacting
-        // at an order block / support / resistance" when the swept price
-        // itself actually sits within reach of that same zone, using the
-        // same ATR*zoneReachAtr() tolerance already used everywhere else
-        // in this file to decide whether a zone is "near" a price at all.
         if (!$continuation && $sweep !== null && Config::requireSweepAtZone()) {
             if (abs($guard['level'] - $sweep['price']) > $atr * Config::zoneReachAtr()) {
                 return $this->reject('کندل جاروی نقدینگی (حرکت شارپ) درست روی این ناحیه (اوردر بلاک/حمایت/مقاومت) اتفاق نیفتاده');
             }
         }
 
-        // A pullback/reversal entry has no breakout of its own to lean on —
-        // what is supposed to make it safe is that the market has actually
-        // turned where the trade says it should, not just "price sat in a
-        // zone." Require that turn to show up as a real candle on the fast
-        // confirm timeframe before the entry is allowed through.
         if (!$continuation && Config::requireReversalCandle()) {
             $confirmation = ReversalCandleEngine::check($snapshot->candlesFor(Config::reversalConfirmTimeframe()), $isLong);
             if (!$confirmation['confirmed']) {
@@ -6048,16 +4951,12 @@ final class ConfluenceProStrategy implements Strategy
             }
         }
 
-        // -- optimal trade entry ----------------------------------------------
-        // OTE is a retracement pocket, so it only means anything on a
-        // pullback entry either.
         if ($smc['in_ote'] && !$continuation) {
             $score += Config::oteWeight();
             $groups[$side]['location'] += Config::oteWeight();
             $why[] = 'قیمت داخل ناحیه ورود بهینه (OTE ۶۲-۷۹٪)';
         }
 
-        // -- higher timeframe --------------------------------------------------
         if ($htf !== null) {
             if ($htf === ($isLong ? 'bullish' : 'bearish')) {
                 $score += Config::htfWeight();
@@ -6068,12 +4967,6 @@ final class ConfluenceProStrategy implements Strategy
             }
         }
 
-        // -- published score: sum of each group's CAPPED total, not the raw
-        // flat sum above -- so several correlated votes piling into one
-        // group (e.g. structure + wave event + iBOS all firing together)
-        // can no longer outweigh genuinely independent evidence the way a
-        // flat sum would. Which side won was already decided from the raw
-        // $votes total further up and is untouched by this.
         $groupCaps = self::groupCaps();
         $rawScore = $score;
         $score = 0.0;
@@ -6092,13 +4985,6 @@ final class ConfluenceProStrategy implements Strategy
             ));
         }
 
-        // -- the stop -----------------------------------------------------------
-        // The padding beyond the guard zone scales with how choppy THIS coin
-        // has been relative to its own recent past, not a single fixed ATR
-        // multiple for every market condition: the same 0.25 ATR that is
-        // comfortable padding in a quiet market is tight enough to get
-        // wicked out by ordinary noise in a choppy one, and unnecessarily
-        // wide in a quiet one.
         $volRatio = $this->volatilityRatio($candles, $atr);
         $stopPad = $volRatio <= Config::volatilityCalmRatio()
             ? Config::stopPadAtrCalm()
@@ -6111,14 +4997,6 @@ final class ConfluenceProStrategy implements Strategy
             return $this->reject('حد ضرر ساختاری سمت اشتباه قیمت افتاد');
         }
 
-        // -- room to target [required, only when a target was actually found] ---
-        // The nearest opposing structure ahead is exactly what the planner
-        // later uses as a ceiling on tp4 -- but a target that is honestly
-        // this close was never worth publishing in the first place, whatever
-        // the rest of the setup looks like. Measured in R (multiples of the
-        // stop's own risk distance), the textbook definition, not the fixed
-        // leveraged-% ladder: a target under the bar here gets refused
-        // before any of that ladder math even runs.
         $risk = abs($price - $stop);
         if ($target !== null && $risk > 0) {
             $room = abs($target - $price);
@@ -6169,15 +5047,10 @@ final class ConfluenceProStrategy implements Strategy
             'direction' => $direction,
             'entry' => $price,
             'stop_loss' => $stop,
-            'tp1' => null,   // the planner sizes all four targets from the risk budget
+            'tp1' => null,
             'tp2' => null,
             'tp3' => null,
-            // The nearest real opposing structure (untapped liquidity / EQH
-            // / EQL) in the trade's favour -- the planner uses it as a
-            // ceiling so a leveraged-% target is never aimed past a level
-            // price has no shown reason to trade through. Null when nothing
-            // like that exists in reach, in which case the planner falls
-            // back to the plain leveraged-% target unchanged.
+
             'structural_target' => $target,
             'setup' => $isLong ? 'breakout' : 'reversal',
             'event' => $structure['event'] ?? ($wave['event'] ?? 'confluence'),
@@ -6186,19 +5059,6 @@ final class ConfluenceProStrategy implements Strategy
         ];
     }
 
-    /**
-     * Is this a continuation trade or a pullback one?
-     *
-     * Continuation: something broke — a range, a structure level, a sweep
-     * that started a move. Price is meant to be at the edge of its range.
-     * Pullback: price came back into a zone and is being bought or sold
-     * there, which is where premium/discount and OTE apply.
-     *
-     * @param array<int,string> $firedSetups
-     * @param array<string,mixed> $range
-     * @param array<string,mixed> $structure
-     * @param array<string,mixed> $smc
-     */
     private function isContinuation(array $firedSetups, array $range, array $structure, array $smc): bool
     {
         if ($range['qualified'] && $range['break'] !== null) {
@@ -6215,32 +5075,10 @@ final class ConfluenceProStrategy implements Strategy
         return false;
     }
 
-    /**
-     * The trend on the confirmation timeframe above this one (15m checks
-     * 1h, 30m checks 2h, 1h checks 4h — see Config::htfConfirmTimeframe(),
-     * roughly a 4x step so the two timeframes carry genuinely independent
-     * context, rather than simply the next entry in SIGNAL_TIMEFRAMES,
-     * which for the default 15m/30m/1h/2h list would check 15m against
-     * 30m — barely a "higher" timeframe at all).
-     *
-     * A 15m long into a falling 1h is the trade that keeps almost working:
-     * the trigger is real, the context is wrong, and it gets stopped on the
-     * higher timeframe's next leg. Returns null when that timeframe has no
-     * candles loaded, which is not a veto — just no information.
-     *
-     * The ALMA wave crossing the "right" way is not, by itself, proof the
-     * higher timeframe actually agrees — that is just a moving average,
-     * and one that can cross before the market has structurally turned.
-     * So the wave's own last BOS/CHoCH is also read (structure_trend) and
-     * has to not actively contradict the wave direction; when it does,
-     * this returns null (no usable bias) rather than a false confirmation.
-     */
     private function higherTimeframeBias(MarketSnapshot $snapshot, string $timeframe): ?string
     {
         $best = Config::htfConfirmTimeframe($timeframe);
         if ($best === null) {
-            // No explicit cascade entry for this timeframe -- fall back to
-            // the old "next configured timeframe up" behaviour.
             $order = Config::signalTimeframes();
             $seconds = static function (string $tf): int {
                 $unit = strtolower(substr($tf, -1));
@@ -6280,21 +5118,6 @@ final class ConfluenceProStrategy implements Strategy
         return $wave['direction'];
     }
 
-    /**
-     * The nearest protective zone below (long) or above (short) price:
-     * an order block, an unfilled FVG, or a supply/demand zone. Only zones
-     * within reach count — a demand zone 8 ATR away protects nothing.
-     *
-     * @param OrderBlock[] $orderBlocks
-     * @param Fvg[] $fvgs
-     * @param SupplyDemandZone[] $sdZones
-     * @return array{level:float, label:string}|null
-     */
-    /**
-     * @param Candle[] $candles oldest-first -- only used to resolve a supply
-     *   /demand zone's candle index into a timestamp comparable with the
-     *   order-block/FVG origins, which already carry one.
-     */
     private function guardLevel(bool $isLong, float $price, float $atr, array $orderBlocks, array $fvgs, array $sdZones, array $candles): ?array
     {
         $reach = $atr * Config::zoneReachAtr();
@@ -6344,13 +5167,6 @@ final class ConfluenceProStrategy implements Strategy
         return $best;
     }
 
-    /**
-     * How far price has retraced into the nearest unfilled FVG in the
-     * trade's direction, in percent — or null when there is no such gap
-     * within reach at all. See FvgMitigation.
-     *
-     * @param Fvg[] $fvgs
-     */
     private function nearestFvgMitigation(bool $isLong, float $price, float $atr, array $fvgs): ?float
     {
         $reach = $atr * Config::zoneReachAtr();
@@ -6371,12 +5187,6 @@ final class ConfluenceProStrategy implements Strategy
         return $best;
     }
 
-    /**
-     * The nearest untapped liquidity pool in the trade's direction — where
-     * price is being drawn, and a sanity check that the target is reachable.
-     *
-     * @param LiquidityLevel[] $levels
-     */
     private function liquidityTarget(bool $isLong, float $price, array $levels): ?float
     {
         $best = null;
@@ -6396,17 +5206,6 @@ final class ConfluenceProStrategy implements Strategy
         return $best;
     }
 
-    /**
-     * The single most-tested support or resistance zone within reach of
-     * price, in whichever direction it would favour -- support below
-     * price argues long, resistance above it argues short. Ported from
-     * "Support Resistance - Dynamic v2": among several zones, the one
-     * with the most confirming touches is the proven level, not just any
-     * nearby one.
-     *
-     * @param Zone[] $zones
-     * @return array{side:string, touches:int}|null
-     */
     private function nearestStrongZone(float $price, float $atr, array $zones): ?array
     {
         if (empty($zones)) {
@@ -6430,20 +5229,10 @@ final class ConfluenceProStrategy implements Strategy
         ];
     }
 
-    /**
-     * This coin's current ATR against its own recent past -- not a fixed
-     * threshold, since a "wide" candle range means something completely
-     * different for BTC than for a micro-cap. Below 1.0 the market has gone
-     * quieter than usual, above 1.0 choppier; see stopPadAtrCalm()/
-     * stopPadAtrVolatile() for what that changes.
-     *
-     * @param Candle[] $candles oldest-first
-     */
     private function volatilityRatio(array $candles, float $recentAtr): float
     {
         $n = count($candles);
-        // A window ending 14 candles back, so the padding decision is not
-        // just measuring the same spike it is meant to pad against.
+
         $priorEnd = max(0, $n - 14);
         $priorStart = max(0, $priorEnd - 46);
         $prior = array_slice($candles, $priorStart, $priorEnd - $priorStart);
@@ -6466,7 +5255,6 @@ final class ConfluenceProStrategy implements Strategy
         };
     }
 
-    /** Which independent evidence group a matched entry setup belongs to. */
     private static function groupForSetup(string $setup): string
     {
         return match ($setup) {
@@ -6478,7 +5266,6 @@ final class ConfluenceProStrategy implements Strategy
         };
     }
 
-    /** @return array<string,float> each group's point cap, keyed the same as self::GROUPS. */
     private static function groupCaps(): array
     {
         return [
@@ -6492,30 +5279,8 @@ final class ConfluenceProStrategy implements Strategy
     }
 }
 
-/**
- * A second gate on top of ConfluenceProStrategy's own score, run against
- * that strategy's lastVotes() once a setup has already cleared every other
- * gate. Where the score asks "how much combined weight did this setup
- * earn", this asks a narrower question: of seven genuinely INDEPENDENT
- * pieces of confirming evidence -- HTF trend, a liquidity sweep, a
- * CHoCH/BOS, a fresh order block or FVG (not just any support/demand
- * zone), an actual break-and-retest pattern, a displacement candle backed
- * by a volume imbalance, and room to an actual liquidity target -- how
- * many are actually present. A setup can clear the score floor on
- * strength concentrated in one or two of the six scoring groups; this is
- * the check that the broader picture agrees too.
- *
- * Not part of ConfluenceProStrategy itself -- deliberately a separate,
- * independently-toggleable layer (Config::requireAPlusSetup()) that reads
- * the strategy's output rather than changing it, so it can be switched off
- * from the panel without touching the underlying strategy at all.
- */
 final class APlusSetupFilter
 {
-    /**
-     * @param array<string,mixed> $lastVotes ConfluenceProStrategy::lastVotes()
-     * @return array{passed:bool, count:int, total:int, required:int, checklist:array<string,bool>, reason:?string}
-     */
     public static function evaluate(array $lastVotes, bool $isLong): array
     {
         $dir = $isLong ? 'bullish' : 'bearish';
@@ -6535,12 +5300,6 @@ final class APlusSetupFilter
         $total = count($checklist);
         $required = Config::aPlusMinConfirmations();
 
-        // -- hard reject: a continuation/breakout entry from dead-center of
-        // its range is neither a fresh break nor a value entry -- it is
-        // the one place with the least evidence in EITHER direction,
-        // whatever the score says. Reversal/pullback entries are exempt:
-        // premium/discount and OTE already govern where in the range those
-        // are allowed to happen.
         $rangePos = $lastVotes['range_position'] ?? null;
         if (($lastVotes['continuation'] ?? false) && $rangePos !== null && $rangePos > 0.42 && $rangePos < 0.58) {
             return [
@@ -6562,7 +5321,6 @@ final class APlusSetupFilter
 
 final class StrategyEngine
 {
-    /** @var array<string,Strategy> */
     private array $strategies = [];
 
     public function __construct()
@@ -6582,35 +5340,19 @@ final class StrategyEngine
         return $this->strategies[$name] ?? null;
     }
 
-    /** @return string[] */
     public function names(): array
     {
         return array_keys($this->strategies);
     }
 }
 
-// ============================================================================
-// SECTION 15.5 — SYMBOL TIERS, LEVERAGE, TRADE PLANNING
-//
-// This is the "fully automatic" part of the bot: given a structural setup
-// the strategy found, decide how much leverage this particular coin can
-// carry, where the stop has to sit for that leverage to survive, and where
-// the two targets land.
-// ============================================================================
-
 final class SymbolClassifier
 {
-    public const TIER_MAJOR = 'major';   // BTC / ETH — deep books, the high-leverage tier
-    public const TIER_LARGE = 'large';   // top-volume alts
-    public const TIER_ALT   = 'alt';     // ordinary altcoins
-    public const TIER_MICRO = 'micro';   // thin books: memecoins, low-cap "shitcoins"
+    public const TIER_MAJOR = 'major';
+    public const TIER_LARGE = 'large';
+    public const TIER_ALT   = 'alt';
+    public const TIER_MICRO = 'micro';
 
-    /**
-     * Best-effort base asset for a symbol, for the cases where the symbols
-     * table has no base_asset stored (a hand-run test, an older row).
-     * Exchanges spell the same pair four different ways: BTCUSDT,
-     * BTC-USDT, BTC/USDT, BTC_USDT.
-     */
     public static function baseAsset(string $symbol, ?string $known = null): string
     {
         if ($known !== null && trim($known) !== '') {
@@ -6630,15 +5372,6 @@ final class SymbolClassifier
         return $symbol;
     }
 
-    /**
-     * Liquidity bucket. The thresholds are quote-currency 24h volume. As of
-     * MIN_VOLUME_USDT's current default (5,000,000, the ALT floor) this
-     * bucket is effectively never reached from the live scanner -- a thin
-     * book is exactly what turns a small entry into slippage or a
-     * pump-and-dump, so it is excluded before it ever gets here. The
-     * function itself still classifies down to MICRO in case the volume
-     * floor is ever lowered from the panel.
-     */
     public static function tier(string $baseAsset, float $volume24h): string
     {
         if (in_array(strtoupper($baseAsset), Config::majorAssets(), true)) {
@@ -6654,14 +5387,6 @@ final class SymbolClassifier
 
 final class LeverageEngine
 {
-    /**
-     * Majors get the configured high leverage (150x by default). Everything
-     * else is placed inside the LEVERAGE_ALT_MIN..MAX band (20..25 by
-     * default) by liquidity and volatility: a deep, calm book earns the top
-     * of the band, a thin or wildly swinging one gets the bottom.
-     *
-     * @param float $volatilityPct ATR as a percentage of price on the signal timeframe
-     */
     public static function forSymbol(string $baseAsset, float $volume24h, float $volatilityPct): int
     {
         $tier = SymbolClassifier::tier($baseAsset, $volume24h);
@@ -6672,17 +5397,10 @@ final class LeverageEngine
         $min = Config::leverageAltMin();
         $max = max($min, Config::leverageAltMax());
 
-        // Liquidity: $1M of 24h volume scores 0, $500M scores 1 (log scale,
-        // because volume across the whole altcoin universe spans decades).
         $liquidity = self::normalize(log10(max(1.0, $volume24h)), 6.0, 8.7);
 
-        // Stability: 0.5% ATR scores 1, 6% ATR scores 0 — inverted, since
-        // more volatility must mean less leverage.
         $stability = 1.0 - self::normalize($volatilityPct, 0.5, 6.0);
 
-        // A micro-cap never reaches the top of the band no matter how calm
-        // it looks on a quiet hour: thin books gap, and the ATR of the last
-        // 14 candles does not price that in.
         $quality = 0.6 * $liquidity + 0.4 * $stability;
         if ($tier === SymbolClassifier::TIER_MICRO) {
             $quality = min($quality, 0.45);
@@ -6700,18 +5418,8 @@ final class LeverageEngine
     }
 }
 
-/**
- * Turns "the strategy likes a LONG here, with structure at X" into the
- * actual publishable trade: leverage, a stop that can survive that
- * leverage, and TP1/TP2 at the configured risk-multiples.
- */
 final class TradePlanner
 {
-    /**
-     * @param float $structuralStop where the strategy would put the stop from market structure alone
-     * @param ?float $structuralTarget nearest real opposing level (untapped liquidity / EQH / EQL) in the trade's favour, if any
-     * @return array{entry:float, stop_loss:float, tp1:float, tp2:float, tp3:float, tp4:float, leverage:int, tier:string, risk:float, rr:float, rr_final:float, stop_pct:float}|null
-     */
     public function plan(
         Direction $direction,
         float $entry,
@@ -6727,12 +5435,6 @@ final class TradePlanner
 
         $tier = SymbolClassifier::tier($baseAsset, $volume24h);
 
-        // The stop is where market structure says the trade idea is wrong
-        // — an order block, a swing, a zone plus ATR padding. It is never
-        // adjusted to make a leverage budget work: a stop moved in for
-        // convenience no longer marks that point, so ordinary noise clips
-        // it before the trade is actually wrong, whatever the direction
-        // call was. What adapts instead is leverage.
         $minStopPct = Config::minStopPercent();
         $distance = max(abs($entry - $structuralStop), $entry * ($minStopPct / 100));
         if ($distance <= 0) {
@@ -6740,10 +5442,6 @@ final class TradePlanner
         }
         $stopPct = ($distance / $entry) * 100;
 
-        // The most leverage this REAL stop can carry without breaching the
-        // published risk budget or eating into the liquidation buffer —
-        // the same two ceilings as before, just solved for leverage
-        // instead of for a fake, tighter distance.
         $maxLeverageForStop = min(
             Config::maxStopLeveragedPercent() / $stopPct,
             Config::leverageLiquidationBuffer() * (100.0 / $stopPct)
@@ -6752,46 +5450,18 @@ final class TradePlanner
         $ceiling = $tier === SymbolClassifier::TIER_MAJOR ? Config::leverageMajor() : Config::leverageAltMax();
         $floor = $tier === SymbolClassifier::TIER_MAJOR ? 1 : Config::leverageAltMin();
         if ($maxLeverageForStop < $floor) {
-            // Even this tier's lowest allowed leverage would put more of
-            // the account at risk than the budget allows at this stop's
-            // real distance — skip the trade rather than fake a tighter
-            // one to make the numbers fit.
             return null;
         }
 
-        // The liquidity/volatility-aware pick (a thin or wild coin earns
-        // less leverage even when its current stop happens to be tight)
-        // still applies — it is just one more cap now, not the only input.
         $volatilityPct = $atr > 0 ? ($atr / $entry) * 100 : 0.0;
         $preferred = LeverageEngine::forSymbol($baseAsset, $volume24h, $volatilityPct);
         $leverage = (int) max($floor, min($ceiling, $preferred, floor($maxLeverageForStop)));
 
-        // Targets are the leveraged percentages the operator asked for --
-        // four scale-out points, converted at this coin's leverage. They do
-        // NOT scale with the stop: a wider structural stop makes the trade a
-        // worse R:R rather than a bigger win.
         $tp1Distance = $entry * (Config::tp1LeveragedPercent() / $leverage) / 100;
         $tp2Distance = $entry * (Config::tp2LeveragedPercent() / $leverage) / 100;
         $tp3Distance = $entry * (Config::tp3LeveragedPercent() / $leverage) / 100;
         $tp4Distance = $entry * (Config::tp4LeveragedPercent() / $leverage) / 100;
 
-        // A real opposing level closer than the farthest leveraged-% target
-        // is exactly the kind of ceiling/floor price tends to react at --
-        // reaching for a target past it is optimism, not structure. Only
-        // ever pulls TP4 IN, never pushes it out past what the leveraged-%
-        // math already asked for.
-        //
-        // TP1-TP3 are NEVER rescaled to fit under a compressed TP4. An
-        // earlier version cascaded each one down to 0.6x of the next
-        // whenever ordering broke, which compounds three times (0.6^3 =
-        // ~0.22) — when the nearest real level was only ~1.5-2% away, that
-        // crushed TP1 down to almost exactly the stop's own distance, a
-        // coin flip instead of an edge (confirmed against real HYPE/USDT
-        // and TRUMP/USDT signals where TP1 ended up a hair from the stop
-        // and both hit it). If capping TP4 breaks tp1<tp2<tp3<tp4, the real
-        // structure here simply doesn't leave room for a sensible
-        // four-target plan — skip the trade rather than cram all four
-        // scale-outs into whatever space is left.
         if ($structuralTarget !== null) {
             $targetDistance = abs($structuralTarget - $entry);
             if ($targetDistance > 0 && $targetDistance < $tp4Distance) {
@@ -6822,24 +5492,8 @@ final class TradePlanner
     }
 }
 
-// ============================================================================
-// SECTION 15.9 — MONEY MANAGEMENT
-//
-// The bot publishes signals, it does not place orders, so this turns the
-// stop the planner produced into the numbers a reader actually needs to
-// size the trade: risk a fixed percent of the account, never a fixed
-// margin, so a losing streak shrinks the position instead of compounding
-// the damage.
-// ============================================================================
-
 final class MoneyManager
 {
-    /**
-     * @return array{
-     *   balance:float, risk_pct:float, risk_amount:float,
-     *   position_size:float, margin:float, qty:float, stop_pct:float
-     * }
-     */
     public static function plan(float $entry, float $stopLoss, int $leverage): array
     {
         $balance = Config::accountBalance();
@@ -6854,14 +5508,9 @@ final class MoneyManager
             ];
         }
 
-        // Notional that loses exactly $riskAmount when the stop is hit.
-        // Leverage does not change the risk — it only changes how much
-        // margin that notional ties up, which is the whole reason sizing is
-        // done from the stop distance and not from the leverage.
         $positionSize = $riskAmount / ($stopPct / 100);
         $margin = $leverage > 0 ? $positionSize / $leverage : $positionSize;
 
-        // Never let a single trade tie up more margin than the account has.
         if ($margin > $balance) {
             $margin = $balance;
             $positionSize = $margin * max(1, $leverage);
@@ -6878,7 +5527,6 @@ final class MoneyManager
         ];
     }
 
-    /** Formats a quote-currency amount the way the caption prints it. */
     public static function money(float $value): string
     {
         if ($value >= 1000) {
@@ -6888,13 +5536,8 @@ final class MoneyManager
     }
 }
 
-// ============================================================================
-// SECTION 16 — SIGNAL VALIDATOR
-// ============================================================================
-
 final class SignalValidator
 {
-    /** @return array{valid:bool, reasons:string[]} */
     public function validate(Signal $signal, MarketSnapshot $snapshot): array
     {
         $reasons = [];
@@ -6902,16 +5545,7 @@ final class SignalValidator
         if ($signal->score < Config::minSignalScore()) {
             $reasons[] = sprintf('امتیاز (%.2f) کمتر از حداقل مجاز (%.2f) است', $signal->score, Config::minSignalScore());
         }
-        // Targets are placed at a configured risk-multiple (TP1_RR), but the
-        // planner will pull TP2/TP1 IN when a real opposing level sits
-        // closer than that multiple would reach — so R:R is no longer
-        // constant by construction, and a trade that structure genuinely
-        // caps this close is correctly rejected here rather than published
-        // at a worse reward than the operator asked for. Gating on a
-        // separately-configured MIN_RISK_REWARD that happens to be higher
-        // — e.g. a 1.5 left over from an old default against a TP1_RR of
-        // 1.2 — would reject every signal with no visible reason, so the
-        // lower (less strict) of the two wins.
+
         $minRr = min(Config::minRiskReward(), Config::tp1RiskReward());
         if ($signal->riskReward < $minRr) {
             $reasons[] = sprintf('نسبت ریسک به ریوارد (%.2f) کمتر از حداقل مجاز (%.2f) است', $signal->riskReward, $minRr);
@@ -6956,24 +5590,10 @@ final class SignalValidator
     }
 }
 
-// ============================================================================
-// SECTION 17 — SIGNAL DEDUPLICATION
-// ============================================================================
-
 final class SignalDeduplicator
 {
     public function fingerprint(string $exchange, string $symbol, Direction $direction, string $timeframe, string $strategy, float $entry): string
     {
-        // Entry is bucketed into ~0.5% relative steps (log scale, so the
-        // step size is the same 0.5% at any price level) so near-identical
-        // re-triggers of the same structural setup collapse to the same
-        // fingerprint, while a genuinely different entry price still gets
-        // its own fingerprint. `$entry / ($entry * 0.005)` used to sit here
-        // — it always reduced to the constant 1/0.005, so every entry price
-        // hashed to the same bucket and any later setup on the same
-        // exchange/symbol/direction/timeframe/strategy was silently treated
-        // as a duplicate for the whole cooldown window, no matter how far
-        // the price had actually moved.
         $bucket = $entry > 0 ? (int) round(log($entry) / log(1.005)) : 0;
         return hash('sha256', implode('|', [$exchange, $symbol, $direction->value, $timeframe, $strategy, $bucket]));
     }
@@ -6989,17 +5609,6 @@ final class SignalDeduplicator
     }
 }
 
-// ============================================================================
-// SECTION 18 — SIGNAL FORMATTER
-// ============================================================================
-
-/**
- * Price display precision, scaled to the magnitude of the number.
- *
- * A fixed 8 decimals is right for a memecoin at 0.00000842 and absurd for
- * BTC at 89739.92258649 — and both go through the same templates and the
- * same card.
- */
 final class PriceFormatter
 {
     public static function format(float $price): string
@@ -7019,14 +5628,6 @@ final class PriceFormatter
 
 final class SignalFormatter
 {
-    /**
-     * Placeholder set for the entry message. Everything a reader needs to
-     * act is in here — including the leveraged profit each target is worth,
-     * which is the number the "profit shot" will later confirm.
-     *
-     * @param array<int,array<string,mixed>> $templateEntities
-     * @return array{text:string, entities:array<int,array<string,mixed>>}
-     */
     public function format(Signal $signal, string $templateText, array $templateEntities): array
     {
         $risk = abs($signal->entry - $signal->stopLoss);
@@ -7040,8 +5641,7 @@ final class SignalFormatter
             'direction' => $signal->direction->value,
             'direction_fa' => self::directionFa($signal->direction->value),
             'entry' => $this->fmt($signal->entry),
-            // Entries are market orders taken at the price the signal was
-            // built on — never a resting trigger — so the caption can say so.
+
             'entry_mode' => 'مارکت (Market)',
             'margin' => MoneyManager::money($money['margin']) . ' USDT',
             'position_size' => MoneyManager::money($money['position_size']) . ' USDT',
@@ -7075,14 +5675,6 @@ final class SignalFormatter
         return TelegramEntityUtils::renderTemplate($templateText, $templateEntities, $placeholders);
     }
 
-    /**
-     * Placeholder set for a trade-result announcement (TP1 risk-free, TP2
-     * close, stop out, breakeven close).
-     *
-     * @param array<string,mixed> $row the signals table row
-     * @param array<int,array<string,mixed>> $templateEntities
-     * @return array{text:string, entities:array<int,array<string,mixed>>}
-     */
     public function formatResult(array $row, string $kind, float $exitPrice, string $templateText, array $templateEntities): array
     {
         $stats = self::resultStats($row, $exitPrice);
@@ -7111,13 +5703,6 @@ final class SignalFormatter
         return TelegramEntityUtils::renderTemplate($templateText, $templateEntities, $placeholders);
     }
 
-    /**
-     * Shared PnL maths for a closed/partially-closed row, so the message
-     * text and the image card can never disagree about the numbers.
-     *
-     * @param array<string,mixed> $row
-     * @return array{leverage:int, move:float, pnl:float, move_signed:string, pnl_signed:string}
-     */
     public static function resultStats(array $row, float $exitPrice): array
     {
         $entry = (float) $row['entry_price'];
@@ -7127,11 +5712,6 @@ final class SignalFormatter
             ? (($isLong ? $price - $entry : $entry - $price) / $entry) * 100
             : 0.0;
 
-        // tp1_hit_price is only ever set by markRiskFree() -- i.e. only on
-        // a trade that actually reached TP1 and kept running (a straight
-        // 'tp1' close never sets it). A signal service's TP1 means "take
-        // some off the table," so a later 'be' or 'tp2' close is a blend of
-        // that banked partial and the final exit, never just the last fill.
         $tp1Price = ($row['tp1_hit_price'] ?? null) !== null ? (float) $row['tp1_hit_price'] : null;
         if ($tp1Price !== null) {
             $share = Config::tp1ClosePercent() / 100;
@@ -7185,42 +5765,12 @@ final class SignalFormatter
     }
 }
 
-// ============================================================================
-// SECTION 18.5 — CARD FACTORY
-//
-// The one place that maps trading data onto the image renderer's inputs, so
-// the picture and the caption are always generated from the same numbers.
-// ============================================================================
-
-/**
- * Which coins the reader can actually trade.
- *
- * MEXC is where the analysis happens (deepest small-cap coverage), but the
- * signals are taken on Toobit and Ourbit — so a setup on a coin neither of
- * those lists is a signal nobody can act on. This fetches each venue's
- * listing once every few hours, caches it in bot_settings, and hands back
- * the set of base assets they carry between them.
- *
- * It FAILS OPEN, deliberately and loudly: if a venue cannot be reached, or
- * its response parses to nothing, that venue simply does not contribute a
- * restriction. A tradability filter that failed closed would silence the
- * whole bot the first time an endpoint moved.
- */
 final class VenueListings
 {
     private const CACHE_KEY = 'venue_listings';
 
-    /** @var array{assets:array<string,bool>, venues:array<string,array<string,mixed>>}|null */
     private static ?array $memo = null;
 
-    /**
-     * @return array{
-     *   assets:array<string,bool>,
-     *   venues:array<string,array{ok:bool,count:int,error:?string,url:string}>,
-     *   active:bool,
-     *   fetched_at:int
-     * }
-     */
     public static function current(bool $forceRefresh = false): array
     {
         if (!$forceRefresh && self::$memo !== null) {
@@ -7270,7 +5820,6 @@ final class VenueListings
         return self::$memo = $result;
     }
 
-    /** True when $baseAsset is listed on at least one configured venue, or when the filter is off. */
     public static function allows(string $baseAsset): bool
     {
         $state = self::current();
@@ -7280,27 +5829,15 @@ final class VenueListings
         return isset($state['assets'][strtoupper($baseAsset)]);
     }
 
-    /** Drops the cache so the next call refetches. */
     public static function forget(): void
     {
         self::$memo = null;
         try {
             Database::pdo()->prepare('DELETE FROM bot_settings WHERE setting_key = :k')->execute([':k' => self::CACHE_KEY]);
         } catch (Throwable) {
-            // A cache that will not clear is not worth failing over.
         }
     }
 
-    /**
-     * Pulls one venue's listing and reduces it to a set of base assets.
-     *
-     * The response shape is deliberately not assumed: exchanges put their
-     * instrument list under "symbols", "contracts", "data" or at the root,
-     * and name the base asset half a dozen ways. Anything that yields no
-     * assets returns null so the caller can treat the venue as unavailable.
-     *
-     * @return array<int,string>|null
-     */
     private static function fetchVenue(string $url): ?array
     {
         if (trim($url) === '') {
@@ -7319,20 +5856,6 @@ final class VenueListings
         return self::assetsFromJson($res['json']);
     }
 
-    /**
-     * Reduces a listing response to its set of base assets.
-     *
-     * Signals are for PERPETUAL FUTURES, not spot, so when a response
-     * carries both — Toobit returns "symbols" (spot) and "contracts"
-     * (USDT-M) in one document — only the contracts count. A coin listed on
-     * spot with no perp cannot be traded at 20x at all. A response with no
-     * derivatives section falls back to whatever instrument list it does
-     * have, which is the right call for a futures-only endpoint that simply
-     * names its array something else.
-     *
-     * @param array<mixed> $json
-     * @return array<int,string>|null
-     */
     public static function assetsFromJson(array $json): ?array
     {
         $lists = self::instrumentLists($json, true);
@@ -7355,15 +5878,6 @@ final class VenueListings
         return empty($assets) ? null : array_keys($assets);
     }
 
-    /**
-     * Every list-of-objects in the response that could be an instrument
-     * list, in the order exchanges tend to nest them.
-     *
-     * @param array<mixed> $json
-     * @param bool $futuresOnly restrict to the keys an exchange uses for its
-     *   derivatives book, so a spot-only listing never satisfies the filter
-     * @return array<int,array<int,mixed>>
-     */
     private static function instrumentLists(array $json, bool $futuresOnly = false): array
     {
         $keys = $futuresOnly
@@ -7376,7 +5890,6 @@ final class VenueListings
             if (is_array($candidate) && isset($candidate[0]) && is_array($candidate[0])) {
                 $lists[] = $candidate;
             }
-            // One more level down: {"data": {"list": [...]}}
             if (is_array($candidate)) {
                 foreach (['list', 'symbols', 'contracts'] as $inner) {
                     $nested = $candidate[$inner] ?? null;
@@ -7392,10 +5905,8 @@ final class VenueListings
         return $lists;
     }
 
-    /** @param array<string,mixed> $row */
     private static function baseAssetOf(array $row): ?string
     {
-        // A status field, when present, must say the instrument is live.
         foreach (['status', 'state', 'contractStatus'] as $key) {
             $status = $row[$key] ?? null;
             if (is_string($status) && $status !== '' && !in_array(strtoupper($status), ['TRADING', 'ENABLED', 'ONLINE', 'NORMAL', 'LIVE', '1'], true)) {
@@ -7406,9 +5917,6 @@ final class VenueListings
         foreach (['baseAsset', 'baseCoin', 'baseCurrency', 'baseCoinName', 'base'] as $key) {
             $v = $row[$key] ?? null;
             if (is_string($v) && trim($v) !== '') {
-                // Toobit spells a contract's base asset as the whole
-                // instrument name ("BTC-SWAP-USDT"), so it still goes
-                // through the splitter rather than being trusted whole.
                 return SymbolClassifier::baseAsset(strtoupper(trim($v)));
             }
         }
@@ -7421,7 +5929,6 @@ final class VenueListings
         return null;
     }
 
-    /** @return array{assets:array<string,bool>, venues:array<string,mixed>, active:bool, fetched_at:int}|null */
     private static function readCache(): ?array
     {
         try {
@@ -7449,7 +5956,6 @@ final class VenueListings
         ];
     }
 
-    /** @param array<string,mixed> $state */
     private static function writeCache(array $state): void
     {
         try {
@@ -7465,7 +5971,6 @@ final class VenueListings
 
 final class SignalCardFactory
 {
-    /** PNG bytes for the entry card, or null when cards are off/unavailable. */
     public static function entry(Signal $signal): ?string
     {
         if (!CardConfig::enabled()) {
@@ -7485,12 +5990,6 @@ final class SignalCardFactory
         ]);
     }
 
-    /**
-     * PNG bytes for the "profit shot" / trade-result card.
-     *
-     * @param array<string,mixed> $row the signals table row
-     * @param string $kind tp1|tp2|sl|be
-     */
     public static function result(array $row, string $kind, float $exitPrice): ?string
     {
         if (!CardConfig::enabled()) {
@@ -7500,9 +5999,7 @@ final class SignalCardFactory
 
         return ResultCard::render([
             'kind' => $kind,
-            // The share card speaks the exchanges' own language, so the
-            // symbol keeps its raw exchange spelling rather than the
-            // prettified BTC/USDT form used in the Persian caption.
+
             'symbol' => strtoupper((string) $row['symbol']),
             'direction' => (string) $row['direction'],
             'leverage' => $stats['leverage'] . 'X',
@@ -7515,13 +6012,6 @@ final class SignalCardFactory
         ]);
     }
 
-    /**
-     * How long the trade was open, in the exchanges' own "00H 00M" form.
-     * Falls back to zero rather than guessing when the row predates the
-     * timestamp columns.
-     *
-     * @param array<string,mixed> $row
-     */
     private static function holdTime(array $row): string
     {
         $opened = strtotime((string) ($row['created_at'] ?? ''));
@@ -7533,7 +6023,6 @@ final class SignalCardFactory
         return sprintf('%02dH %02dM', intdiv($seconds, 3600), intdiv($seconds % 3600, 60));
     }
 
-    /** BTCUSDT / BTC-USDT / BTC_USDT all display as BTC/USDT. */
     public static function displaySymbol(string $symbol, ?string $base = null): string
     {
         $symbol = strtoupper(trim($symbol));
@@ -7555,10 +6044,6 @@ final class SignalCardFactory
         return PriceFormatter::format($n);
     }
 }
-
-// ============================================================================
-// SECTION 19 — REPOSITORIES
-// ============================================================================
 
 final class SignalRepository
 {
@@ -7592,8 +6077,6 @@ final class SignalRepository
 
     public function countToday(): int
     {
-        // Bind PHP-computed day bounds instead of relying on SQL date
-        // functions, which differ between MySQL and SQLite.
         $stmt = Database::pdo()->prepare('SELECT COUNT(*) FROM signals WHERE created_at >= :start AND created_at < :end');
         $stmt->execute([':start' => date('Y-m-d 00:00:00'), ':end' => date('Y-m-d 00:00:00', strtotime('+1 day'))]);
         return (int) $stmt->fetchColumn();
@@ -7605,7 +6088,6 @@ final class SignalRepository
         return (int) $stmt->fetchColumn();
     }
 
-    /** @return array<int,array<string,mixed>> */
     public function recent(int $limit = 10): array
     {
         $stmt = Database::pdo()->prepare('SELECT * FROM signals ORDER BY created_at DESC LIMIT :lim');
@@ -7614,12 +6096,6 @@ final class SignalRepository
         return $stmt->fetchAll();
     }
 
-    /**
-     * True while this symbol already has a dispatched (or, in DRY_RUN,
-     * queued) signal whose outcome (SL or TP1) hasn't been determined yet
-     * -- used to hold off issuing a new signal for the same symbol until
-     * the previous one's result is known, instead of firing back-to-back.
-     */
     public function hasOpenPosition(string $exchange, string $symbol): bool
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -7635,15 +6111,6 @@ final class SignalRepository
         return ((int) $stmt->fetchColumn()) > 0;
     }
 
-    /**
-     * True while ANY exchange has an unresolved trade open on this base
-     * asset. hasOpenPosition() alone only blocks the exact same
-     * exchange+symbol pair, and the scanner covers every exchange at once
-     * — so without this, ETH via one exchange sitting in risk_free after
-     * TP1 did not stop a completely independent ETH signal from a
-     * different exchange going out minutes later, which read as "the same
-     * coin got signalled twice."
-     */
     public function hasOpenPositionForBaseAsset(string $baseAsset): bool
     {
         $stmt = Database::pdo()->query(
@@ -7657,13 +6124,6 @@ final class SignalRepository
         return false;
     }
 
-    /**
-     * True when this base asset was stopped out within the last
-     * $withinSeconds, on ANY exchange -- a fresh setup right back into the
-     * same area is still fighting the level that just took the stop, even
-     * if it independently qualifies on its own. See
-     * Config::symbolLossCooldownSeconds().
-     */
     public function recentLossOnBaseAsset(string $baseAsset, int $withinSeconds): bool
     {
         if ($withinSeconds <= 0) {
@@ -7682,11 +6142,6 @@ final class SignalRepository
         return false;
     }
 
-    /**
-     * Exchange/symbol pairs that still have an unresolved trade on them.
-     *
-     * @return array<int,array{exchange:string,symbol:string}>
-     */
     public function openPositionSymbols(): array
     {
         $sql = "SELECT DISTINCT e.name AS exchange, s.symbol
@@ -7696,7 +6151,6 @@ final class SignalRepository
         return Database::pdo()->query($sql)->fetchAll();
     }
 
-    /** @return array<int,array<string,mixed>> open positions, joined with their exchange name */
     public function openPositions(): array
     {
         $sql = "SELECT s.*, e.name AS exchange
@@ -7713,11 +6167,6 @@ final class SignalRepository
         )->execute([':outcome' => $outcome, ':now' => date('Y-m-d H:i:s'), ':price' => $price, ':id' => $id]);
     }
 
-    /**
-     * TP1 was reached: the trade moves to the risk-free stage and its stop
-     * is lifted to the entry price, so from here the worst case is a
-     * breakeven exit. The position stays open, running toward TP2.
-     */
     public function markRiskFree(int $id, float $price, float $entry): void
     {
         $now = date('Y-m-d H:i:s');
@@ -7729,11 +6178,6 @@ final class SignalRepository
         )->execute([':entry' => $entry, ':now' => $now, ':price' => $price, ':id' => $id]);
     }
 
-    /**
-     * TP2 was reached: the stop trails up to the TP1 price (the runner can
-     * now, worst case, only give back to a real banked profit, not all the
-     * way to breakeven), and the position keeps running toward TP3.
-     */
     public function markTrailingTp2(int $id, float $price, float $tp1Price): void
     {
         $now = date('Y-m-d H:i:s');
@@ -7745,13 +6189,6 @@ final class SignalRepository
         )->execute([':tp1price' => $tp1Price, ':now' => $now, ':price' => $price, ':id' => $id]);
     }
 
-    /**
-     * TP3 was reached: the stop trails up to the TP2 price. From here the
-     * bot also starts watching for a stall/reversal toward TP4 (see
-     * Worker::monitorOpenPositions()) instead of only waiting for a hard
-     * stop-out, since giving back a three-target run all the way to a
-     * trailing stop is a worse outcome than locking it in early.
-     */
     public function markTrailingTp3(int $id, float $price, float $tp2Price): void
     {
         $now = date('Y-m-d H:i:s');
@@ -7763,7 +6200,6 @@ final class SignalRepository
         )->execute([':tp2price' => $tp2Price, ':now' => $now, ':price' => $price, ':id' => $id]);
     }
 
-    /** Extends the best (most favourable) price seen since the last stage change -- never moves it backwards. */
     public function updatePeak(int $id, float $peak): void
     {
         Database::pdo()->prepare(
@@ -7771,7 +6207,6 @@ final class SignalRepository
         )->execute([':peak' => $peak, ':now' => date('Y-m-d H:i:s'), ':id' => $id]);
     }
 
-    /** Records that the pre-TP1 "this is going wrong" advisory was sent, so it is never repeated for this trade. */
     public function markAdvisorySent(int $id): void
     {
         Database::pdo()->prepare(
@@ -7779,12 +6214,6 @@ final class SignalRepository
         )->execute([':now' => date('Y-m-d H:i:s'), ':id' => $id]);
     }
 
-    /**
-     * Records that the post-TP3 "it's stalling before TP4" advisory was
-     * sent. A separate budget from markAdvisorySent() on purpose: a trade
-     * that got the early warning and recovered all the way to TP3 still
-     * deserves this later, different one.
-     */
     public function markStallAdvisorySent(int $id): void
     {
         Database::pdo()->prepare(
@@ -7792,18 +6221,12 @@ final class SignalRepository
         )->execute([':now' => date('Y-m-d H:i:s'), ':id' => $id]);
     }
 
-    /**
-     * Final close. `result` carries the real state (tp1/tp2/tp3/tp4/trail/
-     * sl/be/manual) while `outcome` keeps the legacy win/loss value its
-     * CHECK constraint allows, so anything still reading the old column
-     * stays correct.
-     */
     public function close(int $id, string $result, float $price): void
     {
         $legacyOutcome = match ($result) {
             'tp1', 'tp2', 'tp3', 'tp4', 'trail' => 'tp1',
             'sl' => 'sl',
-            default => null, // a breakeven or manual exit is neither a win nor a loss
+            default => null,
         };
         $now = date('Y-m-d H:i:s');
         Database::pdo()->prepare(
@@ -7822,12 +6245,18 @@ final class SignalRepository
         return (int) $stmt->fetchColumn();
     }
 
-    /**
-     * Trades stopped out since local midnight, and signals published since
-     * local midnight — the two counters the daily circuit breaker reads.
-     *
-     * @return array{losses:int, published:int}
-     */
+    public function lastPublishedAt(): ?int
+    {
+        $v = Database::pdo()->query(
+            "SELECT MAX(created_at) FROM signals WHERE status IN ('sent','queued')"
+        )->fetchColumn();
+        if ($v === false || $v === null) {
+            return null;
+        }
+        $ts = strtotime((string) $v);
+        return $ts === false ? null : $ts;
+    }
+
     public function todayTally(): array
     {
         $midnight = date('Y-m-d 00:00:00');
@@ -7845,7 +6274,6 @@ final class SignalRepository
         return ['losses' => (int) $lost->fetchColumn(), 'published' => (int) $sent->fetchColumn()];
     }
 
-    /** @return array<int,array<string,mixed>> */
     public function recentClosed(int $limit = 10): array
     {
         $stmt = Database::pdo()->prepare(
@@ -7856,15 +6284,6 @@ final class SignalRepository
         return $stmt->fetchAll();
     }
 
-    /**
-     * Win/loss tally over closed trades, for the panel. TP1-TP4 and a
-     * trailing-stop exit (locked in above breakeven, after TP2 or TP3) all
-     * count as wins; a breakeven exit counts as neither. A manual close
-     * (the panel's "close all open positions" button) is excluded entirely
-     * — it is an admin override, not a strategy outcome.
-     *
-     * @return array{total:int, wins:int, losses:int, breakeven:int, win_rate:float}
-     */
     public function performance(): array
     {
         $rows = Database::pdo()->query(
@@ -7877,6 +6296,15 @@ final class SignalRepository
             if (isset($counts[$key])) {
                 $counts[$key] = (int) $row['n'];
             }
+        }
+        $timeouts = Database::pdo()->query(
+            "SELECT direction, entry_price, resolved_price FROM signals WHERE resolved_at IS NOT NULL AND result = 'timeout'"
+        )->fetchAll();
+        foreach ($timeouts as $t) {
+            $entry = (float) $t['entry_price'];
+            $exit = (float) $t['resolved_price'];
+            $gain = (string) $t['direction'] === 'LONG' ? $exit - $entry : $entry - $exit;
+            $counts[$gain < 0 ? 'sl' : 'be']++;
         }
         $wins = $counts['tp1'] + $counts['tp2'] + $counts['tp3'] + $counts['tp4'] + $counts['trail'];
         $total = $wins + $counts['sl'] + $counts['be'];
@@ -7894,7 +6322,6 @@ final class SignalRepository
 
 final class ZoneRepository
 {
-    /** @param Zone[] $zones */
     public function replaceForSymbol(string $exchange, string $symbol, string $timeframe, array $zones): void
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -7914,7 +6341,6 @@ final class ZoneRepository
              VALUES (:eid, :symbol, :type, :high, :low, :tf, :strength, :volume, :touches, :source, :now1, :now2)'
         );
         foreach ($zones as $zone) {
-            /** @var Zone $zone */
             $stmt->execute([
                 ':eid' => $exchangeId, ':symbol' => $symbol, ':type' => $zone->type->value, ':high' => $zone->high,
                 ':low' => $zone->low, ':tf' => $timeframe, ':strength' => $zone->strength, ':volume' => $zone->volume,
@@ -7923,7 +6349,6 @@ final class ZoneRepository
         }
     }
 
-    /** @return Zone[] */
     public function forSymbol(string $exchange, string $symbol, string $timeframe): array
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -7941,7 +6366,6 @@ final class ZoneRepository
 
 final class OrderBlockRepository
 {
-    /** @param OrderBlock[] $blocks */
     public function replaceForSymbol(string $exchange, string $symbol, string $timeframe, array $blocks): void
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -7960,7 +6384,6 @@ final class OrderBlockRepository
              VALUES (:eid, :symbol, :type, :high, :low, :tf, :strength, :volume, :mit, :created)'
         );
         foreach ($blocks as $ob) {
-            /** @var OrderBlock $ob */
             $stmt->execute([
                 ':eid' => $exchangeId, ':symbol' => $symbol, ':type' => $ob->type->value, ':high' => $ob->high,
                 ':low' => $ob->low, ':tf' => $timeframe, ':strength' => $ob->strength, ':volume' => $ob->volume,
@@ -7969,7 +6392,6 @@ final class OrderBlockRepository
         }
     }
 
-    /** @return OrderBlock[] */
     public function forSymbol(string $exchange, string $symbol, string $timeframe): array
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -7987,7 +6409,6 @@ final class OrderBlockRepository
 
 final class FvgRepository
 {
-    /** @param Fvg[] $fvgs */
     public function replaceForSymbol(string $exchange, string $symbol, string $timeframe, array $fvgs): void
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -8006,7 +6427,6 @@ final class FvgRepository
              VALUES (:eid, :symbol, :type, :high, :low, :mid, :tf, :size, :filled, :created)'
         );
         foreach ($fvgs as $fvg) {
-            /** @var Fvg $fvg */
             $stmt->execute([
                 ':eid' => $exchangeId, ':symbol' => $symbol, ':type' => $fvg->type->value, ':high' => $fvg->high,
                 ':low' => $fvg->low, ':mid' => $fvg->midpoint, ':tf' => $timeframe, ':size' => $fvg->size,
@@ -8015,7 +6435,6 @@ final class FvgRepository
         }
     }
 
-    /** @return Fvg[] */
     public function forSymbol(string $exchange, string $symbol, string $timeframe): array
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -8033,7 +6452,6 @@ final class FvgRepository
 
 final class SymbolRepository
 {
-    /** @param array<int,array{symbol:string,base:string,quote:string,volume:float,liquidity:float,spread:float,volatility:float,rank:int}> $rows */
     public function upsertRanked(string $exchange, array $rows): void
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
@@ -8063,9 +6481,6 @@ final class SymbolRepository
         }
     }
 
-    /**
-     * @return array<int,array{exchange:string,symbol:string,base_asset:string,quote_asset:string,volume_24h:float,volatility:float,spread_pct:float,rank_position:int}>
-     */
     public function listActive(?string $exchange = null, ?int $limit = null): array
     {
         $sql = 'SELECT e.name AS exchange, s.symbol, s.base_asset, s.quote_asset, s.volume_24h, s.volatility,
@@ -8091,25 +6506,10 @@ final class SymbolRepository
         return (int) $stmt->fetchColumn();
     }
 
-    /**
-     * The scan universe, with BTC/ETH (whatever LEVERAGE_MAJOR_ASSETS says)
-     * pulled to the front regardless of where the volume ranking put them,
-     * and the rest following in volume/liquidity order — so the majors are
-     * always evaluated even when a cron pass runs out of budget partway
-     * through a few hundred alts.
-     *
-     * @return array<int,array<string,mixed>>
-     */
     public function universe(?int $limit = null): array
     {
-        // A limit of 0 (or null) means the whole universe — every perp above
-        // the volume floor. The rotation in the worker bounds the work by
-        // time instead, so there is no reason to throw coins away here.
         $limit = ($limit === null || $limit <= 0) ? null : $limit;
 
-        // Over-fetch, because the same pair listed on four exchanges
-        // collapses to one row below and a limit applied before that would
-        // return a universe of mostly duplicates.
         $rows = $this->listActive(null, $limit === null ? null : $limit * 4);
         $rows = self::preferPrimaryExchange($rows);
         $majors = Config::majorAssets();
@@ -8127,19 +6527,6 @@ final class SymbolRepository
         return $limit === null ? $merged : array_slice($merged, 0, $limit);
     }
 
-    /**
-     * One row per pair, taken from PRIMARY_EXCHANGE wherever that exchange
-     * lists it.
-     *
-     * Without this the same coin is analysed once per exchange that carries
-     * it, and since the dedup fingerprint includes the exchange name, the
-     * identical setup goes out as three separate signals. It also means a
-     * pair MEXC lists is signalled on MEXC — which is the point of having a
-     * primary venue at all.
-     *
-     * @param array<int,array<string,mixed>> $rows ordered best-first
-     * @return array<int,array<string,mixed>>
-     */
     private static function preferPrimaryExchange(array $rows): array
     {
         $primary = Config::primaryExchange();
@@ -8154,8 +6541,7 @@ final class SymbolRepository
                 $best[$key] = $row;
                 continue;
             }
-            // Rows arrive best-ranked first, so only the primary exchange
-            // may displace one that is already held.
+
             if (strtolower((string) $row['exchange']) === $primary
                 && strtolower((string) $best[$key]['exchange']) !== $primary) {
                 $best[$key] = $row;
@@ -8191,10 +6577,6 @@ final class ScannerRunRepository
     }
 }
 
-// ============================================================================
-// SECTION 20 — MARKET SCANNER
-// ============================================================================
-
 final class MarketScanner
 {
     private SymbolRepository $symbolRepo;
@@ -8206,11 +6588,6 @@ final class MarketScanner
         $this->runRepo = new ScannerRunRepository();
     }
 
-    /**
-     * Ranks candidate symbols across all enabled, healthy exchanges by
-     * volume/liquidity/spread/volatility and persists the top N. Never
-     * throws — a failing exchange is simply skipped for this run.
-     */
     public function scan(ExchangeManager $exchangeManager): int
     {
         $totalScanned = 0;
@@ -8247,16 +6624,8 @@ final class MarketScanner
         return $totalSelected;
     }
 
-    /**
-     * @param array<int,array{symbol:string,base:string,quote:string,status:string}> $symbols
-     * @param array<string,array{volume:float,lastPrice:float,bid:float,ask:float,priceChangePercent:float}> $tickers
-     * @return array{candidates:array<int,array{symbol:string,base:string,quote:string,volume:float,liquidity:float,spread:float,volatility:float,rank:int}>, funnel:array<string,int>}
-     */
     private function rank(array $symbols, array $tickers): array
     {
-        // Compared case-insensitively -- an exchange returning "usdt"
-        // while ALLOWED_QUOTE_ASSETS says "USDT" must still match; a
-        // strict-case mismatch here silently filters out every symbol.
         $allowedQuotes = array_map('strtoupper', Config::allowedQuoteAssets());
         $blockedQuotes = Config::blockedQuoteAssets();
         $minVolume = Config::minVolumeUsdt();
@@ -8273,7 +6642,6 @@ final class MarketScanner
         foreach ($symbols as $s) {
             $quote = strtoupper($s['quote']);
             $base = strtoupper($s['base']);
-            // Fiat quotes are refused unconditionally — see Config::blockedQuoteAssets().
             if (in_array($quote, $blockedQuotes, true)) {
                 continue;
             }
@@ -8285,9 +6653,7 @@ final class MarketScanner
                 continue;
             }
             $funnel['stable_ok']++;
-            // A setup on a coin the reader's exchange does not list is a
-            // signal nobody can act on. Inactive (and therefore harmless)
-            // whenever the venue listings could not be loaded.
+
             if (!VenueListings::allows($base)) {
                 continue;
             }
@@ -8310,7 +6676,6 @@ final class MarketScanner
             }
             $funnel['spread_ok']++;
             $change = (float) $ticker['priceChangePercent'];
-            // Liquidity proxy: volume normalized against spread (tighter spread + higher volume = more liquid).
             $liquidity = $spread > 0 ? $ticker['volume'] / $spread : $ticker['volume'];
 
             $candidates[] = [
@@ -8330,35 +6695,15 @@ final class MarketScanner
         return ['candidates' => $candidates, 'funnel' => $funnel];
     }
 
-    /**
-     * Builds the universe out of three baskets rather than one volume
-     * ranking: the day's biggest gainers, its biggest losers, and the most
-     * liquid names. They are then interleaved, so the top of the list —
-     * the part a cron pass is guaranteed to reach before its budget runs
-     * out — always contains all three kinds.
-     *
-     * A coin only counts as a mover if it has actually moved
-     * (SCANNER_MIN_MOVE_PCT); in a flat market the mover baskets simply
-     * come up short and the liquid basket fills the rest, which is the
-     * correct behaviour rather than promoting noise.
-     *
-     * @param array<int,array<string,mixed>> $candidates
-     * @return array<int,array<string,mixed>>
-     */
     private static function bucketRank(array $candidates, int $topN): array
     {
         if (empty($candidates)) {
             return [];
         }
-        // 0 means no cap: keep every coin that cleared the volume floor.
-        // Clamping to 1 here would collapse the whole market to a single
-        // symbol, which is what "unlimited" must never be turned into.
+
         $topN = $topN > 0 ? $topN : count($candidates);
         $minMove = Config::scannerMinMovePercent();
 
-        // With no cap the baskets exist purely to ORDER the list — the
-        // movers lead so the rotation reaches them first — and every
-        // remaining coin still follows in the liquid basket.
         $gainerSlots = max(1, (int) round($topN * Config::scannerGainerShare() / 100));
         $loserSlots = max(1, (int) round($topN * Config::scannerLoserShare() / 100));
 
@@ -8378,7 +6723,6 @@ final class MarketScanner
             $loserSlots
         );
 
-        // Volume and liquidity, the original ranking, for everything else.
         $liquid = $candidates;
         usort($liquid, static function ($a, $b) {
             $scoreA = ($a['volume'] * 0.7) + ($a['liquidity'] * 0.3);
@@ -8395,7 +6739,6 @@ final class MarketScanner
         }
         unset($c);
 
-        // Round-robin so the first slots carry one of each kind.
         $out = [];
         $seen = [];
         $lists = [$gainers, $losers, $liquid];
@@ -8418,22 +6761,13 @@ final class MarketScanner
                 }
             }
             if (!$addedThisRound) {
-                break; // every basket exhausted
+                break;
             }
         }
 
         return $out;
     }
 
-    /**
-     * Fresh, direct (circuit-breaker-bypassing) fetch + rank for ONE
-     * exchange, returning the funnel counts at every filter stage instead
-     * of just the final result — pinpoints exactly which filter
-     * (quote asset, stablecoin exclusion, missing ticker match, min
-     * volume, max spread) is eliminating every candidate, for the admin
-     * panel's scanner diagnostic.
-     * @return array{ok:bool, error?:string, funnel?:array<string,int>, sample?:array<int,array<string,mixed>>}
-     */
     public function diagnoseExchange(string $exchangeName, ExchangeAdapter $adapter): array
     {
         try {
@@ -8454,10 +6788,6 @@ final class MarketScanner
     }
 }
 
-// ============================================================================
-// SECTION 21 — SIGNAL GENERATOR (orchestrator)
-// ============================================================================
-
 final class SignalGenerator
 {
     private SupportResistanceEngine $srEngine;
@@ -8473,17 +6803,6 @@ final class SignalGenerator
     private FvgRepository $fvgRepo;
     private SignalRepository $signalRepo;
 
-    /**
-     * The strongest setup seen since the last reset, whether or not it was
-     * publishable, plus why it was turned down.
-     *
-     * Without this a quiet bot is indistinguishable from a broken one: the
-     * pass just returns null and the operator has no number to act on. With
-     * it the panel can say "best of this pass was 28.4 on BTCUSDT, minimum
-     * is 45", which is a decision they can actually make.
-     *
-     * @var array{symbol:string,timeframe:string,score:float,bias:string,reason:string}|null
-     */
     private ?array $bestObservation = null;
 
     public function resetObservations(): void
@@ -8491,7 +6810,6 @@ final class SignalGenerator
         $this->bestObservation = null;
     }
 
-    /** @return array{symbol:string,timeframe:string,score:float,bias:string,reason:string}|null */
     public function bestObservation(): ?array
     {
         return $this->bestObservation;
@@ -8527,30 +6845,12 @@ final class SignalGenerator
         $this->signalRepo = new SignalRepository();
     }
 
-    /**
-     * Runs the full structural analysis pipeline for one symbol/timeframe
-     * and returns a fully planned but UNSAVED Signal, or null.
-     *
-     * Nothing is written here on purpose. The worker evaluates every active
-     * symbol across every signal timeframe and then publishes only the
-     * single best candidate of the pass, so persisting each one as it was
-     * produced would fill the signals table with trades that were never
-     * sent — and would poison the deduplication window against the
-     * candidate that actually won.
-     *
-     * @param array{base_asset?:string, volume_24h?:float} $meta symbol metadata from the scanner
-     */
     public function evaluate(
         MarketSnapshot $snapshot,
         string $timeframe,
         array $meta = [],
         ?string $strategyName = null,
     ): ?Signal {
-        // A manually-entered blackout window for a known high-impact release
-        // (CPI/FOMC/NFP/rate decision) -- see Config::newsBlackoutStart().
-        // Checked before anything else: the cheapest possible reject, and
-        // it should silence every symbol at once, not just the one the
-        // rotation happens to be visiting.
         if (Config::isNewsBlackoutActive()) {
             return null;
         }
@@ -8561,25 +6861,15 @@ final class SignalGenerator
             return null;
         }
 
-        // Don't stack a new signal on a symbol that already has one out
-        // whose result isn't known yet -- checked before the detection
-        // pipeline runs so a symbol under an open position also skips the
-        // wasted computation, not just the dispatch.
         if ($this->signalRepo->hasOpenPosition($snapshot->exchange, $snapshot->symbol)) {
             return null;
         }
-        // Same rule, but by coin rather than by exchange+symbol: the
-        // rotation scans every exchange, so ETH/USDT on exchange A being
-        // open must also block ETH/USDT on exchange B -- otherwise the same
-        // coin can end up with two independent open trades at once.
+
         $baseAsset = SymbolClassifier::baseAsset($snapshot->symbol, $meta['base_asset'] ?? null);
         if ($this->signalRepo->hasOpenPositionForBaseAsset($baseAsset)) {
             return null;
         }
-        // A stop-loss on this coin is recent enough that walking straight
-        // back in -- even on a fresh, independently-qualifying setup -- is
-        // still fighting the same area of the chart that just took the
-        // stop out. See Config::symbolLossCooldownSeconds().
+
         if ($this->signalRepo->recentLossOnBaseAsset($baseAsset, Config::symbolLossCooldownSeconds())) {
             return null;
         }
@@ -8591,9 +6881,6 @@ final class SignalGenerator
             $trend = SwingPivots::structuralTrend($candles);
             $indicatorResults = $this->indicatorEngine->runAll($candles);
 
-            // Write-only tables (nothing in the project reads them back),
-            // and a DELETE+INSERT per symbol per timeframe is the single
-            // most expensive thing a scan pass can do on SQLite. Opt-in.
             if (Config::persistStructure()) {
                 $this->zoneRepo->replaceForSymbol($snapshot->exchange, $snapshot->symbol, $timeframe, $zones);
                 $this->obRepo->replaceForSymbol($snapshot->exchange, $snapshot->symbol, $timeframe, $orderBlocks);
@@ -8619,13 +6906,6 @@ final class SignalGenerator
                 return null;
             }
 
-            // -- A+ Setup Filter [confluence_pro only, togglable] ---------------
-            // A second, independent-evidence-counting gate on top of the
-            // score confluence_pro already cleared -- see APlusSetupFilter.
-            // Reads that strategy's own lastVotes() rather than changing
-            // anything about how it scores or picks direction, so it can be
-            // switched off from the panel (REQUIRE_APLUS_SETUP) without
-            // touching the underlying strategy at all.
             if ($strategy instanceof ConfluenceProStrategy && Config::requireAPlusSetup()) {
                 $aplus = APlusSetupFilter::evaluate($strategy->lastVotes(), $setup['direction'] === Direction::LONG);
                 if (!$aplus['passed']) {
@@ -8637,8 +6917,6 @@ final class SignalGenerator
                 }
             }
 
-            // The strategy supplies direction + structure; the planner turns
-            // that into a leveraged, publishable trade (see TradePlanner).
             $plan = $this->planner->plan(
                 $setup['direction'],
                 (float) $setup['entry'],
@@ -8661,13 +6939,7 @@ final class SignalGenerator
                 $strategy->name(),
                 $plan['entry']
             );
-            // A strategy that scored the setup itself owns that number.
-            //
-            // The combination strategy weighs the six indicators directly,
-            // so judging its output by the older factor engine's score as
-            // well would be a second, invisible gate on a different scale —
-            // and a setup every module agreed on could be thrown away for
-            // failing a test it never took.
+
             $score = isset($setup['confluence_score'])
                 ? (float) $setup['confluence_score']
                 : $confluence['score'];
@@ -8677,26 +6949,6 @@ final class SignalGenerator
                 return null;
             }
 
-            // Relative to whichever gate this score actually had to clear --
-            // not a fixed number. A hardcoded 70/55 split quietly broke the
-            // day MIN_CONFLUENCE_SCORE was recalibrated to 100: every signal
-            // that could publish at all already scored above 70, so every
-            // signal showed "high" regardless of how much it really cleared
-            // the bar by.
-            //
-            // confluence_pro's score is no longer the old flat sum -- it is
-            // six independently-capped groups added together (see
-            // Config::confluence*Cap()), and the group caps make the
-            // theoretical max (~142) something almost no real setup gets
-            // close to. Measured against the actual population of setups
-            // that clear every hard gate (test_group_score_calibration.php):
-            // median ~82-86, p75 ~90, p90 ~94-102. The 1.2x/1.5x ratios
-            // below were tuned for the OLD unbounded scale, where a score
-            // could run well past 150 -- on this one they put "medium" and
-            // "high" out of practical reach, so almost every signal that
-            // published at all still showed "low", including ones scoring
-            // comfortably above the floor. 1.08x/1.20x reflect where the
-            // real distribution actually sits.
             if (isset($setup['confluence_score'])) {
                 $scoreFloor = Config::minConfluenceScore();
                 $confidence = $score >= $scoreFloor * 1.20 ? 'high' : ($score >= $scoreFloor * 1.08 ? 'medium' : 'low');
@@ -8743,20 +6995,8 @@ final class SignalGenerator
         }
     }
 
-    /**
-     * Puts the structural event that actually triggered the trade at the
-     * top of the reason list. The confluence factors explain why it was
-     * worth taking; this explains what happened.
-     *
-     * @param array<string,mixed> $setup
-     * @param string[] $reasons
-     * @return string[]
-     */
     private static function setupReasons(array $setup, array $reasons): array
     {
-        // The combination strategy already explains itself in full — which
-        // modules agreed and why — so its reasons lead and the generic
-        // confluence factors follow.
         if (!empty($setup['confluence_reasons']) && is_array($setup['confluence_reasons'])) {
             return array_merge($setup['confluence_reasons'], $reasons);
         }
@@ -8783,18 +7023,12 @@ final class SignalGenerator
         return array_merge($head, $reasons);
     }
 
-    /** Writes the chosen candidate and stamps its database id onto it. */
     public function persist(Signal $signal): Signal
     {
         $signal->id = $this->signalRepo->save($signal);
         return $signal;
     }
 
-    /**
-     * evaluate() + persist() in one call — the original entry point, kept
-     * for the admin panel's "Test Signal" button, which produces exactly
-     * one signal and wants it stored.
-     */
     public function generate(MarketSnapshot $snapshot, string $timeframe, ?string $strategyName = null): ?Signal
     {
         $signal = $this->evaluate($snapshot, $timeframe, [], $strategyName);
