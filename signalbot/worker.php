@@ -402,7 +402,9 @@ final class Worker
 
     private const TICK_RESERVE_SECONDS = 15;
 
-    private array $nextTimeframeRun = [];
+    private const CANDLE_HISTORY = 200;
+
+    private const CANDLE_KEEP = 500;
 
     private ?string $dailyStop = null;
 
@@ -433,8 +435,6 @@ final class Worker
 
         $lastScan = $this->scannerRunRepo->lastRunAt();
         $this->lastScanAt = $lastScan !== null ? (int) strtotime($lastScan) : 0;
-        $seedTimeframes = array_unique(array_merge(Config::timeframes(), [Config::reversalConfirmTimeframe()]));
-        $this->nextTimeframeRun = array_merge(array_fill_keys($seedTimeframes, 0), $this->loadTimeframeSchedule());
 
         $this->installSignalHandlers();
     }
@@ -535,23 +535,6 @@ final class Worker
         )->execute([':v' => (string) time(), ':now' => date('Y-m-d H:i:s')]);
     }
 
-    private function loadTimeframeSchedule(): array
-    {
-        $stmt = Database::pdo()->prepare('SELECT setting_value FROM bot_settings WHERE setting_key = \'tf_schedule\'');
-        $stmt->execute();
-        $v = $stmt->fetchColumn();
-        $data = $v !== false && $v !== '' ? json_decode((string) $v, true) : null;
-        return is_array($data) ? array_map('intval', $data) : [];
-    }
-
-    private function saveTimeframeSchedule(array $schedule): void
-    {
-        Database::pdo()->prepare(
-            'INSERT INTO bot_settings (setting_key, setting_value, updated_at) VALUES (\'tf_schedule\', :v, :now)
-             ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = excluded.updated_at'
-        )->execute([':v' => json_encode($schedule), ':now' => date('Y-m-d H:i:s')]);
-    }
-
     private function maybeRunScanner(): void
     {
         if (time() - $this->lastScanAt < Config::scannerIntervalSeconds()) {
@@ -570,18 +553,11 @@ final class Worker
 
     private function primeMarketData(): void
     {
-        $candleManager = $this->marketData->candleManager();
         foreach ($this->signalRepo->openPositionSymbols() as $open) {
             if (!$this->running || $this->outOfDataBudget()) {
                 break;
             }
-            $missing = array_values(array_filter(
-                Config::signalTimeframes(),
-                static fn(string $tf) => !$candleManager->hasAny($open['exchange'], $open['symbol'], $tf)
-            ));
-            if (!empty($missing)) {
-                $this->syncSymbolCandles($open['exchange'], $open['symbol'], $missing, 200);
-            }
+            $this->syncFreshCandles((string) $open['exchange'], (string) $open['symbol'], Config::signalTimeframes());
         }
     }
 
@@ -619,20 +595,26 @@ final class Worker
         }
     }
 
-    private function syncSymbolCandles(string $exchange, string $symbol, array $timeframes, int $limit): void
+    private function syncFreshCandles(string $exchange, string $symbol, array $timeframes): void
     {
-        foreach ($timeframes as $tf) {
+        $candleManager = $this->marketData->candleManager();
+        $now = time();
+        foreach (array_unique($timeframes) as $tf) {
+            $step = Candle::timeframeSeconds($tf);
+            $last = $candleManager->latestOpenTime($exchange, $symbol, $tf);
+            if ($last !== null && intdiv($last, 1000) + $step > $now) {
+                continue;
+            }
+            $limit = $last === null
+                ? self::CANDLE_HISTORY
+                : min(self::CANDLE_HISTORY, intdiv($now - intdiv($last, 1000), $step) + 2);
             $candles = $this->exchangeManager->withIsolation($exchange, fn(ExchangeAdapter $a) => $a->fetchCandles($symbol, $tf, $limit));
             if (is_array($candles) && !empty($candles)) {
-                $this->marketData->candleManager()->upsertMany($exchange, $symbol, $tf, $candles);
+                $candleManager->upsertMany($exchange, $symbol, $tf, $candles);
+                $candleManager->pruneSeries($exchange, $symbol, $tf, $limit >= self::CANDLE_HISTORY ? self::CANDLE_HISTORY : self::CANDLE_KEEP);
                 $this->exchangeBackoff[$exchange]->reset();
             }
         }
-    }
-
-    private function timeframeSeconds(string $timeframe): int
-    {
-        return Candle::timeframeSeconds($timeframe);
     }
 
     private function monitorOpenPositions(): void
@@ -878,8 +860,6 @@ final class Worker
         }
 
         $this->signalGenerator->resetObservations();
-        $dueTimeframes = $this->dueTimeframes();
-        $candleManager = $this->marketData->candleManager();
         $tickerCache = [];
 
         $cursor = $this->loadCursor() % $total;
@@ -906,15 +886,7 @@ final class Worker
             }
 
             try {
-                $sync = $dueTimeframes;
-                foreach ($snapshotTimeframes as $tf) {
-                    if (!in_array($tf, $sync, true) && !$candleManager->hasAny($exchange, $symbol, $tf)) {
-                        $sync[] = $tf;
-                    }
-                }
-                if (!empty($sync)) {
-                    $this->syncSymbolCandles($exchange, $symbol, $sync, 200);
-                }
+                $this->syncFreshCandles($exchange, $symbol, $snapshotTimeframes);
                 $this->refreshTicker($tickerCache, $exchange, $symbol);
 
                 $snapshot = $this->marketData->buildSnapshot($exchange, $symbol, $snapshotTimeframes);
@@ -950,30 +922,6 @@ final class Worker
 
         $this->saveScanReport($evaluated, $total, !empty($chosen), count($ranked), $visited, $cursor);
         return $chosen;
-    }
-
-    private function dueTimeframes(): array
-    {
-        $now = time();
-        $due = [];
-
-        $tracked = array_merge(Config::signalTimeframes(), [Config::reversalConfirmTimeframe()]);
-        foreach (Config::signalTimeframes() as $tf) {
-            $htfTf = Config::htfConfirmTimeframe($tf);
-            if ($htfTf !== null) {
-                $tracked[] = $htfTf;
-            }
-        }
-        foreach (array_unique($tracked) as $tf) {
-            if ($now >= ($this->nextTimeframeRun[$tf] ?? 0)) {
-                $due[] = $tf;
-                $this->nextTimeframeRun[$tf] = $now + $this->timeframeSeconds($tf);
-            }
-        }
-        if (!empty($due)) {
-            $this->saveTimeframeSchedule($this->nextTimeframeRun);
-        }
-        return $due;
     }
 
     private function loadCursor(): int

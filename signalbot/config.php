@@ -1600,6 +1600,25 @@ final class Database
 
         self::pruneLogs($pdo);
         self::seedDefaults($pdo);
+        self::resetLooseScoreOverride($pdo);
+    }
+
+    private static function resetLooseScoreOverride(PDO $pdo): void
+    {
+        $flag = 'migration_score_reset_v1';
+        $stmt = $pdo->prepare('SELECT 1 FROM bot_settings WHERE setting_key = :k');
+        $stmt->execute([':k' => $flag]);
+        if ($stmt->fetchColumn() !== false) {
+            return;
+        }
+        $read = $pdo->prepare('SELECT setting_value FROM bot_settings WHERE setting_key = :k');
+        $read->execute([':k' => 'MIN_CONFLUENCE_SCORE']);
+        $value = $read->fetchColumn();
+        if ($value !== false && is_numeric($value) && (float) $value < Env::getFloat('MIN_CONFLUENCE_SCORE', 80.0)) {
+            $pdo->prepare('DELETE FROM bot_settings WHERE setting_key = :k')->execute([':k' => 'MIN_CONFLUENCE_SCORE']);
+        }
+        $pdo->prepare('INSERT OR IGNORE INTO bot_settings (setting_key, setting_value, updated_at) VALUES (:k, :v, :now)')
+            ->execute([':k' => $flag, ':v' => '1', ':now' => date('Y-m-d H:i:s')]);
     }
 
     private static function ensureColumn(PDO $pdo, string $table, string $column, string $definition): void

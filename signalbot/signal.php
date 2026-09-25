@@ -1807,17 +1807,30 @@ final class CandleManager
         ), $rows);
     }
 
-    public function hasAny(string $exchange, string $symbol, string $timeframe): bool
+    public function latestOpenTime(string $exchange, string $symbol, string $timeframe): ?int
     {
         $exchangeId = ExchangeRepository::idForName($exchange);
         if ($exchangeId === null) {
-            return false;
+            return null;
         }
         $stmt = Database::pdo()->prepare(
-            'SELECT 1 FROM candles WHERE exchange_id = :eid AND symbol = :symbol AND timeframe = :tf LIMIT 1'
+            'SELECT MAX(open_time) FROM candles WHERE exchange_id = :eid AND symbol = :symbol AND timeframe = :tf'
         );
         $stmt->execute([':eid' => $exchangeId, ':symbol' => $symbol, ':tf' => $timeframe]);
-        return $stmt->fetchColumn() !== false;
+        $v = $stmt->fetchColumn();
+        return $v === false || $v === null ? null : (int) $v;
+    }
+
+    public function pruneSeries(string $exchange, string $symbol, string $timeframe, int $keep): void
+    {
+        $exchangeId = ExchangeRepository::idForName($exchange);
+        if ($exchangeId === null || $keep <= 0) {
+            return;
+        }
+        $cutoff = (time() - Candle::timeframeSeconds($timeframe) * $keep) * 1000;
+        Database::pdo()->prepare(
+            'DELETE FROM candles WHERE exchange_id = :eid AND symbol = :symbol AND timeframe = :tf AND open_time < :cutoff'
+        )->execute([':eid' => $exchangeId, ':symbol' => $symbol, ':tf' => $timeframe, ':cutoff' => $cutoff]);
     }
 }
 
@@ -4489,7 +4502,7 @@ final class StructureBreakStrategy implements Strategy
         return $this->rejection;
     }
 
-    private function reject(string $why): null
+    private function reject(string $why): ?array
     {
         $this->rejection = $why;
         return null;
@@ -4646,7 +4659,7 @@ final class ConfluenceProStrategy implements Strategy
         return $this->lastVotes;
     }
 
-    private function reject(string $why): null
+    private function reject(string $why): ?array
     {
         $this->rejection = $why;
         return null;
