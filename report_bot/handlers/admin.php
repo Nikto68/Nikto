@@ -372,7 +372,7 @@ function handleAdminGroup(array $cq): void {
 
     $a = screenAnchorFromCq($cq);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'],
-        "👥 داخل گروه/تاپیکِ موردنظر دستور زیر را بفرستید:\n/setreporttopic$status",
+        "👥 /setreporttopic$status",
         [], kbBackToAdmin());
     tgAnswerCallback($cq['id']);
 }
@@ -383,7 +383,7 @@ function handleSetReportTopicCommand(array $msg): void {
 
     $chat = $msg['chat'];
     if (!in_array($chat['type'], ['group', 'supergroup'], true)) {
-        tgSendMessage($chat['id'], '⚠️ این دستور را باید داخل گروه بفرستید.');
+        tgSendMessage($chat['id'], '⚠️ فقط داخل گروه.');
         return;
     }
 
@@ -407,7 +407,7 @@ function handleAdminSupportGroup(array $cq): void {
 
     $a = screenAnchorFromCq($cq);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'],
-        "📨 داخل گروه/تاپیکِ موردنظر دستور زیر را بفرستید:\n/setsupporttopic$status",
+        "📨 /setsupporttopic$status",
         [], kbBackToAdmin());
     tgAnswerCallback($cq['id']);
 }
@@ -418,7 +418,7 @@ function handleSetSupportTopicCommand(array $msg): void {
 
     $chat = $msg['chat'];
     if (!in_array($chat['type'], ['group', 'supergroup'], true)) {
-        tgSendMessage($chat['id'], '⚠️ این دستور را باید داخل گروه بفرستید.');
+        tgSendMessage($chat['id'], '⚠️ فقط داخل گروه.');
         return;
     }
 
@@ -443,7 +443,7 @@ function handleAdminChannel(array $cq): void {
     $a = screenAnchorFromCq($cq);
     stateSet($uid, 'admin_await_channel', ['prompt' => $a]);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'],
-        "📢 یک پیام از کانالِ مقصد فوروارد کنید، یا آیدی/یوزرنیمِ آن را بفرستید.$status",
+        "📢 فوروارد از کانال یا آیدی/یوزرنیم:$status",
         [], kbBack());
     tgAnswerCallback($cq['id']);
 }
@@ -465,7 +465,7 @@ function handleAdminChannelMessage(array $msg, array $st = []): void {
     }
 
     if (!$target) {
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ پیام فورواردشده از کانال یا آیدی/یوزرنیم را بفرستید.', [], kbBack());
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ فوروارد از کانال یا آیدی/یوزرنیم.', [], kbBack());
         return;
     }
 

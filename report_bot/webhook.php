@@ -11,7 +11,7 @@ require_once __DIR__ . '/handlers/admin.php';
 function reportWebhookSecretOk(): bool {
     if (REPORT_WEBHOOK_SECRET === '') {
         reportAdminAlertOnce('webhook_secret_missing',
-            '🔴 REPORT_WEBHOOK_SECRET تنظیم نشده — تا وقتی تنظیم نشود هیچ آپدیتی از تلگرام پذیرفته نمی‌شود.', 3600);
+            '🔴 REPORT_WEBHOOK_SECRET تنظیم نشده.', 3600);
         return false;
     }
     $got = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';

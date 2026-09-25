@@ -13,13 +13,13 @@ if (!defined('REPORT_DATA_DIR'))    define('REPORT_DATA_DIR', getenv('REPORT_DAT
 if (REPORT_BOT_TOKEN === '') {
     http_response_code(500);
     header('Content-Type: text/plain; charset=utf-8');
-    exit("REPORT_BOT_TOKEN تنظیم نشده — config.local.php را از روی config.local.example.php بسازید.\n");
+    exit("REPORT_BOT_TOKEN تنظیم نشده.\n");
 }
 
 if (!class_exists('SQLite3')) {
     http_response_code(500);
     header('Content-Type: text/plain; charset=utf-8');
-    exit("افزونه‌ی SQLite3 در PHP این هاست فعال نیست.\n");
+    exit("افزونه‌ی SQLite3 فعال نیست.\n");
 }
 
 function reportBotId(): int {

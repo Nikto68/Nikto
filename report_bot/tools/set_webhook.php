@@ -13,21 +13,18 @@ function fail(string $msg, bool $isCli): void {
 }
 
 if (REPORT_WEBHOOK_SECRET === '') {
-    fail('REPORT_WEBHOOK_SECRET در config.local.php تنظیم نشده — اول آن را بگذارید.', $isCli);
+    fail('REPORT_WEBHOOK_SECRET تنظیم نشده.', $isCli);
 }
 
 if (!$isCli) {
     $key = $_GET['key'] ?? '';
     if (!hash_equals(REPORT_WEBHOOK_SECRET, (string)$key)) {
-        fail('دسترسی غیرمجاز — پارامترِ key باید برابرِ REPORT_WEBHOOK_SECRET باشد.', $isCli);
+        fail('دسترسی غیرمجاز.', $isCli);
     }
 }
 
 if (!$url) {
-    $usage = $isCli
-        ? 'استفاده: php set_webhook.php <URL کاملِ webhook.php>'
-        : 'استفاده: ...set_webhook.php?url=<URL کاملِ webhook.php>&key=<REPORT_WEBHOOK_SECRET>';
-    fail($usage, $isCli);
+    fail('url لازم است.', $isCli);
 }
 
 $res = tgCall('setWebhook', [
