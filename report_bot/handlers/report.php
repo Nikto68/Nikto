@@ -26,7 +26,6 @@ function extractReportMedia(array $msg): ?array {
     return null;
 }
 
-/** پستِ گروه را ویرایش می‌کند — برایِ گزارشِ متنی editMessageText لازم است، نه editMessageCaption. */
 function editGroupPost(array $sub, string $text, array $entities, array $opts = []) {
     if ($sub['media_type'] === 'text') {
         return tgEditMessageText((int)$sub['group_chat_id'], (int)$sub['group_message_id'], $text, $entities, $opts);
@@ -34,26 +33,18 @@ function editGroupPost(array $sub, string $text, array $entities, array $opts = 
     return tgEditCaption((int)$sub['group_chat_id'], (int)$sub['group_message_id'], $text, $entities, $opts);
 }
 
-/** محتوایِ یک submission را (متن یا رسانه) به یک چت می‌فرستد؛ متن‌ها sendMessage می‌شوند چون copyMessage کپشن را فقط روی رسانه می‌پذیرد. */
-function postSubmissionContent(array $sub, int $toChatId, array $capBuilt, array $extraOpts = []) {
+function postSubmissionContent(array $sub, int $toChatId, array $capBuilt, array $extraOpts = [], bool $fromGroup = false) {
     if ($sub['media_type'] === 'text') {
-        return tgCall('sendMessage', array_merge([
-            'chat_id' => $toChatId,
-            'text' => $capBuilt['text'] !== '' ? $capBuilt['text'] : '.',
-            'entities' => $capBuilt['entities'] ?: null,
-        ], $extraOpts));
+        return tgSendMessage($toChatId, $capBuilt['text'] !== '' ? $capBuilt['text'] : '.', $capBuilt['entities'], $extraOpts);
     }
-    return tgCopyMessage($toChatId, (int)$sub['src_chat_id'], (int)$sub['src_message_id'], array_merge([
+    $fromChat = $fromGroup ? (int)$sub['group_chat_id'] : (int)$sub['src_chat_id'];
+    $fromMsg = $fromGroup ? (int)$sub['group_message_id'] : (int)$sub['src_message_id'];
+    return tgCopyMessage($toChatId, $fromChat, $fromMsg, array_merge([
         'caption' => $capBuilt['text'] !== '' ? $capBuilt['text'] : null,
         'caption_entities' => $capBuilt['entities'] ?: null,
     ], $extraOpts));
 }
 
-/**
- * بعدِ ارسالِ محتوا، قبل از رفتن به گروه، از خودِ کاربر تاییدِ نهایی می‌گیرد.
- * این تاییدیه پیامِ تازه است، نه ادیتِ پرامپتِ قبلی — چون آن پرامپت الان
- * بالایِ همین محتوایی که کاربر فرستاده مانده و ادیتش آنجا دیده نمی‌شود.
- */
 function handleReportMedia(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
     $chatId = (int)$msg['chat']['id'];
@@ -65,6 +56,11 @@ function handleReportMedia(array $msg, array $st = []): void {
         return;
     }
 
+    $album = $msg['media_group_id'] ?? null;
+    if ($album !== null && ($st['state'] ?? null) === 'report_confirm' && ($st['data']['msg']['media_group_id'] ?? null) === $album) {
+        return;
+    }
+
     $t = botText('report_confirm_prompt');
     tgSendMessage($chatId, $t['text'], $t['entities'], ['reply_markup' => kbReportConfirm()]);
     stateSet($uid, 'report_confirm', ['msg' => $msg]);
@@ -73,7 +69,7 @@ function handleReportMedia(array $msg, array $st = []): void {
 function handleReportConfirmSend(array $cq): void {
     $uid = (int)$cq['from']['id'];
     $st = stateGet($uid);
-    if ($st['state'] !== 'report_confirm' || empty($st['data']['msg'])) {
+    if ($st['state'] !== 'report_confirm' || empty($st['data']['msg']) || !stateTake($uid, 'report_confirm')) {
         tgAnswerCallback($cq['id'], 'این درخواست منقضی شده؛ دوباره تلاش کنید.', true);
         return;
     }
@@ -160,6 +156,13 @@ function handleTagPick(array $cq, int $subId, int $tagId): void {
     if ($sub['status'] !== 'pending') { tgAnswerCallback($cq['id'], 'قبلاً بررسی شده است.', true); return; }
 
     $newTag = ((int)$sub['tag_id'] === $tagId) ? null : $tagId;
+    if ($newTag !== null && !tagGet($newTag)) {
+        tgEditReplyMarkup((int)$sub['group_chat_id'], (int)$sub['group_message_id'],
+            kbReview($subId, tagGetAll(), $sub['tag_id'] ? (int)$sub['tag_id'] : null, false));
+        tgAnswerCallback($cq['id'], 'این تگ حذف شده.', true);
+        return;
+    }
+
     submissionUpdate($subId, ['tag_id' => $newTag]);
     $sub['tag_id'] = $newTag;
 
@@ -170,11 +173,6 @@ function handleTagPick(array $cq, int $subId, int $tagId): void {
     tgAnswerCallback($cq['id'], $newTag ? 'برچسب ثبت شد.' : 'برچسب برداشته شد.');
 }
 
-/**
- * پیامِ تایید/ردِ نهایی همیشه پیامِ تازه است، نه ادیتِ «ثبت شد»ی که قبلاً
- * فرستاده بودیم — چون ادیت برایِ کاربر نوتیفیکیشن/هایلایتِ تازه نمی‌سازد و
- * ممکن است دیده نشود؛ پیامِ تازه او را واقعاً مطلع می‌کند.
- */
 function notifySubmitter(array $sub, array $textPart): void {
     $chatId = (int)$sub['src_chat_id'];
     $kb = kbStart(reportIsAdmin((int)$sub['user_id']));
@@ -187,8 +185,9 @@ function handleDecision(array $cq, string $action, int $subId): void {
 
     $sub = submissionGet($subId);
     if (!$sub) { tgAnswerCallback($cq['id'], 'یافت نشد.', true); return; }
-    if ($sub['status'] !== 'pending') { tgAnswerCallback($cq['id'], 'قبلاً بررسی شده است.', true); return; }
+    if (!in_array($sub['status'], ['pending', 'processing'], true)) { tgAnswerCallback($cq['id'], 'قبلاً بررسی شده است.', true); return; }
 
+    $channelId = null;
     if ($action === 'approve') {
         $channelId = settingGet('report_channel_id');
         if (!$channelId) {
@@ -196,11 +195,19 @@ function handleDecision(array $cq, string $action, int $subId): void {
             reportAdminAlertOnce('no_channel', '⚠️ کانالِ مقصد تنظیم نشده.');
             return;
         }
+    }
 
+    if (!submissionClaim($subId)) { tgAnswerCallback($cq['id'], 'قبلاً بررسی شده است.', true); return; }
+
+    if ($action === 'approve') {
         $cap = buildChannelCaption($sub);
         $res = postSubmissionContent($sub, (int)$channelId, $cap);
+        if (empty($res['ok']) && $sub['media_type'] !== 'text' && $cap['text'] !== '' && !empty($sub['group_message_id'])) {
+            $res = postSubmissionContent($sub, (int)$channelId, $cap, [], true);
+        }
 
         if (empty($res['ok'])) {
+            submissionUpdate($subId, ['status' => 'pending', 'decided_at' => null]);
             tgAnswerCallback($cq['id'], 'ارسال به کانال ناموفق بود.', true);
             reportAdminAlertOnce('channel_copy_fail', '⚠️ ارسال به کانال ناموفق بود: ' . ($res['description'] ?? ''));
             return;
@@ -234,25 +241,51 @@ function handleGroupEditStart(array $cq, int $subId): void {
     if (!$sub) { tgAnswerCallback($cq['id'], 'یافت نشد.', true); return; }
     if ($sub['status'] !== 'pending') { tgAnswerCallback($cq['id'], 'قبلاً بررسی شده است.', true); return; }
 
-    stateSet($uid, 'admin_await_group_edit', ['subId' => $subId]);
-    tgAnswerCallback($cq['id'], 'پیامِ بعدیِ شما در همین گروه، متنِ جدیدِ این گزارش می‌شود.', true);
+    $old = stateGet($uid);
+    if ($old['state'] === 'admin_await_group_edit' && !empty($old['data']['prompt'])) {
+        tgDeleteMessage((int)$old['data']['chat'], (int)$old['data']['prompt']);
+    }
+
+    $post = $cq['message'];
+    $chatId = (int)$post['chat']['id'];
+    $res = tgSendMessage($chatId, '✏️ متن جدید:', [], array_merge(replyOptsFor($post), [
+        'reply_markup' => ['force_reply' => true],
+    ]));
+
+    stateSet($uid, 'admin_await_group_edit', [
+        'subId' => $subId,
+        'chat' => $chatId,
+        'thread' => msgThreadId($post),
+        'prompt' => !empty($res['ok']) ? (int)$res['result']['message_id'] : null,
+        'at' => time(),
+    ]);
+    tgAnswerCallback($cq['id']);
 }
 
-/** پیامِ بعدیِ ادمین در گروه (بعدِ زدنِ «ویرایش متن») را به‌عنوانِ متنِ محتوایِ همین submission ذخیره می‌کند. */
-function handleGroupEditMessage(array $msg, int $subId): void {
+function handleGroupEditMessage(array $msg, array $st): bool {
     $uid = (int)$msg['from']['id'];
-    stateClear($uid);
+    $d = $st['data'];
 
-    $sub = submissionGet($subId);
-    if (!$sub || $sub['status'] !== 'pending') return;
+    if (time() - (int)($d['at'] ?? 0) > 900) { stateClear($uid); return false; }
+    if ((int)$msg['chat']['id'] !== (int)($d['chat'] ?? 0)) return false;
+    if (msgThreadId($msg) !== ($d['thread'] ?? null)) return false;
+
+    $reply = $msg['reply_to_message'] ?? null;
+    if ($reply && empty($reply['forum_topic_created']) && (int)$reply['message_id'] !== (int)($d['prompt'] ?? 0)) return false;
 
     $newText = $msg['text'] ?? '';
-    if (trim($newText) === '') return;
-    $parsed = parseEmojiBrackets($newText, $msg['entities'] ?? []);
+    if (trim($newText) === '') return false;
+
+    stateClear($uid);
+    if (!empty($d['prompt'])) tgDeleteMessage((int)$d['chat'], (int)$d['prompt']);
+
+    $subId = (int)$d['subId'];
+    $sub = submissionGet($subId);
+    if (!$sub || $sub['status'] !== 'pending') return true;
 
     submissionUpdate($subId, [
-        'orig_caption' => $parsed['text'],
-        'orig_caption_entities' => json_encode($parsed['entities'], JSON_UNESCAPED_UNICODE),
+        'orig_caption' => $newText,
+        'orig_caption_entities' => json_encode($msg['entities'] ?? [], JSON_UNESCAPED_UNICODE),
     ]);
 
     $sub = submissionGet($subId);
@@ -260,6 +293,7 @@ function handleGroupEditMessage(array $msg, int $subId): void {
     editGroupPost($sub, $cap['text'], $cap['entities'], [
         'reply_markup' => kbReview($subId, tagGetAll(), $sub['tag_id'] ? (int)$sub['tag_id'] : null, false),
     ]);
+    return true;
 }
 
 function handleAdminReportReply(array $msg): bool {
@@ -273,6 +307,7 @@ function handleAdminReportReply(array $msg): bool {
 
     $t = botText('report_admin_note_prefix');
     tgSendMessage((int)$sub['src_chat_id'], $t['text'], $t['entities']);
-    tgCopyMessage((int)$sub['src_chat_id'], (int)$msg['chat']['id'], $msg['message_id']);
+    $res = tgCopyMessage((int)$sub['src_chat_id'], (int)$msg['chat']['id'], (int)$msg['message_id']);
+    if (empty($res['ok'])) tgSendMessage((int)$msg['chat']['id'], '⚠️ به کاربر نرسید.', [], replyOptsFor($msg));
     return true;
 }

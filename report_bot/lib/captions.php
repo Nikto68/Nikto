@@ -1,5 +1,8 @@
 <?php
-/** ساختِ کپشنِ پستِ گروه/تاپیک و کپشنِ نهاییِ کانال، از رویِ یک submission */
+
+function captionLimit(array $sub): int {
+    return $sub['media_type'] === 'text' ? 4096 : 1024;
+}
 
 function submitterLine(array $sub): array {
     $name = trim(($sub['first_name'] ?? '') !== '' ? $sub['first_name'] : 'کاربر');
@@ -16,45 +19,45 @@ function statusLine(string $status): array {
     return ['text' => $map[$status] ?? $status, 'entities' => []];
 }
 
-function buildGroupCaption(array $sub): array {
-    $parts = [submitterLine($sub)];
-
+function origPart(array $sub): ?array {
     $orig = $sub['orig_caption'] ?? '';
-    if ($orig !== '') {
-        $parts[] = ['text' => "\n\n" . $orig, 'entities' => json_decode($sub['orig_caption_entities'] ?: '[]', true) ?: []];
-    }
+    if ($orig === '') return null;
+    return ['text' => $orig, 'entities' => json_decode($sub['orig_caption_entities'] ?: '[]', true) ?: []];
+}
 
-    if (!empty($sub['tag_id'])) {
-        $tag = tagGet((int)$sub['tag_id']);
-        if ($tag) {
-            $parts[] = ['text' => "\n\n🏷 ", 'entities' => []];
-            $parts[] = ['text' => $tag['text'], 'entities' => $tag['entities']];
-        }
-    }
+function tagParts(array $sub): array {
+    if (empty($sub['tag_id'])) return [];
+    $tag = tagGet((int)$sub['tag_id']);
+    if (!$tag) return [];
+    return [['text' => '🏷 ', 'entities' => []], ['text' => $tag['text'], 'entities' => $tag['entities']]];
+}
 
-    $parts[] = ['text' => "\n\n", 'entities' => []];
-    $parts[] = statusLine($sub['status']);
+function concatWithOrig(array $before, ?array $orig, array $after, int $limit): array {
+    if ($orig === null) return entityConcat(array_merge($before, $after));
+    $used = 0;
+    foreach (array_merge($before, $after) as $p) $used += utf16Len($p['text']);
+    return entityConcat(array_merge($before, [entityTruncate($orig, $limit - $used)], $after));
+}
 
-    return entityConcat($parts);
+function buildGroupCaption(array $sub): array {
+    $gap = ['text' => "\n\n", 'entities' => []];
+    $orig = origPart($sub);
+
+    $before = [submitterLine($sub)];
+    if ($orig) $before[] = $gap;
+
+    $after = [];
+    $tag = tagParts($sub);
+    if ($tag) $after = array_merge([$gap], $tag);
+    $after[] = $gap;
+    $after[] = statusLine($sub['status']);
+
+    return concatWithOrig($before, $orig, $after, captionLimit($sub));
 }
 
 function buildChannelCaption(array $sub): array {
-    $parts = [];
-
-    if (!empty($sub['tag_id'])) {
-        $tag = tagGet((int)$sub['tag_id']);
-        if ($tag) {
-            $parts[] = ['text' => "🏷 ", 'entities' => []];
-            $parts[] = ['text' => $tag['text'], 'entities' => $tag['entities']];
-            $parts[] = ['text' => "\n\n", 'entities' => []];
-        }
-    }
-
-    $orig = $sub['orig_caption'] ?? '';
-    if ($orig !== '') {
-        $parts[] = ['text' => $orig, 'entities' => json_decode($sub['orig_caption_entities'] ?: '[]', true) ?: []];
-    }
-
-    if (!$parts) return ['text' => '', 'entities' => []];
-    return entityConcat($parts);
+    $orig = origPart($sub);
+    $before = tagParts($sub);
+    if ($before && $orig) $before[] = ['text' => "\n\n", 'entities' => []];
+    return concatWithOrig($before, $orig, [], captionLimit($sub));
 }

@@ -4,6 +4,10 @@ function reportDb(): SQLite3 {
     if ($db !== null) return $db;
 
     if (!is_dir(REPORT_DATA_DIR)) mkdir(REPORT_DATA_DIR, 0775, true);
+    $ht = REPORT_DATA_DIR . '/.htaccess';
+    if (!is_file($ht)) {
+        @file_put_contents($ht, "<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\nOrder allow,deny\nDeny from all\n</IfModule>\n");
+    }
     $db = new SQLite3(REPORT_DATA_DIR . '/report.sqlite3');
     $db->enableExceptions(true);
     $db->busyTimeout(5000);
@@ -177,6 +181,18 @@ function submissionUpdate(int $id, array $fields): void {
         $stmt->bindValue(":$k", $v, $type);
     }
     $stmt->execute();
+}
+
+function submissionClaim(int $id): bool {
+    $db = reportDb();
+    $now = time();
+    $stmt = $db->prepare("UPDATE submissions SET status = 'processing', decided_at = :now
+        WHERE id = :id AND (status = 'pending' OR (status = 'processing' AND decided_at < :stale))");
+    $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+    $stmt->bindValue(':now', $now, SQLITE3_INTEGER);
+    $stmt->bindValue(':stale', $now - 120, SQLITE3_INTEGER);
+    $stmt->execute();
+    return $db->changes() === 1;
 }
 
 function userTouch(array $from): void {

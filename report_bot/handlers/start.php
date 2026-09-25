@@ -28,18 +28,10 @@ function handleStartCommand(array $msg): void {
 
     $c = startScreenContent($uid);
     if ($c['photo']) {
-        tgSendPhoto($chatId, $c['photo'], $c['text'], $c['entities'], ['reply_markup' => $c['keyboard']]);
-    } else {
-        tgSendMessage($chatId, $c['text'], $c['entities'], ['reply_markup' => $c['keyboard']]);
+        $res = tgSendPhoto($chatId, $c['photo'], $c['text'], $c['entities'], ['reply_markup' => $c['keyboard']]);
+        if (!empty($res['ok'])) return;
     }
-}
-
-function renderStartInPlace(array $cq): void {
-    $uid = (int)$cq['from']['id'];
-    stateClear($uid);
-    $c = startScreenContent($uid);
-    $a = screenAnchorFromCq($cq);
-    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], $c['text'], $c['entities'], $c['keyboard']);
+    tgSendMessage($chatId, $c['text'], $c['entities'], ['reply_markup' => $c['keyboard']]);
 }
 
 function handleNavBack(array $cq): void {
@@ -55,5 +47,5 @@ function handleNavBack(array $cq): void {
     }
 
     $c = startScreenContent($uid);
-    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], $c['text'], $c['entities'], $c['keyboard']);
+    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], $c['text'], $c['entities'], $c['keyboard'], $c['photo']);
 }

@@ -1,5 +1,4 @@
 <?php
-/** یک ماشین‌حالتِ ساده به‌ازای هر کاربر — برای گفتگوهای چندمرحله‌ای (منتظرِ عکس/متن و...) */
 
 function stateGet(int $userId): array {
     $stmt = reportDb()->prepare('SELECT state, data FROM user_state WHERE user_id = :u');
@@ -21,4 +20,14 @@ function stateSet(int $userId, ?string $state, array $data = []): void {
 
 function stateClear(int $userId): void {
     stateSet($userId, null, []);
+}
+
+function stateTake(int $userId, string $state): bool {
+    $db = reportDb();
+    $stmt = $db->prepare("UPDATE user_state SET state = NULL, data = '[]', updated_at = :t WHERE user_id = :u AND state = :s");
+    $stmt->bindValue(':u', $userId, SQLITE3_INTEGER);
+    $stmt->bindValue(':s', $state, SQLITE3_TEXT);
+    $stmt->bindValue(':t', time(), SQLITE3_INTEGER);
+    $stmt->execute();
+    return $db->changes() === 1;
 }

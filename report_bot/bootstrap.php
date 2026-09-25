@@ -1,15 +1,4 @@
 <?php
-/**
- * بوت‌استرپِ ربات گزارشات — پروژه‌ای کاملاً جدا از بقیه‌ی فایل‌های این ریپو
- * (ربات فروشگاه/آپلودر). توکن و آیدیِ مدیر مخصوصِ همین ربات است و هیچ
- * تداخلی با ثابت‌های BOT_TOKEN / ADMIN_ID در فایل‌های دیگر ندارد.
- *
- * دنبالِ تنظیمات در دو جا می‌گردیم، اولی که بود برنده است:
- *   ۱) فایلِ config.local.php کنارِ همین فایل — بیرون از گیت
- *   ۲) متغیرهای محیطیِ سرور
- *
- * هیچ توکنی داخلِ سورس نیست؛ بدونِ تنظیم، ربات عمداً بالا نمی‌آید.
- */
 
 if (is_file(__DIR__ . '/config.local.php')) require_once __DIR__ . '/config.local.php';
 
@@ -33,7 +22,10 @@ if (!class_exists('SQLite3')) {
     exit("افزونه‌ی SQLite3 در PHP این هاست فعال نیست.\n");
 }
 
-/** فهرستِ آیدیِ عددیِ همه‌ی مدیرها (اولین‌شان REPORT_ADMIN_ID است) */
+function reportBotId(): int {
+    return (int)strtok(REPORT_BOT_TOKEN, ':');
+}
+
 function reportAdminIds(): array {
     static $ids = null;
     if ($ids !== null) return $ids;

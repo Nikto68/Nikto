@@ -1,5 +1,4 @@
 <?php
-/** رنگِ دکمه‌ها (style: primary/success/danger) — قابلِ بازنویسی از پنل، وگرنه پیش‌فرضِ کد */
 
 const REPORT_STYLE_CHOICES = [
     ''         => 'بدون رنگ',

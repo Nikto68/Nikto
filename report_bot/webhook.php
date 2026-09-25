@@ -1,7 +1,4 @@
 <?php
-/**
- * Webhook مادرِ ربات گزارشات — این آدرس را با tools/set_webhook.php ثبت کنید.
- */
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/handlers/start.php';
@@ -86,12 +83,8 @@ function reportDispatchMessage(array $msg): void {
         if (strncmp($text, '/setreporttopic', 15) === 0) { handleSetReportTopicCommand($msg); return; }
         if (strncmp($text, '/setsupporttopic', 16) === 0) { handleSetSupportTopicCommand($msg); return; }
         if (isset($msg['from']) && reportIsAdmin($msg['from']['id'])) {
-            $auid = (int)$msg['from']['id'];
-            $ast = stateGet($auid);
-            if ($ast['state'] === 'admin_await_group_edit' && !empty($ast['data']['subId'])) {
-                handleGroupEditMessage($msg, (int)$ast['data']['subId']);
-                return;
-            }
+            $ast = stateGet((int)$msg['from']['id']);
+            if ($ast['state'] === 'admin_await_group_edit' && handleGroupEditMessage($msg, $ast)) return;
             if (isset($msg['reply_to_message'])) {
                 if (!handleAdminReportReply($msg)) handleAdminSupportGroupReply($msg);
             }
@@ -102,8 +95,8 @@ function reportDispatchMessage(array $msg): void {
     if (!isset($msg['from'])) return;
     $uid = (int)$msg['from']['id'];
 
-    if ($text === '/start') { handleStartCommand($msg); return; }
-    if ($text === '/admin' && reportIsAdmin($uid)) { handleAdminCommand($msg); return; }
+    if (preg_match('~^/start(@\w+)?(\s|$)~', $text)) { handleStartCommand($msg); return; }
+    if (preg_match('~^/admin(@\w+)?$~', $text) && reportIsAdmin($uid)) { handleAdminCommand($msg); return; }
 
     $st = stateGet($uid);
     if ($st['state']) {

@@ -24,6 +24,7 @@ function requireAdminCq(array $cq): bool {
 
 function handleAdminMenu(array $cq): void {
     if (!requireAdminCq($cq)) return;
+    stateClear((int)$cq['from']['id']);
     $a = screenAnchorFromCq($cq);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '⚙️ پنل مدیریت ربات گزارشات', [], kbAdminMenu());
     tgAnswerCallback($cq['id']);
@@ -35,8 +36,6 @@ function handleAdminCommand(array $msg): void {
     stateClear($uid);
     tgSendMessage((int)$msg['chat']['id'], '⚙️ پنل مدیریت ربات گزارشات', [], ['reply_markup' => kbAdminMenu()]);
 }
-
-// ---- تگ‌ها ----
 
 function kbTagsList(): array {
     $rows = [];
@@ -79,11 +78,10 @@ function handleAdminTagText(array $msg, array $st = []): void {
         screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است؛ دوباره بفرستید.', [], kbBack());
         return;
     }
-    $parsed = parseEmojiBrackets($text, $msg['entities'] ?? []);
 
     $stmt = reportDb()->prepare('INSERT INTO tags (text, entities, sort_order, created_at) VALUES (:t, :e, :o, :c)');
-    $stmt->bindValue(':t', $parsed['text'], SQLITE3_TEXT);
-    $stmt->bindValue(':e', json_encode($parsed['entities'], JSON_UNESCAPED_UNICODE), SQLITE3_TEXT);
+    $stmt->bindValue(':t', $text, SQLITE3_TEXT);
+    $stmt->bindValue(':e', json_encode($msg['entities'] ?? [], JSON_UNESCAPED_UNICODE), SQLITE3_TEXT);
     $stmt->bindValue(':o', time(), SQLITE3_INTEGER);
     $stmt->bindValue(':c', time(), SQLITE3_INTEGER);
     $stmt->execute();
@@ -100,8 +98,6 @@ function handleAdminTagDelete(array $cq, int $tagId): void {
     tgAnswerCallback($cq['id'], 'حذف شد.');
     tgEditReplyMarkup((int)$cq['message']['chat']['id'], $cq['message']['message_id'], kbTagsList());
 }
-
-// ---- ایموجی پریمیوم ----
 
 function kbEmojiList(): array {
     $rows = [];
@@ -161,8 +157,6 @@ function handleAdminEmojiMessage(array $msg, string $slot, array $st = []): void
     screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbEmojiList());
 }
 
-// ---- عکس پیام خوش‌آمد ----
-
 function handleAdminStartPhoto(array $cq): void {
     if (!requireAdminCq($cq)) return;
     $uid = (int)$cq['from']['id'];
@@ -198,12 +192,11 @@ function handleAdminStartPhotoMessage(array $msg, array $st = []): void {
 function handleAdminStartPhotoDelete(array $cq): void {
     if (!requireAdminCq($cq)) return;
     settingDel('start_photo_file_id');
+    stateClear((int)$cq['from']['id']);
     tgAnswerCallback($cq['id'], 'حذف شد.');
     $a = screenAnchorFromCq($cq);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✅ عکس پیام خوش‌آمد حذف شد.', [], kbAdminMenu());
 }
-
-// ---- متن پیام خوش‌آمد ----
 
 function handleAdminStartText(array $cq): void {
     if (!requireAdminCq($cq)) return;
@@ -226,14 +219,11 @@ function handleAdminStartTextMessage(array $msg, array $st = []): void {
         screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است.', [], kbBack());
         return;
     }
-    $parsed = parseEmojiBrackets($text, $msg['entities'] ?? []);
-    settingSet('start_text', $parsed['text']);
-    settingSet('start_text_entities', json_encode($parsed['entities'], JSON_UNESCAPED_UNICODE));
+    settingSet('start_text', $text);
+    settingSet('start_text_entities', json_encode($msg['entities'] ?? [], JSON_UNESCAPED_UNICODE));
     stateClear($uid);
     screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbAdminMenu());
 }
-
-// ---- عکس راهنما ----
 
 function handleAdminGuidePhoto(array $cq): void {
     if (!requireAdminCq($cq)) return;
@@ -270,12 +260,11 @@ function handleAdminGuidePhotoMessage(array $msg, array $st = []): void {
 function handleAdminGuidePhotoDelete(array $cq): void {
     if (!requireAdminCq($cq)) return;
     settingDel('guide_photo_file_id');
+    stateClear((int)$cq['from']['id']);
     tgAnswerCallback($cq['id'], 'حذف شد.');
     $a = screenAnchorFromCq($cq);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✅ عکسِ راهنما حذف شد.', [], kbAdminMenu());
 }
-
-// ---- متن‌های ربات ----
 
 function kbTextsList(): array {
     $rows = [];
@@ -325,8 +314,7 @@ function handleAdminTextEditMessage(array $msg, string $key, array $st = []): vo
         screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است.', [], kbBack());
         return;
     }
-    $parsed = parseEmojiBrackets($text, $msg['entities'] ?? []);
-    textSet($key, $parsed['text'], $parsed['entities']);
+    textSet($key, $text, $msg['entities'] ?? []);
     stateClear($uid);
     screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbTextsList());
 }
@@ -339,8 +327,6 @@ function handleAdminTextClear(array $cq, string $key): void {
     $a = screenAnchorFromCq($cq);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '✏️ متن‌های ربات', [], kbTextsList());
 }
-
-// ---- رنگ دکمه‌ها ----
 
 function kbColorsList(): array {
     $rows = [];
@@ -367,14 +353,16 @@ function handleAdminColors(array $cq): void {
 
 function handleAdminColorSet(array $cq, string $slot, string $val): void {
     if (!requireAdminCq($cq)) return;
-    if (!in_array($slot, BUTTON_STYLE_SLOTS, true)) { tgAnswerCallback($cq['id'], 'نامعتبر.', true); return; }
-    styleSet($slot, $val === 'none' ? '' : $val);
+    $val = $val === 'none' ? '' : $val;
+    if (!in_array($slot, BUTTON_STYLE_SLOTS, true) || !array_key_exists($val, REPORT_STYLE_CHOICES)) {
+        tgAnswerCallback($cq['id'], 'نامعتبر.', true);
+        return;
+    }
+    styleSet($slot, $val);
     tgAnswerCallback($cq['id'], 'ذخیره شد.');
     $a = screenAnchorFromCq($cq);
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '🎨 رنگ دکمه‌ها', [], kbColorsList());
 }
-
-// ---- متن دکمه‌ها ----
 
 function kbButtonLabelsList(): array {
     $rows = [];
@@ -435,8 +423,6 @@ function handleAdminButtonLabelClear(array $cq, string $slot): void {
     screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '📝 متن دکمه‌ها', [], kbButtonLabelsList());
 }
 
-// ---- گروه/تاپیک گزارش ----
-
 function handleAdminGroup(array $cq): void {
     if (!requireAdminCq($cq)) return;
     $gid = settingGet('report_group_id');
@@ -462,16 +448,15 @@ function handleSetReportTopicCommand(array $msg): void {
 
     settingSet('report_group_id', $chat['id']);
     $opts = [];
-    if (isset($msg['message_thread_id'])) {
-        settingSet('report_topic_id', $msg['message_thread_id']);
-        $opts['message_thread_id'] = $msg['message_thread_id'];
+    $thread = msgThreadId($msg);
+    if ($thread !== null) {
+        settingSet('report_topic_id', $thread);
+        $opts['message_thread_id'] = $thread;
     } else {
         settingDel('report_topic_id');
     }
     tgSendMessage($chat['id'], '✅ این گروه/تاپیک به‌عنوان مقصد گزارش‌ها تنظیم شد.', [], $opts);
 }
-
-// ---- گروه/تاپیک پشتیبانی ----
 
 function handleAdminSupportGroup(array $cq): void {
     if (!requireAdminCq($cq)) return;
@@ -498,16 +483,15 @@ function handleSetSupportTopicCommand(array $msg): void {
 
     settingSet('support_group_id', $chat['id']);
     $opts = [];
-    if (isset($msg['message_thread_id'])) {
-        settingSet('support_topic_id', $msg['message_thread_id']);
-        $opts['message_thread_id'] = $msg['message_thread_id'];
+    $thread = msgThreadId($msg);
+    if ($thread !== null) {
+        settingSet('support_topic_id', $thread);
+        $opts['message_thread_id'] = $thread;
     } else {
         settingDel('support_topic_id');
     }
     tgSendMessage($chat['id'], '✅ این گروه/تاپیک به‌عنوان مقصد پشتیبانی تنظیم شد.', [], $opts);
 }
-
-// ---- کانال مقصد ----
 
 function handleAdminChannel(array $cq): void {
     if (!requireAdminCq($cq)) return;
@@ -531,8 +515,9 @@ function handleAdminChannelMessage(array $msg, array $st = []): void {
     $anchorPhoto = $prompt['has_photo'] ?? false;
 
     $target = null;
-    if (isset($msg['forward_from_chat']) && $msg['forward_from_chat']['type'] === 'channel') {
-        $target = $msg['forward_from_chat']['id'];
+    $origin = $msg['forward_origin'] ?? null;
+    if ($origin && ($origin['type'] ?? '') === 'channel' && isset($origin['chat']['id'])) {
+        $target = $origin['chat']['id'];
     } elseif (!empty($msg['text'])) {
         $t = trim($msg['text']);
         $target = ctype_digit(ltrim($t, '-')) ? (int)$t : $t;
@@ -544,8 +529,15 @@ function handleAdminChannelMessage(array $msg, array $st = []): void {
     }
 
     $chat = tgGetChat($target);
-    if (empty($chat['ok']) || $chat['result']['type'] !== 'channel') {
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ این کانال پیدا نشد یا ربات در آن ادمین نیست.', [], kbBack());
+    if (empty($chat['ok']) || ($chat['result']['type'] ?? '') !== 'channel') {
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ کانال پیدا نشد.', [], kbBack());
+        return;
+    }
+
+    $member = tgGetChatMember($chat['result']['id'], reportBotId());
+    $m = $member['result'] ?? [];
+    if (($m['status'] ?? '') !== 'administrator' || empty($m['can_post_messages'])) {
+        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ ربات در این کانال ادمین نیست یا اجازه‌ی ارسال پست ندارد.', [], kbBack());
         return;
     }
 
@@ -553,8 +545,6 @@ function handleAdminChannelMessage(array $msg, array $st = []): void {
     stateClear($uid);
     screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد: ' . ($chat['result']['title'] ?? $chat['result']['id']), [], kbAdminMenu());
 }
-
-// ---- وضعیت ----
 
 function handleAdminStatus(array $cq): void {
     if (!requireAdminCq($cq)) return;

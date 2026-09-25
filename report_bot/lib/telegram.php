@@ -1,5 +1,4 @@
 <?php
-/** کلاینتِ سبکِ Bot API — فقط چیزهایی که همین ربات لازم دارد. */
 
 function tgCall(string $method, array $params = []) {
     $params = array_filter($params, fn($v) => $v !== null);
@@ -11,7 +10,7 @@ function tgCall(string $method, array $params = []) {
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 25,
         CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_POSTFIELDS => json_encode($params, JSON_UNESCAPED_UNICODE),
+        CURLOPT_POSTFIELDS => json_encode($params, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
     ]);
     $resp = curl_exec($ch);
     $err = curl_error($ch);
@@ -75,12 +74,24 @@ function tgEditCaption(int $chatId, int $messageId, string $caption, array $enti
     ], $opts));
 }
 
+function tgEditMessageMedia(int $chatId, int $messageId, array $media, array $opts = []) {
+    return tgCall('editMessageMedia', array_merge([
+        'chat_id' => $chatId,
+        'message_id' => $messageId,
+        'media' => $media,
+    ], $opts));
+}
+
 function tgEditReplyMarkup(int $chatId, int $messageId, ?array $markup) {
     return tgCall('editMessageReplyMarkup', [
         'chat_id' => $chatId,
         'message_id' => $messageId,
         'reply_markup' => $markup ?: ['inline_keyboard' => []],
     ]);
+}
+
+function tgDeleteMessage(int $chatId, int $messageId) {
+    return tgCall('deleteMessage', ['chat_id' => $chatId, 'message_id' => $messageId]);
 }
 
 function tgAnswerCallback(string $callbackId, string $text = '', bool $alert = false) {
@@ -93,4 +104,8 @@ function tgAnswerCallback(string $callbackId, string $text = '', bool $alert = f
 
 function tgGetChat($chatId) {
     return tgCall('getChat', ['chat_id' => $chatId]);
+}
+
+function tgGetChatMember($chatId, int $userId) {
+    return tgCall('getChatMember', ['chat_id' => $chatId, 'user_id' => $userId]);
 }

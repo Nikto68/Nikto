@@ -9,7 +9,6 @@ function handleSupportNew(array $cq): void {
     tgAnswerCallback($cq['id']);
 }
 
-/** پاسخ به پیامِ ارسالی، پیامِ تازه است — نه ادیتِ پرامپتِ قبلی که الان بالایِ همین پیام مانده. */
 function handleSupportMessage(array $msg, array $st = []): void {
     $uid = (int)$msg['from']['id'];
     $chatId = (int)$msg['chat']['id'];
@@ -31,8 +30,8 @@ function handleSupportMessage(array $msg, array $st = []): void {
     $copyOpts = [];
     if ($topicId) $copyOpts['message_thread_id'] = (int)$topicId;
 
-    tgSendMessage((int)$groupId, $header, [], $copyOpts);
-    $res = tgCopyMessage((int)$groupId, $chatId, $msg['message_id'], $copyOpts);
+    $hdr = tgSendMessage((int)$groupId, $header, [], $copyOpts);
+    $res = tgCopyMessage((int)$groupId, $chatId, (int)$msg['message_id'], $copyOpts);
 
     stateClear($uid);
     if (empty($res['ok'])) {
@@ -43,6 +42,8 @@ function handleSupportMessage(array $msg, array $st = []): void {
     }
 
     supportThreadCreate((int)$groupId, (int)$res['result']['message_id'], $uid);
+    if (!empty($hdr['ok'])) supportThreadCreate((int)$groupId, (int)$hdr['result']['message_id'], $uid);
+
     $t = botText('support_sent');
     tgSendMessage($chatId, $t['text'], $t['entities'], ['reply_markup' => kbStart(reportIsAdmin($uid))]);
 }
@@ -59,6 +60,7 @@ function handleAdminSupportGroupReply(array $msg): bool {
     $userId = (int)$thread['user_id'];
     $t = botText('support_reply_prefix');
     tgSendMessage($userId, $t['text'], $t['entities']);
-    tgCopyMessage($userId, (int)$msg['chat']['id'], $msg['message_id']);
+    $res = tgCopyMessage($userId, (int)$msg['chat']['id'], (int)$msg['message_id']);
+    if (empty($res['ok'])) tgSendMessage((int)$msg['chat']['id'], '⚠️ به کاربر نرسید.', [], replyOptsFor($msg));
     return true;
 }

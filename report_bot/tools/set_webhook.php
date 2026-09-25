@@ -1,17 +1,4 @@
 <?php
-/**
- * ثبتِ webhook — یک‌بار، بعد از هر تغییرِ آدرس یا REPORT_WEBHOOK_SECRET.
- * دو جور قابلِ‌اجراست (هرکدام که روی هاستِ شما راحت‌تر است):
- *
- *   ۱) از طریقِ خط‌فرمان (SSH):
- *      php tools/set_webhook.php https://yourdomain.com/report_bot/webhook.php
- *
- *   ۲) از طریقِ مرورگر (وقتی SSH ندارید — کافی‌ست فایل روی هاست باشد):
- *      https://yourdomain.com/report_bot/tools/set_webhook.php?url=https://yourdomain.com/report_bot/webhook.php&key=REPORT_WEBHOOK_SECRETِ‌شما
- *      (پارامترِ key همان REPORT_WEBHOOK_SECRET داخلِ config.local.php است —
- *      بدونش، برای جلوگیری از سوءاستفاده‌ی هرکسِ دیگری که این آدرس را حدس بزند، اجرا نمی‌شود.
- *      بعدِ اجرا، بد نیست همین فایل را از روی هاست پاک/rename کنید.)
- */
 
 require_once __DIR__ . '/../bootstrap.php';
 

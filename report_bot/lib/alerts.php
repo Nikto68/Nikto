@@ -1,5 +1,4 @@
 <?php
-/** لاگِ ساده‌ی فایلی + هشدار به مدیرها با throttle (که با هر خطا اسپم نشوند) */
 
 function reportLog(string $msg): void {
     $line = '[' . date('Y-m-d H:i:s') . "] $msg\n";
