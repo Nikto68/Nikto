@@ -4560,7 +4560,7 @@ final class StructureBreakStrategy implements Strategy
         }
 
         if (abs($price - $ms['level']) > $atr * Config::maxChaseAtr()) {
-            return $this->reject('قیمت از سطح شکست خیلی دور شده — ورود در این نقطه دنبال‌کردن بازار است');
+            return $this->reject('قیمت از سطح شکست خیلی دور شده');
         }
         $wanted = $isLong ? 'bullish' : 'bearish';
         if ($confluence['bias'] !== 'neutral' && $confluence['bias'] !== $wanted) {
@@ -4759,7 +4759,7 @@ final class ConfluenceProStrategy implements Strategy
         if ($breaker !== null && $breaker['fresh']) {
             $sideB = $breaker['direction'] === 'bullish' ? 'long' : 'short';
             $vote($sideB, 'liquidity', Config::breakerBlockWeight());
-            $reasons[$sideB][] = 'بریکر بلاک تازه تایید شده (جارو + برگشت ساختار) — نشانه زودهنگام قبل از حرکت اصلی';
+            $reasons[$sideB][] = 'بریکر بلاک تازه تایید شده (جارو + برگشت ساختار)';
         }
 
         $squeeze = SqueezeEngine::detect($candles);
@@ -4832,7 +4832,7 @@ final class ConfluenceProStrategy implements Strategy
         }
         if ($direction === null) {
             return $this->reject($votes['long'] > 0 || $votes['short'] > 0
-                ? 'سیگنال‌های خرید و فروش هم‌وزن شدند — بازار تصمیم نگرفته'
+                ? 'سیگنال‌های خرید و فروش هم‌وزن شدند'
                 : 'هیچ‌کدام از شش ستاپ فعال نشد');
         }
 
@@ -4845,7 +4845,7 @@ final class ConfluenceProStrategy implements Strategy
         $opposingRatio = Config::maxOpposingVoteRatio();
         if ($opposingRatio < 1.0 && $votes[$otherSide] >= $votes[$side] * $opposingRatio) {
             return $this->reject(sprintf(
-                'شواهد خلاف جهت خیلی قوی بود (%.0f در برابر %.0f) — بازار دوطرفه است',
+                'شواهد خلاف جهت خیلی قوی بود (%.0f در برابر %.0f)',
                 $votes[$otherSide],
                 $votes[$side]
             ));
@@ -4885,7 +4885,7 @@ final class ConfluenceProStrategy implements Strategy
 
         if (!$reversal && $wave['direction'] !== 'neutral' && $wave['direction'] === ($isLong ? 'bullish' : 'bearish')
             && $wave['distance_atr'] > Config::maxChaseAtr()) {
-            return $this->reject('قیمت خیلی از میانگین حرکت فاصله گرفته — تعقیب حرکت تمام‌شده است، نه ورود در نقطه شروع آن');
+            return $this->reject('قیمت خیلی از میانگین حرکت فاصله گرفته');
         }
 
         $guard = $this->guardLevel($isLong, $price, $atr, $orderBlocks, $fvgs, $sdZones, $candles);
@@ -4924,14 +4924,14 @@ final class ConfluenceProStrategy implements Strategy
             $momentumWith = $groups[$side]['momentum'] + $groups[$side]['volume'];
             $momentumAgainst = $groups[$otherSide]['momentum'] + $groups[$otherSide]['volume'];
             if ($momentumWith <= 0 || $momentumWith < $momentumAgainst) {
-                return $this->reject('شکست بدون تایید مومنتوم و حجم — احتمال شکست فیک بالاست');
+                return $this->reject('شکست بدون تایید مومنتوم و حجم');
             }
         }
 
         if (!$continuation && $sweep !== null && Config::requireFreshReversalZone()) {
             $sweepTime = (float) $candles[$sweep['index']]->openTime;
             if ($guard['origin'] < $sweepTime) {
-                return $this->reject('ناحیه‌ای که حد ضرر روی آن است قبل از جاروی نقدینگی اخیر شکل گرفته — بخشی از همین برگشت نیست');
+                return $this->reject('ناحیه‌ای که حد ضرر روی آن است قبل از جاروی نقدینگی اخیر شکل گرفته');
             }
         }
 
@@ -4954,8 +4954,8 @@ final class ConfluenceProStrategy implements Strategy
         if (!$continuation) {
             if ($wrongHalf && Config::requireDiscountPremium() && !$reversal) {
                 return $this->reject($isLong
-                    ? 'ورود پولبکی در نیمه بالای محدوده (Premium) — خرید اینجا گران است'
-                    : 'ورود پولبکی در نیمه پایین محدوده (Discount) — فروش اینجا ارزان است');
+                    ? 'ورود پولبکی در نیمه بالای محدوده (Premium)'
+                    : 'ورود پولبکی در نیمه پایین محدوده (Discount)');
             }
             if (!$wrongHalf) {
                 $score += Config::premiumDiscountWeight();
@@ -5016,7 +5016,7 @@ final class ConfluenceProStrategy implements Strategy
             $roomR = $room / $risk;
             if ($roomR < Config::minRoomToTargetR()) {
                 return $this->reject(sprintf(
-                    'فاصله تا نزدیک‌ترین ساختار مخالف فقط %.2fR است (حداقل لازم %.1fR) — جا برای رشد سود کافی نیست',
+                    'فاصله تا نزدیک‌ترین ساختار مخالف فقط %.2fR است (حداقل لازم %.1fR)',
                     $roomR,
                     Config::minRoomToTargetR()
                 ));
@@ -5317,7 +5317,7 @@ final class APlusSetupFilter
         if (($lastVotes['continuation'] ?? false) && $rangePos !== null && $rangePos > 0.42 && $rangePos < 0.58) {
             return [
                 'passed' => false, 'count' => $count, 'total' => $total, 'required' => $required, 'checklist' => $checklist,
-                'reason' => 'ورود از وسط محدوده قیمتی — نه شکست تازه است نه بازگشت از ناحیه قوی',
+                'reason' => 'ورود از وسط محدوده قیمتی',
             ];
         }
 

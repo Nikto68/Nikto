@@ -41,46 +41,43 @@ $env[] = check(
     PHP_VERSION_ID >= 80100,
     PHP_VERSION
 );
-foreach (['curl' => 'ارتباط با تلگرام و صرافی‌ها', 'pdo_sqlite' => 'دیتابیس', 'mbstring' => 'پردازش متن'] as $ext => $why) {
-    $env[] = check("افزونه $ext ($why)", extension_loaded($ext));
+foreach (['curl', 'pdo_sqlite', 'mbstring'] as $ext) {
+    $env[] = check("افزونه $ext", extension_loaded($ext));
 }
 $env[] = check(
-    'افزونه gd (کارت تصویری) — اختیاری',
-    CardConfig::available(),
-    CardConfig::available() ? '' : 'بدون این افزونه ربات فقط پیام متنی می‌فرستد'
+    'افزونه gd — اختیاری',
+    CardConfig::available()
 );
 $env[] = check(
     'فونت فارسی روی کارت — اختیاری',
     CardConfig::supportsPersian(),
     CardConfig::supportsPersian()
         ? basename((string) CardConfig::fontPath())
-        : 'فایل Vazirmatn-Regular.ttf پیدا نشد؛ برچسب کارت‌ها انگلیسی می‌شود'
+        : 'Vazirmatn-Regular.ttf پیدا نشد'
 );
 
 $conf = [];
 $conf[] = check(
     'فایل env.php',
     is_file(__DIR__ . '/env.php'),
-    is_file(__DIR__ . '/env.php') ? '' : 'env.example.php را کپی کنید و اسمش را env.php بگذارید'
+    is_file(__DIR__ . '/env.php') ? '' : 'پیدا نشد'
 );
 $conf[] = check(
     'TELEGRAM_BOT_TOKEN',
     $tokenConfigured,
-    $tokenConfigured ? 'تنظیم شده' : 'خالی است — ربات بدون آن هیچ پیامی نمی‌فرستد'
+    $tokenConfigured ? 'تنظیم شده' : 'خالی است'
 );
 $adminIds = Config::adminIds();
 $conf[] = check(
     'ADMIN_IDS',
     !empty($adminIds),
-    empty($adminIds) ? 'خالی است — پنل مدیریت برای هیچ‌کس باز نمی‌شود' : count($adminIds) . ' ادمین'
+    empty($adminIds) ? 'خالی است' : count($adminIds) . ' ادمین'
 );
 $secret = Config::telegramWebhookSecret();
 $conf[] = check(
     'TELEGRAM_WEBHOOK_SECRET',
     true,
-    $secret === ''
-        ? 'خالی (بررسی امضا غیرفعال است — مشکلی ندارد)'
-        : 'تنظیم شده — باید دقیقاً همین مقدار موقع setWebhook ثبت شده باشد'
+    $secret === '' ? 'خالی' : 'تنظیم شده'
 );
 
 $storage = [];
@@ -182,8 +179,6 @@ header('Content-Type: text/html; charset=utf-8');
   .mark { flex:0 0 22px; font-size:15px; }
   .label { flex:1; }
   .detail { color:#8fa89c; font-size:13px; word-break:break-all; }
-  /* Paths and URLs inside RTL text get their leading slash visually reordered;
-     plaintext/auto direction lets each string pick its own direction. */
   .label { unicode-bidi: plaintext; }
   .ok { color:#2ee796; } .bad { color:#ff9a3c; }
   .banner { padding:14px 18px; border-radius:14px; margin-bottom:20px; font-weight:bold; }
@@ -205,10 +200,9 @@ header('Content-Type: text/html; charset=utf-8');
 <div class="wrap">
 
 <h1>بررسی نصب ربات سیگنال</h1>
-<div class="sub">اگر ربات به <code>/start</code> جواب نمی‌دهد، جواب معمولاً همین‌جاست.</div>
 
 <div class="banner <?= $allOk ? 'good' : 'warn' ?>">
-  <?= $allOk ? '✅ همه بررسی‌های پایه سالم هستند.' : '⚠️ چند مورد ایراد دارد — موارد نارنجی پایین را درست کنید.' ?>
+  <?= $allOk ? '✅ همه بررسی‌های پایه سالم هستند.' : '⚠️ چند مورد ایراد دارد.' ?>
 </div>
 
 <h2>۱. محیط سرور</h2>
@@ -244,12 +238,11 @@ header('Content-Type: text/html; charset=utf-8');
 <h2>۴. تلگرام و وبهوک</h2>
 <?php if (!$tokenConfigured): ?>
   <div class="card">
-    <div class="bad">تا وقتی <code>TELEGRAM_BOT_TOKEN</code> در <code>env.php</code> تنظیم نشده، این بخش قابل بررسی نیست.
-    همین احتمالاً دلیل جواب ندادن ربات است.</div>
+    <div class="bad"><code>TELEGRAM_BOT_TOKEN</code> تنظیم نشده.</div>
   </div>
 <?php elseif (!$unlocked): ?>
   <div class="card">
-    <div class="note">برای دیدن وضعیت وبهوک و خطاها، توکن ربات را وارد کنید (فقط برای اثبات مالکیت؛ جایی ذخیره نمی‌شود).</div>
+    <div class="note">توکن ربات:</div>
     <?php if ($badToken): ?><div class="bad">توکن وارد شده با توکن داخل env.php یکی نیست.</div><?php endif; ?>
     <form method="post">
       <input type="password" name="token" placeholder="123456789:AA..." autocomplete="off" required>
@@ -264,14 +257,14 @@ header('Content-Type: text/html; charset=utf-8');
     <div class="row">
       <div class="mark <?= $me !== null ? 'ok' : 'bad' ?>"><?= $me !== null ? '✔' : '✖' ?></div>
       <div class="label">توکن معتبر است
-        <div class="detail" dir="auto"><?= $me !== null ? '@' . h((string) ($me['username'] ?? '')) : 'تلگرام این توکن را قبول نکرد — توکن را از BotFather دوباره بگیرید' ?></div>
+        <div class="detail" dir="auto"><?= $me !== null ? '@' . h((string) ($me['username'] ?? '')) : 'تلگرام این توکن را قبول نکرد' ?></div>
       </div>
     </div>
     <?php $hookUrl = (string) ($hook['url'] ?? ''); ?>
     <div class="row">
       <div class="mark <?= $hookUrl !== '' ? 'ok' : 'bad' ?>"><?= $hookUrl !== '' ? '✔' : '✖' ?></div>
       <div class="label">وبهوک ثبت شده
-        <div class="detail" dir="auto"><?= $hookUrl !== '' ? h($hookUrl) : 'هیچ وبهوکی ثبت نشده — به همین دلیل تلگرام هیچ پیامی به سرور شما نمی‌فرستد' ?></div>
+        <div class="detail" dir="auto"><?= $hookUrl !== '' ? h($hookUrl) : 'ثبت نشده' ?></div>
       </div>
     </div>
     <?php if ($hookUrl !== '' && $expectedUrl !== '' && $hookUrl !== $expectedUrl): ?>
@@ -297,14 +290,6 @@ header('Content-Type: text/html; charset=utf-8');
         <div class="detail" dir="auto"><?= (int) ($hook['pending_update_count'] ?? 0) ?></div>
       </div>
     </div>
-    <?php if ($secret !== '' && !($hook['has_custom_certificate'] ?? false)): ?>
-    <div class="row">
-      <div class="mark">•</div>
-      <div class="label">در env.php یک TELEGRAM_WEBHOOK_SECRET تنظیم شده
-        <div class="detail" dir="auto">اگر وبهوک با مقدار دیگری ثبت شده باشد، bot.php همه پیام‌ها را رد می‌کند. دکمه زیر آن را با همین مقدار دوباره ثبت می‌کند.</div>
-      </div>
-    </div>
-    <?php endif; ?>
     <form method="post" style="margin-top:12px">
       <input type="hidden" name="token" value="<?= h(setupConfirmNonce($configuredToken)) ?>">
       <input type="hidden" name="action" value="set_webhook">
@@ -315,8 +300,7 @@ header('Content-Type: text/html; charset=utf-8');
   <h2>۵. آخرین خطاهای ثبت‌شده</h2>
   <div class="card">
     <?php if (empty($recentErrors)): ?>
-      <div class="note">خطایی ثبت نشده. (توجه: <code>LOG_LEVEL</code> به‌صورت پیش‌فرض روی <code>error</code> است،
-      یعنی فقط خطاهای واقعی اینجا می‌آیند.)</div>
+      <div class="note">خطایی ثبت نشده.</div>
     <?php else: ?>
       <table>
         <?php foreach ($recentErrors as $row): ?>
@@ -331,15 +315,10 @@ header('Content-Type: text/html; charset=utf-8');
   </div>
 <?php endif; ?>
 
-<h2>بعد از درست شدن</h2>
-<div class="card">
-  <div class="note">
-    ۱. در تلگرام به ربات <code>/start</code> بزنید، بعد <code>/panel</code> برای پنل مدیریت.<br>
-    ۲. یک Cron Job هر دقیقه بسازید که <code>php worker.php</code> را داخل همین پوشه
-    (کنار همین فایل <code>setup.php</code>) اجرا کند<?= $unlocked ? ' — مسیر کامل: <code>' . h(__DIR__) . '/worker.php</code>' : '' ?>.<br>
-    ۳. <strong>این فایل (<code>setup.php</code>) را پاک کنید.</strong>
-  </div>
-</div>
+<?php if ($unlocked): ?>
+<h2>Cron</h2>
+<div class="card"><code><?= h(__DIR__) ?>/worker.php</code></div>
+<?php endif; ?>
 
 </div>
 </body>

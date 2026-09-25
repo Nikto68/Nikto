@@ -514,7 +514,7 @@ final class AdminPanel
 
     public function sendMainMenu(int $chatId): void
     {
-        $this->telegram->sendMessage($chatId, "پنل مدیریت\n\nیکی از گزینه‌های زیر را انتخاب کنید:", [], [
+        $this->telegram->sendMessage($chatId, "پنل مدیریت", [], [
             'reply_markup' => $this->mainMenuKeyboard(),
         ]);
     }
@@ -601,7 +601,7 @@ final class AdminPanel
         if ($action === 'apikey_set' && isset($parts[3]) && isset($parts[4])) {
             $this->states->set($userId, 'awaiting_api_credential', ['exchange' => $parts[3], 'field' => $parts[4]]);
             $fieldLabel = $parts[4] === 'secret' ? 'Secret' : 'API Key';
-            $this->render($chatId, $messageId, "مقدار جدید {$fieldLabel} برای " . ucfirst($parts[3]) . " رو ارسال کنید.\n(برای پاک کردن، کلمه «حذف» رو بفرستید.)", ['inline_keyboard' => [$this->backRow("admin:exchanges:apikey:{$parts[3]}")]]);
+            $this->render($chatId, $messageId, "مقدار جدید {$fieldLabel} برای " . ucfirst($parts[3]) . " رو ارسال کنید.", ['inline_keyboard' => [$this->backRow("admin:exchanges:apikey:{$parts[3]}")]]);
             return;
         }
 
@@ -614,7 +614,7 @@ final class AdminPanel
             ];
         }
         $keyboard[] = $this->backRow();
-        $this->render($chatId, $messageId, "صرافی‌ها\n\nبرای فعال/غیرفعال کردن روی نامش بزنید. همه صرافی‌ها برای داده بازار به کلید API نیازی ندارند؛ دکمه فقط برای ذخیره کلید جهت استفاده‌های بعدی است.", ['inline_keyboard' => $keyboard]);
+        $this->render($chatId, $messageId, "صرافی‌ها", ['inline_keyboard' => $keyboard]);
     }
 
     private function renderExchangeApiKey(int $chatId, int $messageId, string $exchange): void
@@ -638,7 +638,7 @@ final class AdminPanel
 
         if ($action === 'add') {
             $this->states->set($userId, 'awaiting_channel_id');
-            $this->render($chatId, $messageId, "افزودن کانال\n\nآیدی عددی کانال را ارسال کنید (مثال: -1001234567890).\nربات باید از قبل به عنوان ادمین به کانال اضافه شده باشد.", ['inline_keyboard' => [$this->backRow('admin:channels')]]);
+            $this->render($chatId, $messageId, "افزودن کانال\n\nآیدی عددی کانال را ارسال کنید (مثال: -1001234567890).", ['inline_keyboard' => [$this->backRow('admin:channels')]]);
             return;
         }
 
@@ -672,13 +672,13 @@ final class AdminPanel
 
         if ($action === 'quote_set' && isset($parts[3])) {
             $this->states->set($userId, 'awaiting_quote_forward', ['channel_id' => (int) $parts[3]]);
-            $this->render($chatId, $messageId, "تنظیم Quote\n\nپیامی که می‌خواید سیگنال‌ها روش Reply/Quote بشن رو از همون کانال Forward کنید (نه کپی — باید واقعاً Forward باشه تا ربات چت و آیدی پیام اصلی رو تشخیص بده).", ['inline_keyboard' => [$this->backRow("admin:channels:view:{$parts[3]}")]]);
+            $this->render($chatId, $messageId, "تنظیم Quote\n\nپیام مرجع را از کانال Forward کنید.", ['inline_keyboard' => [$this->backRow("admin:channels:view:{$parts[3]}")]]);
             return;
         }
 
         if ($action === 'minscore_set' && isset($parts[3])) {
             $this->states->set($userId, 'awaiting_channel_min_score', ['channel_id' => (int) $parts[3]]);
-            $this->render($chatId, $messageId, sprintf("حداقل امتیاز این کانال\n\nمقدار فعلی کلی سیستم: %.1f\nیک عدد جدید فقط برای همین کانال بفرستید (مثلاً 15).", Config::minSignalScore()), ['inline_keyboard' => [$this->backRow("admin:channels:view:{$parts[3]}")]]);
+            $this->render($chatId, $messageId, sprintf("حداقل امتیاز این کانال\n\nمقدار فعلی کلی سیستم: %.1f\nعدد جدید را بفرستید.", Config::minSignalScore()), ['inline_keyboard' => [$this->backRow("admin:channels:view:{$parts[3]}")]]);
             return;
         }
 
@@ -730,7 +730,7 @@ final class AdminPanel
         ];
 
         if (!$accessOk) {
-            $text .= "\n\nربات دسترسی ارسال پیام در این کانال را ندارد یا هنوز ادمین نشده است.";
+            $text .= "\n\nربات دسترسی ارسال پیام در این کانال را ندارد.";
         }
 
         $this->render($chatId, $messageId, $text, ['inline_keyboard' => $keyboard]);
@@ -741,7 +741,7 @@ final class AdminPanel
         $action = $parts[2] ?? null;
 
         if ($action === 'test') {
-            $this->render($chatId, $messageId, "در حال تست اتصال به صرافی‌ها... چند ثانیه صبر کنید.", ['inline_keyboard' => []]);
+            $this->render($chatId, $messageId, "در حال تست اتصال به صرافی‌ها...", ['inline_keyboard' => []]);
             $report = $this->testExchangeConnections();
             $this->render($chatId, $messageId, $report, ['inline_keyboard' => [
                 [['text' => 'تست دوباره', 'callback_data' => 'admin:scanner:test']],
@@ -751,14 +751,14 @@ final class AdminPanel
         }
 
         if ($action === 'run') {
-            $this->render($chatId, $messageId, "در حال اجرای Scanner... چند ثانیه صبر کنید.", ['inline_keyboard' => []]);
+            $this->render($chatId, $messageId, "در حال اجرای Scanner...", ['inline_keyboard' => []]);
             $selected = (new MarketScanner())->scan($this->exchangeManager);
-            $this->render($chatId, $messageId, "اسکن تمام شد.\n\nنمادهای انتخاب‌شده: $selected\n\nاگر صفر بود، از «تست اتصال صرافی‌ها» برای دیدن دلیل دقیق استفاده کنید.", ['inline_keyboard' => [$this->backRow('admin:scanner')]]);
+            $this->render($chatId, $messageId, "اسکن تمام شد.\n\nنمادهای انتخاب‌شده: $selected", ['inline_keyboard' => [$this->backRow('admin:scanner')]]);
             return;
         }
 
         if ($action === 'venues') {
-            $this->render($chatId, $messageId, "در حال گرفتن لیست صرافی‌ها… چند ثانیه صبر کنید.", ['inline_keyboard' => []]);
+            $this->render($chatId, $messageId, "در حال گرفتن لیست صرافی‌ها…", ['inline_keyboard' => []]);
             $this->renderVenues($chatId, $messageId, $parts);
             return;
         }
@@ -772,10 +772,10 @@ final class AdminPanel
             $this->states->set($userId, 'awaiting_scanner_filter', ['setting' => $parts[3]]);
             $labels = [
                 'MIN_VOLUME_USDT' => 'حداقل حجم ۲۴ ساعته (عدد، به USDT)',
-                'MAX_SPREAD_PERCENT' => 'حداکثر اسپرد مجاز (عدد، درصد — مثلاً 2 یعنی ۲٪)',
-                'ALLOWED_QUOTE_ASSETS' => 'ارزهای مجاز quote (با کاما، مثلاً USDT,USDC — برای خاموش کردن کامل این فیلتر علامت * بفرستید، برای برگشت به پیش‌فرض «حذف» بفرستید)',
+                'MAX_SPREAD_PERCENT' => 'حداکثر اسپرد مجاز (درصد)',
+                'ALLOWED_QUOTE_ASSETS' => 'ارزهای مجاز quote (با کاما، مثلاً USDT,USDC)',
                 'SCANNER_TOP_N' => 'حداکثر تعداد نماد (عدد صحیح)',
-                'MIN_SIGNAL_SCORE' => 'حداقل امتیاز لازم برای صدور سیگنال (عدد ۰ تا ۱۰۰)',
+                'MIN_SIGNAL_SCORE' => 'حداقل امتیاز سیگنال (۰ تا ۱۰۰)',
             ];
             $label = $labels[$parts[3]] ?? $parts[3];
             $this->render($chatId, $messageId, "$label رو ارسال کنید.", ['inline_keyboard' => [$this->backRow('admin:scanner:filters')]]);
@@ -814,9 +814,9 @@ final class AdminPanel
 
         $lines = ['صرافی‌های معاملاتی', ''];
         if (empty($venues)) {
-            $lines[] = 'فیلتر خاموش است: سیگنال روی هر ارزی که تحلیل اجازه بدهد داده می‌شود.';
+            $lines[] = 'فیلتر خاموش است.';
         } else {
-            $lines[] = 'فقط ارزهایی سیگنال می‌شوند که در این صرافی‌ها لیست شده باشند:';
+            $lines[] = 'صرافی‌ها:';
             $lines[] = '';
             foreach ($venues as $venue) {
                 $row = $state['venues'][$venue] ?? null;
@@ -832,7 +832,7 @@ final class AdminPanel
             $lines[] = '';
             $lines[] = $state['active']
                 ? sprintf('مجموع ارزهای قابل معامله: %d', count($state['assets']))
-                : 'هیچ لیستی خوانده نشد، پس فیلتر فعلاً خاموش است و ربات ساکت نمی‌شود. اگر آدرس API عوض شده، از تنظیمات «TOOBIT_LISTINGS_URL» یا «OURBIT_LISTINGS_URL» آدرس درست را بگذارید.';
+                : 'هیچ لیستی خوانده نشد؛ فیلتر فعلاً خاموش است.';
             if ($state['fetched_at'] > 0) {
                 $lines[] = sprintf('آخرین به‌روزرسانی: %s', date('Y-m-d H:i', $state['fetched_at']));
             }
@@ -862,7 +862,7 @@ final class AdminPanel
         $overrideNote = static fn(string $key) => $hasOverride($key) ? ' (override فعال از پنل)' : ' (از env.php)';
 
         $text = sprintf(
-            "تنظیمات فیلتر Scanner\n\nحداقل حجم: %s USDT%s\nحداکثر اسپرد: %s%%%s\nارزهای مجاز: %s%s\nحداکثر تعداد نماد: %d%s\nحداقل امتیاز سیگنال: %.1f%s\n\nاین مقادیر بلافاصله بعد ذخیره، توی «اسکن الان» اعمال می‌شن. اگه یه مقدار از پنل ست بشه، همیشه روی env.php اولویت داره — برای پاک کردن همه override ها و برگشت به env.php از دکمه پایین استفاده کنید.",
+            "تنظیمات فیلتر Scanner\n\nحداقل حجم: %s USDT%s\nحداکثر اسپرد: %s%%%s\nارزهای مجاز: %s%s\nحداکثر تعداد نماد: %d%s\nحداقل امتیاز سیگنال: %.1f%s",
             number_format(Config::minVolumeUsdt()), $overrideNote('MIN_VOLUME_USDT'),
             Config::maxSpreadPercent(), $overrideNote('MAX_SPREAD_PERCENT'),
             implode(',', Config::allowedQuoteAssets()) ?: '(بدون فیلتر)', $overrideNote('ALLOWED_QUOTE_ASSETS'),
@@ -910,15 +910,12 @@ final class AdminPanel
             $elapsed = round((microtime(true) - $start) * 1000);
 
             if ($res['status'] === 0) {
-                $lines[] = "اتصال برقرار نشد ({$elapsed}ms) — شبکه/DNS/فایروال هاست، یا IP این سرور توسط صرافی بلاک شده.";
+                $lines[] = "اتصال برقرار نشد ({$elapsed}ms).";
             } elseif ($res['status'] >= 400) {
                 $bodySnippet = mb_strimwidth(trim($res['body']), 0, 200, '…');
                 $lines[] = "HTTP {$res['status']} ({$elapsed}ms)";
                 if ($bodySnippet !== '') {
                     $lines[] = "پاسخ: $bodySnippet";
-                }
-                if ($res['status'] === 451 || $res['status'] === 403) {
-                    $lines[] = "(این کد معمولاً یعنی IP هاست شما از سمت صرافی مسدود/محدود شده — خیلی رایج برای هاست‌های اشتراکی، مخصوصاً هاست‌های ایرانی روی Binance/MEXC)";
                 }
             } else {
                 $count = is_array($res['json']) ? (count($res['json']['symbols'] ?? $res['json']['result']['symbols'] ?? $res['json']['Data'] ?? $res['json']) ) : 0;
@@ -933,15 +930,15 @@ final class AdminPanel
                         $f['has_ticker'], $f['volume_ok'], $f['spread_ok']
                     );
                     if (($f['stable_ok'] ?? 0) > 0 && ($f['tradable_ok'] ?? 0) === 0) {
-                        $lines[] = "هیچ ارزی در لیست صرافی‌های شما (" . implode('، ', Config::tradableVenues()) . ") پیدا نشد. از «صرافی‌های معاملاتی» وضعیت لیست‌ها رو ببینید.";
+                        $lines[] = "هیچ ارزی در لیست صرافی‌های شما (" . implode('، ', Config::tradableVenues()) . ") پیدا نشد.";
                     }
                     if ($f['total'] > 0 && $f['quote_ok'] === 0) {
                         $sampleQuotes = implode(', ', array_unique(array_column($diag['sample'], 'quote')));
                         $lines[] = "هیچ نمادی از ارزهای مجاز (" . implode(',', Config::allowedQuoteAssets()) . ") پیدا نشد. نمونه quote واقعی این صرافی: $sampleQuotes";
                     } elseif ($f['quote_ok'] > 0 && $f['has_ticker'] === 0) {
-                        $lines[] = "نماد با ارز مجاز پیدا شد ولی هیچ‌کدوم قیمت/تیکر نداشتن — یعنی احتمالاً ساختار پاسخ fetchTicker24h با انتظار کد فرق داره.";
+                        $lines[] = "نماد با ارز مجاز پیدا شد ولی هیچ‌کدوم قیمت/تیکر نداشتن.";
                     } elseif ($f['has_ticker'] > 0 && $f['volume_ok'] === 0) {
-                        $lines[] = "تیکر پیدا شد ولی حجمی به‌اندازه MIN_VOLUME_USDT نبود — یا واحد حجم گزارش‌شده با فرض ما (USDT) فرق داره، یا واقعاً حجم پایینه.";
+                        $lines[] = "تیکر پیدا شد ولی حجمی به‌اندازه MIN_VOLUME_USDT نبود.";
                     }
                 } elseif (isset($diag['error'])) {
                     $lines[] = "خطا در محاسبه فیلتر: {$diag['error']}";
@@ -973,23 +970,23 @@ final class AdminPanel
             $keyboard[] = [['text' => "[$status] {$r['display_name']}", 'callback_data' => "admin:strategies:toggle:{$r['id']}"]];
         }
         $keyboard[] = $this->backRow();
-        $this->render($chatId, $messageId, "استراتژی‌ها\n\nاستراتژی‌های غیرفعال در تولید سیگنال استفاده نمی‌شوند.", ['inline_keyboard' => $keyboard]);
+        $this->render($chatId, $messageId, "استراتژی‌ها", ['inline_keyboard' => $keyboard]);
     }
 
     private const PORTED_INDICATORS = [
-        ['MTF Liquidity Stack', 'سطوح نقدینگی، سقف/کف روز قبل، تشخیص جارو شدن', 'LiquidityEngine'],
-        ['Order Block Detector', 'اوردر بلاک روی پیوت حجم', 'OrderBlockEngine'],
-        ['Supply & Demand MTF', 'نواحی عرضه و تقاضا از کندل‌های مومنتوم', 'SupplyDemandEngine'],
-        ['Setup Scanner', 'هشت ستاپ ورود (VWAP، EMA، شکست‌وپولبک، جارو، واگرایی، کانال، حرکت بزرگ)', 'SetupScanner'],
-        ['SMC Clean Wave', 'موج روند ALMA و موتور BOS/CHoCH', 'TrendWave'],
-        ['Auto Range Detector', 'تشخیص آماری رنج و شکست تاییدشده', 'RangeEngine'],
-        ['Liquidity Sweep → Big Move', 'جارو با سایه واقعی، بعد کندل تاییدی قوی', 'SetupScanner'],
-        ['SMC Analytics', 'ساختار داخلی iBOS، سقف/کف برابر، خط تعادل', 'SmcContext'],
-        ['Dynamic Deviation Channels', 'کانال EMA±ATR با فیلتر RSI', 'DeviationChannel'],
-        ['SMC Confluence Suite', 'ناحیه OTE، Premium/Discount، هم‌جهتی تایم بالاتر', 'SmcContext'],
-        ['MACD', 'تقاطع خط مکدی با خط سیگنال + جهت هیستوگرام', 'Ta'],
-        ['EMA200', 'موقعیت قیمت نسبت به میانگین متحرک ۲۰۰ کندلی (روند بلندمدت)', 'Ta'],
-        ['ADX', 'قدرت روند — فیلتر اختیاری (REQUIRE_ADX_FILTER)، پیش‌فرض خاموش', 'Ta'],
+        ['MTF Liquidity Stack', 'LiquidityEngine'],
+        ['Order Block Detector', 'OrderBlockEngine'],
+        ['Supply & Demand MTF', 'SupplyDemandEngine'],
+        ['Setup Scanner', 'SetupScanner'],
+        ['SMC Clean Wave', 'TrendWave'],
+        ['Auto Range Detector', 'RangeEngine'],
+        ['Liquidity Sweep → Big Move', 'SetupScanner'],
+        ['SMC Analytics', 'SmcContext'],
+        ['Dynamic Deviation Channels', 'DeviationChannel'],
+        ['SMC Confluence Suite', 'SmcContext'],
+        ['MACD', 'Ta'],
+        ['EMA200', 'Ta'],
+        ['ADX', 'Ta'],
     ];
 
     private function renderIndicators(int $chatId, int $messageId): void
@@ -998,16 +995,9 @@ final class AdminPanel
         $lines[] = sprintf('استراتژی فعال: %s', Config::strategyName());
         $lines[] = '';
 
-        $active = Config::strategyName() === 'confluence_pro';
-        $lines[] = $active
-            ? sprintf('این %d اندیکاتور روی هر ارز و هر تایم‌فریم اجرا می‌شوند و به هم رأی می‌دهند:', count(self::PORTED_INDICATORS))
-            : 'این اندیکاتورها فقط وقتی استراتژی confluence_pro فعال باشد استفاده می‌شوند:';
-        $lines[] = '';
-
-        foreach (self::PORTED_INDICATORS as $i => [$name, $role, $class]) {
+        foreach (self::PORTED_INDICATORS as $i => [$name, $class]) {
             $ok = class_exists($class);
             $lines[] = sprintf('%s %d. %s', $ok ? '[OK]' : '[FAIL]', $i + 1, $name);
-            $lines[] = '     ' . $role;
         }
 
         $lines[] = '';
@@ -1015,8 +1005,6 @@ final class AdminPanel
         $lines[] = sprintf('وزن‌ها — ستاپ %.0f | رنج %.0f | ساختار %.0f | ناحیه %.0f | روند %.0f | نقدینگی %.0f | تایم بالاتر %.0f',
             Config::setupWeight(), Config::rangeWeight(), Config::structureWeight(),
             Config::zoneWeight(), Config::trendWeight(), Config::liquidityWeight(), Config::htfWeight());
-        $lines[] = '';
-        $lines[] = 'برای دیدن اینکه آخرین پاس کدام رأی‌ها را داشت، به «اتومات» بروید.';
 
         $this->render($chatId, $messageId, implode("\n", $lines), ['inline_keyboard' => [$this->backRow()]]);
     }
@@ -1026,7 +1014,7 @@ final class AdminPanel
         $action = $parts[2] ?? null;
         if ($action === 'edit') {
             $this->states->set($userId, 'awaiting_text_input', ['key' => 'signal_template']);
-            $this->render($chatId, $messageId, "قالب سیگنال\n\nپیام جدید قالب را ارسال کنید (می‌توانید از Bold/Italic/Emoji اختصاصی/Spoiler و placeholder های {symbol} {exchange} {direction} {entry} {sl} {tp1} {tp2} {tp3} {score} {timeframe} {strategy} {reasons} استفاده کنید).", ['inline_keyboard' => [$this->backRow('admin:template')]]);
+            $this->render($chatId, $messageId, "قالب سیگنال\n\nقالب جدید را بفرستید.\n\n{symbol} {exchange} {direction} {entry} {sl} {tp1} {tp2} {tp3} {score} {timeframe} {strategy} {reasons}", ['inline_keyboard' => [$this->backRow('admin:template')]]);
             return;
         }
 
@@ -1061,13 +1049,13 @@ final class AdminPanel
     private static function placeholdersFor(string $key): array
     {
         $signal = [
-            '{symbol}' => 'نماد ارز — مثل BTC/USDT',
-            '{symbol_raw}' => 'نماد خام صرافی — مثل BTCUSDT',
-            '{direction_fa}' => 'جهت — خرید / فروش',
-            '{direction}' => 'جهت — LONG / SHORT',
+            '{symbol}' => 'نماد ارز',
+            '{symbol_raw}' => 'نماد خام صرافی',
+            '{direction_fa}' => 'جهت (فارسی)',
+            '{direction}' => 'جهت (LONG/SHORT)',
             '{leverage}' => 'اهرم',
             '{entry}' => 'قیمت ورود',
-            '{entry_mode}' => 'نوع ورود — مارکت (Market)',
+            '{entry_mode}' => 'نوع ورود',
             '{balance}' => 'سرمایه مرجع',
             '{risk_per_trade}' => 'درصد ریسک هر معامله',
             '{risk_amount}' => 'مبلغ ریسک این معامله',
@@ -1082,7 +1070,7 @@ final class AdminPanel
             '{rr}' => 'ریسک به ریوارد',
             '{risk_pct}' => 'فاصله حد ضرر (درصد)',
             '{score}' => 'امتیاز سیگنال',
-            '{confidence_fa}' => 'اعتبار — بالا / متوسط / پایین',
+            '{confidence_fa}' => 'اعتبار',
             '{tier}' => 'نوع ارز',
             '{exchange}' => 'صرافی',
             '{timeframe}' => 'تایم‌فریم',
@@ -1091,9 +1079,9 @@ final class AdminPanel
         ];
 
         $result = [
-            '{symbol}' => 'نماد ارز — مثل BTC/USDT',
+            '{symbol}' => 'نماد ارز',
             '{symbol_raw}' => 'نماد خام صرافی',
-            '{direction_fa}' => 'جهت — خرید / فروش',
+            '{direction_fa}' => 'جهت',
             '{leverage}' => 'اهرم',
             '{entry}' => 'نقطه ورود',
             '{exit}' => 'قیمت خروج',
@@ -1114,7 +1102,7 @@ final class AdminPanel
             'result_tp1', 'result_tp2', 'result_tp3', 'result_tp4', 'result_trail', 'result_sl', 'result_be', 'result_timeout' => $result,
             'signal_long', 'signal_short' => ['{symbol}' => 'نماد ارز'],
             'scanner_status' => ['{status}' => 'وضعیت اسکنر'],
-            'advisory_stop_warning', 'advisory_stall_warning' => ['{symbol}' => 'نماد ارز — مثل BTC/USDT'],
+            'advisory_stop_warning', 'advisory_stall_warning' => ['{symbol}' => 'نماد ارز'],
             default => [],
         };
     }
@@ -1157,7 +1145,7 @@ final class AdminPanel
             $keyboard[] = [['text' => self::TEXT_LABELS[$key] ?? $key, 'callback_data' => "admin:texts:edit:$key"]];
         }
         $keyboard[] = $this->backRow();
-        $this->render($chatId, $messageId, "مدیریت متن‌ها\n\nیکی از متن‌ها را برای ویرایش انتخاب کنید:", ['inline_keyboard' => $keyboard]);
+        $this->render($chatId, $messageId, "مدیریت متن‌ها", ['inline_keyboard' => $keyboard]);
     }
 
     private function renderSignalSettings(int $chatId, int $messageId, array $parts): void
@@ -1212,7 +1200,7 @@ final class AdminPanel
             $this->render(
                 $chatId,
                 $messageId,
-                "متن جدید دکمه را بفرستید.\n\nبرای بازگشت به مقدار پیش‌فرض، «حذف» بفرستید.",
+                "متن جدید دکمه را بفرستید.",
                 ['inline_keyboard' => [$this->backRow('admin:buttons')]]
             );
             return;
@@ -1223,7 +1211,7 @@ final class AdminPanel
             $this->render(
                 $chatId,
                 $messageId,
-                "لینک جدید دکمه را بفرستید (باید با http:// یا https:// یا tg:// شروع بشه).\n\nبرای بازگشت به مقدار پیش‌فرض، «حذف» بفرستید.",
+                "لینک جدید دکمه را بفرستید.",
                 ['inline_keyboard' => [$this->backRow('admin:buttons')]]
             );
             return;
@@ -1235,11 +1223,7 @@ final class AdminPanel
             $lines = [
                 'آیکون ایموجی پریمیوم دکمه',
                 '',
-                'یک پیام حاوی دقیقاً همون ایموجی اختصاصی/پریمیومی که می‌خواید روی دکمه باشه بفرستید (از پنل ایموجی تلگرام انتخاب کنید، نه با کیبورد معمولی تایپ کنید).',
-                '',
-                'توجه: طبق قوانین تلگرام، آیکون سفارشی روی دکمه‌های زیر پست‌های کانال فقط وقتی نشون داده می‌شه که ربات یک یوزرنیم خریداری‌شده از Fragment داشته باشه — پرمیوم بودن خود مالک ربات فقط روی چت خصوصی/گروه/سوپرگروه اثر داره، نه کانال. اگه تلگرام درخواست رو رد کنه، ربات خودکار بدون آیکون (ولی با همون متن و لینک) دوباره می‌فرسته تا سیگنال از دست نره.',
-                '',
-                'برای حذف آیکون فعلی، «حذف» بفرستید.',
+                'ایموجی پریمیوم را بفرستید.',
             ];
             if ($current !== null) {
                 $lines[] = '';
@@ -1256,9 +1240,7 @@ final class AdminPanel
         $style = Config::channelButtonStyle($slot);
         $emoji = Config::channelButtonEmojiId($slot);
         $lines = [
-            'دکمه شیشه‌ای زیر پست‌های کانال',
-            '',
-            'این دکمه زیر همه پیام‌هایی که ربات به کانال می‌فرسته (سیگنال، شات سود، اعلام ریسک‌فری/بسته شدن، هشدارها) نمایش داده می‌شه.',
+            'دکمه شیشه‌ای کانال',
             '',
             sprintf(
                 "«%s»\nرنگ: %s\nلینک: %s%s",
@@ -1291,69 +1273,69 @@ final class AdminPanel
     }
 
     private const AUTO_SETTINGS = [
-        'SIGNALS_PER_PASS'            => ['سیگنال در هر پاس', 'چند تا از بهترین‌های هر اسکن منتشر شوند. روی 1 یعنی دقیقاً یک سیگنال هر بار، نه چندتا با هم. مثال: 1'],
-        'MIN_VOLUME_USDT'             => ['حداقل حجم ۲۴ ساعته', 'به دلار. مثال: 300000'],
-        'ROTATION_BUDGET_SECONDS'     => ['ثانیه‌های چرخش هر اجرا', 'هرچه بیشتر، ارز بیشتری در هر دقیقه چک می‌شود. مثال: 32'],
+        'SIGNALS_PER_PASS'            => ['سیگنال در هر پاس', 'عدد. مثال: 1'],
+        'MIN_VOLUME_USDT'             => ['حداقل حجم ۲۴ ساعته', 'USDT. مثال: 5000000'],
+        'ROTATION_BUDGET_SECONDS'     => ['ثانیه‌های چرخش هر اجرا', 'ثانیه. مثال: 32'],
         'REQUIRE_HTF_ALIGNMENT'       => ['اجبار هم‌جهتی تایم بالاتر', 'true یا false'],
-        'REQUIRE_DISCOUNT_PREMIUM'    => ['اجبار ورود از ناحیه درست', 'true یا false (فقط روی ورود پولبکی)'],
-        'TRADABLE_VENUES'             => ['صرافی‌های معاملاتی', 'با کاما. مثال: toobit,ourbit — یا off برای خاموش کردن فیلتر.'],
-        'SIGNAL_TIMEFRAMES'           => ['تایم‌فریم سیگنال', 'با کاما جدا کنید. مثال: 15m,1h,4h'],
-        'TP1_LEVERAGED_PCT'           => ['سود تارگت ۱ (با اهرم)', 'درصد سود روی مارجین. مثال: 28'],
-        'TP2_LEVERAGED_PCT'           => ['سود تارگت ۲ (با اهرم)', 'درصد سود روی مارجین. مثال: 50'],
-        'TP3_LEVERAGED_PCT'           => ['سود تارگت ۳ (با اهرم)', 'درصد سود روی مارجین. مثال: 90'],
-        'TP4_LEVERAGED_PCT'           => ['سود تارگت ۴ نهایی (با اهرم)', 'درصد سود روی مارجین. مثال: 160'],
-        'TP1_CLOSE_PERCENT'           => ['درصد خروج در تارگت ۱', 'چند درصد پوزیشن در تارگت ۱ بسته می‌شود (برای محاسبه سود نهایی معاملات ریسک‌فری/تارگت‌های بعدی). مثال: 50'],
-        'ADVISORY_STOP_WARN_PCT'      => ['آستانه هشدار قبل تارگت ۱', 'اگه قیمت این‌قدر درصد از فاصله حد ضرر رو طی کرد و هنوز تارگت ۱ نخورده، ربات یک هشدار می‌فرسته. مثال: 70'],
-        'ADVISORY_STALL_RETRACE_PCT'  => ['آستانه هشدار بعد تارگت ۳', 'اگه بعد تارگت ۳ قیمت این‌قدر درصد از حرکت تارگت۲-۳ برگشت و به تارگت ۴ نرسید، ربات پیشنهاد خروج می‌ده. مثال: 50'],
-        'MAX_STOP_LEVERAGED_PCT'      => ['حداکثر ضرر حد ضرر (با اهرم)', 'درصد ضرر روی مارجین. مثال: 30'],
-        'LEVERAGE_MAJOR_ASSETS'       => ['ارزهای اصلی', 'با کاما جدا کنید. مثال: BTC,ETH'],
-        'LEVERAGE_MAJOR'              => ['اهرم ارزهای اصلی', 'عدد صحیح. مثال: 20'],
-        'LEVERAGE_ALT_MIN'            => ['حداقل اهرم آلت/شت‌کوین', 'عدد صحیح. مثال: 20'],
+        'REQUIRE_DISCOUNT_PREMIUM'    => ['اجبار ورود از ناحیه درست', 'true یا false'],
+        'TRADABLE_VENUES'             => ['صرافی‌های معاملاتی', 'با کاما. مثال: toobit,ourbit — یا off'],
+        'SIGNAL_TIMEFRAMES'           => ['تایم‌فریم سیگنال', 'با کاما. مثال: 15m,30m,1h,2h'],
+        'TP1_LEVERAGED_PCT'           => ['سود تارگت ۱ (با اهرم)', 'درصد. مثال: 28'],
+        'TP2_LEVERAGED_PCT'           => ['سود تارگت ۲ (با اهرم)', 'درصد. مثال: 50'],
+        'TP3_LEVERAGED_PCT'           => ['سود تارگت ۳ (با اهرم)', 'درصد. مثال: 90'],
+        'TP4_LEVERAGED_PCT'           => ['سود تارگت ۴ نهایی (با اهرم)', 'درصد. مثال: 160'],
+        'TP1_CLOSE_PERCENT'           => ['درصد خروج در تارگت ۱', 'درصد. مثال: 50'],
+        'ADVISORY_STOP_WARN_PCT'      => ['آستانه هشدار قبل تارگت ۱', 'درصد. مثال: 70'],
+        'ADVISORY_STALL_RETRACE_PCT'  => ['آستانه هشدار بعد تارگت ۳', 'درصد. مثال: 50'],
+        'MAX_STOP_LEVERAGED_PCT'      => ['حداکثر ضرر حد ضرر (با اهرم)', 'درصد. مثال: 35'],
+        'LEVERAGE_MAJOR_ASSETS'       => ['ارزهای اصلی', 'با کاما. مثال: BTC,ETH'],
+        'LEVERAGE_MAJOR'              => ['اهرم ارزهای اصلی', 'عدد صحیح. مثال: 15'],
+        'LEVERAGE_ALT_MIN'            => ['حداقل اهرم آلت/شت‌کوین', 'عدد صحیح. مثال: 8'],
         'LEVERAGE_ALT_MAX'            => ['حداکثر اهرم آلت/شت‌کوین', 'عدد صحیح. مثال: 25'],
         'LEVERAGE_LIQUIDATION_BUFFER' => ['ضریب فاصله تا لیکویید', 'بین ۰ و ۱. مثال: 0.75'],
         'SIGNAL_MAX_SYMBOLS_PER_PASS' => ['تعداد ارز در هر اسکن', 'عدد صحیح. مثال: 60'],
-        'MIN_SIGNAL_SCORE'            => ['حداقل امتیاز سیگنال', 'مثال: 45'],
-        'PRIMARY_EXCHANGE'            => ['صرافی اصلی', 'سیگنال روی این صرافی داده می‌شود. مثال: mexc'],
-        'ACCOUNT_BALANCE'             => ['سرمایه مرجع', 'برای محاسبه حجم پوزیشن. مثال: 1000'],
-        'RISK_PER_TRADE_PCT'          => ['ریسک هر معامله', 'درصد سرمایه. مثال: 2'],
-        'MAX_DAILY_LOSSES'            => ['سقف ضرر روزانه', 'بعد از این تعداد باخت، تا فردا سیگنال نمی‌دهد. مثال: 3'],
-        'SYMBOL_LOSS_COOLDOWN_SECONDS' => ['استراحت ارز بعد از استاپ', 'بعد از استاپ خوردن یک ارز، تا این‌قدر ثانیه دیگه روی همون ارز سیگنال نمی‌ده — حتی اگه ستاپ جدید پیدا کنه. صفر یعنی خاموش. مثال: 10800 (۳ ساعت)'],
-        'MAX_DAILY_SIGNALS'           => ['سقف سیگنال روزانه', '۰ یعنی بدون سقف. مثال: 8'],
-        'MAX_OPEN_TRADES'             => ['حداکثر معامله باز هم‌زمان', 'وقتی تعداد معاملات باز الان به این عدد برسه، سیگنال جدید منتشر نمی‌شه تا یکی از اونا بسته بشه. ۰ یعنی بدون سقف. مثال: 3'],
-        'MIN_SIGNAL_GAP_MINUTES'      => ['حداقل فاصله بین سیگنال‌ها', 'به دقیقه. ۰ یعنی بدون فاصله. مثال: 30'],
-        'MAX_TRADE_HOURS'             => ['حداکثر عمر معامله قبل از تارگت ۱', 'به ساعت. اگه تا این مدت به تارگت ۱ نرسه، با قیمت فعلی بسته می‌شه. ۰ یعنی خاموش. مثال: 24'],
-        'MAX_OPPOSING_VOTE_RATIO'     => ['سقف شواهد خلاف جهت', 'بین 0.1 تا 1. اگه امتیاز جهت مخالف به این نسبت از جهت برنده برسه، سیگنال رد می‌شه. 1 یعنی خاموش. مثال: 0.6'],
-        'REQUIRE_BREAKOUT_MOMENTUM'   => ['اجبار تایید مومنتوم برای شکست', 'true یا false. شکست بدون تایید مومنتوم/حجم رد می‌شه.'],
-        'MIN_CONFLUENCE_SCORE'        => ['حداقل امتیاز هم‌گرایی', 'مجموع امتیاز سقف‌خورده شش گروه مستقل باید از این عدد بیشتر باشه. مثال: 90'],
-        'ZONE_REACH_ATR'              => ['حداکثر فاصله ناحیه حمایتی', 'بر حسب ATR. مثال: 2.5'],
-        'SETUP_VOLUME_MULT'           => ['حجم لازم ستاپ‌ها', 'چند برابر میانگین ۲۰. مثال: 1'],
-        'BREAK_VOLUME_RATIO'          => ['حجم لازم روی شکست', 'چند برابر میانگین ۲۰ کندل قبل — فقط توی استراتژی قدیمی structure_break استفاده می‌شه، نه استراتژی فعال فعلی. مثال: 1.3'],
-        'MAX_CHASE_ATR'               => ['حداکثر فاصله از سطح شکست', 'بر حسب ATR. مثال: 1.5'],
+        'MIN_SIGNAL_SCORE'            => ['حداقل امتیاز سیگنال', 'عدد. مثال: 45'],
+        'PRIMARY_EXCHANGE'            => ['صرافی اصلی', 'مثال: mexc'],
+        'ACCOUNT_BALANCE'             => ['سرمایه مرجع', 'USDT. مثال: 1000'],
+        'RISK_PER_TRADE_PCT'          => ['ریسک هر معامله', 'درصد. مثال: 2'],
+        'MAX_DAILY_LOSSES'            => ['سقف ضرر روزانه', 'عدد. مثال: 5'],
+        'SYMBOL_LOSS_COOLDOWN_SECONDS' => ['استراحت ارز بعد از استاپ', 'ثانیه، ۰ = خاموش. مثال: 10800'],
+        'MAX_DAILY_SIGNALS'           => ['سقف سیگنال روزانه', 'عدد، ۰ = بدون سقف. مثال: 10'],
+        'MAX_OPEN_TRADES'             => ['حداکثر معامله باز هم‌زمان', 'عدد، ۰ = بدون سقف. مثال: 3'],
+        'MIN_SIGNAL_GAP_MINUTES'      => ['حداقل فاصله بین سیگنال‌ها', 'دقیقه، ۰ = خاموش. مثال: 30'],
+        'MAX_TRADE_HOURS'             => ['حداکثر عمر معامله قبل از تارگت ۱', 'ساعت، ۰ = خاموش. مثال: 24'],
+        'MAX_OPPOSING_VOTE_RATIO'     => ['سقف شواهد خلاف جهت', 'بین 0.1 تا 1، 1 = خاموش. مثال: 0.6'],
+        'REQUIRE_BREAKOUT_MOMENTUM'   => ['اجبار تایید مومنتوم برای شکست', 'true یا false'],
+        'MIN_CONFLUENCE_SCORE'        => ['حداقل امتیاز هم‌گرایی', 'عدد. مثال: 80'],
+        'ZONE_REACH_ATR'              => ['حداکثر فاصله ناحیه حمایتی', 'ATR. مثال: 2.5'],
+        'SETUP_VOLUME_MULT'           => ['حجم لازم ستاپ‌ها', 'ضریب. مثال: 1'],
+        'BREAK_VOLUME_RATIO'          => ['حجم لازم روی شکست', 'ضریب. مثال: 1.3'],
+        'MAX_CHASE_ATR'               => ['حداکثر فاصله از سطح شکست', 'ATR. مثال: 1.5'],
         'REVERSAL_RUN_PCT'            => ['حداقل رشد برای سیگنال برگشتی', 'درصد. مثال: 12'],
         'BASE_RANGE_PCT'              => ['حداکثر عرض کف برای شکست', 'درصد. مثال: 12'],
-        'REQUIRE_REVERSAL_CANDLE'     => ['اجبار تایید کندل برگشتی', 'true یا false — قبل از سیگنال پولبکی/برگشتی، کندل همر یا شوتینگ‌استار لازم می‌شود.'],
+        'REQUIRE_REVERSAL_CANDLE'     => ['اجبار تایید کندل برگشتی', 'true یا false'],
         'REVERSAL_CONFIRM_TIMEFRAME'  => ['تایم‌فریم تایید کندل برگشتی', 'مثال: 5m'],
-        'REQUIRE_FRESH_REVERSAL_ZONE' => ['اجبار تازگی ناحیه برگشت', 'true یا false — روی سیگنال پولبکی/برگشتی، ناحیه‌ای که حد ضرر رویش است باید بعد از جاروی نقدینگی اخیر شکل گرفته باشه، نه قبلش.'],
-        'REQUIRE_SWEEP_AT_ZONE'       => ['اجبار جارو دقیقاً روی ناحیه', 'true یا false — حرکت شارپ/جاروی نقدینگی باید دقیقاً روی همون اوردر بلاک/حمایت/مقاومتی که حد ضرر رویش است اتفاق افتاده باشه (فیلتر حرکت‌های ناگهانی شارپی مثل فشار فاندینگ که درست روی یه ناحیه مهم واکنش نشون می‌دن).'],
-        'REQUIRE_KILLZONE'            => ['اجبار بازه زمانی پرحجم (Killzone)', 'true یا false — فقط ساعات نیویورک/لندن/آسیا سیگنال بده. کریپتو ۲۴ساعته است، پیش‌فرض خاموش.'],
+        'REQUIRE_FRESH_REVERSAL_ZONE' => ['اجبار تازگی ناحیه برگشت', 'true یا false'],
+        'REQUIRE_SWEEP_AT_ZONE'       => ['اجبار جارو دقیقاً روی ناحیه', 'true یا false'],
+        'REQUIRE_KILLZONE'            => ['اجبار بازه زمانی پرحجم (Killzone)', 'true یا false'],
         'MIN_FVG_MITIGATION_PCT'      => ['حداقل بازگشت به داخل FVG', 'درصد. مثال: 5'],
-        'STRONG_ZONE_VETO_TOUCHES'    => ['آستانه وتوی سطح قوی', 'اگه قوی‌ترین حمایت/مقاومت نزدیک قیمت این‌قدر بار لمس شده باشه و برخلاف جهت معامله باشه، سیگنال رد می‌شه (حتی اگه بقیه ماژول‌ها موافق باشن). مثال: 3'],
-        'CONFLUENCE_STRUCTURE_CAP'    => ['سقف امتیاز گروه ساختار', 'سقف مجموع امتیاز BOS/CHoCH، شکست موج، iBOS و شکست رنج. مثال: 30'],
-        'CONFLUENCE_LIQUIDITY_CAP'    => ['سقف امتیاز گروه نقدینگی', 'سقف مجموع امتیاز جاروی نقدینگی، بریکر بلاک و نقدینگی دست‌نخورده. مثال: 28'],
-        'CONFLUENCE_LOCATION_CAP'     => ['سقف امتیاز گروه موقعیت', 'سقف مجموع امتیاز سطح قوی، ناحیه ورود (اوردر بلاک/FVG)، پرمیوم/دیسکانت و OTE. مثال: 26'],
-        'CONFLUENCE_MOMENTUM_CAP'     => ['سقف امتیاز گروه مومنتوم', 'سقف مجموع امتیاز فشردگی نوسان، RSI و سوپرترند. مثال: 22'],
-        'CONFLUENCE_VOLUME_CAP'       => ['سقف امتیاز گروه حجم', 'سقف مجموع امتیاز عدم تعادل حجمی و کندل جابجایی. مثال: 14'],
-        'CONFLUENCE_HTF_CAP'          => ['سقف امتیاز گروه تایم‌فریم بالاتر', 'سقف مجموع امتیاز هم‌جهتی روند و تایم‌فریم بالاتر. مثال: 22'],
-        'MIN_ROOM_TO_TARGET_R'        => ['حداقل فاصله تا هدف (بر حسب R)', 'نزدیک‌ترین ساختار مخالف باید حداقل این‌قدر برابر فاصله‌ی حد ضرر جلوتر باشه، وگرنه سیگنال رد می‌شه. مثال: 1.5'],
-        'HTF_CONFIRM_MAP'             => ['نقشه تایید تایم‌فریم بالاتر', 'هر تایم‌فریم ورودی با کدوم تایم‌فریم بالاتر تایید بشه، با کاما. مثال: 15m:1h,30m:2h,1h:4h,2h:4h,4h:1d'],
-        'REQUIRE_APLUS_SETUP'         => ['اجبار فیلتر A+ Setup', 'true یا false — علاوه بر امتیاز هم‌گرایی، حداقل چند تاییدیه مستقل (HTF، جاروی نقدینگی، CHoCH/BOS، اوردر بلاک/FVG تازه، Retest، جابجایی+حجم، فاصله تا هدف) هم لازم می‌شه.'],
-        'APLUS_MIN_CONFIRMATIONS'     => ['حداقل تاییدیه‌های A+', 'از ۷ تاییدیه مستقل، حداقل چندتاش لازمه. مثال: 5'],
-        'REQUIRE_ADX_FILTER'          => ['اجبار فیلتر قدرت روند (ADX)', 'true یا false — پیش‌فرض خاموش. وقتی روشنه، اگه ADX زیر MIN_ADX باشه (بازار بدون روند واقعی) سیگنال رد می‌شه.'],
-        'MIN_ADX'                     => ['حداقل ADX', 'فقط وقتی REQUIRE_ADX_FILTER روشنه اثر داره. مثال: 20 (زیر ۲۰ یعنی روند ضعیف/بدون روند)'],
-        'NEWS_BLACKOUT_START'         => ['شروع سکوت خبری', 'تاریخ و ساعت شروع توقف سیگنال (مثلاً قبل از CPI/FOMC/NFP). خالی یعنی غیرفعال. مثال: 2026-09-20 16:00'],
-        'NEWS_BLACKOUT_END'           => ['پایان سکوت خبری', 'تاریخ و ساعت پایان توقف سیگنال. خالی یعنی غیرفعال. مثال: 2026-09-20 17:00'],
-        'SCANNER_GAINER_SHARE'        => ['سهم بیشترین رشد', 'درصد از لیست اسکن. مثال: 40'],
-        'SCANNER_LOSER_SHARE'         => ['سهم بیشترین ضرر', 'درصد از لیست اسکن. مثال: 25'],
+        'STRONG_ZONE_VETO_TOUCHES'    => ['آستانه وتوی سطح قوی', 'عدد. مثال: 3'],
+        'CONFLUENCE_STRUCTURE_CAP'    => ['سقف امتیاز گروه ساختار', 'عدد. مثال: 30'],
+        'CONFLUENCE_LIQUIDITY_CAP'    => ['سقف امتیاز گروه نقدینگی', 'عدد. مثال: 28'],
+        'CONFLUENCE_LOCATION_CAP'     => ['سقف امتیاز گروه موقعیت', 'عدد. مثال: 26'],
+        'CONFLUENCE_MOMENTUM_CAP'     => ['سقف امتیاز گروه مومنتوم', 'عدد. مثال: 22'],
+        'CONFLUENCE_VOLUME_CAP'       => ['سقف امتیاز گروه حجم', 'عدد. مثال: 14'],
+        'CONFLUENCE_HTF_CAP'          => ['سقف امتیاز گروه تایم‌فریم بالاتر', 'عدد. مثال: 22'],
+        'MIN_ROOM_TO_TARGET_R'        => ['حداقل فاصله تا هدف (بر حسب R)', 'R. مثال: 1.5'],
+        'HTF_CONFIRM_MAP'             => ['نقشه تایید تایم‌فریم بالاتر', 'مثال: 15m:1h,30m:2h,1h:4h,2h:4h,4h:1d'],
+        'REQUIRE_APLUS_SETUP'         => ['اجبار فیلتر A+ Setup', 'true یا false'],
+        'APLUS_MIN_CONFIRMATIONS'     => ['حداقل تاییدیه‌های A+', 'عدد. مثال: 3'],
+        'REQUIRE_ADX_FILTER'          => ['اجبار فیلتر قدرت روند (ADX)', 'true یا false'],
+        'MIN_ADX'                     => ['حداقل ADX', 'عدد. مثال: 20'],
+        'NEWS_BLACKOUT_START'         => ['شروع سکوت خبری', 'تاریخ و ساعت، خالی = خاموش. مثال: 2026-09-20 16:00'],
+        'NEWS_BLACKOUT_END'           => ['پایان سکوت خبری', 'تاریخ و ساعت، خالی = خاموش. مثال: 2026-09-20 17:00'],
+        'SCANNER_GAINER_SHARE'        => ['سهم بیشترین رشد', 'درصد. مثال: 40'],
+        'SCANNER_LOSER_SHARE'         => ['سهم بیشترین ضرر', 'درصد. مثال: 25'],
         'SCANNER_MIN_MOVE_PCT'        => ['حداقل حرکت ۲۴ ساعته', 'درصد. مثال: 4'],
     ];
 
@@ -1398,9 +1380,9 @@ final class AdminPanel
         if (!is_array($report)) {
             $symbols = (new SymbolRepository())->countActive();
             if ($symbols === 0) {
-                return "هنوز هیچ اسکنی انجام نشده و نماد فعالی نیست.\nیعنی یا کرون اجرا نمی‌شود، یا هیچ صرافی‌ای در دسترس نیست (Scanner → تست اتصال).";
+                return "هنوز هیچ اسکنی انجام نشده و نماد فعالی نیست.";
             }
-            return "اسکنر نماد دارد ولی هنوز پاس سیگنالی ثبت نشده. چند دقیقه به کرون فرصت بدهید.";
+            return "اسکنر نماد دارد ولی هنوز پاس سیگنالی ثبت نشده.";
         }
 
         $ago = max(0, time() - (int) ($report['at'] ?? 0));
@@ -1413,7 +1395,7 @@ final class AdminPanel
         $today = $this->signalRepo->todayTally();
         if ($today['losses'] >= Config::maxDailyLosses()) {
             return sprintf(
-                "همین الان (%s): انتشار تا فردا متوقف است.\nامروز %d معامله با حد ضرر بسته شد و سقف روزانه ضرر (%d) پر شده. این یک محافظ است، نه خطا.\nبرای تغییر: اتومات → مدیریت سرمایه.",
+                "همین الان (%s): انتشار تا فردا متوقف است.\nامروز %d معامله با حد ضرر بسته شد و سقف روزانه ضرر (%d) پر شده.",
                 $when,
                 $today['losses'],
                 Config::maxDailyLosses()
@@ -1422,7 +1404,7 @@ final class AdminPanel
         $maxSignals = Config::maxDailySignals();
         if ($maxSignals > 0 && $today['published'] >= $maxSignals) {
             return sprintf(
-                "همین الان (%s): سهمیه سیگنال امروز (%d از %d) پر شده و ربات تا فردا منتشر نمی‌کند.\nبرای تغییر: اتومات → مدیریت سرمایه.",
+                "همین الان (%s): سهمیه سیگنال امروز (%d از %d) پر شده و ربات تا فردا منتشر نمی‌کند.",
                 $when,
                 $today['published'],
                 $maxSignals
@@ -1432,7 +1414,7 @@ final class AdminPanel
         $openNow = $this->signalRepo->countOpen();
         if ($maxOpen > 0 && $openNow >= $maxOpen) {
             return sprintf(
-                "همین الان (%s): تعداد معاملات باز (%d از %d) به سقف رسیده — ربات صبر می‌کند تا یکی از اونا بسته بشه، بعد سراغ سیگنال بعدی می‌رود.\nبرای تغییر: اتومات → مدیریت سرمایه.",
+                "همین الان (%s): تعداد معاملات باز (%d از %d) به سقف رسیده.",
                 $when,
                 $openNow,
                 $maxOpen
@@ -1442,7 +1424,7 @@ final class AdminPanel
         $lastPublished = $this->signalRepo->lastPublishedAt();
         if ($gapMinutes > 0 && $lastPublished !== null && time() - $lastPublished < $gapMinutes * 60) {
             return sprintf(
-                "همین الان (%s): از آخرین سیگنال کمتر از %d دقیقه گذشته — سیگنال بعدی حدود %d دقیقه دیگر مجاز است.\nبرای تغییر: اتومات → مدیریت سرمایه.",
+                "همین الان (%s): از آخرین سیگنال کمتر از %d دقیقه گذشته — سیگنال بعدی حدود %d دقیقه دیگر.",
                 $when,
                 $gapMinutes,
                 (int) ceil(($gapMinutes * 60 - (time() - $lastPublished)) / 60)
@@ -1451,7 +1433,7 @@ final class AdminPanel
 
         $symbols = (int) ($report['symbols'] ?? 0);
         if ($symbols === 0) {
-            return sprintf("آخرین پاس (%s): هیچ نماد فعالی نبود.\nاسکنر چیزی پیدا نکرده — از Scanner اتصال صرافی‌ها را تست کنید.", $when);
+            return sprintf("آخرین پاس (%s): هیچ نماد فعالی نبود.", $when);
         }
 
         $visited = (int) ($report['visited'] ?? 0);
@@ -1471,7 +1453,7 @@ final class AdminPanel
         $qualified = (int) ($report['qualified'] ?? 0);
         if ($qualified > 0) {
             return sprintf(
-                "آخرین پاس (%s): %d ستاپ قابل انتشار پیدا شد ولی هیچ‌کدام ارسال نشد.\nمعمولاً یعنی سهمیه‌ی روزانه یا توقف ضرر روزانه اجازه نداده.%s",
+                "آخرین پاس (%s): %d ستاپ قابل انتشار پیدا شد ولی هیچ‌کدام ارسال نشد.%s",
                 $when,
                 $qualified,
                 $rotation
@@ -1496,10 +1478,6 @@ final class AdminPanel
             (string) $best['reason']
         );
 
-        if ((float) $best['score'] > 0 && (float) $best['score'] < $min) {
-            $verdict .= sprintf("\n\nاگر می‌خواهید زودتر سیگنال بگیرید، «حداقل امتیاز سیگنال» را کمی زیر %.0f بگذارید.", (float) $best['score']);
-        }
-
         return $verdict;
     }
 
@@ -1522,7 +1500,7 @@ final class AdminPanel
                 $this->telegram->sendMessage($chatId, 'معامله باز فعالی وجود ندارد.');
             } else {
                 $this->render($chatId, $messageId, sprintf(
-                    "مطمئنی؟ %d معامله باز فعلی، همین الان با قیمت لحظه‌ای بسته می‌شن (نه با تارگت یا حد ضرر واقعی). این کار برگشت‌پذیر نیست.",
+                    "مطمئنی؟ %d معامله باز با قیمت لحظه‌ای بسته می‌شوند.",
                     $open
                 ), [
                     'inline_keyboard' => [
@@ -1543,7 +1521,7 @@ final class AdminPanel
             if (isset(self::AUTO_SETTINGS[$key])) {
                 [$label, $hint] = self::AUTO_SETTINGS[$key];
                 $this->states->set($userId, 'awaiting_auto_setting', ['key' => $key]);
-                $this->telegram->sendMessage($chatId, "مقدار جدید «{$label}» را بفرستید.\n\n{$hint}\n\nبرای بازگشت به مقدار پیش‌فرض، کلمه «حذف» را بفرستید.");
+                $this->telegram->sendMessage($chatId, "مقدار جدید «{$label}» را بفرستید.\n\n{$hint}");
                 return;
             }
         }
@@ -1658,15 +1636,13 @@ final class AdminPanel
                 sprintf('تارگت‌ها با اهرم: ۱) %.0f%% | ۲) %.0f%% | ۳) %.0f%% | ۴) %.0f%% | حد ضرر حداکثر %.0f%%',
                     Config::tp1LeveragedPercent(), Config::tp2LeveragedPercent(), Config::tp3LeveragedPercent(),
                     Config::tp4LeveragedPercent(), Config::maxStopLeveragedPercent()),
-                sprintf('یعنی ریسک به ریوارد %.2f | %.2f | %.2f | %.2f',
+                sprintf('ریسک به ریوارد: %.2f | %.2f | %.2f | %.2f',
                     Config::tp1RiskReward(), Config::tp2RiskReward(), Config::tp3RiskReward(), Config::tp4RiskReward()),
-                'مدیریت معامله: تی۱ → حد ضرر رو نقطه ورود | تی۲ → حد ضرر رو تی۱ | تی۳ → حد ضرر رو تی۲ | تی۴ → بسته کامل.',
-                sprintf('درصد خروج فرضی در تارگت ۱ (برای محاسبه سود نهایی): %.0f%%', Config::tp1ClosePercent()),
-                'تارگت‌ها هیچ‌وقت از نزدیک‌ترین نقدینگی/سطح واقعی جلوتر تنظیم نمی‌شوند — اگر سطح واقعی نزدیک‌تر بود، تارگت به همان محدود می‌شود.',
-                sprintf('هشدار قبل تی۱ (اگه %.0f%% فاصله حد ضرر طی بشه) و هشدار توقف بعد تی۳ (اگه %.0f%% حرکت تی۲-تی۳ برگرده): فعال، هرکدام حداکثر یک بار در هر معامله.',
+                sprintf('درصد خروج در تارگت ۱: %.0f%%', Config::tp1ClosePercent()),
+                sprintf('هشدار قبل تی۱: %.0f%% | هشدار بعد تی۳: %.0f%%',
                     Config::advisoryStopWarnPercent(), Config::advisoryStallRetracePercent()),
                 sprintf('%s → اهرم %dx', implode(',', Config::majorAssets()), Config::leverageMajor()),
-                sprintf('بقیه ارزها → اهرم %dx تا %dx (خودکار بر اساس نقدینگی و نوسان)', Config::leverageAltMin(), Config::leverageAltMax()),
+                sprintf('بقیه ارزها → اهرم %dx تا %dx', Config::leverageAltMin(), Config::leverageAltMax()),
             ],
             'capital' => [
                 sprintf('سرمایه مرجع: %s USDT | ریسک هر معامله: %.1f%%',
@@ -1681,16 +1657,13 @@ final class AdminPanel
             ],
             'strategy' => [
                 sprintf('استراتژی: %s (حداقل امتیاز هم‌گرایی %.0f)', Config::strategyName(), Config::minConfluenceScore()),
-                'ماژول‌ها: شش ستاپ + رنج خودکار + ساختار BOS/CHoCH + موج ALMA + نقدینگی + بریکر بلاک + فشردگی نوسان + اوردر بلاک/عرضه و تقاضا',
                 sprintf('حداقل امتیاز سیگنال: %.1f', Config::minSignalScore()),
-                sprintf('تایید کندل برگشتی (همر/شوتینگ‌استار) روی سیگنال‌های پولبکی: %s | تایم‌فریم %s',
+                sprintf('تایید کندل برگشتی: %s | تایم‌فریم %s',
                     Config::requireReversalCandle() ? 'فعال' : 'خاموش', Config::reversalConfirmTimeframe()),
-                'شکار زودهنگام قبل از پامپ/دامپ: بریکر بلاک (هر دو تعریف) + فشردگی نوسان + سوپرترند تطبیقی + برگشت آماری RSI',
-                'ماژول‌های تکمیلی: عدم تعادل حجمی، کندل جابجایی، قوی‌ترین سطح حمایت/مقاومت، درصد بازگشت به FVG',
-                sprintf('Killzone (بازه‌های پرحجم): %s', Config::requireKillzone() ? 'فعال' : 'خاموش (پیش‌فرض — کریپتو ۲۴ساعته است)'),
-                sprintf('وتوی سطح قوی: اگه نزدیک‌ترین حمایت/مقاومت حداقل %d بار لمس شده باشه و برخلاف جهت معامله باشه، سیگنال رد می‌شه — حتی اگه بقیه ماژول‌ها موافق باشن (جلوگیری از شورت رو حمایت/لانگ رو مقاومت قوی).',
+                sprintf('Killzone: %s', Config::requireKillzone() ? 'فعال' : 'خاموش'),
+                sprintf('وتوی سطح قوی: %d بار لمس',
                     Config::strongZoneVetoTouches()),
-                sprintf('سقف شواهد خلاف جهت: %s | تایید مومنتوم برای شکست: %s | تحلیل فقط روی کندل بسته‌شده',
+                sprintf('سقف شواهد خلاف جهت: %s | تایید مومنتوم برای شکست: %s',
                     Config::maxOpposingVoteRatio() < 1.0 ? number_format(Config::maxOpposingVoteRatio(), 2) : 'خاموش',
                     Config::requireBreakoutMomentum() ? 'فعال' : 'خاموش'),
             ],
@@ -1717,7 +1690,7 @@ final class AdminPanel
             $this->runChannelTest($chatId);
             return;
         }
-        $this->render($chatId, $messageId, "Test Signal\n\nاجرای تست: یک سیگنال واقعی از روی بازار تولید می‌کنه (نیاز به نماد فعال داره).\nپیش‌نمایش قالب: همین‌جا در چت خصوصی، قالب فعلی رو با داده فرضی می‌فرسته.\nتست روی کانال: همون پیام رو واقعاً به کانال‌های فعال می‌فرسته و گزارش می‌ده که ایموجی پریمیوم توی کانال قبول شد یا نه — و جواب تارگت رو هم به‌صورت ریپلای می‌فرسته تا زنجیره ریپلای رو ببینید.", [
+        $this->render($chatId, $messageId, "Test Signal", [
             'inline_keyboard' => [
                 [['text' => 'اجرای تست (با بازار)', 'callback_data' => 'admin:test_signal:run']],
                 [['text' => 'پیش‌نمایش قالب (فوری)', 'callback_data' => 'admin:test_signal:preview']],
@@ -1812,7 +1785,7 @@ final class AdminPanel
         if (empty($channels)) {
             $this->telegram->sendMessage(
                 $chatId,
-                "هیچ کانال فعالی پیدا نشد.\n\nاز «کانال‌ها» کانال را اضافه کنید، ربات را در آن ادمین کنید، و بعد کانال را فعال کنید."
+                "هیچ کانال فعالی پیدا نشد."
             );
             return;
         }
@@ -1866,7 +1839,7 @@ final class AdminPanel
             if ($buttonIconAccepted !== null) {
                 $report[] = $buttonIconAccepted
                     ? '   آیکون پریمیوم دکمه قبول شد'
-                    : '   آیکون پریمیوم دکمه رد شد؛ بدون آیکون ارسال شد (نیاز به یوزرنیم خریداری‌شده از Fragment)';
+                    : '   آیکون پریمیوم دکمه رد شد؛ بدون آیکون ارسال شد';
             }
 
             if ($sentEmoji > 0) {
@@ -1898,7 +1871,6 @@ final class AdminPanel
             $report[] = '';
         }
 
-        $report[] = 'اگر ایموجی پریمیوم حذف شده باشد، ربات در ارسال واقعی هم خودکار بدون آن می‌فرستد تا سیگنال از دست نرود. همین قانون برای آیکون پریمیوم روی دکمه‌ها هم برقرار است.';
         $this->telegram->sendMessage($chatId, implode("\n", $report));
     }
 
@@ -1917,7 +1889,7 @@ final class AdminPanel
     {
         $symbols = (new SymbolRepository())->universe(1);
         if (empty($symbols)) {
-            $this->telegram->sendMessage($chatId, "هیچ نماد فعالی برای تست وجود ندارد. ابتدا Scanner را اجرا کنید.");
+            $this->telegram->sendMessage($chatId, "هیچ نماد فعالی برای تست وجود ندارد.");
             return;
         }
         $target = $symbols[0];
@@ -1959,7 +1931,7 @@ final class AdminPanel
         $diag[] = "قیمت: {$snapshot->price} | کندل: " . count($candles);
 
         if (count($candles) < 30) {
-            $diag[] = "کندل کافی نیست (حداقل ۳۰ لازمه) — این دلیل اصلی نبود سیگنال است.";
+            $diag[] = "کندل کافی نیست (حداقل ۳۰).";
             $this->telegram->sendMessage($chatId, implode("\n", $diag));
             return;
         }
@@ -1985,7 +1957,7 @@ final class AdminPanel
         $diag[] = 'تفکیک: ' . implode(', ', $breakdown);
 
         if ($confluence['bias'] === 'neutral') {
-            $diag[] = "بایاس خنثی — استراتژی فعلی فقط وقتی بازار واضح صعودی یا نزولی باشه پلن می‌سازه.";
+            $diag[] = "بایاس خنثی.";
             $this->telegram->sendMessage($chatId, implode("\n", $diag));
             return;
         }
@@ -1994,7 +1966,7 @@ final class AdminPanel
         $plan = $strategy?->evaluate($snapshot, $mainTf, $zones, $orderBlocks, $fvgs, $confluence);
 
         if ($plan === null) {
-            $diag[] = "استراتژی نتوانست پلن معامله بسازد (معمولاً یعنی ATR صفر یا داده قیمت ناقص است).";
+            $diag[] = "استراتژی پلن معامله نساخت.";
             $this->telegram->sendMessage($chatId, implode("\n", $diag));
             return;
         }
@@ -2010,7 +1982,7 @@ final class AdminPanel
             $volume24h
         );
         if ($tradePlan === null) {
-            $diag[] = "TradePlanner نتوانست معامله بسازد (اهرم تنظیم‌شده جایی برای حد ضرر باقی نمی‌گذارد).";
+            $diag[] = "TradePlanner معامله نساخت (اهرم جایی برای حد ضرر نگذاشت).";
             $this->telegram->sendMessage($chatId, implode("\n", $diag));
             return;
         }
@@ -2024,7 +1996,7 @@ final class AdminPanel
         );
 
         if ($confluence['score'] < Config::minSignalScore()) {
-            $diag[] = sprintf("امتیاز (%.1f) کمتر از حداقل (%.1f) است — این دلیل رد شدن سیگنال است.", $confluence['score'], Config::minSignalScore());
+            $diag[] = sprintf("امتیاز (%.1f) کمتر از حداقل (%.1f) است.", $confluence['score'], Config::minSignalScore());
             $this->telegram->sendMessage($chatId, implode("\n", $diag));
             return;
         }
@@ -2033,7 +2005,7 @@ final class AdminPanel
         $signal = $generator->generate($snapshot, $mainTf);
 
         if ($signal === null) {
-            $diag[] = "طبق این محاسبه باید سیگنال صادر می‌شد اما SignalGenerator چیزی برنگرداند — احتمالاً به‌خاطر Cooldown/Deduplication (سیگنال مشابه اخیراً صادر شده).";
+            $diag[] = "SignalGenerator سیگنالی برنگرداند (Cooldown/تکراری).";
             $this->telegram->sendMessage($chatId, implode("\n", $diag));
             return;
         }
@@ -2156,7 +2128,6 @@ final class AdminPanel
         $v = $this->getSetting('worker_heartbeat', '');
         if ($v === '') {
             return "هرگز اجرا نشده\n"
-                . "   کرون اجرا نمی‌شود. این دستور را هر دقیقه تنظیم کنید:\n"
                 . '   php ' . __DIR__ . '/worker.php';
         }
 
@@ -2165,9 +2136,9 @@ final class AdminPanel
             return sprintf('فعال (%d ثانیه پیش)', max(0, $ago));
         }
         if ($ago < 3600) {
-            return sprintf("%d دقیقه پیش\n   یعنی کرون کند اجرا می‌شود یا هر بار قبل از پایان قطع می‌شود.", (int) round($ago / 60));
+            return sprintf("%d دقیقه پیش", (int) round($ago / 60));
         }
-        return sprintf("%d ساعت پیش — کرون متوقف شده\n   php %s/worker.php را هر دقیقه اجرا کنید.", (int) round($ago / 3600), __DIR__);
+        return sprintf("%d ساعت پیش — کرون متوقف شده\n   php %s/worker.php", (int) round($ago / 3600), __DIR__);
     }
 
     public function handleStateInput(int $userId, int $chatId, array $message): bool
@@ -2183,7 +2154,7 @@ final class AdminPanel
         if ($state['state'] === 'awaiting_channel_id') {
             $this->states->clear($userId);
             if (!preg_match('/^-?\d+$/', trim($text))) {
-                $this->telegram->sendMessage($chatId, "آیدی نامعتبر است. لطفاً یک عدد صحیح ارسال کنید.");
+                $this->telegram->sendMessage($chatId, "آیدی نامعتبر است.");
                 return true;
             }
             $targetChatId = (int) trim($text);
@@ -2198,7 +2169,7 @@ final class AdminPanel
             }
             $msg = $access['ok']
                 ? "کانال با موفقیت اضافه شد و ربات دسترسی ارسال پیام دارد."
-                : "کانال ثبت شد اما ربات هنوز ادمین کانال نیست یا اجازه ارسال پیام ندارد (وضعیت: {$access['status']}). پس از افزودن ربات به‌عنوان ادمین، از «بررسی دسترسی ربات» استفاده کنید.";
+                : "کانال ثبت شد اما ربات اجازه ارسال پیام ندارد (وضعیت: {$access['status']}).";
             $this->telegram->sendMessage($chatId, $msg);
             return true;
         }
@@ -2210,7 +2181,7 @@ final class AdminPanel
                 return true;
             }
             $this->texts->set($key, $text, is_array($entities) ? $entities : [], $userId);
-            $this->telegram->sendMessage($chatId, "متن «$key» با حفظ کامل فرمت و ایموجی‌های اختصاصی ذخیره شد.");
+            $this->telegram->sendMessage($chatId, "متن «$key» ذخیره شد.");
             return true;
         }
 
@@ -2240,7 +2211,7 @@ final class AdminPanel
                 $tokens = array_map(static fn($x) => strtoupper(trim($x)), explode(',', $value));
                 $invalid = array_filter($tokens, static fn($x) => $x !== '' && !preg_match('/^[A-Z0-9]{2,10}$/', $x));
                 if (!empty($invalid)) {
-                    $this->telegram->sendMessage($chatId, "این مقدار معتبر نیست: «" . implode('، ', $invalid) . "»\n\nفقط نام ارزها با کاما (مثلاً USDT,USDC). برای خاموش کردن کامل این فیلتر، علامت * بفرستید. برای برگشت به پیش‌فرض، «حذف» بفرستید.");
+                    $this->telegram->sendMessage($chatId, "این مقدار معتبر نیست: «" . implode('، ', $invalid) . "»");
                     return true;
                 }
             }
@@ -2249,7 +2220,7 @@ final class AdminPanel
                 $value = '*';
             }
             $this->setSetting($setting, $value);
-            $this->telegram->sendMessage($chatId, "ذخیره شد. برای اعمال، «اسکن الان» رو بزنید.");
+            $this->telegram->sendMessage($chatId, "ذخیره شد.");
             return true;
         }
 
@@ -2323,10 +2294,6 @@ final class AdminPanel
                     return true;
                 }
 
-                $missing = array_diff($given, Config::timeframes());
-                if (!empty($missing)) {
-                    $this->telegram->sendMessage($chatId, "توجه: تایم‌فریم(های) " . implode(', ', $missing) . " در TIMEFRAMES فایل env.php نیست، پس کندلی برایشان جمع نمی‌شود و سیگنالی هم نمی‌دهند.");
-                }
             }
             if ($key === 'REVERSAL_CONFIRM_TIMEFRAME') {
                 $known = ['1m', '5m', '15m', '30m', '1h', '2h', '4h', '1D'];
@@ -2346,10 +2313,7 @@ final class AdminPanel
                 VenueListings::forget();
             }
 
-            $scanOnly = ['SCANNER_GAINER_SHARE', 'SCANNER_LOSER_SHARE', 'SCANNER_MIN_MOVE_PCT', 'MIN_VOLUME_USDT'];
-            $this->telegram->sendMessage($chatId, in_array($key, $scanOnly, true)
-                ? "ذخیره شد. برای اعمال، «اسکن الان» رو بزنید."
-                : "ذخیره شد. از همین الان اعمال می‌شود.");
+            $this->telegram->sendMessage($chatId, "ذخیره شد.");
             return true;
         }
 
@@ -2388,12 +2352,12 @@ final class AdminPanel
             }
             $origin = $this->extractForwardOrigin($message);
             if ($origin === null) {
-                $this->telegram->sendMessage($chatId, "این پیام Forward نبود. لطفاً پیام مورد نظر رو مستقیماً از کانال Forward کنید (از منوی پیام گزینه Forward، نه کپی/پیست متن).");
+                $this->telegram->sendMessage($chatId, "این پیام Forward نبود.");
                 return true;
             }
             $this->quotes->store('channel_pin', (string) $channelId, $origin['chat_id'], $origin['message_id'], $text, is_array($entities) ? $entities : []);
             $this->channels->updateSettings($channelId, ['quote_enabled' => 1]);
-            $this->telegram->sendMessage($chatId, "پیام مرجع ذخیره شد و Quote برای این کانال فعال شد. سیگنال‌های بعدی این کانال به این پیام Reply می‌کنن.");
+            $this->telegram->sendMessage($chatId, "پیام مرجع ذخیره شد و Quote فعال شد.");
             return true;
         }
 
@@ -2431,7 +2395,7 @@ final class AdminPanel
                 return true;
             }
             if (!preg_match('#^(https?://|tg://)\S+$#i', $value)) {
-                $this->telegram->sendMessage($chatId, "لینک نامعتبره. باید با http:// یا https:// یا tg:// شروع بشه و فاصله نداشته باشه.");
+                $this->telegram->sendMessage($chatId, "لینک نامعتبره.");
                 return true;
             }
             $this->setSetting("BUTTON{$slot}_URL", $value);
@@ -2458,13 +2422,13 @@ final class AdminPanel
                 }
             }
             if ($emojiId === null) {
-                $this->telegram->sendMessage($chatId, "توی این پیام ایموجی اختصاصی/پریمیومی پیدا نشد. از پنل ایموجی تلگرام یک ایموجی انتخاب و مستقیم بفرستید (نه تایپ با کیبورد معمولی).");
+                $this->telegram->sendMessage($chatId, "توی این پیام ایموجی پریمیومی پیدا نشد.");
                 return true;
             }
             $this->setSetting("BUTTON{$slot}_EMOJI_ID", $emojiId);
             $this->telegram->sendMessage(
                 $chatId,
-                "آیکون دکمه ذخیره شد.\n\nیادآوری: این آیکون روی پست‌های کانال فقط وقتی نشون داده می‌شه که ربات یوزرنیم خریداری‌شده از Fragment داشته باشه. اگه نداشته باشه، ربات خودکار بدون آیکون می‌فرسته — از «تست روی کانال» می‌تونید همین الان چک کنید."
+                "آیکون دکمه ذخیره شد."
             );
             return true;
         }
