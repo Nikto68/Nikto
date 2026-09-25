@@ -40,7 +40,6 @@ function reportDispatchCallback(array $cq): void {
             'adm:menu'       => 'handleAdminMenu',
             'adm:tags'       => 'handleAdminTags',
             'tagadd'         => 'handleAdminTagAdd',
-            'adm:emoji'      => 'handleAdminEmoji',
             'adm:colors'     => 'handleAdminColors',
             'adm:btnlabels'  => 'handleAdminButtonLabels',
             'adm:texts'      => 'handleAdminTexts',
@@ -58,8 +57,6 @@ function reportDispatchCallback(array $cq): void {
     if (isset($exact[$data])) { $exact[$data]($cq); return; }
 
     if (preg_match('/^tagdel:(\d+)$/', $data, $m))       { handleAdminTagDelete($cq, (int)$m[1]); return; }
-    if (preg_match('/^emoset:([a-z_]+)$/', $data, $m))   { handleAdminEmojiSet($cq, $m[1]); return; }
-    if (preg_match('/^emoclr:([a-z_]+)$/', $data, $m))   { handleAdminEmojiClear($cq, $m[1]); return; }
     if (preg_match('/^stset:([a-z_]+):([a-z]+)$/', $data, $m)) { handleAdminColorSet($cq, $m[1], $m[2]); return; }
     if (preg_match('/^txted:([a-z_]+)$/', $data, $m))    { handleAdminTextEdit($cq, $m[1]); return; }
     if (preg_match('/^txtclr:([a-z_]+)$/', $data, $m))   { handleAdminTextClear($cq, $m[1]); return; }
@@ -105,7 +102,6 @@ function reportDispatchMessage(array $msg): void {
             case 'report_confirm':          handleReportMedia($msg, $st); return;
             case 'awaiting_support':        handleSupportMessage($msg, $st); return;
             case 'admin_await_tag_text':    handleAdminTagText($msg, $st); return;
-            case 'admin_await_emoji':       handleAdminEmojiMessage($msg, $st['data']['slot'] ?? '', $st); return;
             case 'admin_await_start_photo': handleAdminStartPhotoMessage($msg, $st); return;
             case 'admin_await_start_text':  handleAdminStartTextMessage($msg, $st); return;
             case 'admin_await_guide_photo': handleAdminGuidePhotoMessage($msg, $st); return;

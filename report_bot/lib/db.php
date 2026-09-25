@@ -30,13 +30,6 @@ function reportEnsureSchema(SQLite3 $db): void {
         created_at INTEGER NOT NULL
     )");
 
-    $db->exec("CREATE TABLE IF NOT EXISTS premium_emoji (
-        slot TEXT PRIMARY KEY,
-        custom_emoji_id TEXT NOT NULL,
-        placeholder TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-    )");
-
     $db->exec("CREATE TABLE IF NOT EXISTS button_style (
         slot TEXT PRIMARY KEY,
         style TEXT NOT NULL,

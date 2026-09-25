@@ -1,6 +1,5 @@
 <?php
 
-const EMOJI_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_guide', 'btn_back', 'btn_approve', 'btn_reject', 'start_prefix', 'admin_prefix'];
 const BUTTON_STYLE_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_guide', 'btn_approve', 'btn_reject', 'admin_prefix'];
 const BUTTON_LABEL_SLOTS = ['btn_report', 'btn_support', 'btn_account', 'btn_guide', 'btn_back', 'btn_approve', 'btn_reject', 'admin_prefix'];
 const BUTTON_LABEL_DEFAULTS = [
@@ -97,64 +96,6 @@ function handleAdminTagDelete(array $cq, int $tagId): void {
     $stmt->execute();
     tgAnswerCallback($cq['id'], 'حذف شد.');
     tgEditReplyMarkup((int)$cq['message']['chat']['id'], $cq['message']['message_id'], kbTagsList());
-}
-
-function kbEmojiList(): array {
-    $rows = [];
-    foreach (EMOJI_SLOTS as $slot) {
-        $cur = emojiGet($slot);
-        $rows[] = [['text' => $cur['char'] . ' ' . emojiSlotLabel($slot), 'callback_data' => 'noop']];
-        $rows[] = [
-            ['text' => '✏️ تغییر', 'callback_data' => 'emoset:' . $slot],
-            ['text' => '↩️ پیش‌فرض', 'callback_data' => 'emoclr:' . $slot],
-        ];
-    }
-    $rows[] = [emojiBtn('btn_back', 'بازگشت', 'adm:menu')];
-    return ['inline_keyboard' => $rows];
-}
-
-function handleAdminEmoji(array $cq): void {
-    if (!requireAdminCq($cq)) return;
-    $a = screenAnchorFromCq($cq);
-    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '⭐ ایموجی‌های پریمیوم', [], kbEmojiList());
-    tgAnswerCallback($cq['id']);
-}
-
-function handleAdminEmojiSet(array $cq, string $slot): void {
-    if (!requireAdminCq($cq)) return;
-    if (!in_array($slot, EMOJI_SLOTS, true)) { tgAnswerCallback($cq['id'], 'نامعتبر.', true); return; }
-    $uid = (int)$cq['from']['id'];
-    $a = screenAnchorFromCq($cq);
-    stateSet($uid, 'admin_await_emoji', ['slot' => $slot, 'prompt' => $a]);
-    screenRender($a['chat_id'], $a['message_id'], $a['has_photo'], '⭐ یک پیام حاوی ایموجی پریمیوم بفرستید:', [], kbBack());
-    tgAnswerCallback($cq['id']);
-}
-
-function handleAdminEmojiClear(array $cq, string $slot): void {
-    if (!requireAdminCq($cq)) return;
-    emojiClear($slot);
-    tgAnswerCallback($cq['id'], 'به پیش‌فرض برگشت.');
-    tgEditReplyMarkup((int)$cq['message']['chat']['id'], $cq['message']['message_id'], kbEmojiList());
-}
-
-function handleAdminEmojiMessage(array $msg, string $slot, array $st = []): void {
-    $uid = (int)$msg['from']['id'];
-    $prompt = $st['data']['prompt'] ?? null;
-    $anchorChat = $prompt['chat_id'] ?? (int)$msg['chat']['id'];
-    $anchorMsg = $prompt['message_id'] ?? null;
-    $anchorPhoto = $prompt['has_photo'] ?? false;
-
-    if (!in_array($slot, EMOJI_SLOTS, true)) { stateClear($uid); return; }
-
-    $found = extractFirstCustomEmoji($msg);
-    if (!$found) {
-        screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ ایموجی پریمیومی پیدا نشد؛ دوباره تلاش کنید.', [], kbBack());
-        return;
-    }
-
-    emojiSet($slot, $found['custom_emoji_id'], $found['placeholder']);
-    stateClear($uid);
-    screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbEmojiList());
 }
 
 function handleAdminStartPhoto(array $cq): void {
@@ -554,8 +495,6 @@ function handleAdminStatus(array $cq): void {
     $stid = settingGet('support_topic_id', '—');
     $cid = settingGet('report_channel_id', '—');
     $tags = count(tagGetAll());
-    $emojiCount = 0;
-    foreach (EMOJI_SLOTS as $s) if (emojiGet($s)['id']) $emojiCount++;
     $photo = settingGet('start_photo_file_id') ? 'دارد' : 'ندارد';
 
     $text = "ℹ️ وضعیت\n\n" .
@@ -563,7 +502,6 @@ function handleAdminStatus(array $cq): void {
         "گروه پشتیبانی: $sgid · تاپیک: $stid\n" .
         "کانال: $cid\n" .
         "تگ‌ها: $tags\n" .
-        "ایموجی پریمیوم: $emojiCount از " . count(EMOJI_SLOTS) . "\n" .
         "عکس خوش‌آمد: $photo";
 
     $a = screenAnchorFromCq($cq);

@@ -45,21 +45,3 @@ function entityTruncate(array $part, int $max): array {
     }
     return ['text' => mb_convert_encoding(substr($u, 0, $cut * 2), 'UTF-8', 'UTF-16LE') . '…', 'entities' => $kept];
 }
-
-function extractFirstCustomEmoji(array $message): ?array {
-    $entities = $message['entities'] ?? ($message['caption_entities'] ?? []);
-    $text = $message['text'] ?? ($message['caption'] ?? '');
-    if (!$entities || $text === '') return null;
-
-    $utf16 = mb_convert_encoding($text, 'UTF-16LE', 'UTF-8');
-    foreach ($entities as $e) {
-        if (($e['type'] ?? '') === 'custom_emoji') {
-            $slice = substr($utf16, (int)$e['offset'] * 2, (int)$e['length'] * 2);
-            return [
-                'custom_emoji_id' => $e['custom_emoji_id'],
-                'placeholder' => mb_convert_encoding($slice, 'UTF-8', 'UTF-16LE'),
-            ];
-        }
-    }
-    return null;
-}

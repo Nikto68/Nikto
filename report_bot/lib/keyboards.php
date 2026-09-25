@@ -49,7 +49,6 @@ function kbReview(int $submissionId, array $tags, ?int $selectedTagId, bool $dec
 function kbAdminMenu(): array {
     return ['inline_keyboard' => [
         [['text' => '🏷 مدیریت تگ‌ها', 'callback_data' => 'adm:tags']],
-        [['text' => '⭐ ایموجی‌های پریمیوم', 'callback_data' => 'adm:emoji']],
         [['text' => '🎨 رنگ دکمه‌ها', 'callback_data' => 'adm:colors']],
         [['text' => '📝 متن دکمه‌ها', 'callback_data' => 'adm:btnlabels']],
         [['text' => '✏️ متن‌های ربات', 'callback_data' => 'adm:texts']],

@@ -5,12 +5,8 @@ function startScreenContent(int $uid): array {
     $startEntities = json_decode(settingGet('start_text_entities', '[]'), true) ?: [];
 
     if ($startText === null) {
-        $built = entityConcat([
-            emojiTextPart('start_prefix'),
-            ['text' => " به ربات گزارشات خوش آمدید!", 'entities' => []],
-        ]);
-        $startText = $built['text'];
-        $startEntities = $built['entities'];
+        $startText = REPORT_EMOJI_DEFAULTS['start_prefix'] . ' به ربات گزارشات خوش آمدید!';
+        $startEntities = [];
     }
 
     return [
