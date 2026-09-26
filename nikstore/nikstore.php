@@ -1,4 +1,13 @@
 <?php
+$NS_CONFIG = [
+    'admin_password' => 'change-me',
+    'site_url' => '',
+    'db' => ['driver' => 'sqlite', 'host' => 'localhost', 'name' => '', 'user' => '', 'pass' => ''],
+    'storage' => __DIR__ . '/nikstore-data',
+    'secret' => '',
+    'debug' => false,
+];
+
 define('NS_ROOT', __DIR__);
 define('NS_SELF', basename(__FILE__));
 define('NS_VERSION', '1.1.0');
@@ -9,13 +18,8 @@ if (PHP_VERSION_ID < 80000) {
     http_response_code(500);
     exit('Nik Store به PHP 8.0 یا بالاتر نیاز دارد. نسخه‌ی فعلی: ' . PHP_VERSION);
 }
-if (!is_file(NS_ROOT . '/nikstore-config.php')) {
-    http_response_code(500);
-    header('Content-Type: text/plain; charset=utf-8');
-    exit("nikstore-config.php پیدا نشد؛ این فایل باید کنار nikstore.php باشد.");
-}
-
-$GLOBALS['NS_CFG'] = require NS_ROOT . '/nikstore-config.php';
+if (is_file(NS_ROOT . '/nikstore-config.php')) $NS_CONFIG = array_replace($NS_CONFIG, (array)(require NS_ROOT . '/nikstore-config.php'));
+$GLOBALS['NS_CFG'] = $NS_CONFIG;
 define('NS_STORAGE', rtrim((string)($GLOBALS['NS_CFG']['storage'] ?? NS_ROOT . '/nikstore-data'), '/\\'));
 
 date_default_timezone_set('Asia/Tehran');
@@ -27,7 +31,6 @@ if (!empty($GLOBALS['NS_CFG']['debug'])) {
 } else {
     ini_set('display_errors', '0');
 }
-ns_storage_ready();
 
 set_exception_handler(function (Throwable $e) {
     error_log('[nikstore] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
@@ -44,6 +47,9 @@ set_exception_handler(function (Throwable $e) {
        . ($dbg ? '<pre dir="ltr" style="text-align:left;white-space:pre-wrap;color:#fda4af">' . htmlspecialchars($e->getMessage() . "\n" . $e->getFile() . ':' . $e->getLine()) . '</pre>' : '')
        . '</div></body>';
 });
+
+ns_storage_ready();
+ns_secret_boot();
 
 function cfg($key, $default = null) {
     return $GLOBALS['NS_CFG'][$key] ?? $default;
@@ -195,6 +201,19 @@ function ns_storage_ready() {
     }
 }
 
+function ns_secret_boot() {
+    $s = (string)cfg('secret', '');
+    if (strlen($s) >= 16 && $s !== 'change-this-to-a-long-random-string') return;
+    $f = NS_STORAGE . '/secret.php';
+    $v = is_file($f) ? (string)(include $f) : '';
+    if (strlen($v) < 32) {
+        $v = bin2hex(random_bytes(32));
+        if (@file_put_contents($f, "<?php return '" . $v . "';\n", LOCK_EX) === false)
+            throw new RuntimeException('پوشه‌ی ' . basename(NS_STORAGE) . ' قابلِ نوشتن نیست؛ دسترسیِ پوشه‌ی سایت را ۷۵۵ کنید.');
+    }
+    $GLOBALS['NS_CFG']['secret'] = $v;
+}
+
 function session_boot() {
     if (session_status() === PHP_SESSION_ACTIVE) return;
     $life = 30 * 86400;
@@ -306,7 +325,7 @@ function db() {
         } else {
             if (!in_array('sqlite', PDO::getAvailableDrivers(), true))
                 throw new RuntimeException('افزونه‌ی pdo_sqlite روی هاست فعال نیست — از پنل هاست فعالش کنید یا به MySQL بروید.');
-            $path = (string)($c['path'] ?? NS_STORAGE . '/nikstore.sqlite');
+            $path = (string)($c['path'] ?? ns_db_file());
             $pdo = new PDO('sqlite:' . $path, null, null, $opt);
             $pdo->exec('PRAGMA journal_mode = WAL');
             $pdo->exec('PRAGMA busy_timeout = 5000');
@@ -318,6 +337,16 @@ function db() {
     $GLOBALS['NS_DRIVER'] = $driver;
     ns_migrate($pdo);
     return $pdo;
+}
+
+function ns_db_file() {
+    if (is_file(NS_STORAGE . '/nikstore.sqlite')) return NS_STORAGE . '/nikstore.sqlite';
+    $f = NS_STORAGE . '/db-' . substr(hash_hmac('sha256', 'db', (string)cfg('secret', '')), 0, 16) . '.sqlite';
+    if (!is_file($f)) {
+        $any = glob(NS_STORAGE . '/db-*.sqlite') ?: [];
+        if ($any) return $any[0];
+    }
+    return $f;
 }
 
 function db_driver() { db(); return $GLOBALS['NS_DRIVER']; }
@@ -1278,7 +1307,9 @@ function ns_admin() {
 
     if ($a === 'login') {
         $err = '';
-        if (is_post()) {
+        $ready = (string)setting('admin_hash') !== '' || !in_array((string)cfg('admin_password', ''), ['', 'change-me'], true);
+        if (!$ready) $err = 'رمزِ پنل تنظیم نشده است؛ بالای فایلِ ' . NS_SELF . ' مقدارِ admin_password را عوض کنید.';
+        elseif (is_post()) {
             csrf_check();
             if (!throttle_ok('adm:' . client_ip(), 8, 900)) $err = 'تلاشِ زیاد؛ ۱۵ دقیقه بعد امتحان کنید.';
             elseif (!admin_check_pass((string)($_POST['pass'] ?? ''))) { usleep(400000); $err = 'رمز اشتباه است.'; }
