@@ -198,28 +198,12 @@ final class TextFormatManager
 {
     public function get(string $key): array
     {
-        $stmt = Database::pdo()->prepare('SELECT text_value, entities FROM text_formats WHERE text_key = :k LIMIT 1');
-        $stmt->execute([':k' => $key]);
-        $row = $stmt->fetch();
-        if ($row === false) {
-            return ['text' => '', 'entities' => []];
-        }
-        $entities = json_decode((string) $row['entities'], true);
-        return ['text' => (string) $row['text_value'], 'entities' => is_array($entities) ? $entities : []];
+        return TextStore::text($key) ?? ['text' => '', 'entities' => []];
     }
 
     public function set(string $key, string $text, array $entities, ?int $updatedBy = null): void
     {
-        $stmt = Database::pdo()->prepare(
-            'INSERT INTO text_formats (text_key, text_value, entities, updated_at, updated_by)
-             VALUES (:k, :v, :e, :now, :by)
-             ON CONFLICT(text_key) DO UPDATE SET text_value = excluded.text_value, entities = excluded.entities,
-                updated_at = excluded.updated_at, updated_by = excluded.updated_by'
-        );
-        $stmt->execute([
-            ':k' => $key, ':v' => $text, ':e' => json_encode($entities, JSON_UNESCAPED_UNICODE),
-            ':now' => date('Y-m-d H:i:s'), ':by' => $updatedBy,
-        ]);
+        TextStore::putText($key, $text, $entities, $updatedBy);
     }
 
     public function render(string $key, array $placeholders = []): array
@@ -233,8 +217,7 @@ final class TextFormatManager
 
     public function listKeys(): array
     {
-        $stmt = Database::pdo()->query('SELECT text_key FROM text_formats ORDER BY text_key ASC');
-        return array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+        return TextStore::textKeys();
     }
 }
 
@@ -1234,7 +1217,7 @@ final class AdminPanel
         }
 
         if ($action === 'setstyle' && isset($parts[3]) && in_array($parts[3], Config::channelButtonStyles(), true)) {
-            $this->setSetting("BUTTON{$slot}_STYLE", $parts[3]);
+            TextStore::putValue("BUTTON{$slot}_STYLE", $parts[3]);
         }
 
         $style = Config::channelButtonStyle($slot);
@@ -2369,7 +2352,7 @@ final class AdminPanel
             }
             $value = trim($text);
             if ($value === 'حذف') {
-                Database::pdo()->prepare('DELETE FROM bot_settings WHERE setting_key = :k')->execute([':k' => "BUTTON{$slot}_TEXT"]);
+                TextStore::putValue("BUTTON{$slot}_TEXT", null);
                 $this->telegram->sendMessage($chatId, "متن دکمه به مقدار پیش‌فرض برگشت.");
                 return true;
             }
@@ -2377,7 +2360,7 @@ final class AdminPanel
                 $this->telegram->sendMessage($chatId, "متن دکمه نمی‌تونه خالی باشه.");
                 return true;
             }
-            $this->setSetting("BUTTON{$slot}_TEXT", $value);
+            TextStore::putValue("BUTTON{$slot}_TEXT", $value);
             $this->telegram->sendMessage($chatId, "متن دکمه ذخیره شد.");
             return true;
         }
@@ -2390,7 +2373,7 @@ final class AdminPanel
             }
             $value = trim($text);
             if ($value === 'حذف') {
-                Database::pdo()->prepare('DELETE FROM bot_settings WHERE setting_key = :k')->execute([':k' => "BUTTON{$slot}_URL"]);
+                TextStore::putValue("BUTTON{$slot}_URL", null);
                 $this->telegram->sendMessage($chatId, "لینک دکمه به مقدار پیش‌فرض برگشت.");
                 return true;
             }
@@ -2398,7 +2381,7 @@ final class AdminPanel
                 $this->telegram->sendMessage($chatId, "لینک نامعتبره.");
                 return true;
             }
-            $this->setSetting("BUTTON{$slot}_URL", $value);
+            TextStore::putValue("BUTTON{$slot}_URL", $value);
             $this->telegram->sendMessage($chatId, "لینک دکمه ذخیره شد.");
             return true;
         }
@@ -2410,7 +2393,7 @@ final class AdminPanel
                 return true;
             }
             if (trim($text) === 'حذف') {
-                Database::pdo()->prepare('DELETE FROM bot_settings WHERE setting_key = :k')->execute([':k' => "BUTTON{$slot}_EMOJI_ID"]);
+                TextStore::putValue("BUTTON{$slot}_EMOJI_ID", null);
                 $this->telegram->sendMessage($chatId, "آیکون دکمه حذف شد.");
                 return true;
             }
@@ -2425,7 +2408,7 @@ final class AdminPanel
                 $this->telegram->sendMessage($chatId, "توی این پیام ایموجی پریمیومی پیدا نشد.");
                 return true;
             }
-            $this->setSetting("BUTTON{$slot}_EMOJI_ID", $emojiId);
+            TextStore::putValue("BUTTON{$slot}_EMOJI_ID", $emojiId);
             $this->telegram->sendMessage(
                 $chatId,
                 "آیکون دکمه ذخیره شد."

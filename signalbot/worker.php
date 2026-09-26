@@ -488,6 +488,12 @@ final class Worker
 
         $this->heartbeat();
 
+        try {
+            Database::maintain();
+        } catch (Throwable $e) {
+            Logger::warning('worker', 'database maintenance skipped', ['error' => $e->getMessage()]);
+        }
+
         $this->maybeRunScanner();
         $this->primeMarketData();
 

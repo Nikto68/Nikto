@@ -1178,18 +1178,18 @@ final class Config
     public static function channelButtonText(int $slot): string
     {
         $default = self::CHANNEL_BUTTON_DEFAULTS[$slot]['text'] ?? '';
-        return self::dbOverride("BUTTON{$slot}_TEXT") ?? $default;
+        return TextStore::value("BUTTON{$slot}_TEXT") ?? $default;
     }
 
     public static function channelButtonUrl(int $slot): string
     {
         $default = self::CHANNEL_BUTTON_DEFAULTS[$slot]['url'] ?? '';
-        return self::dbOverride("BUTTON{$slot}_URL") ?? $default;
+        return TextStore::value("BUTTON{$slot}_URL") ?? $default;
     }
 
     public static function channelButtonStyle(int $slot): string
     {
-        $v = self::dbOverride("BUTTON{$slot}_STYLE");
+        $v = TextStore::value("BUTTON{$slot}_STYLE");
         if ($v !== null && in_array($v, self::CHANNEL_BUTTON_STYLES, true)) {
             return $v;
         }
@@ -1198,7 +1198,7 @@ final class Config
 
     public static function channelButtonEmojiId(int $slot): ?string
     {
-        return self::dbOverride("BUTTON{$slot}_EMOJI_ID");
+        return TextStore::value("BUTTON{$slot}_EMOJI_ID");
     }
 
     public static function channelButtonStyles(): array
@@ -1335,16 +1335,6 @@ final class Database
                 setting_value TEXT NULL,
                 updated_at TEXT NOT NULL,
                 UNIQUE (setting_key)
-            )",
-
-            "CREATE TABLE IF NOT EXISTS text_formats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                text_key TEXT NOT NULL,
-                text_value TEXT NOT NULL,
-                entities TEXT NULL,
-                updated_at TEXT NOT NULL,
-                updated_by INTEGER NULL,
-                UNIQUE (text_key)
             )",
 
             "CREATE TABLE IF NOT EXISTS exchanges (
@@ -1599,6 +1589,7 @@ final class Database
         self::ensureColumn($pdo, 'symbols', 'bucket', "TEXT NOT NULL DEFAULT 'liquid'");
 
         self::pruneLogs($pdo);
+        self::moveTextsToFile($pdo);
         self::seedDefaults($pdo);
         self::resetLooseScoreOverride($pdo);
     }
@@ -1632,6 +1623,46 @@ final class Database
         $pdo->exec("ALTER TABLE $table ADD COLUMN $column $definition");
     }
 
+    public static function maintain(): void
+    {
+        $pdo = self::pdo();
+        $read = $pdo->prepare('SELECT setting_value FROM bot_settings WHERE setting_key = :k');
+        $read->execute([':k' => 'db_maintenance_at']);
+        if (time() - (int) ($read->fetchColumn() ?: 0) < 86400) {
+            return;
+        }
+        $pdo->prepare(
+            "INSERT INTO bot_settings (setting_key, setting_value, updated_at) VALUES ('db_maintenance_at', :v, :now)
+             ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = excluded.updated_at"
+        )->execute([':v' => (string) time(), ':now' => date('Y-m-d H:i:s')]);
+
+        $cutoff = time() - 3 * 86400;
+        $since = date('Y-m-d H:i:s', $cutoff);
+        try {
+            $stale = $pdo->prepare('SELECT exchange_id, symbol, timeframe FROM candles GROUP BY exchange_id, symbol, timeframe HAVING MAX(open_time) < :c');
+            $stale->bindValue(':c', $cutoff * 1000, PDO::PARAM_INT);
+            $stale->execute();
+            $drop = $pdo->prepare('DELETE FROM candles WHERE exchange_id = :e AND symbol = :s AND timeframe = :t');
+            foreach ($stale->fetchAll() as $row) {
+                $drop->execute([':e' => $row['exchange_id'], ':s' => $row['symbol'], ':t' => $row['timeframe']]);
+            }
+            foreach (['zones', 'order_blocks', 'fvgs'] as $table) {
+                $pdo->prepare("DELETE FROM $table WHERE created_at < :c")->execute([':c' => $since]);
+            }
+            $pdo->prepare('DELETE FROM scanner_runs WHERE started_at < :c')->execute([':c' => $since]);
+            $pdo->prepare('DELETE FROM admin_states WHERE updated_at < :c')->execute([':c' => $since]);
+        } catch (Throwable $e) {
+            Logger::warning('db', 'cleanup failed', ['error' => $e->getMessage()]);
+        }
+        try {
+            $pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+            $pdo->exec('VACUUM');
+            $pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        } catch (Throwable $e) {
+            Logger::warning('db', 'vacuum failed', ['error' => $e->getMessage()]);
+        }
+    }
+
     private static function pruneLogs(PDO $pdo): void
     {
         $days = Config::logRetentionDays();
@@ -1657,22 +1688,54 @@ final class Database
 
     private const RESULT_TP2_V1 = "🏆 تارگت ۲ فعال شد | {symbol}\n\n💰 سود نهایی با اهرم {leverage}: {pnl}%\n📈 حرکت قیمت: {move}%\n\n📍 ورود: {entry}\n🎯 خروج: {exit}\n\n✅ معامله با موفقیت بسته شد. ربات به سراغ سیگنال بعدی می‌رود.";
 
-    private static function upgradeUntouchedText(PDO $pdo, string $key, string $oldDefault, string $newValue, string $now): void
+    private static function moveTextsToFile(PDO $pdo): void
     {
         try {
-            $stmt = $pdo->prepare('SELECT text_value, entities FROM text_formats WHERE text_key = :k');
-            $stmt->execute([':k' => $key]);
-            $row = $stmt->fetch();
-            if ($row === false) {
+            $hasTable = $pdo->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'text_formats'")->fetchColumn() !== false;
+            $buttons = $pdo->query("SELECT setting_key, setting_value FROM bot_settings WHERE setting_key LIKE 'BUTTON%'")->fetchAll();
+            if (!$hasTable && empty($buttons)) {
                 return;
             }
-            $entities = json_decode((string) ($row['entities'] ?? '[]'), true);
-            if ((string) $row['text_value'] !== $oldDefault || !empty($entities)) {
-                return;
+            $rows = $hasTable ? $pdo->query('SELECT text_key, text_value, entities, updated_at, updated_by FROM text_formats')->fetchAll() : [];
+            TextStore::update(static function (array $data) use ($rows, $buttons): array {
+                foreach ($rows as $row) {
+                    $key = (string) $row['text_key'];
+                    if (isset($data['texts'][$key])) {
+                        continue;
+                    }
+                    $entities = json_decode((string) ($row['entities'] ?? '[]'), true);
+                    $data['texts'][$key] = [
+                        'text' => (string) $row['text_value'],
+                        'entities' => is_array($entities) ? array_values($entities) : [],
+                        'updated_at' => (string) $row['updated_at'],
+                        'updated_by' => $row['updated_by'] !== null ? (int) $row['updated_by'] : null,
+                    ];
+                }
+                foreach ($buttons as $row) {
+                    $key = (string) $row['setting_key'];
+                    if (!isset($data['buttons'][$key]) && (string) $row['setting_value'] !== '') {
+                        $data['buttons'][$key] = (string) $row['setting_value'];
+                    }
+                }
+                return $data;
+            });
+            $saved = TextStore::snapshot();
+            foreach ($rows as $row) {
+                if (!isset($saved['texts'][(string) $row['text_key']])) {
+                    return;
+                }
             }
-            $pdo->prepare('UPDATE text_formats SET text_value = :v, updated_at = :u WHERE text_key = :k')
-                ->execute([':v' => $newValue, ':u' => $now, ':k' => $key]);
-        } catch (Throwable) {
+            foreach ($buttons as $row) {
+                if ((string) $row['setting_value'] !== '' && !isset($saved['buttons'][(string) $row['setting_key']])) {
+                    return;
+                }
+            }
+            if ($hasTable) {
+                $pdo->exec('DROP TABLE IF EXISTS text_formats');
+            }
+            $pdo->exec("DELETE FROM bot_settings WHERE setting_key LIKE 'BUTTON%'");
+        } catch (Throwable $e) {
+            Logger::error('texts', 'could not move texts to texts.json', ['error' => $e->getMessage()]);
         }
     }
 
@@ -1722,18 +1785,36 @@ final class Database
             'result_be' => "🛡 معامله بدون ضرر بسته شد | {symbol}\n\nقیمت بعد از فعال شدن تارگت ۱ به نقطه ورود برگشت و چون معامله ریسک‌فری شده بود، بدون ضرر بسته شد.\n\n📍 ورود: {entry}\n🎯 خروج: {exit}\n💰 نتیجه با اهرم {leverage}: {pnl}%\n\nربات به سراغ سیگنال بعدی می‌رود.",
             'result_timeout' => "⏱ معامله به‌خاطر طول کشیدن بسته شد | {symbol}\n\nقیمت در زمان مجاز به تارگت ۱ نرسید، پس ستاپ اعتبارش رو از دست داد و معامله با قیمت فعلی بسته شد.\n\n📍 ورود: {entry}\n🎯 خروج: {exit}\n💰 نتیجه با اهرم {leverage}: {pnl}%\n\nربات به سراغ سیگنال بعدی می‌رود.",
         ];
-        $stmt = $pdo->prepare(
-            'INSERT OR IGNORE INTO text_formats (text_key, text_value, entities, updated_at) VALUES (:k, :v, :e, :u)'
-        );
-        foreach ($defaults as $key => $value) {
-            $stmt->execute([':k' => $key, ':v' => $value, ':e' => json_encode([]), ':u' => $now]);
+        $upgrades = [
+            ['signal_template', self::LEGACY_SIGNAL_TEMPLATE, self::AUTO_SIGNAL_TEMPLATE],
+            ['signal_template', self::AUTO_SIGNAL_TEMPLATE_V1, self::AUTO_SIGNAL_TEMPLATE],
+            ['signal_template', self::AUTO_SIGNAL_TEMPLATE_V2, self::AUTO_SIGNAL_TEMPLATE],
+            ['signal_template', self::AUTO_SIGNAL_TEMPLATE_V3, self::AUTO_SIGNAL_TEMPLATE],
+            ['result_tp2', self::RESULT_TP2_V1, $defaults['result_tp2']],
+        ];
+        $apply = static function (array $data) use ($defaults, $upgrades, $now): array {
+            foreach ($defaults as $key => $value) {
+                if (!isset($data['texts'][$key])) {
+                    $data['texts'][$key] = ['text' => $value, 'entities' => [], 'updated_at' => $now, 'updated_by' => null];
+                }
+            }
+            foreach ($upgrades as [$key, $old, $new]) {
+                $entry = $data['texts'][$key] ?? null;
+                if (is_array($entry) && (string) ($entry['text'] ?? '') === $old && empty($entry['entities'])) {
+                    $data['texts'][$key] = ['text' => $new, 'entities' => [], 'updated_at' => $now, 'updated_by' => null];
+                }
+            }
+            return $data;
+        };
+        try {
+            $current = TextStore::snapshot();
+            $probe = $apply($current);
+            if ($probe !== $current) {
+                TextStore::update($apply);
+            }
+        } catch (Throwable $e) {
+            Logger::error('texts', 'could not seed texts.json', ['error' => $e->getMessage()]);
         }
-
-        self::upgradeUntouchedText($pdo, 'signal_template', self::LEGACY_SIGNAL_TEMPLATE, self::AUTO_SIGNAL_TEMPLATE, $now);
-        self::upgradeUntouchedText($pdo, 'signal_template', self::AUTO_SIGNAL_TEMPLATE_V1, self::AUTO_SIGNAL_TEMPLATE, $now);
-        self::upgradeUntouchedText($pdo, 'signal_template', self::AUTO_SIGNAL_TEMPLATE_V2, self::AUTO_SIGNAL_TEMPLATE, $now);
-        self::upgradeUntouchedText($pdo, 'signal_template', self::AUTO_SIGNAL_TEMPLATE_V3, self::AUTO_SIGNAL_TEMPLATE, $now);
-        self::upgradeUntouchedText($pdo, 'result_tp2', self::RESULT_TP2_V1, $defaults['result_tp2'], $now);
 
         foreach (Config::adminIds() as $adminId) {
             $ins = $pdo->prepare(
@@ -1742,6 +1823,130 @@ final class Database
             );
             $ins->execute([':id' => $adminId, ':now' => $now]);
         }
+    }
+}
+
+final class TextStore
+{
+    private const EMPTY = ['texts' => [], 'buttons' => []];
+
+    public static function path(): string
+    {
+        return Config::storageDir() . '/texts.json';
+    }
+
+    public static function snapshot(): array
+    {
+        return self::load() ?? self::EMPTY;
+    }
+
+    public static function text(string $key): ?array
+    {
+        $entry = self::snapshot()['texts'][$key] ?? null;
+        if (!is_array($entry) || !isset($entry['text'])) {
+            return null;
+        }
+        return [
+            'text' => (string) $entry['text'],
+            'entities' => is_array($entry['entities'] ?? null) ? $entry['entities'] : [],
+        ];
+    }
+
+    public static function textKeys(): array
+    {
+        $keys = array_map('strval', array_keys(self::snapshot()['texts']));
+        sort($keys);
+        return $keys;
+    }
+
+    public static function putText(string $key, string $text, array $entities, ?int $updatedBy = null): void
+    {
+        self::update(static function (array $data) use ($key, $text, $entities, $updatedBy): array {
+            $data['texts'][$key] = [
+                'text' => $text,
+                'entities' => array_values($entities),
+                'updated_at' => date('Y-m-d H:i:s'),
+                'updated_by' => $updatedBy,
+            ];
+            return $data;
+        });
+    }
+
+    public static function value(string $key): ?string
+    {
+        $value = self::snapshot()['buttons'][$key] ?? null;
+        return is_scalar($value) && (string) $value !== '' ? (string) $value : null;
+    }
+
+    public static function putValue(string $key, ?string $value): void
+    {
+        self::update(static function (array $data) use ($key, $value): array {
+            if ($value === null || $value === '') {
+                unset($data['buttons'][$key]);
+            } else {
+                $data['buttons'][$key] = $value;
+            }
+            return $data;
+        });
+    }
+
+    public static function update(callable $change): void
+    {
+        $dir = Config::storageDir();
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        $lock = @fopen($dir . '/.texts.lock', 'c');
+        if ($lock === false) {
+            throw new RuntimeException('texts.json lock could not be opened');
+        }
+        try {
+            flock($lock, LOCK_EX);
+            $current = self::load();
+            if ($current === null) {
+                throw new RuntimeException('texts.json is not valid JSON; leaving it untouched');
+            }
+            $next = $change($current);
+            $next = [
+                'texts' => is_array($next['texts'] ?? null) ? $next['texts'] : [],
+                'buttons' => is_array($next['buttons'] ?? null) ? $next['buttons'] : [],
+            ];
+            ksort($next['texts']);
+            ksort($next['buttons']);
+            if ($next === $current && is_file(self::path())) {
+                return;
+            }
+            $json = json_encode($next, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                throw new RuntimeException('texts could not be encoded');
+            }
+            $tmp = self::path() . '.tmp';
+            if (@file_put_contents($tmp, $json . "\n") === false || !@rename($tmp, self::path())) {
+                @unlink($tmp);
+                throw new RuntimeException('texts.json could not be written');
+            }
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+
+    private static function load(): ?array
+    {
+        $path = self::path();
+        clearstatcache(true, $path);
+        if (!is_file($path)) {
+            return self::EMPTY;
+        }
+        $raw = @file_get_contents($path);
+        $data = is_string($raw) ? json_decode($raw, true) : null;
+        if (!is_array($data)) {
+            return null;
+        }
+        return [
+            'texts' => is_array($data['texts'] ?? null) ? $data['texts'] : [],
+            'buttons' => is_array($data['buttons'] ?? null) ? $data['buttons'] : [],
+        ];
     }
 }
 
