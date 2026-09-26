@@ -13,6 +13,7 @@ const NIKTO_CONFIG = [
     'http_proxy'     => '',
     'data_proxy'     => '',
     'coinglass_key'  => '',
+    'coingecko_key'  => '',
 ];
 }
 namespace Nikto\Bundle {
@@ -175,6 +176,7 @@ final class Runtime
             'http_proxy'     => (string) ($config['http_proxy'] ?? ''),
             'data_proxy'     => (string) ($config['data_proxy'] ?? ''),
             'coinglass_key'  => (string) ($config['coinglass_key'] ?? ''),
+            'coingecko_key'  => (string) ($config['coingecko_key'] ?? ''),
             'db_path'        => $data . '/bot.sqlite',
             'timezone'       => (string) ($config['timezone'] ?? 'Asia/Tehran'),
             'brand'          => (string) ($config['brand'] ?? 'NIKTO CRYPTO'),
@@ -644,6 +646,7 @@ final class Config
             'http_proxy'     => '',
             'data_proxy'     => '',
             'coinglass_key'  => '',
+            'coingecko_key'  => '',
             'api_keys'       => [],
             'log_level'      => 'info',
             'webhook_secret' => '',
@@ -991,6 +994,18 @@ final class Diagnostics
 
         $proxy = Http::proxy();
         $add(null, 'پراکسی داده', $proxy === '' ? 'ندارد (اتصال مستقیم)' : (string) preg_replace('#//[^@/]*@#', '//***@', $proxy));
+
+        if (\Nikto\Data\CoinGeckoApi::enabled()) {
+            Http::resetFailures();
+            $ping = \Nikto\Data\CoinGeckoApi::get('/ping', [], 10);
+            $add(
+                is_array($ping),
+                'کلید CoinGecko',
+                is_array($ping) ? 'کلید معتبر است' : (Http::explainFailures(1) !== '' ? ltrim(Http::explainFailures(1), '• ') : 'پاسخی نیامد')
+            );
+        } else {
+            $add(null, 'کلید CoinGecko', 'تنظیم نشده (رایگان؛ coingecko_key بالای فایل)');
+        }
 
         if (\Nikto\Data\CoinGlass::enabled()) {
             Http::resetFailures();
@@ -2556,6 +2571,82 @@ use Nikto\Core\Config;
 use Nikto\Core\Http;
 
 /**
+ * CoinGecko API with a free Demo key (coingecko_key). CoinGecko serves Binance Futures data from its own servers,
+ * so the prices and futures cards keep working where Binance blocks this server.
+ */
+final class CoinGeckoApi
+{
+    public const BASE = 'https://api.coingecko.com/api/v3';
+
+    public static function enabled(): bool
+    {
+        return trim((string) Config::get('coingecko_key', '')) !== '';
+    }
+
+    public static function headers(): array
+    {
+        return self::enabled() ? ['x-cg-demo-api-key: ' . trim((string) Config::get('coingecko_key'))] : [];
+    }
+
+    public static function get(string $path, array $query = [], int $timeout = 25): ?array
+    {
+        return Http::getJson(self::BASE . $path . ($query !== [] ? '?' . http_build_query($query) : ''), self::headers(), $timeout, 1);
+    }
+
+    /**
+     * Binance USDT perpetuals as Binance-shaped tickers, plus pair => CoinGecko coin id for sparklines.
+     *
+     * @return array{0: array, 1: array<string, string>}
+     */
+    public static function futuresTickers(string $exchangeId = 'binance_futures'): array
+    {
+        $data = self::get('/derivatives/exchanges/' . $exchangeId, ['include_tickers' => 'unexpired'], 30);
+        $rows = [];
+        $ids = [];
+        foreach ((array) ($data['tickers'] ?? []) as $t) {
+            $base = strtoupper((string) ($t['base'] ?? ''));
+            if (!is_array($t) || ($t['contract_type'] ?? '') !== 'perpetual' || strtoupper((string) ($t['target'] ?? '')) !== 'USDT'
+                || !preg_match('/^[A-Z0-9]+$/', $base)
+            ) {
+                continue;
+            }
+            $pair = $base . 'USDT';
+            $last = (float) ($t['converted_last']['usd'] ?? 0) ?: (float) ($t['last'] ?? 0);
+            $rows[] = Exchanges::ticker($pair, $last, (float) ($t['h24_percentage_change'] ?? 0), 0.0, 0.0, (float) ($t['converted_volume']['usd'] ?? 0));
+            if (($t['coin_id'] ?? '') !== '') {
+                $ids[$pair] = (string) $t['coin_id'];
+            }
+        }
+
+        return [$rows, $ids];
+    }
+
+    /** Last 24 hourly prices per CoinGecko coin id, from the 7-day sparkline of /coins/markets. */
+    public static function sparklines(array $coinIds): array
+    {
+        $coinIds = array_values(array_unique(array_filter($coinIds)));
+        if ($coinIds === []) {
+            return [];
+        }
+        $data = self::get('/coins/markets', ['vs_currency' => 'usd', 'ids' => implode(',', $coinIds), 'sparkline' => 'true', 'per_page' => 250]);
+        $out = [];
+        foreach (is_array($data) ? $data : [] as $row) {
+            $prices = $row['sparkline_in_7d']['price'] ?? null;
+            if (is_array($row) && isset($row['id']) && is_array($prices)) {
+                $out[(string) $row['id']] = array_slice(array_map('floatval', $prices), -24);
+            }
+        }
+
+        return $out;
+    }
+}
+}
+
+namespace Nikto\Data {
+use Nikto\Core\Config;
+use Nikto\Core\Http;
+
+/**
  * CoinGlass API v4 (paid; key set as coinglass_key). CoinGlass reads the exchanges on its own servers, so it works
  * even where Binance blocks this server. Endpoints the key's plan doesn't include return null and callers fall back
  * to the exchanges: order book needs Standard, coins-markets needs Standard, 1h price history needs Startup.
@@ -3170,8 +3261,9 @@ final class FuturesProvider
             $tickers = Mock::futuresTickers();
             $tradable = self::tradable(Mock::futuresExchangeInfo());
             $exchange = 'Binance';
+            $coinIds = [];
         } else {
-            [$tickers, $tradable, $exchange] = self::tickers();
+            [$tickers, $tradable, $exchange, $coinIds] = self::tickers();
         }
 
         if (!is_array($tickers) || $tickers === [] || array_values($tickers) !== $tickers) {
@@ -3183,13 +3275,23 @@ final class FuturesProvider
         if ($result === null) {
             return null;
         }
-        $result['exchange'] = $exchange;
-        $result['source'] = $exchange === 'CoinGlass' ? 'CoinGlass · All exchanges' : $exchange . ' Futures';
+        // CoinGecko relays Binance Futures itself, so the card keeps the Binance title.
+        $result['exchange'] = $exchange === 'CoinGecko' ? 'Binance' : $exchange;
+        $result['source'] = match ($exchange) {
+            'CoinGlass' => 'CoinGlass · All exchanges',
+            'CoinGecko' => 'CoinGecko · Binance Futures',
+            default     => $exchange . ' Futures',
+        };
 
         if ($withSparkline) {
+            $shown = array_merge(array_column($result['gainers'], 'pair'), array_column($result['losers'], 'pair'));
+            $geckoSparks = $exchange === 'CoinGecko'
+                ? CoinGeckoApi::sparklines(array_map(static fn (string $p): string => $coinIds[$p] ?? '', $shown))
+                : [];
             foreach (['gainers', 'losers'] as $side) {
                 foreach ($result[$side] as $i => $row) {
-                    $result[$side][$i]['spark'] = self::sparkline((string) $row['pair'], (float) $row['change_pct'], $exchange);
+                    $pair = (string) $row['pair'];
+                    $result[$side][$i]['spark'] = $geckoSparks[$coinIds[$pair] ?? ''] ?? self::sparkline($pair, (float) $row['change_pct'], $exchange);
                 }
             }
         }
@@ -3201,14 +3303,20 @@ final class FuturesProvider
      * Binance Futures first; if it is blocked for the server's region (HTTP 451/403) or down,
      * fall back to other exchanges' USDT perpetuals.
      *
-     * @return array{0: ?array, 1: ?array, 2: string}
+     * @return array{0: ?array, 1: ?array, 2: string, 3: array<string, string>}
      */
     private static function tickers(): array
     {
         if (CoinGlass::enabled()) {
             $rows = CoinGlass::futuresTickers();
             if ($rows !== []) {
-                return [$rows, null, 'CoinGlass'];
+                return [$rows, null, 'CoinGlass', []];
+            }
+        }
+        if (CoinGeckoApi::enabled()) {
+            [$rows, $ids] = CoinGeckoApi::futuresTickers();
+            if ($rows !== []) {
+                return [$rows, null, 'CoinGecko', $ids];
             }
         }
 
@@ -3219,18 +3327,18 @@ final class FuturesProvider
                 return is_array($info) ? self::tradable($info) : null;
             });
 
-            return [$tickers, $tradable, 'Binance'];
+            return [$tickers, $tradable, 'Binance', []];
         }
 
         foreach (Exchanges::FUTURES as $exchange) {
             $rows = Exchanges::futuresTickers($exchange);
             if ($rows !== []) {
                 Log::warn('Futures tickers served by fallback exchange', ['exchange' => $exchange]);
-                return [$rows, null, $exchange];
+                return [$rows, null, $exchange, []];
             }
         }
 
-        return [null, null, 'Binance'];
+        return [null, null, 'Binance', []];
     }
 
     public static function tradable(array $exchangeInfo): array
@@ -3351,6 +3459,7 @@ final class FuturesProvider
         $candles = match ($exchange) {
             'Binance'   => Http::getJson(self::FAPI . '/klines?symbol=' . rawurlencode($pair) . '&interval=1h&limit=24', [], 12, 1),
             'CoinGlass' => CoinGlass::klines('Binance', $pair, 24),
+            'CoinGecko' => [],
             default     => Exchanges::klines($exchange, 'futures', $pair, 24),
         };
         if (!is_array($candles) || $candles === []) {
@@ -4002,26 +4111,25 @@ final class PriceProvider
         }
 
         $source = Settings::get('price_source');
-        $rows = [];
+        // With a CoinGecko key, CoinGecko is the fixed source; the others only fill coins it misses.
+        $order = match (true) {
+            $source === 'binance'   => ['binance'],
+            $source === 'coingecko' => ['coingecko'],
+            CoinGeckoApi::enabled() => ['coingecko', 'binance', 'exchanges'],
+            default                 => ['binance', 'coingecko', 'exchanges'],
+        };
 
-        if ($source === 'binance' || $source === 'auto') {
-            $rows = self::fromBinance($symbols, $withSparkline);
-        }
-        if ($source === 'coingecko' || $source === 'auto') {
+        $rows = [];
+        foreach ($order as $provider) {
             $missing = array_values(array_diff($symbols, array_column($rows, 'symbol')));
-            if ($missing !== []) {
-                $rows = array_merge($rows, self::fromGecko($missing));
+            if ($missing === []) {
+                break;
             }
-        }
-        if ($source === 'auto') {
-            // Binance and CoinGecko both unreachable from this server: try other exchanges one by one.
-            foreach (Exchanges::SPOT as $exchange) {
-                $missing = array_values(array_diff($symbols, array_column($rows, 'symbol')));
-                if ($missing === []) {
-                    break;
-                }
-                $rows = array_merge($rows, self::fromExchange($exchange, $missing, $withSparkline));
-            }
+            $rows = array_merge($rows, match ($provider) {
+                'binance'   => self::fromBinance($missing, $withSparkline),
+                'coingecko' => self::fromGecko($missing),
+                default     => self::fromExchanges($missing, $withSparkline),
+            });
         }
         usort($rows, static fn (array $a, array $b): int =>
             array_search($a['symbol'], $symbols, true) <=> array_search($b['symbol'], $symbols, true));
@@ -4087,6 +4195,21 @@ final class PriceProvider
         return $out;
     }
 
+    /** Binance and CoinGecko both unreachable from this server: try the other exchanges one by one. */
+    private static function fromExchanges(array $symbols, bool $withSparkline): array
+    {
+        $rows = [];
+        foreach (Exchanges::SPOT as $exchange) {
+            $missing = array_values(array_diff($symbols, array_column($rows, 'symbol')));
+            if ($missing === []) {
+                break;
+            }
+            $rows = array_merge($rows, self::fromExchange($exchange, $missing, $withSparkline));
+        }
+
+        return $rows;
+    }
+
     private static function fromExchange(string $exchange, array $symbols, bool $withSparkline): array
     {
         $tickers = Exchanges::spotTickers($exchange, array_map(static fn (string $s): string => substr(self::pair($s), 0, -4), $symbols));
@@ -4149,7 +4272,7 @@ final class PriceProvider
         }
         $url = self::GECKO . '/coins/markets?vs_currency=usd&ids=' . implode(',', array_keys($ids))
             . '&order=market_cap_desc&sparkline=true&price_change_percentage=24h';
-        $data = Http::getJson($url);
+        $data = Http::getJson($url, CoinGeckoApi::headers());
         if (!is_array($data)) {
             return [];
         }
