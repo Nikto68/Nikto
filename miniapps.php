@@ -12,9 +12,9 @@
  *   • پرداخت: کیف پول ربات یا کارت به کارت با رسید و تایید ادمین
  *
  * آدرس‌ها (DOMAIN = آدرس عمومی همین فایلِ ربات):
- *   مینی‌اپ خدمات : https://DOMAIN/bot.php?app=tg
- *   مینی‌اپ شماره : https://DOMAIN/bot.php?app=num
- *   API           : https://DOMAIN/bot.php?mapi=<action>
+ *   مینی‌اپ خدمات : https://DOMAIN/bot_master_membership.php?app=tg
+ *   مینی‌اپ شماره : https://DOMAIN/bot_master_membership.php?app=num
+ *   API           : https://DOMAIN/bot_master_membership.php?mapi=<action>
  */
 
 require_once __DIR__ . '/miniapp_view_tg.php';
@@ -1953,7 +1953,7 @@ function maBadHashText() {
     if ($un !== '') {
         $t .= "\n\n" . 'توکن داخل فایل مال ربات ' . $un . ' است.' . "\n" .
               'اگر این همان رباتی نیست که الان داخلش هستید، توکن را عوض کنید:' . "\n" .
-              'خط ۲۰ فایل bot.php';
+              'خط ۲۰ فایل bot_master_membership.php';
     }
     $t .= "\n\n" . 'اگر تازه از @BotFather توکن را Revoke کرده‌اید، توکن تازه را در فایل بگذارید و وبهوک را دوباره ست کنید.';
     return $t;
@@ -6027,7 +6027,7 @@ function maAdminCallback($data, $uid, $chatId, $msgId, $cbId) {
         maAskState($uid, $chatId, 'ma_base', [],
             "🔗 <b>آدرس عمومی ربات</b>",
             "آدرس کامل همین فایل را بفرستید — باید با <code>https://</code> باشد.\n\n" .
-            "مثال:\n<code>https://example.com/bot.php</code>\n\n" .
+            "مثال:\n<code>https://example.com/bot_master_membership.php</code>\n\n" .
             "برای پاک کردن، <code>-</code> بفرستید.");
         return true;
     }

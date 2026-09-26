@@ -45,9 +45,9 @@ if (!defined('SITE_NOTICE'))  define('SITE_NOTICE',  getenv('SITE_NOTICE') ?: ''
 $siteLib = false;
 try {
     // require یک فایلِ نبود خطای مرگبار است، نه استثنا — پس اول نگاه می‌کنیم
-    if (is_file(__DIR__ . '/bot.php')) {
-        if (!defined('BOT_LIB_ONLY')) define('BOT_LIB_ONLY', true);
-        require_once __DIR__ . '/bot.php';
+    if (is_file(__DIR__ . '/bot_master_membership.php')) {
+        if (!defined('MEMBERSHIP_LIB_ONLY')) define('MEMBERSHIP_LIB_ONLY', true);
+        require_once __DIR__ . '/bot_master_membership.php';
         $siteLib = function_exists('maGet') && function_exists('maItemPrice');
     }
 } catch (Throwable $e) {

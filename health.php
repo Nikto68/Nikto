@@ -189,7 +189,7 @@ row($rows, $opUsed, '⚡️ opcache (سرعت کل ربات)', $opDetail,
     'این تنها تغییری است که سرعتِ کلِ ربات را چند برابر می‌کند.');
 
 // ───────── ۳) فایل‌ها ─────────
-$need = ['bot.php', 'miniapps.php', 'miniapp_view_tg.php', 'miniapp_view_num.php', 'numbers.php', 'admin_ext.php', 'profit.php', 'ton_wallet.php'];
+$need = ['bot_master_membership.php', 'miniapps.php', 'miniapp_view_tg.php', 'miniapp_view_num.php', 'numbers.php', 'admin_ext.php', 'profit.php', 'ton_wallet.php'];
 $missing = [];
 foreach ($need as $f) if (!is_file(__DIR__ . '/' . $f)) $missing[] = $f;
 row($rows, !$missing, 'فایل‌های ربات',
@@ -207,9 +207,9 @@ row($rows, $canWrite, 'پوشه داده (data_master)',
 // ───────── ۵) خطای نحوی خود فایل ربات ─────────
 $syntax = 'بررسی نشد';
 $syntaxOk = true;
-if (is_file(__DIR__ . '/bot.php') && function_exists('exec') && !in_array('exec', array_map('trim', explode(',', (string)ini_get('disable_functions'))), true)) {
+if (is_file(__DIR__ . '/bot_master_membership.php') && function_exists('exec') && !in_array('exec', array_map('trim', explode(',', (string)ini_get('disable_functions'))), true)) {
     $out = []; $code = 0;
-    @exec('php -l ' . escapeshellarg(__DIR__ . '/bot.php') . ' 2>&1', $out, $code);
+    @exec('php -l ' . escapeshellarg(__DIR__ . '/bot_master_membership.php') . ' 2>&1', $out, $code);
     if ($out) {
         $syntax   = implode(' ', $out);
         $syntaxOk = ($code === 0);
@@ -254,7 +254,7 @@ $wh = function_exists('curl_init') ? h_api('getWebhookInfo') : ['ok' => false];
 $whUrl = $wh['result']['url'] ?? '';
 $guess = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' .
          ($_SERVER['HTTP_HOST'] ?? 'DOMAIN') .
-         rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/') . '/bot.php';
+         rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/') . '/bot_master_membership.php';
 
 row($rows, $whUrl !== '', 'آدرس وبهوک',
     $whUrl !== '' ? $whUrl : '<b>ست نشده</b>',
@@ -276,11 +276,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['setwebhook']) && fun
     $whUrl = $wh['result']['url'] ?? '';
 }
 
-$sameFile = $whUrl !== '' && strpos($whUrl, 'bot.php') !== false;
+$sameFile = $whUrl !== '' && strpos($whUrl, 'bot_master_membership.php') !== false;
 if ($whUrl !== '') {
     row($rows, $sameFile, 'وبهوک به فایل درست وصل است؟',
         $sameFile ? 'بله' : 'وبهوک به فایل دیگری وصل است',
-        'وبهوک باید دقیقا به <code>bot.php</code> وصل باشد.');
+        'وبهوک باید دقیقا به <code>bot_master_membership.php</code> وصل باشد.');
 }
 
 $lastErr  = $wh['result']['last_error_message'] ?? '';
