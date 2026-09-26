@@ -49,6 +49,11 @@ $env[] = check(
     CardConfig::available()
 );
 $env[] = check(
+    'فونت کارت — اختیاری',
+    CardConfig::hasCardFonts(),
+    CardConfig::hasCardFonts() ? 'Oxanium, Space Grotesk' : 'Oxanium-ExtraBold.ttf پیدا نشد'
+);
+$env[] = check(
     'فونت فارسی روی کارت — اختیاری',
     CardConfig::supportsPersian(),
     CardConfig::supportsPersian()
