@@ -14,7 +14,7 @@
  *   ✍️ متن‌های قابل ویرایش — همه‌ی متن‌ها و برچسب دکمه‌ها
  *
  * ذخیره‌سازی: data_master/ext.json  (جدا از config.json)
- * وابستگی: توابع پایه‌ی bot_master_membership.php (load/mutate/sendMsg/…)
+ * وابستگی: توابع پایه‌ی bot.php (load/mutate/sendMsg/…)
  */
 
 if (!defined('AX_VERSION')) define('AX_VERSION', '1.0.1');

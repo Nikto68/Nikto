@@ -2,7 +2,7 @@
 /**
  * 👑 پنل مدیریت وب — فروشگاه + ربات‌های اپلودر
  *
- * منطق داده از bot_master_membership.php می‌آید (کتابخانه مشترک)
+ * منطق داده از bot.php می‌آید (کتابخانه مشترک)
  * تا هرگز دو نسخه ناهماهنگ از داده‌ها وجود نداشته باشد.
  */
 
@@ -34,8 +34,8 @@ if (strlen(ADMIN_PASSWORD) < 6) {
          "define('ADMIN_PANEL_PASS', 'رمز شما');\n");
 }
 
-define('MEMBERSHIP_LIB_ONLY', true);
-require_once __DIR__ . '/bot_master_membership.php';
+define('BOT_LIB_ONLY', true);
+require_once __DIR__ . '/bot.php';
 
 // کوکی نشست: نه در دسترس جاوااسکریپت، نه فرستاده‌شده از سایت دیگر،
 // و روی HTTPS فقط رمزنگاری‌شده. بدون این‌ها یک لینک بیرونی یا یک XSS
@@ -1191,7 +1191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $me = tg($token, 'getMe', []);
         if (empty($me['ok'])) go('توکن معتبر نیست: ' . ($me['description'] ?? ''), 'err');
         $bot = BotManager::create($token, $me['result']['username']);
-        $hook = baseUrl() . '/bot_master_membership.php?bot=' . $bot['id'];
+        $hook = baseUrl() . '/bot.php?bot=' . $bot['id'];
         $r = tg($token, 'setWebhook', ['url' => $hook, 'drop_pending_updates' => 'true', 'secret_token' => WEBHOOK_SECRET]);
         go('ربات @' . $bot['username'] . ' اضافه شد.' .
            (!empty($r['ok']) ? ' وبهوک تنظیم شد.' : ' هشدار: وبهوک تنظیم نشد.'),
@@ -1208,13 +1208,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $b = BotManager::get($_POST['id'] ?? '');
         if (!$b) go('ربات پیدا نشد.', 'err');
         $r = tg($b['token'], 'setWebhook',
-            ['url' => baseUrl() . '/bot_master_membership.php?bot=' . $b['id'], 'drop_pending_updates' => 'true', 'secret_token' => WEBHOOK_SECRET]);
+            ['url' => baseUrl() . '/bot.php?bot=' . $b['id'], 'drop_pending_updates' => 'true', 'secret_token' => WEBHOOK_SECRET]);
         go(!empty($r['ok']) ? 'وبهوک تنظیم شد.' : 'خطا: ' . ($r['description'] ?? ''), !empty($r['ok']) ? 'ok' : 'err');
     }
     if ($a === 'master_webhook') {
         // my_chat_member لازم است تا ثبت خودکار کانال کار کند
         $r = tg(BOT_TOKEN, 'setWebhook', [
-            'url' => baseUrl() . '/bot_master_membership.php',
+            'url' => baseUrl() . '/bot.php',
             'drop_pending_updates' => 'true',
             'allowed_updates' => json_encode(['message', 'callback_query', 'my_chat_member']),
             'secret_token' => WEBHOOK_SECRET,
@@ -1876,7 +1876,7 @@ $tabFolders = [
   </div></div>
 
   <div class="card"><h2>🔗 وبهوک و کران</h2><div class="body">
-    <p class="muted" style="margin-bottom:10px">وبهوک مادر: <code><?= h(baseUrl()) ?>/bot_master_membership.php</code></p>
+    <p class="muted" style="margin-bottom:10px">وبهوک مادر: <code><?= h(baseUrl()) ?>/bot.php</code></p>
     <form method="post" class="inline">
       <input type="hidden" name="csrf" value="<?= h($CSRF) ?>">
       <input type="hidden" name="tab" value="dashboard">
@@ -1887,7 +1887,7 @@ $tabFolders = [
       برای اینکه حذف خودکار فایل‌ها حتی بدون فعالیت ربات هم دقیق کار کند،
       این آدرس را هر دقیقه در کران هاست صدا بزنید:
     </p>
-    <?php $cronUrl = baseUrl() . '/bot_master_membership.php?cron=' . CRON_KEY; ?>
+    <?php $cronUrl = baseUrl() . '/bot.php?cron=' . CRON_KEY; ?>
     <div class="secret-box" style="margin-bottom:10px">
       <code class="ltr"><?= h($cronUrl) ?></code>
       <button type="button" onclick="copyText('<?= h(addslashes($cronUrl)) ?>',this)">📋 کپی</button>
@@ -3328,7 +3328,7 @@ $tabFolders = [
 
 <?php // ================= ربات‌های شریک ================= ?>
 <?php elseif ($tab === 'partners'):
-  $apiBase = baseUrl() . '/bot_master_membership.php'; ?>
+  $apiBase = baseUrl() . '/bot.php'; ?>
   <div class="card"><h2>🤝 افزودن ربات شریک</h2><div class="body">
     <div class="note">
       برای رباتی که <b>سورس خودش را دارد</b> و می‌خواهد فقط از بخش <b>عضویت اجباری</b> ما استفاده کند.
@@ -3931,7 +3931,7 @@ def join_gate(user_id):
       <input type="hidden" name="action" value="save_miniapps_root">
       <div class="grid2">
         <div><label>🔗 آدرسِ عمومیِ فایلِ ربات (باید https باشه)</label>
-          <input name="base_url" value="<?= h($MAC['base_url'] ?? '') ?>" placeholder="https://site.com/bot_master_membership.php" style="direction:ltr"></div>
+          <input name="base_url" value="<?= h($MAC['base_url'] ?? '') ?>" placeholder="https://site.com/bot.php" style="direction:ltr"></div>
         <div><label>📐 چیدمانِ دکمه‌های مینی‌اپ زیرِ محصولات</label>
           <input name="row_layout" value="<?= h($MAC['row_layout'] ?? '1,1') ?>" style="direction:ltr"></div>
       </div>

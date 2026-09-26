@@ -8,9 +8,9 @@
  *             اول در کانال‌های اجباری عضو می‌شود، بعد فایل را می‌گیرد و
  *             فایل بعد از N ثانیه خودکار حذف می‌شود
  *
- * Webhook مادر : https://DOMAIN/bot_master_membership.php
- * Webhook فرعی : https://DOMAIN/bot_master_membership.php?bot=<BOT_ID>
- * Cron حذف     : https://DOMAIN/bot_master_membership.php?cron=<CRON_KEY>
+ * Webhook مادر : https://DOMAIN/bot.php
+ * Webhook فرعی : https://DOMAIN/bot.php?bot=<BOT_ID>
+ * Cron حذف     : https://DOMAIN/bot.php?cron=<CRON_KEY>
  */
 
 // ============================================================
@@ -156,7 +156,7 @@ if (!class_exists('SQLite3')) {
 }
 
 // بدون توکن و شناسه‌ی ادمین جلوتر نمی‌رویم
-if (!defined('MEMBERSHIP_LIB_ONLY') && (BOT_TOKEN === '' || ADMIN_ID <= 0)) {
+if (!defined('BOT_LIB_ONLY') && (BOT_TOKEN === '' || ADMIN_ID <= 0)) {
     http_response_code(500);
     header('Content-Type: text/plain; charset=utf-8');
     exit("پیکربندی ناقص است.\n\n" .
@@ -10405,7 +10405,7 @@ function handleApi($action) {
 // 🎯 ورودی
 // ============================================================
 
-if (defined('MEMBERSHIP_LIB_ONLY')) return;
+if (defined('BOT_LIB_ONLY')) return;
 
 if (isset($_GET['ipn'])) {
     try { handleIpn(); }
