@@ -3262,10 +3262,7 @@ function maApi() {
 
     $initData = (string)($body['initData'] ?? '');
     $reason = '';
-    // 🌐 خریدِ مستقیم از سایت: slApi() کاربر را از نشستِ سایت شناخته و فقط
-    //    همان درخواست پرش می‌کند — هیچ پارامتری از بیرون به آن راه ندارد.
-    $siteUser = function_exists('siteApiUser') ? siteApiUser() : null;
-    $user = $siteUser ?: maVerifyInitData($initData, $reason);
+    $user = maVerifyInitData($initData, $reason);
     if (!$user) {
         maApiOut(['ok' => false, 'error' => 'unauthorized', 'reason' => $reason,
                   'message' => maAuthReasonText($reason)], 401);
@@ -3501,10 +3498,7 @@ function maApi() {
             maApiOut(['ok' => false, 'error' => 'failed',
                       'message' => 'ثبت درخواست شارژ انجام نشد. با پشتیبانی تماس بگیرید.'], 500);
 
-        // 💠 اگر درگاه فاکتور ساخت، لینکِ پرداخت را هم بده — سایت مستقیم بازش می‌کند
-        $tord = class_exists('Order') ? Order::get($oid) : null;
         maApiOut(['ok' => true, 'order' => $oid, 'amount' => $amt,
-                  'pay_url' => (string)($tord['gw']['url'] ?? ''),
                   'card' => (string)$t['card'], 'holder' => (string)$t['name'],
                   'message' => 'درخواست شارژ ثبت شد. فاکتور و شماره کارت داخل ربات برایتان فرستاده شد؛ ' .
                                'بعد از واریز، دکمه «ارسال رسید» را بزنید.']);
@@ -3635,8 +3629,7 @@ function maApi() {
                       'message' => 'تعداد سفارش‌های پشت‌سرهم زیاد است. یک دقیقه صبر کنید.'], 429);
 
         // 🛡 هر initData فقط یک سفارش — جلوی بازپخش (replay) را می‌گیرد
-        // (سایت initData ندارد؛ آنجا CSRF + سقفِ نرخ + ضدِ تکرارِ پایین همین کار را می‌کنند)
-        if (!$siteUser && !maNonceOk($initData))
+        if (!maNonceOk($initData))
             maApiOut(['ok' => false, 'error' => 'replay',
                       'message' => 'سقف سفارش این نشست پر شد. مینی‌اپ را ببندید و دوباره باز کنید.'], 409);
 
