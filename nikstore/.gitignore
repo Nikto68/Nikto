@@ -1,4 +1,2 @@
-config.php
-storage/*
-!storage/.htaccess
-!storage/index.html
+nikstore-config.php
+nikstore-data/
