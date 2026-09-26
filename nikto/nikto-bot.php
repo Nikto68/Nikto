@@ -12,6 +12,7 @@ const NIKTO_CONFIG = [
     'brand'          => 'NIKTO CRYPTO',
     'http_proxy'     => '',
     'data_proxy'     => '',
+    'coinglass_key'  => '',
 ];
 }
 namespace Nikto\Bundle {
@@ -173,6 +174,7 @@ final class Runtime
             'webhook_secret' => (string) ($config['webhook_secret'] ?? ''),
             'http_proxy'     => (string) ($config['http_proxy'] ?? ''),
             'data_proxy'     => (string) ($config['data_proxy'] ?? ''),
+            'coinglass_key'  => (string) ($config['coinglass_key'] ?? ''),
             'db_path'        => $data . '/bot.sqlite',
             'timezone'       => (string) ($config['timezone'] ?? 'Asia/Tehran'),
             'brand'          => (string) ($config['brand'] ?? 'NIKTO CRYPTO'),
@@ -641,6 +643,7 @@ final class Config
             'http_timeout'   => 25,
             'http_proxy'     => '',
             'data_proxy'     => '',
+            'coinglass_key'  => '',
             'api_keys'       => [],
             'log_level'      => 'info',
             'webhook_secret' => '',
@@ -889,6 +892,10 @@ final class Diagnostics
         'منبع: KuCoin'            => 'https://api.kucoin.com/api/v1/timestamp',
         'منبع: KuCoin Futures'    => 'https://api-futures.kucoin.com/api/v1/timestamp',
         'منبع: Nobitex'           => 'https://api.nobitex.ir/market/stats?srcCurrency=btc&dstCurrency=usdt',
+        'منبع: Bitget'            => 'https://api.bitget.com/api/v2/public/time',
+        'منبع: BingX'             => 'https://open-api.bingx.com/openApi/swap/v2/server/time',
+        'منبع: CoinEx'            => 'https://api.coinex.com/v2/time',
+        'منبع: HTX'               => 'https://api.hbdm.com/api/v1/timestamp',
         'منبع: CoinGecko'         => 'https://api.coingecko.com/api/v3/ping',
         'منبع: ترس و طمع'          => 'https://api.alternative.me/fng/?limit=1&format=json',
         'منبع: ForexFactory'      => 'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
@@ -984,6 +991,18 @@ final class Diagnostics
 
         $proxy = Http::proxy();
         $add(null, 'پراکسی داده', $proxy === '' ? 'ندارد (اتصال مستقیم)' : (string) preg_replace('#//[^@/]*@#', '//***@', $proxy));
+
+        if (\Nikto\Data\CoinGlass::enabled()) {
+            Http::resetFailures();
+            $coins = \Nikto\Data\CoinGlass::get('/futures/supported-coins');
+            $add(
+                is_array($coins),
+                'منبع: CoinGlass',
+                is_array($coins) ? 'کلید معتبر است' : (Http::explainFailures(1) !== '' ? ltrim(Http::explainFailures(1), '• ') : 'پاسخی نیامد')
+            );
+        } else {
+            $add(null, 'منبع: CoinGlass', 'کلید تنظیم نشده (اختیاری؛ coinglass_key بالای فایل)');
+        }
 
         foreach (Http::probe(self::DATA_SOURCES) as $label => $r) {
             $add(
@@ -1121,6 +1140,7 @@ final class Http
         return match (true) {
             self::isRegionBlock($code, $body) => 'HTTP ' . $code . ' — این سرویس کشورِ سرورِ شما را مسدود کرده است',
             $code === 403 => 'HTTP 403 — دسترسی رد شد (فایروالِ هاست یا محدودیتِ سرویس)',
+            $code === 401 => 'HTTP 401 — کلیدِ API نامعتبر است',
             $code === 429, $code === 418 => 'HTTP ' . $code . ' — محدودیت تعداد درخواست؛ چند دقیقه بعد دوباره امتحان کنید',
             $code >= 500 => 'HTTP ' . $code . ' — خطای موقت سمت سرویس',
             $code > 0 => 'HTTP ' . $code,
@@ -1215,6 +1235,12 @@ final class Http
     private static function host(string $url): string
     {
         return strtolower((string) (parse_url($url, PHP_URL_HOST) ?: $url));
+    }
+
+    /** Records a failure the caller detected itself (e.g. an API that answers 200 with an error code). */
+    public static function note(string $url, int $code, string $error): void
+    {
+        self::fail($url, $code, $error);
     }
 
     private static function fail(string $url, int $code, string $error, string $body = ''): void
@@ -2526,6 +2552,132 @@ final class FearGreedProvider
 }
 
 namespace Nikto\Data {
+use Nikto\Core\Config;
+use Nikto\Core\Http;
+
+/**
+ * CoinGlass API v4 (paid; key set as coinglass_key). CoinGlass reads the exchanges on its own servers, so it works
+ * even where Binance blocks this server. Endpoints the key's plan doesn't include return null and callers fall back
+ * to the exchanges: order book needs Standard, coins-markets needs Standard, 1h price history needs Startup.
+ */
+final class CoinGlass
+{
+    public const NAME_FA = 'کوین‌گلس';
+
+    private const BASE = 'https://open-api-v4.coinglass.com/api';
+
+    public static function enabled(): bool
+    {
+        return trim((string) Config::get('coinglass_key', '')) !== '';
+    }
+
+    public static function get(string $path, array $query = []): mixed
+    {
+        if (!self::enabled()) {
+            return null;
+        }
+        $url = self::BASE . $path . ($query !== [] ? '?' . http_build_query($query) : '');
+        $res = Http::getJson($url, ['CG-API-KEY: ' . trim((string) Config::get('coinglass_key'))], 20, 0);
+        if (!is_array($res)) {
+            return null;
+        }
+        if ((string) ($res['code'] ?? '') !== '0') {
+            // CoinGlass answers HTTP 200 with its own code for a bad key (401) or a plan without this endpoint.
+            Http::note($url, 0, 'CoinGlass ' . (string) ($res['code'] ?? '?') . ': ' . (string) ($res['msg'] ?? 'unknown error'));
+            return null;
+        }
+
+        return $res['data'] ?? null;
+    }
+
+    /** Latest full order-book snapshot of a futures pair, as ['bids' => [[p, q]], 'asks' => ...]. */
+    public static function book(string $exchange, string $pair): ?array
+    {
+        $data = self::get('/futures/orderbook/history', ['exchange' => $exchange, 'symbol' => $pair, 'interval' => '1m', 'limit' => 1]);
+        $snap = is_array($data) && $data !== [] ? end($data) : null;
+        if (!is_array($snap) || !is_array($snap[1] ?? null) || !is_array($snap[2] ?? null)) {
+            return null;
+        }
+        $a = self::levels($snap[1]);
+        $b = self::levels($snap[2]);
+        if ($a === [] || $b === []) {
+            return null;
+        }
+        // The docs don't name the two lists; the one priced higher is the ask side.
+        return self::median($a) >= self::median($b) ? ['bids' => $b, 'asks' => $a] : ['bids' => $a, 'asks' => $b];
+    }
+
+    /** Hourly futures candles as [openTimeMs, open, high, low, close], oldest first. */
+    public static function klines(string $exchange, string $pair, int $limit): array
+    {
+        $data = self::get('/futures/price/history', ['exchange' => $exchange, 'symbol' => $pair, 'interval' => '1h', 'limit' => $limit]);
+        $out = [];
+        foreach (is_array($data) ? $data : [] as $k) {
+            if (is_array($k) && is_numeric($k['time'] ?? null) && is_numeric($k['close'] ?? null)) {
+                $out[] = [(int) $k['time'], (float) ($k['open'] ?? 0), (float) ($k['high'] ?? 0), (float) ($k['low'] ?? 0), (float) $k['close']];
+            }
+        }
+        usort($out, static fn (array $a, array $b): int => $a[0] <=> $b[0]);
+
+        return array_slice($out, -$limit);
+    }
+
+    /** Every futures coin aggregated across all exchanges CoinGlass tracks, as Binance-shaped tickers. */
+    public static function futuresTickers(): array
+    {
+        $out = [];
+        for ($page = 1; $page <= 5; $page++) {
+            $data = self::get('/futures/coins-markets', ['per_page' => 200, 'page' => $page]);
+            if (!is_array($data) || $data === []) {
+                break;
+            }
+            foreach ($data as $c) {
+                $base = strtoupper((string) ($c['symbol'] ?? ''));
+                if (!is_array($c) || !preg_match('/^[A-Z0-9]+$/', $base) || !is_numeric($c['current_price'] ?? null)) {
+                    continue;
+                }
+                // coins-markets has no volume field; open interest / (OI-to-volume ratio) recovers the 24h volume.
+                $ratio = (float) ($c['open_interest_volume_ratio'] ?? 0);
+                $out[] = Exchanges::ticker(
+                    $base . 'USDT',
+                    (float) $c['current_price'],
+                    (float) ($c['price_change_percent_24h'] ?? 0),
+                    0.0,
+                    0.0,
+                    $ratio > 0 ? (float) ($c['open_interest_usd'] ?? 0) / $ratio : 0.0
+                );
+            }
+            if (count($data) < 200) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    private static function levels(array $levels): array
+    {
+        $out = [];
+        foreach ($levels as $l) {
+            if (is_array($l) && is_numeric($l[0] ?? null) && is_numeric($l[1] ?? null) && (float) $l[1] > 0) {
+                $out[] = [(float) $l[0], (float) $l[1]];
+            }
+        }
+
+        return $out;
+    }
+
+    private static function median(array $levels): float
+    {
+        $prices = array_column($levels, 0);
+        sort($prices);
+
+        return (float) $prices[intdiv(count($prices), 2)];
+    }
+}
+}
+
+namespace Nikto\Data {
 use Nikto\Core\Http;
 
 /**
@@ -2536,7 +2688,7 @@ use Nikto\Core\Http;
 final class Exchanges
 {
     public const SPOT    = ['OKX', 'Bybit', 'MEXC', 'KuCoin', 'Gate.io', 'Nobitex'];
-    public const FUTURES = ['Bybit', 'OKX', 'Gate.io', 'MEXC', 'KuCoin'];
+    public const FUTURES = ['Bybit', 'OKX', 'Bitget', 'Gate.io', 'MEXC', 'KuCoin', 'BingX', 'CoinEx', 'HTX'];
     public const BOOKS   = ['OKX' => 'OKX Spot', 'Bybit' => 'Bybit Futures', 'MEXC' => 'MEXC Spot', 'KuCoin' => 'KuCoin Spot', 'Nobitex' => 'Nobitex'];
 
     public const NAMES_FA = [
@@ -2547,6 +2699,10 @@ final class Exchanges
         'MEXC'    => 'مکسی',
         'KuCoin'  => 'کوکوین',
         'Nobitex' => 'نوبیتکس',
+        'Bitget'  => 'بیت‌گت',
+        'BingX'   => 'بینگ‌ایکس',
+        'CoinEx'  => 'کوینکس',
+        'HTX'     => 'اچ‌تی‌ایکس',
     ];
 
     private const OKX      = 'https://www.okx.com/api/v5/market';
@@ -2557,6 +2713,10 @@ final class Exchanges
     private const KUCOIN_F = 'https://api-futures.kucoin.com/api/v1';
     private const GATE     = 'https://api.gateio.ws/api/v4';
     private const NOBITEX  = 'https://api.nobitex.ir';
+    private const BITGET   = 'https://api.bitget.com/api/v2/mix/market';
+    private const BINGX    = 'https://open-api.bingx.com/openApi/swap';
+    private const COINEX   = 'https://api.coinex.com/v2/futures';
+    private const HTX      = 'https://api.hbdm.com/linear-swap-ex/market';
 
     public static function ticker(string $pair, float $last, float $changePct, float $high, float $low, float $quoteVolume): array
     {
@@ -2599,6 +2759,10 @@ final class Exchanges
             'Gate.io' => self::gate('/futures/usdt/tickers', 'contract', 'volume_24h_quote'),
             'MEXC'    => self::mexcFutures(),
             'KuCoin'  => self::kucoinFutures(),
+            'Bitget'  => self::bitget(),
+            'BingX'   => self::bingx(),
+            'CoinEx'  => self::coinex(),
+            'HTX'     => self::htx(),
             default   => [],
         };
     }
@@ -2667,6 +2831,30 @@ final class Exchanges
                     }
                 }
                 break;
+            case 'Bitget':
+                $rows = Http::getJson(self::BITGET . '/candles?symbol=' . $pair . '&productType=USDT-FUTURES&granularity=1H&limit=' . $limit, [], 12, 0)['data'] ?? null;
+                foreach (is_array($rows) ? $rows : [] as $k) {
+                    $out[] = self::candle($k[0] ?? null, $k[1] ?? null, $k[2] ?? null, $k[3] ?? null, $k[4] ?? null);
+                }
+                break;
+            case 'BingX':
+                $rows = Http::getJson(self::BINGX . '/v3/quote/klines?symbol=' . $base . '-USDT&interval=1h&limit=' . $limit, [], 12, 0)['data'] ?? null;
+                foreach (is_array($rows) ? $rows : [] as $k) {
+                    $out[] = self::candle($k['time'] ?? null, $k['open'] ?? null, $k['high'] ?? null, $k['low'] ?? null, $k['close'] ?? null);
+                }
+                break;
+            case 'CoinEx':
+                $rows = Http::getJson(self::COINEX . '/kline?market=' . $pair . '&period=1hour&limit=' . $limit, [], 12, 0)['data'] ?? null;
+                foreach (is_array($rows) ? $rows : [] as $k) {
+                    $out[] = self::candle($k['created_at'] ?? null, $k['open'] ?? null, $k['high'] ?? null, $k['low'] ?? null, $k['close'] ?? null);
+                }
+                break;
+            case 'HTX':
+                $rows = Http::getJson(self::HTX . '/history/kline?contract_code=' . $base . '-USDT&period=60min&size=' . $limit, [], 12, 0)['data'] ?? null;
+                foreach (is_array($rows) ? $rows : [] as $k) {
+                    $out[] = self::candle(isset($k['id']) ? (float) $k['id'] * 1000 : null, $k['open'] ?? null, $k['high'] ?? null, $k['low'] ?? null, $k['close'] ?? null);
+                }
+                break;
             case 'Nobitex':
                 $end = time();
                 $data = Http::getJson(self::NOBITEX . '/market/udf/history?symbol=' . $pair . '&resolution=60&from=' . ($end - ($limit + 1) * 3600) . '&to=' . $end, [], 12, 0);
@@ -2676,7 +2864,10 @@ final class Exchanges
                 break;
         }
 
-        return array_slice(array_values(array_filter($out)), -$limit);
+        $out = array_values(array_filter($out));
+        usort($out, static fn (array $a, array $b): int => $a[0] <=> $b[0]);
+
+        return array_slice($out, -$limit);
     }
 
     private static function candle(mixed $t, mixed $o, mixed $h, mixed $l, mixed $c): ?array
@@ -2858,6 +3049,81 @@ final class Exchanges
         return $out;
     }
 
+    private static function bitget(): array
+    {
+        $list = Http::getJson(self::BITGET . '/tickers?productType=USDT-FUTURES', [], 20, 1)['data'] ?? null;
+        $out = [];
+        foreach (is_array($list) ? $list : [] as $t) {
+            if (!is_array($t) || !preg_match('/^[A-Z0-9]+USDT$/', (string) ($t['symbol'] ?? ''))) {
+                continue;
+            }
+            $out[] = self::ticker(
+                (string) $t['symbol'],
+                (float) ($t['lastPr'] ?? 0),
+                (float) ($t['change24h'] ?? 0) * 100,
+                (float) ($t['high24h'] ?? 0),
+                (float) ($t['low24h'] ?? 0),
+                (float) ($t['quoteVolume'] ?? ($t['usdtVolume'] ?? 0))
+            );
+        }
+
+        return $out;
+    }
+
+    private static function bingx(): array
+    {
+        $list = Http::getJson(self::BINGX . '/v2/quote/ticker', [], 20, 1)['data'] ?? null;
+        $out = [];
+        foreach (is_array($list) ? $list : [] as $t) {
+            if (!is_array($t) || !preg_match('/^([A-Z0-9]+)-USDT$/', (string) ($t['symbol'] ?? ''), $m)) {
+                continue;
+            }
+            // priceChangePercent comes as "-0.56" or "-0.5600%".
+            $out[] = self::ticker(
+                $m[1] . 'USDT',
+                (float) ($t['lastPrice'] ?? 0),
+                (float) rtrim((string) ($t['priceChangePercent'] ?? '0'), '%'),
+                (float) ($t['highPrice'] ?? 0),
+                (float) ($t['lowPrice'] ?? 0),
+                (float) ($t['quoteVolume'] ?? 0)
+            );
+        }
+
+        return $out;
+    }
+
+    private static function coinex(): array
+    {
+        $list = Http::getJson(self::COINEX . '/ticker', [], 20, 1)['data'] ?? null;
+        $out = [];
+        foreach (is_array($list) ? $list : [] as $t) {
+            if (!is_array($t) || !preg_match('/^[A-Z0-9]+USDT$/', (string) ($t['market'] ?? ''))) {
+                continue;
+            }
+            $last = (float) ($t['last'] ?? 0);
+            $open = (float) ($t['open'] ?? 0);
+            $out[] = self::ticker((string) $t['market'], $last, $open > 0 ? ($last - $open) / $open * 100 : 0.0, (float) ($t['high'] ?? 0), (float) ($t['low'] ?? 0), (float) ($t['value'] ?? 0));
+        }
+
+        return $out;
+    }
+
+    private static function htx(): array
+    {
+        $list = Http::getJson(self::HTX . '/detail/batch_merged?business_type=swap', [], 20, 1)['ticks'] ?? null;
+        $out = [];
+        foreach (is_array($list) ? $list : [] as $t) {
+            if (!is_array($t) || !preg_match('/^([A-Z0-9]+)-USDT$/', (string) ($t['contract_code'] ?? ''), $m)) {
+                continue;
+            }
+            $last = (float) ($t['close'] ?? 0);
+            $open = (float) ($t['open'] ?? 0);
+            $out[] = self::ticker($m[1] . 'USDT', $last, $open > 0 ? ($last - $open) / $open * 100 : 0.0, (float) ($t['high'] ?? 0), (float) ($t['low'] ?? 0), (float) ($t['trade_turnover'] ?? 0));
+        }
+
+        return $out;
+    }
+
     private static function nobitex(array $bases): array
     {
         $bases = array_values(array_filter(array_map('strtolower', $bases), static fn ($b) => preg_match('/^[a-z0-9]+$/', $b) === 1));
@@ -2918,7 +3184,7 @@ final class FuturesProvider
             return null;
         }
         $result['exchange'] = $exchange;
-        $result['source'] = $exchange . ' Futures';
+        $result['source'] = $exchange === 'CoinGlass' ? 'CoinGlass · All exchanges' : $exchange . ' Futures';
 
         if ($withSparkline) {
             foreach (['gainers', 'losers'] as $side) {
@@ -2939,6 +3205,13 @@ final class FuturesProvider
      */
     private static function tickers(): array
     {
+        if (CoinGlass::enabled()) {
+            $rows = CoinGlass::futuresTickers();
+            if ($rows !== []) {
+                return [$rows, null, 'CoinGlass'];
+            }
+        }
+
         $tickers = Http::getJson(self::FAPI . '/ticker/24hr', [], 20, 1);
         if (is_array($tickers) && $tickers !== [] && array_values($tickers) === $tickers) {
             $tradable = Http::remember('fapi:tradable', 6 * 3600, static function (): ?array {
@@ -3075,9 +3348,11 @@ final class FuturesProvider
             return Mock::series(crc32($pair), 24, $changePct);
         }
 
-        $candles = $exchange === 'Binance'
-            ? Http::getJson(self::FAPI . '/klines?symbol=' . rawurlencode($pair) . '&interval=1h&limit=24', [], 12, 1)
-            : Exchanges::klines($exchange, 'futures', $pair, 24);
+        $candles = match ($exchange) {
+            'Binance'   => Http::getJson(self::FAPI . '/klines?symbol=' . rawurlencode($pair) . '&interval=1h&limit=24', [], 12, 1),
+            'CoinGlass' => CoinGlass::klines('Binance', $pair, 24),
+            default     => Exchanges::klines($exchange, 'futures', $pair, 24),
+        };
         if (!is_array($candles) || $candles === []) {
             // Spot closes from Binance's public mirror track the perpetual closely enough for a sparkline.
             $candles = Http::getJson(self::SPOT_MIRROR . '/klines?symbol=' . rawurlencode($pair) . '&interval=1h&limit=24', [], 12, 0);
@@ -3131,6 +3406,21 @@ final class LiquidityProvider
         }
 
         $books = [];
+        $klines = [];
+        if (CoinGlass::enabled()) {
+            // CoinGlass reads Binance/Bybit on its side, so this works even where Binance blocks the server.
+            foreach (['Binance', 'Bybit'] as $exchange) {
+                $book = CoinGlass::book($exchange, 'BTCUSDT');
+                if ($book !== null) {
+                    $books[($books === [] ? 'CoinGlass · ' : '') . $exchange] = $book;
+                }
+            }
+            $klines = CoinGlass::klines('Binance', 'BTCUSDT', 48);
+            if ($books !== []) {
+                return self::analyze($books, $klines !== [] ? $klines : self::klines(null), $levels);
+            }
+        }
+
         $futures = Http::getJson(self::FAPI . '/depth?symbol=BTCUSDT&limit=1000', [], 15, 1);
         if (self::isBook($futures)) {
             $books['Binance Futures'] = $futures;
@@ -3161,6 +3451,12 @@ final class LiquidityProvider
             return null;
         }
 
+        return self::analyze($books, $klines !== [] ? $klines : self::klines($fallback), $levels);
+    }
+
+    /** 48 hourly BTC candles: Binance futures, Binance spot, then the book's exchange and the other exchanges. */
+    private static function klines(?string $preferred): array
+    {
         $klines = Http::getJson(self::FAPI . '/klines?symbol=BTCUSDT&interval=1h&limit=48', [], 15, 1);
         if (!is_array($klines)) {
             foreach (self::SPOT as $base) {
@@ -3171,7 +3467,7 @@ final class LiquidityProvider
             }
         }
         if (!is_array($klines) || $klines === []) {
-            $order = array_unique(array_merge($fallback !== null ? [$fallback] : [], Exchanges::SPOT));
+            $order = array_unique(array_merge($preferred !== null ? [$preferred] : [], Exchanges::SPOT));
             foreach ($order as $exchange) {
                 $klines = Exchanges::klines($exchange, 'spot', 'BTCUSDT', 48);
                 if ($klines !== []) {
@@ -3180,7 +3476,7 @@ final class LiquidityProvider
             }
         }
 
-        return self::analyze($books, is_array($klines) ? $klines : [], $levels);
+        return is_array($klines) ? $klines : [];
     }
 
     private static function isBook(mixed $data): bool
@@ -4633,6 +4929,7 @@ final class LiquidityJob extends Job
 
 namespace Nikto\Jobs {
 use Nikto\Core\Settings;
+use Nikto\Data\CoinGlass;
 use Nikto\Data\Exchanges;
 use Nikto\Data\FuturesProvider;
 use Nikto\Render\Card;
@@ -4710,7 +5007,7 @@ final class MoversJob extends Job
     private function withSource(string $text, mixed $data): string
     {
         $exchange = (string) (((array) $data)['exchange'] ?? 'Binance');
-        $name = Exchanges::NAMES_FA[$exchange] ?? $exchange;
+        $name = $exchange === 'CoinGlass' ? CoinGlass::NAME_FA : (Exchanges::NAMES_FA[$exchange] ?? $exchange);
         if ($exchange === 'Binance') {
             return $text;
         }
