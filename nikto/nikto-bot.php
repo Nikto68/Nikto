@@ -899,6 +899,7 @@ final class Diagnostics
         'منبع: BingX'             => 'https://open-api.bingx.com/openApi/swap/v2/server/time',
         'منبع: CoinEx'            => 'https://api.coinex.com/v2/time',
         'منبع: HTX'               => 'https://api.hbdm.com/api/v1/timestamp',
+        'منبع: Hyperliquid'       => ['https://api.hyperliquid.xyz/info', '{"type":"l2Book","coin":"BTC"}'],
         'منبع: CoinGecko'         => 'https://api.coingecko.com/api/v3/ping',
         'منبع: ترس و طمع'          => 'https://api.alternative.me/fng/?limit=1&format=json',
         'منبع: ForexFactory'      => 'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
@@ -1173,16 +1174,20 @@ final class Http
     /**
      * Fires one quick request per URL in parallel and reports reachability; used by the diagnostics page.
      *
-     * @param array<string, string> $urls label => url
+     * @param array<string, string|array{0: string, 1: string}> $urls label => url, or [url, JSON body] to POST
      * @return array<string, array{ok: bool, code: int, error: string, ms: int}>
      */
     public static function probe(array $urls, int $timeout = 8): array
     {
         $mh = curl_multi_init();
         $handles = [];
-        foreach ($urls as $label => $url) {
+        foreach ($urls as $label => $target) {
+            [$url, $post] = is_array($target) ? $target : [$target, null];
             $ch = curl_init($url);
-            curl_setopt_array($ch, self::options($timeout, []));
+            curl_setopt_array($ch, self::options($timeout, $post !== null ? ['Content-Type: application/json'] : []));
+            if ($post !== null) {
+                curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $post]);
+            }
             $proxy = self::proxy();
             if ($proxy !== '') {
                 curl_setopt($ch, CURLOPT_PROXY, $proxy);
@@ -1265,7 +1270,8 @@ final class Http
         self::$failures[$host] = ['code' => $code, 'error' => $error, 'body' => $body];
     }
 
-    public static function get(string $url, array $headers = [], int $timeout = 0, int $retries = 2): ?string
+    /** GET by default; a non-null $post sends it as a JSON POST body. */
+    public static function get(string $url, array $headers = [], int $timeout = 0, int $retries = 2, ?string $post = null): ?string
     {
         $timeout = $timeout ?: (int) Config::get('http_timeout', 25);
         $lastErr = '';
@@ -1278,7 +1284,10 @@ final class Http
                 usleep((int) (500000 * (2 ** ($attempt - 1))));
             }
             $ch = curl_init($url);
-            curl_setopt_array($ch, self::options($timeout, $headers));
+            curl_setopt_array($ch, self::options($timeout, $post !== null ? array_merge($headers, ['Content-Type: application/json']) : $headers));
+            if ($post !== null) {
+                curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $post]);
+            }
             $proxy = self::proxy();
             if ($proxy !== '') {
                 curl_setopt($ch, CURLOPT_PROXY, $proxy);
@@ -1305,9 +1314,14 @@ final class Http
         return null;
     }
 
-    public static function getJson(string $url, array $headers = [], int $timeout = 0, int $retries = 2): ?array
+    public static function postJson(string $url, array $body, int $timeout = 0, int $retries = 1): ?array
     {
-        $raw = self::get($url, $headers, $timeout, $retries);
+        return self::getJson($url, [], $timeout, $retries, (string) json_encode($body));
+    }
+
+    public static function getJson(string $url, array $headers = [], int $timeout = 0, int $retries = 2, ?string $post = null): ?array
+    {
+        $raw = self::get($url, $headers, $timeout, $retries, $post);
         if ($raw === null) {
             return null;
         }
@@ -2780,7 +2794,16 @@ final class Exchanges
 {
     public const SPOT    = ['OKX', 'Bybit', 'MEXC', 'KuCoin', 'Gate.io', 'Nobitex'];
     public const FUTURES = ['Bybit', 'OKX', 'Bitget', 'Gate.io', 'MEXC', 'KuCoin', 'BingX', 'CoinEx', 'HTX'];
-    public const BOOKS   = ['OKX' => 'OKX Spot', 'Bybit' => 'Bybit Futures', 'MEXC' => 'MEXC Spot', 'KuCoin' => 'KuCoin Spot', 'Nobitex' => 'Nobitex'];
+    // Free order books, widest first: Hyperliquid groups its book into ~0.1% steps, OKX and MEXC give 5000 levels.
+    public const BOOKS   = [
+        'Hyperliquid' => 'Hyperliquid',
+        'OKX'         => 'OKX Spot',
+        'MEXC'        => 'MEXC Spot',
+        'Bybit'       => 'Bybit Futures',
+        'Bitget'      => 'Bitget Spot',
+        'KuCoin'      => 'KuCoin Spot',
+        'Nobitex'     => 'Nobitex',
+    ];
 
     public const NAMES_FA = [
         'Binance' => 'بایننس',
@@ -2794,6 +2817,7 @@ final class Exchanges
         'BingX'   => 'بینگ‌ایکس',
         'CoinEx'  => 'کوینکس',
         'HTX'     => 'اچ‌تی‌ایکس',
+        'Hyperliquid' => 'هایپرلیکوئید',
     ];
 
     private const OKX      = 'https://www.okx.com/api/v5/market';
@@ -2808,6 +2832,8 @@ final class Exchanges
     private const BINGX    = 'https://open-api.bingx.com/openApi/swap';
     private const COINEX   = 'https://api.coinex.com/v2/futures';
     private const HTX      = 'https://api.hbdm.com/linear-swap-ex/market';
+    private const BITGET_SPOT = 'https://api.bitget.com/api/v2/spot/market';
+    private const HYPERLIQUID = 'https://api.hyperliquid.xyz/info';
 
     public static function ticker(string $pair, float $last, float $changePct, float $high, float $low, float $quoteVolume): array
     {
@@ -2862,7 +2888,9 @@ final class Exchanges
     {
         $base = substr($pair, 0, -4);
         [$bids, $asks] = match ($exchange) {
-            'OKX'     => self::sides(Http::getJson(self::OKX . '/books?instId=' . $base . '-USDT&sz=400', [], 15, 1)['data'][0] ?? null, 'bids', 'asks'),
+            'Hyperliquid' => self::hyperliquidBook($base),
+            'OKX'     => self::sides(Http::getJson(self::OKX . '/books-full?instId=' . $base . '-USDT&sz=5000', [], 20, 1)['data'][0] ?? null, 'bids', 'asks'),
+            'Bitget'  => self::sides(Http::getJson(self::BITGET_SPOT . '/orderbook?symbol=' . $pair . '&limit=150', [], 15, 1)['data'] ?? null, 'bids', 'asks'),
             'Bybit'   => self::sides(Http::getJson(self::BYBIT . '/orderbook?category=linear&symbol=' . $pair . '&limit=500', [], 15, 1)['result'] ?? null, 'b', 'a'),
             'MEXC'    => self::sides(Http::getJson(self::MEXC . '/depth?symbol=' . $pair . '&limit=5000', [], 20, 1), 'bids', 'asks'),
             'KuCoin'  => self::sides(Http::getJson(self::KUCOIN . '/market/orderbook/level2_100?symbol=' . $base . '-USDT', [], 15, 1)['data'] ?? null, 'bids', 'asks'),
@@ -2946,6 +2974,16 @@ final class Exchanges
                     $out[] = self::candle(isset($k['id']) ? (float) $k['id'] * 1000 : null, $k['open'] ?? null, $k['high'] ?? null, $k['low'] ?? null, $k['close'] ?? null);
                 }
                 break;
+            case 'Hyperliquid':
+                $end = time() * 1000;
+                $rows = Http::postJson(self::HYPERLIQUID, [
+                    'type' => 'candleSnapshot',
+                    'req'  => ['coin' => $base, 'interval' => '1h', 'startTime' => $end - ($limit + 1) * 3600000, 'endTime' => $end],
+                ], 12, 0);
+                foreach (is_array($rows) ? $rows : [] as $k) {
+                    $out[] = self::candle($k['t'] ?? null, $k['o'] ?? null, $k['h'] ?? null, $k['l'] ?? null, $k['c'] ?? null);
+                }
+                break;
             case 'Nobitex':
                 $end = time();
                 $data = Http::getJson(self::NOBITEX . '/market/udf/history?symbol=' . $pair . '&resolution=60&from=' . ($end - ($limit + 1) * 3600) . '&to=' . $end, [], 12, 0);
@@ -2959,6 +2997,40 @@ final class Exchanges
         usort($out, static fn (array $a, array $b): int => $a[0] <=> $b[0]);
 
         return array_slice($out, -$limit);
+    }
+
+    /**
+     * Hyperliquid returns 20 levels per side; asking it to group prices into ~0.1% steps (nSigFigs) turns those
+     * 20 levels into about ±2% of depth, which is what a wall map needs.
+     *
+     * @return array{0: array, 1: array}
+     */
+    private static function hyperliquidBook(string $coin): array
+    {
+        $fetch = static function (?int $sigFigs) use ($coin): array {
+            $body = ['type' => 'l2Book', 'coin' => $coin] + ($sigFigs !== null ? ['nSigFigs' => $sigFigs] : []);
+            $levels = Http::postJson(self::HYPERLIQUID, $body, 15, 1)['levels'] ?? null;
+            $side = static function (mixed $rows): array {
+                $out = [];
+                foreach (is_array($rows) ? $rows : [] as $r) {
+                    if (is_array($r) && is_numeric($r['px'] ?? null) && is_numeric($r['sz'] ?? null)) {
+                        $out[] = [(float) $r['px'], (float) $r['sz']];
+                    }
+                }
+                return $out;
+            };
+            return is_array($levels) ? [$side($levels[0] ?? null), $side($levels[1] ?? null)] : [[], []];
+        };
+
+        [$bids, $asks] = $fetch(null);
+        if ($bids === [] || $asks === []) {
+            return [[], []];
+        }
+        $mid = (max(array_column($bids, 0)) + min(array_column($asks, 0))) / 2;
+        $digits = (int) floor(log10(max($mid, 1))) + 1;
+        $grouped = $fetch(max(2, min(5, $digits - 2)));
+
+        return $grouped[0] !== [] && $grouped[1] !== [] ? $grouped : [$bids, $asks];
     }
 
     private static function candle(mixed $t, mixed $o, mixed $h, mixed $l, mixed $c): ?array
@@ -3542,17 +3614,29 @@ final class LiquidityProvider
             }
         }
 
-        // Binance refused (region block or outage): take the book from the first other exchange that answers.
+        // Binance refused (region block or outage): combine the free books of up to three other exchanges,
+        // the way aggregated liquidity maps do.
         $fallback = null;
         if ($books === []) {
             foreach (Exchanges::BOOKS as $exchange => $name) {
                 $book = Exchanges::book($exchange, 'BTCUSDT');
-                if ($book !== null) {
-                    $books[$name] = $book;
-                    $fallback = $exchange;
-                    Log::warn('BTC order book served by fallback exchange', ['exchange' => $exchange]);
+                if ($book === null) {
+                    continue;
+                }
+                $books[$name] = $book;
+                $fallback ??= $exchange;
+                if (count($books) >= 3) {
                     break;
                 }
+            }
+            if (count($books) > 1 && isset($books['Hyperliquid'])) {
+                // analyze() takes the mid price from the first book; Hyperliquid's is grouped into ~0.1% steps.
+                $grouped = $books['Hyperliquid'];
+                unset($books['Hyperliquid']);
+                $books['Hyperliquid'] = $grouped;
+            }
+            if ($books !== []) {
+                Log::warn('BTC order book served by fallback exchanges', ['sources' => array_keys($books)]);
             }
         }
         if ($books === []) {
@@ -3576,7 +3660,7 @@ final class LiquidityProvider
             }
         }
         if (!is_array($klines) || $klines === []) {
-            $order = array_unique(array_merge($preferred !== null ? [$preferred] : [], Exchanges::SPOT));
+            $order = array_unique(array_merge($preferred !== null ? [$preferred] : [], ['Hyperliquid'], Exchanges::SPOT));
             foreach ($order as $exchange) {
                 $klines = Exchanges::klines($exchange, 'spot', 'BTCUSDT', 48);
                 if ($klines !== []) {
@@ -4989,7 +5073,7 @@ final class LiquidityJob extends Job
 
     public function description(): string
     {
-        return 'دیوارهای پرحجم خرید و فروش بیت‌کوین از دفتر سفارش بایننس روی نمودار ۴۸ ساعته';
+        return 'دیوارهای پرحجم خرید و فروش بیت‌کوین از دفتر سفارش صرافی‌ها (رایگان) روی نمودار ۴۸ ساعته';
     }
 
     public function defaultOptions(): array
