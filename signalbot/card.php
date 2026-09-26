@@ -4,14 +4,24 @@ declare(strict_types=1);
 
 final class CardPalette
 {
-    public const BG_TOP    = [16, 20, 27];
-    public const BG_BOTTOM = [10, 13, 18];
-    public const WHITE     = [245, 247, 250];
-    public const MUTED     = [138, 148, 166];
-    public const NEUTRAL   = [167, 177, 194];
-    public const GREEN     = [14, 203, 129];
-    public const RED       = [246, 70, 93];
-    public const INK       = [6, 20, 14];
+    public const BASE       = [7, 8, 12];
+    public const WHITE      = [255, 255, 255];
+    public const GREEN_SOFT = [134, 247, 207];
+    public const RED_SOFT   = [255, 155, 176];
+
+    public const ORBS = [
+        'short'  => [[255, 61, 110], [123, 92, 255]],
+        'long'   => [[20, 224, 160], [59, 130, 246]],
+        'profit' => [[20, 224, 160], [47, 123, 255]],
+        'loss'   => [[255, 61, 110], [255, 138, 61]],
+        'flat'   => [[107, 127, 168], [154, 168, 199]],
+    ];
+
+    public const PILLS = [
+        'short' => [[255, 77, 109], 0.20, [255, 130, 155], 0.55, [255, 194, 207]],
+        'long'  => [[20, 224, 160], 0.18, [110, 245, 200], 0.55, [191, 255, 232]],
+        'plain' => [[255, 255, 255], 0.08, [255, 255, 255], 0.22, [255, 255, 255]],
+    ];
 }
 
 final class CardFormat
@@ -24,14 +34,20 @@ final class CardFormat
 
     public static function number(string $value): ?float
     {
-        $clean = str_replace([',', '%', '$', '+', ' '], '', trim($value));
+        $clean = str_replace([',', '%', '$', '+', ' ', '−'], ['', '', '', '', '', '-'], trim($value));
         return is_numeric($clean) ? (float) $clean : null;
     }
 
-    public static function time(string $value): string
+    public static function signed(string $value): string
     {
         $value = trim($value);
-        return preg_match('/^(\d{4}-\d{2}-\d{2})\s+(.+)$/', $value, $m) === 1 ? $m[1] . ' · ' . $m[2] : $value;
+        return str_starts_with($value, '-') ? '−' . substr($value, 1) : $value;
+    }
+
+    public static function duration(string $value): string
+    {
+        $value = trim($value);
+        return preg_match('/^(\d+)H\s*(\d+)M$/i', $value, $m) === 1 ? ((int) $m[1]) . 'h ' . $m[2] . 'm' : $value;
     }
 }
 
@@ -336,7 +352,6 @@ final class PersianShaper
     }
 }
 
-
 final class CardCanvas
 {
     private \GdImage $im;
@@ -411,37 +426,84 @@ final class CardCanvas
         return (int) round($y * $this->scale);
     }
 
-    public function paint(callable $colorAt, int $step = 8): void
+    public function blitField(array $field, int $lw, int $lh, int $step, ?array $mask = null): void
     {
-        $lw = (int) ceil($this->width / $step) + 1;
-        $lh = (int) ceil($this->height / $step) + 1;
-        $low = imagecreatetruecolor($lw, $lh);
+        [$red, $green, $blue] = $field;
+        if ($mask === null) {
+            [$i0, $j0, $i1, $j1] = [0, 0, $lw - 1, $lh - 1];
+        } else {
+            [$mx, $my, $mw, $mh] = $mask;
+            $i0 = max(0, (int) floor($mx / $step) - 1);
+            $j0 = max(0, (int) floor($my / $step) - 1);
+            $i1 = min($lw - 1, (int) ceil(($mx + $mw) / $step) + 1);
+            $j1 = min($lh - 1, (int) ceil(($my + $mh) / $step) + 1);
+        }
+        $cw = $i1 - $i0 + 1;
+        $ch = $j1 - $j0 + 1;
+        $low = imagecreatetruecolor($cw, $ch);
         if ($low === false) {
             return;
         }
-        for ($y = 0; $y < $lh; $y++) {
-            for ($x = 0; $x < $lw; $x++) {
-                $rgb = $colorAt($x * $step, $y * $step);
-                imagesetpixel($low, $x, $y, (self::channel($rgb[0]) << 16) | (self::channel($rgb[1]) << 8) | self::channel($rgb[2]));
+        for ($j = 0; $j < $ch; $j++) {
+            $base = ($j0 + $j) * $lw + $i0;
+            for ($i = 0; $i < $cw; $i++) {
+                $k = $base + $i;
+                imagesetpixel($low, $i, $j, (self::channel($red[$k]) << 16) | (self::channel($green[$k]) << 8) | self::channel($blue[$k]));
             }
         }
-        $up = imagescale($low, $lw * $step * $this->scale, $lh * $step * $this->scale, IMG_BILINEAR_FIXED);
+        $ratio = $step * $this->scale;
+        $up = imagescale($low, $cw * $ratio, $ch * $ratio, IMG_BILINEAR_FIXED);
         imagedestroy($low);
         if ($up === false) {
             return;
         }
-        imagecopy($this->im, $up, 0, 0, 0, 0, $this->width * $this->scale, $this->height * $this->scale);
+        $ox = $i0 * $ratio;
+        $oy = $j0 * $ratio;
+        if ($mask === null) {
+            imagecopy($this->im, $up, $ox, $oy, 0, 0, min(imagesx($up), $this->width * $this->scale - $ox), min(imagesy($up), $this->height * $this->scale - $oy));
+        } else {
+            [$mx, $my, $mw, $mh, $mr] = $mask;
+            $bottom = $this->py($my + $mh) - 1;
+            for ($row = $this->py($my); $row <= $bottom; $row++) {
+                $yy = ($row + 0.5) / $this->scale;
+                $dy = min($yy - $my, $my + $mh - $yy);
+                $inset = $dy < $mr ? $mr - sqrt(max(0.0, $mr * $mr - ($mr - $dy) ** 2)) : 0.0;
+                $xl = $this->px($mx + $inset);
+                $xr = $this->px($mx + $mw - $inset) - 1;
+                if ($xr >= $xl) {
+                    imagecopy($this->im, $up, $xl, $row, $xl - $ox, $row - $oy, $xr - $xl + 1, 1);
+                }
+            }
+        }
         imagedestroy($up);
     }
 
-    public function rect(float $x, float $y, float $w, float $h, array $rgb, float $opacity = 1.0): void
+    public static function blur(array $plane, int $w, int $h, float $sigma): array
     {
-        if ($w <= 0 || $h <= 0) {
-            return;
+        $r = max(1, (int) round((sqrt(4 * $sigma * $sigma + 1) - 1) / 2));
+        for ($pass = 0; $pass < 3; $pass++) {
+            $plane = self::boxPass($plane, $w, $h, $r, 1, $w);
+            $plane = self::boxPass($plane, $h, $w, $r, $w, 1);
         }
-        $x1 = $this->px($x);
-        $y1 = $this->py($y);
-        imagefilledrectangle($this->im, $x1, $y1, max($x1, $this->px($x + $w) - 1), max($y1, $this->py($y + $h) - 1), $this->color($rgb, $opacity));
+        return $plane;
+    }
+
+    private static function boxPass(array $src, int $len, int $lines, int $r, int $step, int $lineStep): array
+    {
+        $out = $src;
+        $norm = 1.0 / (2 * $r + 1);
+        for ($line = 0; $line < $lines; $line++) {
+            $base = $line * $lineStep;
+            $sum = 0.0;
+            for ($k = -$r; $k <= $r; $k++) {
+                $sum += $src[$base + max(0, min($len - 1, $k)) * $step];
+            }
+            for ($i = 0; $i < $len; $i++) {
+                $out[$base + $i * $step] = $sum * $norm;
+                $sum += $src[$base + min($len - 1, $i + $r + 1) * $step] - $src[$base + max(0, $i - $r) * $step];
+            }
+        }
+        return $out;
     }
 
     private static function roundRectPath(float $x, float $y, float $w, float $h, float $r, int $seg = 16): array
@@ -471,15 +533,27 @@ final class CardCanvas
         $this->filledPolygon(self::roundRectPath($x, $y, $w, $h, $r), $rgb, $opacity);
     }
 
-    public function strokeRoundRect(float $x, float $y, float $w, float $h, float $r, float $width, array $rgb, float $opacity = 1.0): void
+    public function ring(float $x, float $y, float $w, float $h, float $r, float $width, array $rgb, callable $alphaAt): void
     {
-        $pts = self::roundRectPath($x, $y, $w, $h, $r);
+        $pts = self::roundRectPath($x, $y, $w, $h, $r, 24);
         $pts[] = $pts[0];
-        $device = [];
-        foreach ($pts as [$px, $py]) {
-            $device[] = [$this->fx($px), $this->fy($py)];
+        $stroke = max(1.0, $width * $this->scale);
+        $n = count($pts);
+        for ($i = 0; $i < $n - 1; $i++) {
+            [$x1, $y1] = $pts[$i];
+            [$x2, $y2] = $pts[$i + 1];
+            $parts = max(1, (int) ceil(hypot($x2 - $x1, $y2 - $y1) / 6.0));
+            for ($j = 0; $j < $parts; $j++) {
+                $ax = $x1 + ($x2 - $x1) * $j / $parts;
+                $ay = $y1 + ($y2 - $y1) * $j / $parts;
+                $bx = $x1 + ($x2 - $x1) * ($j + 1) / $parts;
+                $by = $y1 + ($y2 - $y1) * ($j + 1) / $parts;
+                $a = (float) $alphaAt(($ax + $bx) / 2, ($ay + $by) / 2);
+                if ($a >= 0.004) {
+                    $this->strokePath([[$this->fx($ax), $this->fy($ay)], [$this->fx($bx), $this->fy($by)]], $stroke, $this->color($rgb, $a), false);
+                }
+            }
         }
-        $this->strokePath($device, max(1.0, $width * $this->scale), $this->color($rgb, $opacity), false);
     }
 
     public function filledPolygon(array $points, array $rgb, float $opacity = 1.0): void
@@ -493,18 +567,6 @@ final class CardCanvas
             $pts[] = $this->py($p[1]);
         }
         imagefilledpolygon($this->im, $pts, $this->color($rgb, $opacity));
-    }
-
-    public function polyline(array $points, float $width, array $rgb): void
-    {
-        if (count($points) < 2) {
-            return;
-        }
-        $pts = [];
-        foreach ($points as $p) {
-            $pts[] = [$this->fx($p[0]), $this->fy($p[1])];
-        }
-        $this->strokePath($pts, max(1.0, $width * $this->scale), $this->color($rgb));
     }
 
     private function strokePath(array $pts, float $width, int $color, bool $caps = true): void
@@ -649,7 +711,7 @@ final class CardCanvas
         return max($minSize, $size);
     }
 
-    public function write(string $text, float $x, float $capTop, float $size, array $rgb, string $role, string $align = 'left', float $tracking = 0.0): float
+    public function write(string $text, float $x, float $capTop, float $size, array $rgb, string $role, string $align = 'left', float $tracking = 0.0, float $opacity = 1.0): float
     {
         $width = $this->measure($text, $size, $role, $tracking);
         $start = match ($align) {
@@ -658,7 +720,7 @@ final class CardCanvas
             default => $x,
         };
         $font = CardConfig::fontFor($role, $text);
-        $color = $this->color($rgb);
+        $color = $this->color($rgb, $opacity);
         if ($font === null) {
             $cap = $size * 0.72;
             $this->drawVector($text, $start, $capTop, $cap, VectorFont::TRACKING * $cap / 10 + $tracking * $size, $color);
@@ -717,6 +779,7 @@ final class CardCanvas
         return $png;
     }
 }
+
 
 final class CardConfig
 {
@@ -845,31 +908,52 @@ final class CardConfig
     }
 }
 
+
 final class CardLayout
 {
     public const W = 1600;
     public const H = 900;
 
-    private const PAD = 80.0;
-    private const HEADER_Y = 104.0;
-    private const PAIR_TOP = 218.0;
-    private const PAIR_SIZE = 76.0;
-    private const LABEL_TOP = 351.0;
-    private const HERO_TOP = 400.0;
-    private const HERO_SIZE = 156.0;
-    private const STATS_TOP = 612.0;
-    private const STATS_HEIGHT = 208.0;
+    private const STEP = 8;
+    private const GLASS = [240.0, 130.0, 1120.0, 640.0, 48.0];
+    private const LEFT = 312.0;
+    private const RIGHT = 1288.0;
+    private const TOP_ROW_Y = 222.0;
+    private const LABEL_TOP = 334.0;
+    private const HERO_TOP = 401.0;
+    private const HERO_SIZE = 150.0;
+    private const CELL_LABEL_TOP = 628.0;
+    private const CELL_VALUE_TOP = 669.0;
+    private const FOOTER_TOP = 836.0;
 
-    public static function begin(array $glow, float $strength): CardCanvas
+    public static function begin(string $tone): CardCanvas
     {
+        [$orbA, $orbB] = CardPalette::ORBS[$tone] ?? CardPalette::ORBS['flat'];
+        [$gx, $gy, $gw, $gh, $gr] = self::GLASS;
+        $lw = intdiv(self::W, self::STEP) + 1;
+        $lh = intdiv(self::H, self::STEP) + 1;
+        $outside = [[], [], []];
+        $backdrop = [[], [], []];
+        for ($j = 0; $j < $lh; $j++) {
+            $y = (float) ($j * self::STEP);
+            for ($i = 0; $i < $lw; $i++) {
+                $x = (float) ($i * self::STEP);
+                $rgb = CardCanvas::mix($orbA, CardPalette::BASE, self::orb($x, $y, 150.0, 60.0, 440.0, 0.35));
+                $rgb = CardCanvas::mix($orbB, $rgb, self::orb($x, $y, 1060.0, 470.0, 460.0, 0.60));
+                $shade = 1.0 - 0.45 / (1.0 + exp(1.702 * self::roundedDistance($x, $y - 40.0, $gx, $gy, $gw, $gh, $gr) / 40.0));
+                $backdrop[0][] = $rgb[0];
+                $backdrop[1][] = $rgb[1];
+                $backdrop[2][] = $rgb[2];
+                $outside[0][] = $rgb[0] * $shade;
+                $outside[1][] = $rgb[1] * $shade;
+                $outside[2][] = $rgb[2] * $shade;
+            }
+        }
+
         $c = new CardCanvas(self::W, self::H);
-        $cx = self::W / 2;
-        $cy = self::HERO_TOP + $c->capHeight(self::HERO_SIZE, 'heavy') / 2;
-        $c->paint(static function (float $x, float $y) use ($glow, $strength, $cx, $cy): array {
-            $base = CardCanvas::mix(CardPalette::BG_BOTTOM, CardPalette::BG_TOP, $y / self::H);
-            $d = min(1.0, sqrt((($x - $cx) / 620.0) ** 2 + (($y - $cy) / 340.0) ** 2) / 0.72);
-            return CardCanvas::mix($glow, $base, $strength * (1.0 - $d * $d * (3.0 - 2.0 * $d)));
-        });
+        $c->blitField($outside, $lw, $lh, self::STEP);
+        $c->blitField(self::frost($backdrop, $lw, $lh), $lw, $lh, self::STEP, self::GLASS);
+        self::rim($c);
         return $c;
     }
 
@@ -880,110 +964,139 @@ final class CardLayout
         return $png;
     }
 
-    public static function header(CardCanvas $c, string $time): void
+    private static function orb(float $x, float $y, float $left, float $top, float $size, float $focus): float
     {
-        $cy = self::HEADER_Y;
-        $x = self::PAD;
+        $radius = $size / 2;
+        $ray = max($focus, 1.0 - $focus) * M_SQRT2 * $size;
+        $t = hypot($x - ($left + $size * $focus), $y - ($top + $size * $focus)) / $ray;
+        $fill = $t <= 0.55 ? 1.0 - 0.2 * $t / 0.55 : max(0.0, 0.8 * (1.0 - ($t - 0.55) / 0.17));
+        $edge = hypot($x - ($left + $radius), $y - ($top + $radius)) - $radius;
+        return $fill / (1.0 + exp($edge / 3.5));
+    }
+
+    private static function roundedDistance(float $px, float $py, float $x, float $y, float $w, float $h, float $r): float
+    {
+        $qx = abs($px - ($x + $w / 2)) - ($w / 2 - $r);
+        $qy = abs($py - ($y + $h / 2)) - ($h / 2 - $r);
+        return hypot(max($qx, 0.0), max($qy, 0.0)) + min(max($qx, $qy), 0.0) - $r;
+    }
+
+    private static function frost(array $field, int $lw, int $lh): array
+    {
+        $sigma = 64.0 / self::STEP;
+        $red = CardCanvas::blur($field[0], $lw, $lh, $sigma);
+        $green = CardCanvas::blur($field[1], $lw, $lh, $sigma);
+        $blue = CardCanvas::blur($field[2], $lw, $lh, $sigma);
+        [, $gy, , $gh] = self::GLASS;
+        $s = 1.2;
+        $bright = 0.62;
+        $n = $lw * $lh;
+        for ($k = 0; $k < $n; $k++) {
+            $r = $red[$k];
+            $g = $green[$k];
+            $b = $blue[$k];
+            $r2 = ((0.213 + 0.787 * $s) * $r + (0.715 - 0.715 * $s) * $g + (0.072 - 0.072 * $s) * $b) * $bright;
+            $g2 = ((0.213 - 0.213 * $s) * $r + (0.715 + 0.285 * $s) * $g + (0.072 - 0.072 * $s) * $b) * $bright;
+            $b2 = ((0.213 - 0.213 * $s) * $r + (0.715 - 0.715 * $s) * $g + (0.072 + 0.928 * $s) * $b) * $bright;
+            $t = max(0.0, min(1.0, (intdiv($k, $lw) * self::STEP - $gy) / $gh));
+            $sheen = 0.08 - 0.05 * $t;
+            $red[$k] = $r2 + (255.0 - $r2) * $sheen;
+            $green[$k] = $g2 + (255.0 - $g2) * $sheen;
+            $blue[$k] = $b2 + (255.0 - $b2) * $sheen;
+        }
+        return [$red, $green, $blue];
+    }
+
+    private static function rim(CardCanvas $c): void
+    {
+        [$x, $y, $w, $h, $r] = self::GLASS;
+        $c->ring($x + 0.5, $y + 0.5, $w - 1.0, $h - 1.0, $r - 0.5, 1.0, CardPalette::WHITE, static fn(float $px, float $py): float => 0.35 * max(0.0, 1.0 - ($py - $y - 0.5) / 14.0));
+        $cx = $x + $w / 2;
+        $cy = $y + $h / 2;
+        $len = ($w + $h) * M_SQRT1_2;
+        $stops = [[0.0, 0.55], [0.45, 0.08], [0.70, 0.04], [1.0, 0.25]];
+        $c->ring($x + 0.75, $y + 0.75, $w - 1.5, $h - 1.5, $r - 0.75, 1.5, CardPalette::WHITE, static function (float $px, float $py) use ($cx, $cy, $len, $stops): float {
+            $t = max(0.0, min(1.0, (($px - $cx) + ($py - $cy)) * M_SQRT1_2 / $len + 0.5));
+            for ($i = 1; $i < count($stops); $i++) {
+                if ($t <= $stops[$i][0]) {
+                    $k = ($t - $stops[$i - 1][0]) / ($stops[$i][0] - $stops[$i - 1][0]);
+                    return $stops[$i - 1][1] + ($stops[$i][1] - $stops[$i - 1][1]) * $k;
+                }
+            }
+            return $stops[count($stops) - 1][1];
+        });
+    }
+
+    public static function topRow(CardCanvas $c, string $pair, bool $isLong, string $leverage): void
+    {
+        $cy = self::TOP_ROW_Y;
+        $pills = [[$isLong ? 'LONG' : 'SHORT', $isLong ? 'long' : 'short']];
+        if ($leverage !== '') {
+            $pills[] = [$leverage, 'plain'];
+        }
+        $x = self::RIGHT;
+        foreach (array_reverse($pills) as [$text, $style]) {
+            [$fill, $fillAlpha, $line, $lineAlpha, $ink] = CardPalette::PILLS[$style];
+            $w = 43.0 + $c->measure($text, 20.0, 'bold', 0.06) + 1.2;
+            $x -= $w;
+            $c->roundRect($x, $cy - 23.0, $w, 46.0, 23.0, $fill, $fillAlpha);
+            $c->ring($x + 0.75, $cy - 22.25, $w - 1.5, 44.5, 22.25, 1.5, $line, static fn(): float => $lineAlpha);
+            $c->write($text, $x + 21.5, $cy - $c->capHeight(20.0, 'bold', $text) / 2, 20.0, $ink, 'bold', 'left', 0.06);
+            $x -= 10.0;
+        }
+        $size = $c->fit($pair, 56.0, $x - 24.0 - self::LEFT, 'heavy', -0.02, 28.0);
+        $c->write($pair, self::LEFT, $cy - $c->capHeight($size, 'heavy', $pair) / 2, $size, CardPalette::WHITE, 'heavy', 'left', -0.02);
+    }
+
+    public static function center(CardCanvas $c, string $label, array $labelRgb, float $labelAlpha, string $value, array $valueRgb): void
+    {
+        $c->write($label, self::W / 2, self::LABEL_TOP, 24.0, $labelRgb, 'semi', 'center', 0.02, $labelAlpha);
+        $mid = self::HERO_TOP + $c->capHeight(self::HERO_SIZE, 'heavy') / 2;
+        $size = $c->fit($value, self::HERO_SIZE, self::RIGHT - self::LEFT, 'heavy', -0.03, 64.0);
+        $c->write($value, self::W / 2, $mid - $c->capHeight($size, 'heavy', $value) / 2, $size, $valueRgb, 'heavy', 'center', -0.03);
+    }
+
+    public static function cells(CardCanvas $c, array $cells): void
+    {
+        $cells = array_values($cells);
+        $colW = (self::RIGHT - self::LEFT) / max(1, count($cells));
+        $valueMid = self::CELL_VALUE_TOP + $c->capHeight(44.0, 'bold') / 2;
+        foreach ($cells as $i => [$label, $value, $rgb]) {
+            $cx = self::LEFT + $colW * ($i + 0.5);
+            $c->write($label, $cx, self::CELL_LABEL_TOP, 22.0, CardPalette::WHITE, 'semi', 'center', 0.0, 0.58);
+            $size = $c->fit($value, 44.0, $colW - 24.0, 'bold', -0.01, 24.0);
+            $c->write($value, $cx, $valueMid - $c->capHeight($size, 'bold', $value) / 2, $size, $rgb, 'bold', 'center', -0.01);
+        }
+    }
+
+    public static function footer(CardCanvas $c, string $time): void
+    {
+        $time = trim($time);
         $logo = CardConfig::logoPath();
-        $drawn = false;
         if ($logo !== null) {
             $info = @getimagesize($logo);
             $ratio = is_array($info) && ($info[1] ?? 0) > 0 ? $info[0] / $info[1] : 1.0;
-            $drawn = $c->image($logo, $x, $cy - 24.0, min(320.0, 48.0 * $ratio), 48.0);
+            $logoW = min(200.0, 30.0 * $ratio);
+            $timeW = $time !== '' ? $c->measure($time, 20.0, 'semi', 0.14) : 0.0;
+            $x = self::W / 2 - ($logoW + ($time !== '' ? 20.0 + $timeW : 0.0)) / 2;
+            if ($c->image($logo, $x, self::FOOTER_TOP + 7.0 - 15.0, $logoW, 30.0)) {
+                if ($time !== '') {
+                    $c->write($time, $x + $logoW + 20.0, self::FOOTER_TOP, 20.0, CardPalette::WHITE, 'semi', 'left', 0.14, 0.42);
+                }
+                return;
+            }
         }
-        if (!$drawn) {
-            $c->roundRect($x, $cy - 23.0, 46.0, 46.0, 14.0, CardPalette::WHITE, 0.06);
-            $c->strokeRoundRect($x + 0.5, $cy - 22.5, 45.0, 45.0, 13.5, 1.0, CardPalette::WHITE, 0.12);
-            $c->polyline([[$x + 16.0, $cy + 4.0], [$x + 23.0, $cy - 4.0], [$x + 30.0, $cy + 4.0]], 3.2, CardPalette::WHITE);
-            $brand = CardConfig::brand();
-            $c->write($brand, $x + 62.0, $cy - $c->capHeight(24.0, 'bold', $brand) / 2, 24.0, CardPalette::WHITE, 'bold', 'left', 0.08);
-        }
-        $time = CardFormat::time($time);
+        $parts = [strtoupper(CardConfig::brand())];
         if ($time !== '') {
-            $c->write($time, self::W - self::PAD, $cy - $c->capHeight(22.0, 'semi', $time) / 2, 22.0, CardPalette::MUTED, 'semi', 'right', 0.04);
+            $parts[] = '·';
+            $parts[] = $time;
         }
-    }
-
-    public static function pairRow(CardCanvas $c, string $pair, bool $isLong, string $leverage): void
-    {
-        $chips = [[$isLong ? 'LONG' : 'SHORT', $isLong ? CardPalette::GREEN : CardPalette::RED, $isLong ? CardPalette::INK : CardPalette::WHITE, true]];
-        if ($leverage !== '') {
-            $chips[] = [$leverage, null, CardPalette::WHITE, false];
-        }
-        $chipH = 48.0;
-        $chipText = 22.0;
-        $chipTrack = 0.06;
-        $widths = [];
-        $chipsW = -10.0;
-        foreach ($chips as $i => [$text, , , $icon]) {
-            $widths[$i] = 40.0 + ($icon ? 24.0 : 0.0) + $c->measure($text, $chipText, 'heavy', $chipTrack);
-            $chipsW += $widths[$i] + 10.0;
-        }
-
-        $rowCy = self::PAIR_TOP + $c->capHeight(self::PAIR_SIZE, 'heavy') / 2;
-        $size = $c->fit($pair, self::PAIR_SIZE, 1300.0 - 24.0 - $chipsW, 'heavy', -0.02, 40.0);
-        $pairW = $c->measure($pair, $size, 'heavy', -0.02);
-        $x = self::W / 2 - ($pairW + 24.0 + $chipsW) / 2;
-        $c->write($pair, $x, $rowCy - $c->capHeight($size, 'heavy', $pair) / 2, $size, CardPalette::WHITE, 'heavy', 'left', -0.02);
-        $x += $pairW + 24.0;
-
-        foreach ($chips as $i => [$text, $fill, $ink, $icon]) {
-            $w = $widths[$i];
-            $y = $rowCy - $chipH / 2;
-            if ($fill !== null) {
-                $c->roundRect($x, $y, $w, $chipH, $chipH / 2, $fill);
-            } else {
-                $c->strokeRoundRect($x + 0.75, $y + 0.75, $w - 1.5, $chipH - 1.5, $chipH / 2 - 0.75, 1.5, CardPalette::WHITE, 0.2);
-            }
-            $tx = $x + 20.0;
-            if ($icon) {
-                $top = $rowCy - 8.0;
-                $c->filledPolygon($isLong
-                    ? [[$tx + 2.0, $top + 12.0], [$tx + 14.0, $top + 12.0], [$tx + 8.0, $top + 3.0]]
-                    : [[$tx + 2.0, $top + 4.0], [$tx + 14.0, $top + 4.0], [$tx + 8.0, $top + 13.0]], $ink);
-                $tx += 24.0;
-            }
-            $c->write($text, $tx, $rowCy - $c->capHeight($chipText, 'heavy', $text) / 2, $chipText, $ink, 'heavy', 'left', $chipTrack);
-            $x += $w + 10.0;
-        }
-    }
-
-    public static function label(CardCanvas $c, string $text, array $rgb): void
-    {
-        $c->write($text, self::W / 2, self::LABEL_TOP, 24.0, $rgb, 'bold', 'center', 0.22);
-    }
-
-    public static function hero(CardCanvas $c, string $text, array $rgb): void
-    {
-        $cy = self::HERO_TOP + $c->capHeight(self::HERO_SIZE, 'heavy') / 2;
-        $size = $c->fit($text, self::HERO_SIZE, 1240.0, 'heavy', -0.02, 72.0);
-        $c->write($text, self::W / 2, $cy - $c->capHeight($size, 'heavy', $text) / 2, $size, $rgb, 'heavy', 'center', -0.02);
-    }
-
-    public static function stats(CardCanvas $c, array $columns): void
-    {
-        $x = self::PAD;
-        $y = self::STATS_TOP;
-        $w = self::W - 2 * self::PAD;
-        $h = self::STATS_HEIGHT;
-        $c->roundRect($x, $y, $w, $h, 24.0, CardPalette::WHITE, 0.035);
-        $c->strokeRoundRect($x + 0.5, $y + 0.5, $w - 1.0, $h - 1.0, 23.5, 1.0, CardPalette::WHITE, 0.08);
-
-        $columns = array_values($columns);
-        $n = max(1, count($columns));
-        $colW = $w / $n;
-        foreach ($columns as $i => [$label, $value, $rgb]) {
-            if ($i > 0) {
-                $c->rect($x + $colW * $i, $y + 40.0, 1.0, $h - 80.0, CardPalette::WHITE, 0.08);
-            }
-            $cx = $x + $colW * ($i + 0.5);
-            $size = $c->fit($value, 54.0, $colW - 64.0, 'bold', -0.01, 26.0);
-            $labelCap = $c->capHeight(22.0, 'semi', $label);
-            $valueCap = $c->capHeight(54.0, 'bold');
-            $top = $y + ($h - ($labelCap + 30.0 + $valueCap)) / 2;
-            $c->write($label, $cx, $top, 22.0, CardPalette::MUTED, 'semi', 'center', 0.16);
-            $valueTop = $top + $labelCap + 30.0 + ($valueCap - $c->capHeight($size, 'bold', $value)) / 2;
-            $c->write($value, $cx, $valueTop, $size, $rgb, 'bold', 'center', -0.01);
+        $gap = 20.0 * 0.14 + $c->measure(' ', 20.0, 'semi');
+        $widths = array_map(static fn(string $part): float => $c->measure($part, 20.0, 'semi', 0.14), $parts);
+        $x = self::W / 2 - (array_sum($widths) + $gap * (count($parts) - 1)) / 2;
+        foreach ($parts as $i => $part) {
+            $c->write($part, $x, self::FOOTER_TOP, 20.0, CardPalette::WHITE, 'semi', 'left', 0.14, 0.42);
+            $x += $widths[$i] + $gap;
         }
     }
 
@@ -1014,16 +1127,15 @@ final class SignalCard
 
         try {
             $isLong = strtoupper((string) ($d['direction'] ?? '')) !== 'SHORT';
-            $c = CardLayout::begin($isLong ? CardPalette::GREEN : CardPalette::RED, 0.10);
-            CardLayout::header($c, (string) ($d['time'] ?? ''));
-            CardLayout::pairRow($c, CardLayout::pair((string) ($d['symbol'] ?? '')), $isLong, strtoupper(trim((string) ($d['leverage'] ?? ''))));
-            CardLayout::label($c, 'ENTRY PRICE', CardPalette::MUTED);
-            CardLayout::hero($c, CardFormat::orNA($d['entry'] ?? null), CardPalette::WHITE);
-            CardLayout::stats($c, [
-                ['STOP LOSS', CardFormat::orNA($d['sl'] ?? null), CardPalette::RED],
-                ['TARGET 1', CardFormat::orNA($d['tp1'] ?? null), CardPalette::GREEN],
-                ['TARGET 2', CardFormat::orNA($d['tp2'] ?? null), CardPalette::GREEN],
+            $c = CardLayout::begin($isLong ? 'long' : 'short');
+            CardLayout::topRow($c, CardLayout::pair((string) ($d['symbol'] ?? '')), $isLong, strtoupper(trim((string) ($d['leverage'] ?? ''))));
+            CardLayout::center($c, 'Entry price', CardPalette::WHITE, 0.62, CardFormat::orNA($d['entry'] ?? null), CardPalette::WHITE);
+            CardLayout::cells($c, [
+                ['Stop loss', CardFormat::orNA($d['sl'] ?? null), CardPalette::RED_SOFT],
+                ['Target 1', CardFormat::orNA($d['tp1'] ?? null), CardPalette::GREEN_SOFT],
+                ['Target 2', CardFormat::orNA($d['tp2'] ?? null), CardPalette::GREEN_SOFT],
             ]);
+            CardLayout::footer($c, (string) ($d['time'] ?? ''));
             return CardLayout::finish($c);
         } catch (Throwable $e) {
             if (class_exists('Logger')) {
@@ -1037,14 +1149,14 @@ final class SignalCard
 final class ResultCard
 {
     private const STATUS = [
-        'tp1' => 'PROFIT SHOT · TARGET 1',
-        'tp2' => 'PROFIT SHOT · TARGET 2',
-        'tp3' => 'PROFIT SHOT · TARGET 3',
-        'tp4' => 'PROFIT SHOT · ALL TARGETS',
-        'trail' => 'PROFIT SHOT · PROFIT LOCKED',
-        'be' => 'BREAK EVEN · RISK FREE',
-        'sl' => 'STOP LOSS',
-        'timeout' => 'TIME LIMIT · CLOSED',
+        'tp1' => 'Profit shot · Target 1',
+        'tp2' => 'Profit shot · Target 2',
+        'tp3' => 'Profit shot · Target 3',
+        'tp4' => 'Profit shot · All targets',
+        'trail' => 'Profit shot · Profit locked',
+        'be' => 'Break even · Risk free',
+        'sl' => 'Stop loss',
+        'timeout' => 'Time limit',
     ];
 
     public static function render(array $d): ?string
@@ -1059,27 +1171,26 @@ final class ResultCard
             $headline = $headline !== '' ? $headline : '0.00%';
             $pnl = CardFormat::number($headline) ?? 0.0;
             $tone = $pnl > 0.004 ? 'profit' : ($pnl < -0.004 || $kind === 'sl' ? 'loss' : 'flat');
-            $status = self::STATUS[$kind] ?? 'TRADE CLOSED';
-            if ($tone === 'loss' && str_starts_with($status, 'PROFIT SHOT')) {
-                $status = 'TRADE CLOSED';
+            $status = self::STATUS[$kind] ?? 'Trade closed';
+            if ($tone === 'loss' && str_starts_with($status, 'Profit shot')) {
+                $status = 'Trade closed';
             }
-            [$accent, $hero, $glow] = match ($tone) {
-                'profit' => [CardPalette::GREEN, CardPalette::GREEN, 0.12],
-                'loss' => [CardPalette::RED, CardPalette::RED, 0.12],
-                default => [CardPalette::NEUTRAL, CardPalette::WHITE, 0.06],
+            [$accent, $labelAlpha] = match ($tone) {
+                'profit' => [CardPalette::GREEN_SOFT, 1.0],
+                'loss' => [CardPalette::RED_SOFT, 1.0],
+                default => [CardPalette::WHITE, 0.62],
             };
 
             $isLong = strtoupper((string) ($d['direction'] ?? '')) !== 'SHORT';
-            $c = CardLayout::begin($accent, $glow);
-            CardLayout::header($c, (string) ($d['time'] ?? ''));
-            CardLayout::pairRow($c, CardLayout::pair((string) ($d['symbol'] ?? '')), $isLong, strtoupper(trim((string) ($d['leverage'] ?? ''))));
-            CardLayout::label($c, $status, $accent);
-            CardLayout::hero($c, $headline, $hero);
-            CardLayout::stats($c, [
-                ['ENTRY', CardFormat::orNA($d['entry'] ?? null), CardPalette::WHITE],
-                ['EXIT', CardFormat::orNA($d['exit'] ?? null), $tone === 'flat' ? CardPalette::WHITE : $accent],
-                ['DURATION', CardFormat::orNA($d['duration'] ?? null), CardPalette::WHITE],
+            $c = CardLayout::begin($tone);
+            CardLayout::topRow($c, CardLayout::pair((string) ($d['symbol'] ?? '')), $isLong, strtoupper(trim((string) ($d['leverage'] ?? ''))));
+            CardLayout::center($c, $status, $accent, $labelAlpha, CardFormat::signed($headline), $accent);
+            CardLayout::cells($c, [
+                ['Entry', CardFormat::orNA($d['entry'] ?? null), CardPalette::WHITE],
+                ['Exit', CardFormat::orNA($d['exit'] ?? null), CardPalette::WHITE],
+                ['Duration', CardFormat::duration(CardFormat::orNA($d['duration'] ?? null)), CardPalette::WHITE],
             ]);
+            CardLayout::footer($c, (string) ($d['time'] ?? ''));
             return CardLayout::finish($c);
         } catch (Throwable $e) {
             if (class_exists('Logger')) {
