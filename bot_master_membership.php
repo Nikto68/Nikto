@@ -219,6 +219,8 @@ require_once __DIR__ . '/channels.php';
 require_once __DIR__ . '/airdrop.php';
 require_once __DIR__ . '/coupons.php';
 require_once __DIR__ . '/profit.php';
+// 🌐 حسابِ سایت (ورود با تایید در ربات + خریدِ مستقیم) — فقط اگر فایلش آپلود شده باشد
+if (is_file(__DIR__ . '/site_auth.php')) require_once __DIR__ . '/site_auth.php';
 
 // ============================================================
 // 📚 ذخیره‌سازی اتمیک
@@ -6668,6 +6670,9 @@ function masterHandle($update) {
         $u = getUser($uid);
         if ($u && !empty($u['banned'])) { answerCb(BOT_TOKEN, $cbId, T('banned'), true); return; }
 
+        // 🌐 تایید/ردِ ورود به سایت — پیش از دروازه‌ی عضویت، چون خودش خریدی نیست
+        if (function_exists('slBotCallback') && slBotCallback($data, $uid, $chatId, $msgId, $cbId, $uname, $fname)) return;
+
         // 🔒 عضویت اجباری ربات مادر
         if ($data === 'mjchk') {
             $miss = masterJoinMissing($uid, true);
@@ -8255,6 +8260,11 @@ function masterHandle($update) {
         // 🔗 لینکِ دعوتِ ایردراپ («/start 12345») — فقط برایِ گیمیفیکیشنِ
         // مینی‌اپ (ماموریت/لیدربورد)، بدونِ هیچ پورسانتِ نقدی.
         $refArg = trim(substr($text, 6));
+        // 🌐 ورود به سایت — لینکِ t.me/<bot>?start=wl_… که خودِ سایت ساخته
+        if (str_starts_with($refArg, 'wl_') && function_exists('slBotStart')) {
+            slBotStart($uid, $chatId, substr($refArg, 3), $uname, $fname);
+            return;
+        }
         if ($refArg !== '' && ctype_digit($refArg) && function_exists('adSetReferrerOnce')) {
             adSetReferrerOnce($uid, (int)$refArg);
         }
