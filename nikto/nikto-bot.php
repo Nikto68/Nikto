@@ -11,6 +11,7 @@ const NIKTO_CONFIG = [
     'timezone'       => 'Asia/Tehran',
     'brand'          => 'NIKTO CRYPTO',
     'http_proxy'     => '',
+    'data_proxy'     => '',
 ];
 }
 namespace Nikto\Bundle {
@@ -171,6 +172,7 @@ final class Runtime
             'webhook_url'    => (string) ($config['webhook_url'] ?? ''),
             'webhook_secret' => (string) ($config['webhook_secret'] ?? ''),
             'http_proxy'     => (string) ($config['http_proxy'] ?? ''),
+            'data_proxy'     => (string) ($config['data_proxy'] ?? ''),
             'db_path'        => $data . '/bot.sqlite',
             'timezone'       => (string) ($config['timezone'] ?? 'Asia/Tehran'),
             'brand'          => (string) ($config['brand'] ?? 'NIKTO CRYPTO'),
@@ -638,6 +640,7 @@ final class Config
             'brand'          => 'NIKTO CRYPTO',
             'http_timeout'   => 25,
             'http_proxy'     => '',
+            'data_proxy'     => '',
             'api_keys'       => [],
             'log_level'      => 'info',
             'webhook_secret' => '',
@@ -881,6 +884,11 @@ final class Diagnostics
         'منبع: Bybit'             => 'https://api.bybit.com/v5/market/time',
         'منبع: OKX'               => 'https://www.okx.com/api/v5/public/time',
         'منبع: Gate.io'           => 'https://api.gateio.ws/api/v4/spot/time',
+        'منبع: MEXC'              => 'https://api.mexc.com/api/v3/ping',
+        'منبع: MEXC Futures'      => 'https://contract.mexc.com/api/v1/contract/ping',
+        'منبع: KuCoin'            => 'https://api.kucoin.com/api/v1/timestamp',
+        'منبع: KuCoin Futures'    => 'https://api-futures.kucoin.com/api/v1/timestamp',
+        'منبع: Nobitex'           => 'https://api.nobitex.ir/market/stats?srcCurrency=btc&dstCurrency=usdt',
         'منبع: CoinGecko'         => 'https://api.coingecko.com/api/v3/ping',
         'منبع: ترس و طمع'          => 'https://api.alternative.me/fng/?limit=1&format=json',
         'منبع: ForexFactory'      => 'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
@@ -974,11 +982,14 @@ final class Diagnostics
             $add(null, 'کلید امنیتی وب‌هوک', ($result['has_custom_certificate'] ?? false) ? 'گواهی سفارشی' : 'استاندارد');
         }
 
+        $proxy = Http::proxy();
+        $add(null, 'پراکسی داده', $proxy === '' ? 'ندارد (اتصال مستقیم)' : (string) preg_replace('#//[^@/]*@#', '//***@', $proxy));
+
         foreach (Http::probe(self::DATA_SOURCES) as $label => $r) {
             $add(
                 $r['ok'],
                 $label,
-                $r['ok'] ? 'در دسترس (' . $r['ms'] . ' ms)' : Http::explain($r['code'], $r['error'])
+                $r['ok'] ? 'در دسترس (' . $r['ms'] . ' ms)' : Http::explain($r['code'], $r['error'], $r['body'])
             );
         }
 
@@ -1069,23 +1080,47 @@ final class Http
         return (int) (self::$failures[self::host($url)]['code'] ?? 0);
     }
 
-    public static function explainFailures(int $max = 4): string
+    public static function explainFailures(int $max = 8): string
     {
         $lines = [];
         foreach (array_slice(self::$failures, 0, $max, true) as $host => $f) {
-            $lines[] = '• ' . $host . ': ' . self::explain((int) $f['code'], (string) $f['error']);
+            $lines[] = '• ' . $host . ': ' . self::explain((int) $f['code'], (string) $f['error'], (string) ($f['body'] ?? ''));
+        }
+        if (count(self::$failures) > $max) {
+            $lines[] = '• و ' . (count(self::$failures) - $max) . ' سرویس دیگر';
         }
 
         return implode("\n", $lines);
     }
 
-    public static function explain(int $code, string $error): string
+    /** True when every recorded failure is a service refusing the server's country (not an outage or timeout). */
+    public static function allRegionBlocked(): bool
+    {
+        if (self::$failures === []) {
+            return false;
+        }
+        foreach (self::$failures as $f) {
+            if (!self::isRegionBlock((int) $f['code'], (string) ($f['body'] ?? ''))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public static function isRegionBlock(int $code, string $body): bool
+    {
+        return $code === 451
+            || ($code === 403 && preg_match('/country|countries|region|restricted location|eligibility|jurisdiction|1009/i', $body) === 1);
+    }
+
+    public static function explain(int $code, string $error, string $body = ''): string
     {
         $error = str_replace(['<', '>', '&'], '', $error);
 
         return match (true) {
-            $code === 451 => 'HTTP 451 — این سرویس دسترسی از کشورِ سرورِ شما را مسدود کرده است',
-            $code === 403 => 'HTTP 403 — دسترسی مسدود شد (محدودیت منطقه‌ای یا فایروال)',
+            self::isRegionBlock($code, $body) => 'HTTP ' . $code . ' — این سرویس کشورِ سرورِ شما را مسدود کرده است',
+            $code === 403 => 'HTTP 403 — دسترسی رد شد (فایروالِ هاست یا محدودیتِ سرویس)',
             $code === 429, $code === 418 => 'HTTP ' . $code . ' — محدودیت تعداد درخواست؛ چند دقیقه بعد دوباره امتحان کنید',
             $code >= 500 => 'HTTP ' . $code . ' — خطای موقت سمت سرویس',
             $code > 0 => 'HTTP ' . $code,
@@ -1113,7 +1148,7 @@ final class Http
         foreach ($urls as $label => $url) {
             $ch = curl_init($url);
             curl_setopt_array($ch, self::options($timeout, []));
-            $proxy = (string) Config::get('http_proxy', '');
+            $proxy = self::proxy();
             if ($proxy !== '') {
                 curl_setopt($ch, CURLOPT_PROXY, $proxy);
             }
@@ -1141,6 +1176,7 @@ final class Http
                 'ok'    => $code >= 200 && $code < 300,
                 'code'  => $code,
                 'error' => $result !== CURLE_OK ? (string) curl_strerror($result) : '',
+                'body'  => self::snippet(curl_multi_getcontent($ch)),
                 'ms'    => (int) round((float) curl_getinfo($ch, CURLINFO_TOTAL_TIME) * 1000),
             ];
             curl_multi_remove_handle($mh, $ch);
@@ -1165,16 +1201,27 @@ final class Http
         ];
     }
 
+    /** data_proxy routes only market-data requests (not Telegram); http_proxy routes both. */
+    public static function proxy(): string
+    {
+        return (string) (Config::get('data_proxy', '') ?: Config::get('http_proxy', ''));
+    }
+
+    private static function snippet(mixed $body): string
+    {
+        return is_string($body) ? mb_substr(trim((string) preg_replace('/\s+/', ' ', strip_tags($body))), 0, 300) : '';
+    }
+
     private static function host(string $url): string
     {
         return strtolower((string) (parse_url($url, PHP_URL_HOST) ?: $url));
     }
 
-    private static function fail(string $url, int $code, string $error): void
+    private static function fail(string $url, int $code, string $error, string $body = ''): void
     {
         $host = self::host($url);
         unset(self::$failures[$host]);
-        self::$failures[$host] = ['code' => $code, 'error' => $error];
+        self::$failures[$host] = ['code' => $code, 'error' => $error, 'body' => $body];
     }
 
     public static function get(string $url, array $headers = [], int $timeout = 0, int $retries = 2): ?string
@@ -1182,6 +1229,7 @@ final class Http
         $timeout = $timeout ?: (int) Config::get('http_timeout', 25);
         $lastErr = '';
         $lastCode = 0;
+        $lastBody = '';
         $err = '';
 
         for ($attempt = 0; $attempt <= $retries; $attempt++) {
@@ -1190,7 +1238,7 @@ final class Http
             }
             $ch = curl_init($url);
             curl_setopt_array($ch, self::options($timeout, $headers));
-            $proxy = (string) Config::get('http_proxy', '');
+            $proxy = self::proxy();
             if ($proxy !== '') {
                 curl_setopt($ch, CURLOPT_PROXY, $proxy);
             }
@@ -1205,12 +1253,13 @@ final class Http
             }
             $lastErr = $err !== '' ? $err : ('HTTP ' . $code);
             $lastCode = $code;
+            $lastBody = self::snippet($body);
             if ($code >= 400 && $code < 500 && $code !== 429) {
                 break;
             }
         }
 
-        self::fail($url, $lastCode, $err);
+        self::fail($url, $lastCode, $err, $lastBody);
         Log::warn('HTTP request failed', ['url' => self::maskUrl($url), 'error' => $lastErr]);
         return null;
     }
@@ -2478,89 +2527,38 @@ final class FearGreedProvider
 
 namespace Nikto\Data {
 use Nikto\Core\Http;
-use Nikto\Core\Log;
 
-final class FuturesProvider
+/**
+ * Public market data from exchanges other than Binance, normalised to Binance's shapes so any card can use it
+ * when Binance blocks the server's region: tickers use Binance's 24hr-ticker fields, books are
+ * ['bids' => [[price, qty]], 'asks' => ...], klines are [openTimeMs, open, high, low, close], oldest first.
+ */
+final class Exchanges
 {
-    public const SOURCE_BINANCE = 'Binance Futures';
+    public const SPOT    = ['OKX', 'Bybit', 'MEXC', 'KuCoin', 'Gate.io', 'Nobitex'];
+    public const FUTURES = ['Bybit', 'OKX', 'Gate.io', 'MEXC', 'KuCoin'];
+    public const BOOKS   = ['OKX' => 'OKX Spot', 'Bybit' => 'Bybit Futures', 'MEXC' => 'MEXC Spot', 'KuCoin' => 'KuCoin Spot', 'Nobitex' => 'Nobitex'];
 
-    private const FAPI  = 'https://fapi.binance.com/fapi/v1';
-    private const BYBIT = 'https://api.bybit.com/v5/market';
-    private const OKX   = 'https://www.okx.com/api/v5/market';
-    private const GATE  = 'https://api.gateio.ws/api/v4/futures/usdt';
-    private const SPOT_MIRROR = 'https://data-api.binance.vision/api/v3';
-
-    public const SOURCE_NAMES_FA = [
-        'Binance Futures' => 'بایننس',
-        'Bybit Futures'   => 'بای‌بیت',
-        'OKX Futures'     => 'اوکی‌ایکس',
-        'Gate.io Futures' => 'گیت',
+    public const NAMES_FA = [
+        'Binance' => 'بایننس',
+        'Bybit'   => 'بای‌بیت',
+        'OKX'     => 'اوکی‌ایکس',
+        'Gate.io' => 'گیت',
+        'MEXC'    => 'مکسی',
+        'KuCoin'  => 'کوکوین',
+        'Nobitex' => 'نوبیتکس',
     ];
 
-    public static function movers(int $count = 5, float $minVolume = 5_000_000, bool $withSparkline = true): ?array
-    {
-        $count = max(1, min(8, $count));
+    private const OKX      = 'https://www.okx.com/api/v5/market';
+    private const BYBIT    = 'https://api.bybit.com/v5/market';
+    private const MEXC     = 'https://api.mexc.com/api/v3';
+    private const MEXC_F   = 'https://contract.mexc.com/api/v1/contract';
+    private const KUCOIN   = 'https://api.kucoin.com/api/v1';
+    private const KUCOIN_F = 'https://api-futures.kucoin.com/api/v1';
+    private const GATE     = 'https://api.gateio.ws/api/v4';
+    private const NOBITEX  = 'https://api.nobitex.ir';
 
-        if (Mock::enabled()) {
-            $tickers = Mock::futuresTickers();
-            $tradable = self::tradable(Mock::futuresExchangeInfo());
-            $source = self::SOURCE_BINANCE;
-        } else {
-            [$tickers, $tradable, $source] = self::tickers();
-        }
-
-        if (!is_array($tickers) || $tickers === [] || array_values($tickers) !== $tickers) {
-            Log::error('Futures tickers unavailable from every source');
-            return null;
-        }
-
-        $result = self::rank($tickers, $tradable ?: null, $count, $minVolume);
-        if ($result === null) {
-            return null;
-        }
-        $result['source'] = $source;
-
-        if ($withSparkline) {
-            foreach (['gainers', 'losers'] as $side) {
-                foreach ($result[$side] as $i => $row) {
-                    $result[$side][$i]['spark'] = self::sparkline((string) $row['pair'], (float) $row['change_pct'], $source);
-                }
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Binance Futures first; if it is blocked for the server's region (HTTP 451/403) or down,
-     * fall back to other exchanges' USDT perpetuals, normalised to Binance's ticker shape.
-     *
-     * @return array{0: ?array, 1: ?array, 2: string}
-     */
-    private static function tickers(): array
-    {
-        $tickers = Http::getJson(self::FAPI . '/ticker/24hr', [], 20, 1);
-        if (is_array($tickers) && $tickers !== [] && array_values($tickers) === $tickers) {
-            $tradable = Http::remember('fapi:tradable', 6 * 3600, static function (): ?array {
-                $info = Http::getJson(self::FAPI . '/exchangeInfo', [], 25, 1);
-                return is_array($info) ? self::tradable($info) : null;
-            });
-
-            return [$tickers, $tradable, self::SOURCE_BINANCE];
-        }
-
-        foreach (['Bybit Futures' => 'fromBybit', 'OKX Futures' => 'fromOkx', 'Gate.io Futures' => 'fromGate'] as $source => $method) {
-            $rows = self::$method();
-            if ($rows !== []) {
-                Log::warn('Futures tickers served by fallback source', ['source' => $source]);
-                return [$rows, null, $source];
-            }
-        }
-
-        return [null, null, self::SOURCE_BINANCE];
-    }
-
-    private static function ticker(string $pair, float $last, float $changePct, float $high, float $low, float $quoteVolume): array
+    public static function ticker(string $pair, float $last, float $changePct, float $high, float $low, float $quoteVolume): array
     {
         $prev = $changePct > -100 ? $last / (1 + $changePct / 100) : 0.0;
 
@@ -2576,15 +2574,161 @@ final class FuturesProvider
         ];
     }
 
-    private static function fromBybit(): array
+    /** USDT spot tickers keyed by pair (BTCUSDT). $bases limits the request where the exchange needs it. */
+    public static function spotTickers(string $exchange, array $bases = []): array
     {
-        $data = Http::getJson(self::BYBIT . '/tickers?category=linear', [], 20, 1);
-        $list = $data['result']['list'] ?? null;
-        if (!is_array($list)) {
-            return [];
-        }
+        $rows = match ($exchange) {
+            'OKX'     => self::okx('SPOT'),
+            'Bybit'   => self::bybit('spot'),
+            'MEXC'    => self::mexc(),
+            'KuCoin'  => self::kucoin(),
+            'Gate.io' => self::gate('/spot/tickers', 'currency_pair', 'quote_volume'),
+            'Nobitex' => self::nobitex($bases),
+            default   => [],
+        };
+
+        return array_column($rows, null, 'symbol');
+    }
+
+    /** USDT-margined perpetual tickers as a list. */
+    public static function futuresTickers(string $exchange): array
+    {
+        return match ($exchange) {
+            'Bybit'   => self::bybit('linear'),
+            'OKX'     => self::okx('SWAP'),
+            'Gate.io' => self::gate('/futures/usdt/tickers', 'contract', 'volume_24h_quote'),
+            'MEXC'    => self::mexcFutures(),
+            'KuCoin'  => self::kucoinFutures(),
+            default   => [],
+        };
+    }
+
+    public static function book(string $exchange, string $pair): ?array
+    {
+        $base = substr($pair, 0, -4);
+        [$bids, $asks] = match ($exchange) {
+            'OKX'     => self::sides(Http::getJson(self::OKX . '/books?instId=' . $base . '-USDT&sz=400', [], 15, 1)['data'][0] ?? null, 'bids', 'asks'),
+            'Bybit'   => self::sides(Http::getJson(self::BYBIT . '/orderbook?category=linear&symbol=' . $pair . '&limit=500', [], 15, 1)['result'] ?? null, 'b', 'a'),
+            'MEXC'    => self::sides(Http::getJson(self::MEXC . '/depth?symbol=' . $pair . '&limit=5000', [], 20, 1), 'bids', 'asks'),
+            'KuCoin'  => self::sides(Http::getJson(self::KUCOIN . '/market/orderbook/level2_100?symbol=' . $base . '-USDT', [], 15, 1)['data'] ?? null, 'bids', 'asks'),
+            'Nobitex' => self::sides(Http::getJson(self::NOBITEX . '/v3/orderbook/' . $pair, [], 15, 1), 'bids', 'asks'),
+            default   => [[], []],
+        };
+
+        return $bids !== [] && $asks !== [] ? ['bids' => $bids, 'asks' => $asks] : null;
+    }
+
+    /** Hourly candles; $market is 'spot' or 'futures' (exchanges without a simple futures feed use their spot market). */
+    public static function klines(string $exchange, string $market, string $pair, int $limit): array
+    {
+        $base = substr($pair, 0, -4);
+        $futures = $market === 'futures';
         $out = [];
-        foreach ($list as $t) {
+
+        switch ($exchange) {
+            case 'OKX':
+                $inst = $base . '-USDT' . ($futures ? '-SWAP' : '');
+                $rows = Http::getJson(self::OKX . '/candles?instId=' . $inst . '&bar=1H&limit=' . $limit, [], 12, 0)['data'] ?? null;
+                foreach (array_reverse(is_array($rows) ? $rows : []) as $k) {
+                    $out[] = self::candle($k[0] ?? null, $k[1] ?? null, $k[2] ?? null, $k[3] ?? null, $k[4] ?? null);
+                }
+                break;
+            case 'Bybit':
+                $rows = Http::getJson(self::BYBIT . '/kline?category=' . ($futures ? 'linear' : 'spot') . '&symbol=' . $pair . '&interval=60&limit=' . $limit, [], 12, 0)['result']['list'] ?? null;
+                foreach (array_reverse(is_array($rows) ? $rows : []) as $k) {
+                    $out[] = self::candle($k[0] ?? null, $k[1] ?? null, $k[2] ?? null, $k[3] ?? null, $k[4] ?? null);
+                }
+                break;
+            case 'MEXC':
+                $rows = Http::getJson(self::MEXC . '/klines?symbol=' . $pair . '&interval=60m&limit=' . $limit, [], 12, 0);
+                foreach (is_array($rows) ? $rows : [] as $k) {
+                    $out[] = self::candle($k[0] ?? null, $k[1] ?? null, $k[2] ?? null, $k[3] ?? null, $k[4] ?? null);
+                }
+                break;
+            case 'KuCoin':
+                $end = time();
+                $rows = Http::getJson(self::KUCOIN . '/market/candles?type=1hour&symbol=' . $base . '-USDT&startAt=' . ($end - ($limit + 1) * 3600) . '&endAt=' . $end, [], 12, 0)['data'] ?? null;
+                // KuCoin candle: [time(s), open, close, high, low, volume, turnover], newest first.
+                foreach (array_reverse(is_array($rows) ? $rows : []) as $k) {
+                    $out[] = self::candle(isset($k[0]) ? (float) $k[0] * 1000 : null, $k[1] ?? null, $k[3] ?? null, $k[4] ?? null, $k[2] ?? null);
+                }
+                break;
+            case 'Gate.io':
+                if ($futures) {
+                    $rows = Http::getJson(self::GATE . '/futures/usdt/candlesticks?contract=' . $base . '_USDT&interval=1h&limit=' . $limit, [], 12, 0);
+                    foreach (is_array($rows) ? $rows : [] as $k) {
+                        $out[] = self::candle(isset($k['t']) ? (float) $k['t'] * 1000 : null, $k['o'] ?? null, $k['h'] ?? null, $k['l'] ?? null, $k['c'] ?? null);
+                    }
+                } else {
+                    // Gate spot candle: [time(s), quote volume, close, high, low, open, ...], oldest first.
+                    $rows = Http::getJson(self::GATE . '/spot/candlesticks?currency_pair=' . $base . '_USDT&interval=1h&limit=' . $limit, [], 12, 0);
+                    foreach (is_array($rows) ? $rows : [] as $k) {
+                        $out[] = self::candle(isset($k[0]) ? (float) $k[0] * 1000 : null, $k[5] ?? null, $k[3] ?? null, $k[4] ?? null, $k[2] ?? null);
+                    }
+                }
+                break;
+            case 'Nobitex':
+                $end = time();
+                $data = Http::getJson(self::NOBITEX . '/market/udf/history?symbol=' . $pair . '&resolution=60&from=' . ($end - ($limit + 1) * 3600) . '&to=' . $end, [], 12, 0);
+                foreach ((array) ($data['t'] ?? []) as $i => $t) {
+                    $out[] = self::candle((float) $t * 1000, $data['o'][$i] ?? null, $data['h'][$i] ?? null, $data['l'][$i] ?? null, $data['c'][$i] ?? null);
+                }
+                break;
+        }
+
+        return array_slice(array_values(array_filter($out)), -$limit);
+    }
+
+    private static function candle(mixed $t, mixed $o, mixed $h, mixed $l, mixed $c): ?array
+    {
+        foreach ([$t, $o, $h, $l, $c] as $v) {
+            if (!is_numeric($v)) {
+                return null;
+            }
+        }
+
+        return [(int) $t, (float) $o, (float) $h, (float) $l, (float) $c];
+    }
+
+    private static function sides(mixed $data, string $bidKey, string $askKey): array
+    {
+        $pick = static function (mixed $levels): array {
+            $out = [];
+            foreach (is_array($levels) ? $levels : [] as $level) {
+                if (is_array($level) && isset($level[0], $level[1]) && is_numeric($level[0]) && is_numeric($level[1])) {
+                    $out[] = [(float) $level[0], (float) $level[1]];
+                }
+            }
+            return $out;
+        };
+
+        return is_array($data) ? [$pick($data[$bidKey] ?? null), $pick($data[$askKey] ?? null)] : [[], []];
+    }
+
+    private static function okx(string $type): array
+    {
+        $list = Http::getJson(self::OKX . '/tickers?instType=' . $type, [], 20, 1)['data'] ?? null;
+        $pattern = $type === 'SWAP' ? '/^([A-Z0-9]+)-USDT-SWAP$/' : '/^([A-Z0-9]+)-USDT$/';
+        $out = [];
+        foreach (is_array($list) ? $list : [] as $t) {
+            if (!is_array($t) || !preg_match($pattern, (string) ($t['instId'] ?? ''), $m)) {
+                continue;
+            }
+            $last = (float) ($t['last'] ?? 0);
+            $open = (float) ($t['open24h'] ?? 0);
+            // volCcy24h is quote currency on spot but base currency on swaps.
+            $volume = (float) ($t['volCcy24h'] ?? 0) * ($type === 'SWAP' ? $last : 1);
+            $out[] = self::ticker($m[1] . 'USDT', $last, $open > 0 ? ($last - $open) / $open * 100 : 0.0, (float) ($t['high24h'] ?? 0), (float) ($t['low24h'] ?? 0), $volume);
+        }
+
+        return $out;
+    }
+
+    private static function bybit(string $category): array
+    {
+        $list = Http::getJson(self::BYBIT . '/tickers?category=' . $category, [], 20, 1)['result']['list'] ?? null;
+        $out = [];
+        foreach (is_array($list) ? $list : [] as $t) {
             if (!is_array($t) || !preg_match('/^[A-Z0-9]+USDT$/', (string) ($t['symbol'] ?? ''))) {
                 continue;
             }
@@ -2601,42 +2745,104 @@ final class FuturesProvider
         return $out;
     }
 
-    private static function fromOkx(): array
+    private static function mexc(): array
     {
-        $data = Http::getJson(self::OKX . '/tickers?instType=SWAP', [], 20, 1);
-        $list = $data['data'] ?? null;
-        if (!is_array($list)) {
-            return [];
-        }
+        $list = Http::getJson(self::MEXC . '/ticker/24hr', [], 25, 1);
         $out = [];
-        foreach ($list as $t) {
-            if (!is_array($t) || !preg_match('/^([A-Z0-9]+)-USDT-SWAP$/', (string) ($t['instId'] ?? ''), $m)) {
+        foreach (is_array($list) ? $list : [] as $t) {
+            if (!is_array($t) || !preg_match('/^[A-Z0-9]+USDT$/', (string) ($t['symbol'] ?? ''))) {
                 continue;
             }
-            $last = (float) ($t['last'] ?? 0);
-            $open = (float) ($t['open24h'] ?? 0);
+            $last = (float) ($t['lastPrice'] ?? 0);
+            $open = (float) ($t['openPrice'] ?? 0) ?: (float) ($t['prevClosePrice'] ?? 0);
+            if ($open <= 0) {
+                continue;
+            }
+            $out[] = self::ticker((string) $t['symbol'], $last, ($last - $open) / $open * 100, (float) ($t['highPrice'] ?? 0), (float) ($t['lowPrice'] ?? 0), (float) ($t['quoteVolume'] ?? 0));
+        }
+
+        return $out;
+    }
+
+    private static function mexcFutures(): array
+    {
+        $list = Http::getJson(self::MEXC_F . '/ticker', [], 20, 1)['data'] ?? null;
+        $out = [];
+        foreach (is_array($list) ? $list : [] as $t) {
+            if (!is_array($t) || !preg_match('/^([A-Z0-9]+)_USDT$/', (string) ($t['symbol'] ?? ''), $m)) {
+                continue;
+            }
             $out[] = self::ticker(
                 $m[1] . 'USDT',
-                $last,
-                $open > 0 ? ($last - $open) / $open * 100 : 0.0,
-                (float) ($t['high24h'] ?? 0),
-                (float) ($t['low24h'] ?? 0),
-                (float) ($t['volCcy24h'] ?? 0) * $last
+                (float) ($t['lastPrice'] ?? 0),
+                (float) ($t['riseFallRate'] ?? 0) * 100,
+                (float) ($t['high24Price'] ?? 0),
+                (float) ($t['lower24Price'] ?? 0),
+                (float) ($t['amount24'] ?? 0)
             );
         }
 
         return $out;
     }
 
-    private static function fromGate(): array
+    private static function kucoin(): array
     {
-        $list = Http::getJson(self::GATE . '/tickers', [], 20, 1);
+        $list = Http::getJson(self::KUCOIN . '/market/allTickers', [], 25, 1)['data']['ticker'] ?? null;
+        $out = [];
+        foreach (is_array($list) ? $list : [] as $t) {
+            if (!is_array($t) || !preg_match('/^([A-Z0-9]+)-USDT$/', (string) ($t['symbol'] ?? ''), $m)) {
+                continue;
+            }
+            $out[] = self::ticker(
+                $m[1] . 'USDT',
+                (float) ($t['last'] ?? 0),
+                (float) ($t['changeRate'] ?? 0) * 100,
+                (float) ($t['high'] ?? 0),
+                (float) ($t['low'] ?? 0),
+                (float) ($t['volValue'] ?? 0)
+            );
+        }
+
+        return $out;
+    }
+
+    private static function kucoinFutures(): array
+    {
+        $list = Http::getJson(self::KUCOIN_F . '/contracts/active', [], 20, 1)['data'] ?? null;
+        $out = [];
+        foreach (is_array($list) ? $list : [] as $t) {
+            if (!is_array($t) || ($t['quoteCurrency'] ?? '') !== 'USDT' || ($t['settleCurrency'] ?? '') !== 'USDT'
+                || !str_ends_with((string) ($t['symbol'] ?? ''), 'USDTM')
+            ) {
+                continue;
+            }
+            $base = strtoupper((string) ($t['baseCurrency'] ?? ''));
+            $base = $base === 'XBT' ? 'BTC' : $base;
+            if (!preg_match('/^[A-Z0-9]+$/', $base)) {
+                continue;
+            }
+            $out[] = self::ticker(
+                $base . 'USDT',
+                (float) ($t['lastTradePrice'] ?? 0),
+                (float) ($t['priceChgPct'] ?? 0) * 100,
+                (float) ($t['highPrice'] ?? 0),
+                (float) ($t['lowPrice'] ?? 0),
+                (float) ($t['turnoverOf24h'] ?? 0)
+            );
+        }
+
+        return $out;
+    }
+
+    private static function gate(string $path, string $key, string $volumeKey): array
+    {
+        $list = Http::getJson(self::GATE . $path, [], 25, 1);
         if (!is_array($list) || array_values($list) !== $list) {
             return [];
         }
         $out = [];
         foreach ($list as $t) {
-            if (!is_array($t) || !preg_match('/^([A-Z0-9]+)_USDT$/', (string) ($t['contract'] ?? ''), $m)) {
+            if (!is_array($t) || !preg_match('/^([A-Z0-9]+)_USDT$/', (string) ($t[$key] ?? ''), $m)) {
                 continue;
             }
             $out[] = self::ticker(
@@ -2645,11 +2851,113 @@ final class FuturesProvider
                 (float) ($t['change_percentage'] ?? 0),
                 (float) ($t['high_24h'] ?? 0),
                 (float) ($t['low_24h'] ?? 0),
-                (float) ($t['volume_24h_quote'] ?? 0)
+                (float) ($t[$volumeKey] ?? 0)
             );
         }
 
         return $out;
+    }
+
+    private static function nobitex(array $bases): array
+    {
+        $bases = array_values(array_filter(array_map('strtolower', $bases), static fn ($b) => preg_match('/^[a-z0-9]+$/', $b) === 1));
+        if ($bases === []) {
+            return [];
+        }
+        $stats = Http::getJson(self::NOBITEX . '/market/stats?srcCurrency=' . implode(',', $bases) . '&dstCurrency=usdt', [], 20, 1)['stats'] ?? null;
+        $out = [];
+        foreach (is_array($stats) ? $stats : [] as $market => $t) {
+            if (!is_array($t) || !preg_match('/^([a-z0-9]+)-usdt$/', (string) $market, $m) || !empty($t['isClosed'])) {
+                continue;
+            }
+            $out[] = self::ticker(
+                strtoupper($m[1]) . 'USDT',
+                (float) ($t['latest'] ?? 0),
+                (float) ($t['dayChange'] ?? 0),
+                (float) ($t['dayHigh'] ?? 0),
+                (float) ($t['dayLow'] ?? 0),
+                (float) ($t['volumeDst'] ?? 0)
+            );
+        }
+
+        return $out;
+    }
+}
+}
+
+namespace Nikto\Data {
+use Nikto\Core\Http;
+use Nikto\Core\Log;
+
+final class FuturesProvider
+{
+    public const SOURCE_BINANCE = 'Binance Futures';
+
+    private const FAPI = 'https://fapi.binance.com/fapi/v1';
+    private const SPOT_MIRROR = 'https://data-api.binance.vision/api/v3';
+
+    public static function movers(int $count = 5, float $minVolume = 5_000_000, bool $withSparkline = true): ?array
+    {
+        $count = max(1, min(8, $count));
+
+        if (Mock::enabled()) {
+            $tickers = Mock::futuresTickers();
+            $tradable = self::tradable(Mock::futuresExchangeInfo());
+            $exchange = 'Binance';
+        } else {
+            [$tickers, $tradable, $exchange] = self::tickers();
+        }
+
+        if (!is_array($tickers) || $tickers === [] || array_values($tickers) !== $tickers) {
+            Log::error('Futures tickers unavailable from every source');
+            return null;
+        }
+
+        $result = self::rank($tickers, $tradable ?: null, $count, $minVolume);
+        if ($result === null) {
+            return null;
+        }
+        $result['exchange'] = $exchange;
+        $result['source'] = $exchange . ' Futures';
+
+        if ($withSparkline) {
+            foreach (['gainers', 'losers'] as $side) {
+                foreach ($result[$side] as $i => $row) {
+                    $result[$side][$i]['spark'] = self::sparkline((string) $row['pair'], (float) $row['change_pct'], $exchange);
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Binance Futures first; if it is blocked for the server's region (HTTP 451/403) or down,
+     * fall back to other exchanges' USDT perpetuals.
+     *
+     * @return array{0: ?array, 1: ?array, 2: string}
+     */
+    private static function tickers(): array
+    {
+        $tickers = Http::getJson(self::FAPI . '/ticker/24hr', [], 20, 1);
+        if (is_array($tickers) && $tickers !== [] && array_values($tickers) === $tickers) {
+            $tradable = Http::remember('fapi:tradable', 6 * 3600, static function (): ?array {
+                $info = Http::getJson(self::FAPI . '/exchangeInfo', [], 25, 1);
+                return is_array($info) ? self::tradable($info) : null;
+            });
+
+            return [$tickers, $tradable, 'Binance'];
+        }
+
+        foreach (Exchanges::FUTURES as $exchange) {
+            $rows = Exchanges::futuresTickers($exchange);
+            if ($rows !== []) {
+                Log::warn('Futures tickers served by fallback exchange', ['exchange' => $exchange]);
+                return [$rows, null, $exchange];
+            }
+        }
+
+        return [null, null, 'Binance'];
     }
 
     public static function tradable(array $exchangeInfo): array
@@ -2761,60 +3069,28 @@ final class FuturesProvider
         return (string) (preg_replace('/^(1000000|100000|10000|1000|1M)(?=[A-Z])/', '', strtoupper($base)) ?: $base);
     }
 
-    private static function sparkline(string $pair, float $changePct, string $source = self::SOURCE_BINANCE): array
+    private static function sparkline(string $pair, float $changePct, string $exchange = 'Binance'): array
     {
         if (Mock::enabled()) {
             return Mock::series(crc32($pair), 24, $changePct);
         }
 
-        $out = match ($source) {
-            'Bybit Futures'   => self::closes(
-                Http::getJson(self::BYBIT . '/kline?category=linear&symbol=' . rawurlencode($pair) . '&interval=60&limit=24', [], 12, 0)['result']['list'] ?? null,
-                4,
-                true
-            ),
-            'OKX Futures'     => self::closes(
-                Http::getJson(self::OKX . '/candles?instId=' . rawurlencode(substr($pair, 0, -4) . '-USDT-SWAP') . '&bar=1H&limit=24', [], 12, 0)['data'] ?? null,
-                4,
-                true
-            ),
-            'Gate.io Futures' => self::closes(
-                Http::getJson(self::GATE . '/candlesticks?contract=' . rawurlencode(substr($pair, 0, -4) . '_USDT') . '&interval=1h&limit=24', [], 12, 0),
-                'c',
-                false
-            ),
-            default           => self::closes(
-                Http::getJson(self::FAPI . '/klines?symbol=' . rawurlencode($pair) . '&interval=1h&limit=24', [], 12, 1),
-                4,
-                false
-            ),
-        };
-
-        if ($out === []) {
+        $candles = $exchange === 'Binance'
+            ? Http::getJson(self::FAPI . '/klines?symbol=' . rawurlencode($pair) . '&interval=1h&limit=24', [], 12, 1)
+            : Exchanges::klines($exchange, 'futures', $pair, 24);
+        if (!is_array($candles) || $candles === []) {
             // Spot closes from Binance's public mirror track the perpetual closely enough for a sparkline.
-            $out = self::closes(
-                Http::getJson(self::SPOT_MIRROR . '/klines?symbol=' . rawurlencode($pair) . '&interval=1h&limit=24', [], 12, 0),
-                4,
-                false
-            );
+            $candles = Http::getJson(self::SPOT_MIRROR . '/klines?symbol=' . rawurlencode($pair) . '&interval=1h&limit=24', [], 12, 0);
         }
 
-        return $out;
-    }
-
-    private static function closes(mixed $candles, int|string $field, bool $newestFirst): array
-    {
-        if (!is_array($candles)) {
-            return [];
-        }
         $out = [];
-        foreach ($candles as $candle) {
-            if (is_array($candle) && isset($candle[$field]) && is_numeric($candle[$field])) {
-                $out[] = (float) $candle[$field];
+        foreach (is_array($candles) ? $candles : [] as $candle) {
+            if (is_array($candle) && isset($candle[4]) && is_numeric($candle[4])) {
+                $out[] = (float) $candle[4];
             }
         }
 
-        return $newestFirst ? array_reverse($out) : $out;
+        return $out;
     }
 
     public static function formatVolume(float $usd): string
@@ -2866,6 +3142,20 @@ final class LiquidityProvider
                 break;
             }
         }
+
+        // Binance refused (region block or outage): take the book from the first other exchange that answers.
+        $fallback = null;
+        if ($books === []) {
+            foreach (Exchanges::BOOKS as $exchange => $name) {
+                $book = Exchanges::book($exchange, 'BTCUSDT');
+                if ($book !== null) {
+                    $books[$name] = $book;
+                    $fallback = $exchange;
+                    Log::warn('BTC order book served by fallback exchange', ['exchange' => $exchange]);
+                    break;
+                }
+            }
+        }
         if ($books === []) {
             Log::error('BTC order book unavailable');
             return null;
@@ -2876,6 +3166,15 @@ final class LiquidityProvider
             foreach (self::SPOT as $base) {
                 $klines = Http::getJson($base . '/klines?symbol=BTCUSDT&interval=1h&limit=48', [], 15, 1);
                 if (is_array($klines)) {
+                    break;
+                }
+            }
+        }
+        if (!is_array($klines) || $klines === []) {
+            $order = array_unique(array_merge($fallback !== null ? [$fallback] : [], Exchanges::SPOT));
+            foreach ($order as $exchange) {
+                $klines = Exchanges::klines($exchange, 'spot', 'BTCUSDT', 48);
+                if ($klines !== []) {
                     break;
                 }
             }
@@ -3416,10 +3715,20 @@ final class PriceProvider
             $missing = array_values(array_diff($symbols, array_column($rows, 'symbol')));
             if ($missing !== []) {
                 $rows = array_merge($rows, self::fromGecko($missing));
-                usort($rows, static fn (array $a, array $b): int =>
-                    array_search($a['symbol'], $symbols, true) <=> array_search($b['symbol'], $symbols, true));
             }
         }
+        if ($source === 'auto') {
+            // Binance and CoinGecko both unreachable from this server: try other exchanges one by one.
+            foreach (Exchanges::SPOT as $exchange) {
+                $missing = array_values(array_diff($symbols, array_column($rows, 'symbol')));
+                if ($missing === []) {
+                    break;
+                }
+                $rows = array_merge($rows, self::fromExchange($exchange, $missing, $withSparkline));
+            }
+        }
+        usort($rows, static fn (array $a, array $b): int =>
+            array_search($a['symbol'], $symbols, true) <=> array_search($b['symbol'], $symbols, true));
         if ($rows === []) {
             Log::error('Price fetch failed from every source', ['symbols' => $symbols]);
         }
@@ -3477,6 +3786,39 @@ final class PriceProvider
                 (float) ($row['quoteVolume'] ?? 0),
                 $withSparkline ? self::sparkline($base, $pairs[$i]) : []
             );
+        }
+
+        return $out;
+    }
+
+    private static function fromExchange(string $exchange, array $symbols, bool $withSparkline): array
+    {
+        $tickers = Exchanges::spotTickers($exchange, array_map(static fn (string $s): string => substr(self::pair($s), 0, -4), $symbols));
+        $out = [];
+        foreach ($symbols as $symbol) {
+            $t = $tickers[self::pair($symbol)] ?? null;
+            if ($t === null || (float) $t['lastPrice'] <= 0) {
+                continue;
+            }
+            $spark = [];
+            if ($withSparkline) {
+                foreach (Exchanges::klines($exchange, 'spot', self::pair($symbol), 24) as $candle) {
+                    $spark[] = (float) $candle[4];
+                }
+            }
+            $out[] = self::row(
+                $symbol,
+                (float) $t['lastPrice'],
+                (float) $t['priceChangePercent'],
+                (float) $t['priceChange'],
+                (float) $t['highPrice'],
+                (float) $t['lowPrice'],
+                (float) $t['quoteVolume'],
+                $spark
+            );
+        }
+        if ($out !== []) {
+            Log::warn('Prices served by fallback exchange', ['exchange' => $exchange, 'symbols' => array_column($out, 'symbol')]);
         }
 
         return $out;
@@ -3875,6 +4217,11 @@ final class Dispatcher
         $reasons = Http::explainFailures();
         if ($reasons !== '') {
             $message .= "\nعلت:\n" . $reasons;
+        }
+        if (Http::allRegionBlocked()) {
+            $message .= "\n\nهمه‌ی منابع، کشورِ سرورِ ربات را مسدود کرده‌اند. راهِ قطعی: بالای فایل nikto-bot.php مقدارِ "
+                . "data_proxy را یک پراکسیِ خارج از این کشور بگذارید (مثلاً socks5h://user:pass@1.2.3.4:1080) "
+                . 'یا ربات را روی هاستی در کشورِ دیگر ببرید.';
         }
 
         return $message;
@@ -4286,6 +4633,7 @@ final class LiquidityJob extends Job
 
 namespace Nikto\Jobs {
 use Nikto\Core\Settings;
+use Nikto\Data\Exchanges;
 use Nikto\Data\FuturesProvider;
 use Nikto\Render\Card;
 use Nikto\Render\MoversCard;
@@ -4361,9 +4709,9 @@ final class MoversJob extends Job
     /** When Binance was unreachable and another exchange supplied the data, don't label it as Binance. */
     private function withSource(string $text, mixed $data): string
     {
-        $source = (string) (((array) $data)['source'] ?? FuturesProvider::SOURCE_BINANCE);
-        $name = FuturesProvider::SOURCE_NAMES_FA[$source] ?? null;
-        if ($source === FuturesProvider::SOURCE_BINANCE || $name === null) {
+        $exchange = (string) (((array) $data)['exchange'] ?? 'Binance');
+        $name = Exchanges::NAMES_FA[$exchange] ?? $exchange;
+        if ($exchange === 'Binance') {
             return $text;
         }
 
