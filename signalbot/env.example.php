@@ -193,7 +193,6 @@ return [
     'SIGNAL_CARD_ENABLED' => 'true',
     'CARD_RENDER_SCALE' => '2',
     'CARD_BRAND' => 'AUTO TRADE MARKET',
-    'CARD_TAGLINE' => 'TRADE SMARTER • NOT HARDER',
 
     'CARD_LOGO_PATH' => '',
 
