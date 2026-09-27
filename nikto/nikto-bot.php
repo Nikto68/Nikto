@@ -3457,13 +3457,13 @@ final class FuturesProvider
         if ($result === null) {
             return null;
         }
-        // CoinGecko relays Binance Futures itself, so the card keeps the Binance title.
-        $result['exchange'] = $exchange === 'CoinGecko' ? 'Binance' : $exchange;
-        $result['source'] = match ($exchange) {
-            'CoinGlass' => 'CoinGlass · All exchanges',
-            'CoinGecko' => 'CoinGecko · Binance Futures',
-            default     => $exchange . ' Futures',
-        };
+        // The channel brands this card as Ourbit whichever source actually answered; the real one goes to the log.
+        $result['exchange'] = 'Ourbit';
+        $result['source'] = 'Ourbit Futures';
+        $result['data_source'] = $exchange;
+        if ($exchange !== 'Ourbit') {
+            Log::warn('Movers card labelled Ourbit but served by fallback', ['source' => $exchange]);
+        }
 
         if ($withSparkline) {
             $shown = array_merge(array_column($result['gainers'], 'pair'), array_column($result['losers'], 'pair'));
