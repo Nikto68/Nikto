@@ -899,6 +899,7 @@ final class Diagnostics
         'منبع: BingX'             => 'https://open-api.bingx.com/openApi/swap/v2/server/time',
         'منبع: CoinEx'            => 'https://api.coinex.com/v2/time',
         'منبع: HTX'               => 'https://api.hbdm.com/api/v1/timestamp',
+        'منبع: Ourbit'            => 'https://futures.ourbit.com/api/v1/contract/ticker',
         'منبع: Hyperliquid'       => ['https://api.hyperliquid.xyz/info', '{"type":"l2Book","coin":"BTC"}'],
         'منبع: CoinGecko'         => 'https://api.coingecko.com/api/v3/ping',
         'منبع: ترس و طمع'          => 'https://api.alternative.me/fng/?limit=1&format=json',
@@ -2818,6 +2819,7 @@ final class Exchanges
         'CoinEx'  => 'کوینکس',
         'HTX'     => 'اچ‌تی‌ایکس',
         'Hyperliquid' => 'هایپرلیکوئید',
+        'Ourbit'  => 'اوربیت',
     ];
 
     private const OKX      = 'https://www.okx.com/api/v5/market';
@@ -2834,6 +2836,13 @@ final class Exchanges
     private const HTX      = 'https://api.hbdm.com/linear-swap-ex/market';
     private const BITGET_SPOT = 'https://api.bitget.com/api/v2/spot/market';
     private const HYPERLIQUID = 'https://api.hyperliquid.xyz/info';
+    // Ourbit runs on MEXC's platform; these are the endpoints its own website calls.
+    private const OURBIT_TICKERS = [
+        'https://futures.ourbit.com/api/v1/contract/ticker',
+        'https://www.ourbit.com/api/platform/spot/market/v2/tickers',
+        'https://www.ourbit.com/api/platform/spot/market/tickers',
+    ];
+    private const OURBIT_KLINE = 'https://www.ourbit.com/api/platform/spot/market/kline';
 
     public static function ticker(string $pair, float $last, float $changePct, float $high, float $low, float $quoteVolume): array
     {
@@ -2880,6 +2889,7 @@ final class Exchanges
             'BingX'   => self::bingx(),
             'CoinEx'  => self::coinex(),
             'HTX'     => self::htx(),
+            'Ourbit'  => self::ourbit(),
             default   => [],
         };
     }
@@ -2973,6 +2983,14 @@ final class Exchanges
                 foreach (is_array($rows) ? $rows : [] as $k) {
                     $out[] = self::candle(isset($k['id']) ? (float) $k['id'] * 1000 : null, $k['open'] ?? null, $k['high'] ?? null, $k['low'] ?? null, $k['close'] ?? null);
                 }
+                break;
+            case 'Ourbit':
+                $end = time() * 1000;
+                $data = Http::getJson(self::OURBIT_KLINE . '?' . http_build_query([
+                    'end' => $end, 'interval' => 'Min60', 'openPriceMode' => 'LAST_CLOSE',
+                    'start' => $end - ($limit + 1) * 3600000, 'symbol' => $base . '_USDT',
+                ]), [], 12, 0);
+                $out = self::ourbitCandles($data['data'] ?? $data);
                 break;
             case 'Hyperliquid':
                 $end = time() * 1000;
@@ -3212,6 +3230,98 @@ final class Exchanges
         return $out;
     }
 
+    /** First Ourbit ticker endpoint that answers with a list; field names differ between its futures and spot APIs. */
+    private static function ourbit(): array
+    {
+        foreach (self::OURBIT_TICKERS as $url) {
+            $res = Http::getJson($url, [], 20, 0);
+            $list = self::ourbitList($res);
+            $out = [];
+            foreach ($list as $t) {
+                if (!is_array($t)) {
+                    continue;
+                }
+                $symbol = strtoupper((string) ($t['symbol'] ?? $t['s'] ?? $t['sb'] ?? ''));
+                if (!preg_match('/^([A-Z0-9]+)_?USDT$/', $symbol, $m)) {
+                    continue;
+                }
+                $last = self::num($t, ['lastPrice', 'last', 'c', 'p', 'close']);
+                if ($last <= 0) {
+                    continue;
+                }
+                // riseFallRate / r are fractions (0.0123); priceChangePercent is already a percent.
+                $pct = isset($t['priceChangePercent'])
+                    ? (float) rtrim((string) $t['priceChangePercent'], '%')
+                    : self::num($t, ['riseFallRate', 'r', 'rate', 'change24h']) * 100;
+                $out[] = self::ticker(
+                    $m[1] . 'USDT',
+                    $last,
+                    $pct,
+                    self::num($t, ['high24Price', 'high', 'h']),
+                    self::num($t, ['lower24Price', 'low', 'l']),
+                    self::num($t, ['amount24', 'quoteVolume', 'a', 'amount', 'volume24', 'v'])
+                );
+            }
+            if ($out !== []) {
+                return $out;
+            }
+            if (is_array($res)) {
+                // Answered, but not in a shape we know: record it so the diagnostics show what came back.
+                Http::note($url, 0, 'Ourbit: unknown format ' . mb_substr((string) json_encode($res), 0, 120));
+            }
+        }
+
+        return [];
+    }
+
+    private static function ourbitList(mixed $res): array
+    {
+        $data = is_array($res) ? ($res['data'] ?? $res) : null;
+        if (is_array($data) && isset($data['list']) && is_array($data['list'])) {
+            $data = $data['list'];
+        }
+
+        return is_array($data) && array_values($data) === $data ? $data : [];
+    }
+
+    /** Accepts column arrays {t:[],o:[],h:[],l:[],c:[]}, a list of objects, or a list of [t, o, h, l, c]. */
+    private static function ourbitCandles(mixed $data): array
+    {
+        $out = [];
+        if (is_array($data) && isset($data['t']) && is_array($data['t'])) {
+            foreach ($data['t'] as $i => $t) {
+                $out[] = self::candle(self::ms($t), $data['o'][$i] ?? null, $data['h'][$i] ?? null, $data['l'][$i] ?? null, $data['c'][$i] ?? null);
+            }
+        } elseif (is_array($data)) {
+            foreach ($data as $k) {
+                if (!is_array($k)) {
+                    continue;
+                }
+                $out[] = array_values($k) === $k
+                    ? self::candle(self::ms($k[0] ?? null), $k[1] ?? null, $k[2] ?? null, $k[3] ?? null, $k[4] ?? null)
+                    : self::candle(self::ms($k['t'] ?? $k['time'] ?? null), $k['o'] ?? $k['open'] ?? null, $k['h'] ?? $k['high'] ?? null, $k['l'] ?? $k['low'] ?? null, $k['c'] ?? $k['close'] ?? null);
+            }
+        }
+
+        return $out;
+    }
+
+    private static function ms(mixed $t): mixed
+    {
+        return is_numeric($t) && (float) $t < 1e12 ? (float) $t * 1000 : $t;
+    }
+
+    private static function num(array $row, array $keys): float
+    {
+        foreach ($keys as $k) {
+            if (isset($row[$k]) && is_numeric($row[$k])) {
+                return (float) $row[$k];
+            }
+        }
+
+        return 0.0;
+    }
+
     private static function bitget(): array
     {
         $list = Http::getJson(self::BITGET . '/tickers?productType=USDT-FUTURES', [], 20, 1)['data'] ?? null;
@@ -3379,6 +3489,11 @@ final class FuturesProvider
      */
     private static function tickers(): array
     {
+        // Ourbit is the chosen source for this card; everything below is a fallback.
+        $rows = Exchanges::futuresTickers('Ourbit');
+        if ($rows !== []) {
+            return [$rows, null, 'Ourbit', []];
+        }
         if (CoinGlass::enabled()) {
             $rows = CoinGlass::futuresTickers();
             if ($rows !== []) {
