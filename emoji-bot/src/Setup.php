@@ -51,27 +51,31 @@ final class Setup
         $tg = $app->tg();
         $steps = [
             'دستورات' => fn () => $tg->call('setMyCommands', ['commands' => [
-                ['command' => 'start', 'description' => 'شروع و ساخت ایموجی'],
-                ['command' => 'packs', 'description' => 'پک‌های من'],
-                ['command' => 'help', 'description' => 'راهنما'],
+                ['command' => 'start', 'description' => 'Create your emoji'],
+                ['command' => 'packs', 'description' => 'My packs'],
+                ['command' => 'help', 'description' => 'Help'],
             ]]),
             'منوی ربات (دکمه مینی‌اپ)' => fn () => $tg->call('setChatMenuButton', ['menu_button' => [
                 'type' => 'web_app',
-                'text' => '🎨 ساخت ایموجی',
+                'text' => '🎨 Create emoji',
                 'web_app' => ['url' => $app->appUrl()],
             ]]),
             'توضیحات ربات' => function () use ($tg) {
-                $tg->call('setMyShortDescription', ['short_description' => 'ساخت پک ایموجی پریمیوم اختصاصی با اسم و متن دلخواه شما ✨']);
-                $tg->call('setMyDescription', ['description' => "✨ پک ایموجی پریمیوم اختصاصی بساز!\n\nاسمت یا هر متنی رو بنویس، رنگ و قالب رو انتخاب کن و در چند ثانیه پک ایموجی مخصوص خودت رو داشته باش.\n\nبرای شروع /start رو بزن 👇"]);
+                $tg->call('setMyShortDescription', ['short_description' => 'Create your own animated premium emoji pack with your name or logo ✨']);
+                $tg->call('setMyDescription', ['description' => "✨ Create your own custom premium emoji pack!
+
+Type your name or upload your logo, pick colors and templates, and get an animated emoji pack in seconds.
+
+Tap /start to begin 👇"]);
             },
         ];
         foreach ($app->adminIds() as $adminId) {
             $steps["دستورات مدیر ($adminId)"] = fn () => $tg->call('setMyCommands', [
                 'commands' => [
-                    ['command' => 'start', 'description' => 'شروع'],
-                    ['command' => 'admin', 'description' => 'پنل مدیریت'],
-                    ['command' => 'packs', 'description' => 'پک‌های من'],
-                    ['command' => 'cancel', 'description' => 'لغو عملیات'],
+                    ['command' => 'start', 'description' => 'Create your emoji'],
+                    ['command' => 'admin', 'description' => 'Admin panel'],
+                    ['command' => 'packs', 'description' => 'My packs'],
+                    ['command' => 'cancel', 'description' => 'Cancel'],
                 ],
                 'scope' => ['type' => 'chat', 'chat_id' => $adminId],
             ]);

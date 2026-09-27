@@ -47,20 +47,20 @@ final class Params
         $logoMode = in_array($a['logo_mode'] ?? '', self::LOGO_MODES, true) ? $a['logo_mode'] : 'original';
         $text = $logo !== null ? '' : self::normalizeText((string) ($a['text'] ?? ''));
         if ($text === '' && $logo === null) {
-            throw new InvalidArgumentException('متن را وارد کنید.');
+            throw new InvalidArgumentException('Please enter your text.');
         }
         if ($text !== '' && mb_strlen($text) > $maxLen) {
-            throw new InvalidArgumentException("متن حداکثر $maxLen کاراکتر می‌تواند باشد.");
+            throw new InvalidArgumentException("Text can be at most $maxLen characters.");
         }
         if ($latinOnly && preg_match('/[^\x20-\x7E]/', $text)) {
-            throw new InvalidArgumentException('فقط حروف انگلیسی، عدد و علامت‌های ساده مجاز است (مثلاً: Sina).');
+            throw new InvalidArgumentException('English letters, numbers and basic symbols only (e.g. Sina).');
         }
         foreach (Shaper::codepoints($text) as $cp) {
             if ($cp === 0x20 || $cp === 0x200C || $cp === 0x200D) {
                 continue;
             }
             if (!$fonts->canRender($font, $cp)) {
-                throw new InvalidArgumentException('کاراکتر «' . mb_chr($cp) . '» پشتیبانی نمی‌شود (ایموجی و علائم خاص مجاز نیست).');
+                throw new InvalidArgumentException('The character "' . mb_chr($cp) . '" is not supported (no emoji or special symbols).');
             }
         }
         return new self(

@@ -123,7 +123,7 @@ final class TemplateRegistry
                 $groups[$key] = [
                     'id' => substr(md5($key), 0, 10),
                     'title' => $t instanceof CustomTemplate
-                        ? ($t->category !== '' ? $t->category : 'ویژه')
+                        ? ($t->category !== '' ? $t->category : 'Special')
                         : (ArtCatalog::CATEGORY_TITLES[$t->category] ?? Builtins::CATEGORY_TITLES[$t->category] ?? $t->category),
                     'items' => [],
                 ];

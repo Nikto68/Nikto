@@ -56,7 +56,7 @@ final class Api
             $this->respond(['ok' => false, 'error' => $e->getMessage(), 'code' => 'invalid'], 400);
         } catch (Throwable $e) {
             $this->app->log('api', 'error', ['err' => $e->getMessage(), 'at' => $e->getFile() . ':' . $e->getLine()]);
-            $this->respond(['ok' => false, 'error' => 'خطای سرور. دوباره تلاش کنید.', 'code' => 'server'], 500);
+            $this->respond(['ok' => false, 'error' => 'Server error. Please try again.', 'code' => 'server'], 500);
         }
     }
 
@@ -79,16 +79,16 @@ final class Api
         $initData = (string) ($_SERVER['HTTP_X_INIT_DATA'] ?? '');
         $auth = WebAppAuth::validate($initData, (string) $this->app->config('bot_token'), (int) $this->app->config('init_data_ttl', 86400));
         if ($auth === null) {
-            throw new ApiError('نشست نامعتبر است. مینی‌اپ را ببندید و دوباره باز کنید.', 401, 'auth');
+            throw new ApiError('Your session has expired. Close the app and open it again.', 401, 'auth');
         }
         $this->auth = $auth;
         [$this->user] = $this->app->users()->touch($auth['user']);
         $this->uid = (int) $this->user['id'];
         if ((int) $this->user['banned'] === 1) {
-            throw new ApiError('🚫 دسترسی شما مسدود شده است.', 403, 'banned');
+            throw new ApiError('🚫 Your access has been blocked.', 403, 'banned');
         }
         if (!$this->app->limiter()->hit('api:' . $this->uid, 300, 60)) {
-            throw new ApiError('درخواست‌ها زیاد است؛ کمی صبر کنید.', 429, 'rate');
+            throw new ApiError('Too many requests — please slow down.', 429, 'rate');
         }
     }
 
@@ -101,12 +101,12 @@ final class Api
     {
         if (str_starts_with($action, 'adm_')) {
             if (!$this->isAdmin()) {
-                throw new ApiError('دسترسی ندارید.', 403, 'forbidden');
+                throw new ApiError('Access denied.', 403, 'forbidden');
             }
             return (new AdminApi($this->app, $this))->dispatch($action, $in);
         }
         if ($action !== 'boot' && !$this->isAdmin() && $this->app->settings()->get('maintenance')) {
-            throw new ApiError('🛠 ربات در حال بروزرسانی است.', 503, 'maintenance');
+            throw new ApiError('🛠 The bot is under maintenance.', 503, 'maintenance');
         }
         return match ($action) {
             'boot' => $this->boot(),
@@ -189,7 +189,7 @@ final class Api
         );
         // A user may only use their own uploaded logos.
         if ($p->logo !== null && (LogoStore::owner($p->logo) !== $this->uid || !$this->app->logos()->exists($p->logo))) {
-            throw new ApiError('لوگو پیدا نشد؛ دوباره آپلود کنید.', 400, 'invalid');
+            throw new ApiError('Logo not found — please upload it again.', 400, 'invalid');
         }
         return $p;
     }
@@ -218,7 +218,7 @@ final class Api
     private function preview(array $in): array
     {
         if (!$this->app->limiter()->hit('prev:' . $this->uid, 120, 60)) {
-            throw new ApiError('کمی آهسته‌تر 🙂', 429, 'rate');
+            throw new ApiError('Slow down a little 🙂', 429, 'rate');
         }
         $p = $this->params($in);
         $ids = array_slice(array_values(array_unique(array_filter((array) ($in['ids'] ?? []), 'is_string'))), 0, 12);
@@ -236,10 +236,10 @@ final class Api
     {
         $app = $this->app;
         if (!$app->limiter()->hit('create:' . $this->uid, 8, 60)) {
-            throw new ApiError('کمی صبر کنید و دوباره تلاش کنید.', 429, 'rate');
+            throw new ApiError('Please wait a moment and try again.', 429, 'rate');
         }
         if (!Membership::isMember($app, $this->uid, true)) {
-            throw new ApiError('ابتدا عضو کانال شوید.', 403, 'join');
+            throw new ApiError('Please join the channel first.', 403, 'join');
         }
         $p = $this->params($in);
         $ids = array_values(array_unique(array_filter((array) ($in['ids'] ?? []), 'is_string')));
@@ -247,15 +247,15 @@ final class Api
         $n = count($ids);
         $maxPer = $app->settings()->int('max_per_pack');
         if ($n === 0) {
-            throw new ApiError('حداقل یک قالب انتخاب کنید.', 400, 'invalid');
+            throw new ApiError('Select at least one template.', 400, 'invalid');
         }
         if ($n > $maxPer) {
-            throw new ApiError("حداکثر $maxPer ایموجی در هر بار ساخت.", 400, 'invalid');
+            throw new ApiError("You can create up to $maxPer emoji at a time.", 400, 'invalid');
         }
         // Serialize create requests of the same user (double taps, two devices).
         $lock = fopen($app->storage('tmp') . '/user-' . $this->uid . '.lock', 'c');
         if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
-            throw new ApiError('یک ساخت در حال انجام است؛ کمی صبر کنید.', 409, 'busy');
+            throw new ApiError('A pack is already being created — please wait.', 409, 'busy');
         }
         try {
             return $this->createLocked($in, $p, $ids, $n);
@@ -269,10 +269,10 @@ final class Api
     {
         $app = $this->app;
         if ($app->jobs()->activeForUser($this->uid)) {
-            throw new ApiError('یک ساخت در حال انجام است؛ کمی صبر کنید.', 409, 'busy');
+            throw new ApiError('A pack is already being created — please wait.', 409, 'busy');
         }
         if (!$this->isAdmin() && $app->jobs()->todayCount($this->uid) >= $app->settings()->int('daily_job_limit')) {
-            throw new ApiError('سقف ساخت امروز شما پر شده است. فردا دوباره امتحان کنید.', 429, 'daily');
+            throw new ApiError("You've reached today's limit. Please try again tomorrow.", 429, 'daily');
         }
 
         $packId = (int) ($in['pack_id'] ?? 0);
@@ -280,10 +280,10 @@ final class Api
         if ($packId > 0) {
             $pack = $app->db()->one('SELECT * FROM packs WHERE id = ? AND user_id = ? AND deleted = 0', [$packId, $this->uid]);
             if (!$pack) {
-                throw new ApiError('پک پیدا نشد.', 404, 'invalid');
+                throw new ApiError('Pack not found.', 404, 'invalid');
             }
             if ((int) $pack['emoji_count'] + $n > PackService::MAX_SET_SIZE) {
-                throw new ApiError('ظرفیت این پک کافی نیست (حداکثر ۲۰۰ ایموجی).', 400, 'invalid');
+                throw new ApiError('Not enough room in this pack (max 200 emoji).', 400, 'invalid');
             }
             $payload['pack_id'] = $packId;
             $type = 'add';
@@ -295,7 +295,7 @@ final class Api
         $cost = $this->isAdmin() ? 0 : $app->settings()->int('price_per_emoji') * $n;
         $ref = 'job:new';
         if ($cost > 0 && !$app->users()->spendCoins($this->uid, $cost, 'create', $ref)) {
-            throw new ApiError('سکه کافی ندارید.', 402, 'coins');
+            throw new ApiError("You don't have enough coins.", 402, 'coins');
         }
         try {
             $jobId = $app->jobs()->create($this->uid, $type, $payload, $n, $cost);
@@ -363,16 +363,16 @@ final class Api
     private function packDelete(array $in): array
     {
         if (!$this->app->limiter()->hit('del:' . $this->uid, 10, 60)) {
-            throw new ApiError('کمی صبر کنید.', 429, 'rate');
+            throw new ApiError('Please wait a moment.', 429, 'rate');
         }
         $pack = $this->app->db()->one('SELECT * FROM packs WHERE id = ? AND user_id = ? AND deleted = 0', [(int) ($in['id'] ?? 0), $this->uid]);
         if (!$pack) {
-            throw new ApiError('پک پیدا نشد.', 404, 'invalid');
+            throw new ApiError('Pack not found.', 404, 'invalid');
         }
         try {
             $this->app->packs()->deleteSet($pack['name']);
         } catch (TelegramError $e) {
-            throw new ApiError('حذف ناموفق بود: ' . PackService::friendlyError($e), 502, 'telegram');
+            throw new ApiError('Delete failed: ' . PackService::friendlyError($e), 502, 'telegram');
         }
         $this->app->db()->exec('UPDATE packs SET deleted = 1, updated_at = ? WHERE id = ?', [time(), $pack['id']]);
         return ['packs' => $this->packsList()];
@@ -397,14 +397,14 @@ final class Api
     private function logoUpload(): array
     {
         if (!$this->app->limiter()->hit('logo:' . $this->uid, 10, 60)) {
-            throw new ApiError('کمی صبر کنید.', 429, 'rate');
+            throw new ApiError('Please wait a moment.', 429, 'rate');
         }
         $f = $_FILES['image'] ?? null;
         if (!$f || !is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) {
-            throw new ApiError('آپلود لوگو ناموفق بود.', 400, 'invalid');
+            throw new ApiError('Logo upload failed.', 400, 'invalid');
         }
         if ((int) $f['size'] > 5 * 1024 * 1024) {
-            throw new ApiError('حداکثر حجم لوگو ۵ مگابایت است.', 400, 'invalid');
+            throw new ApiError('The logo must be 5 MB or smaller.', 400, 'invalid');
         }
         try {
             $ref = $this->app->logos()->save($this->uid, $f['tmp_name']);
@@ -424,7 +424,7 @@ final class Api
     private function invoice(array $in): array
     {
         if (!$this->app->limiter()->hit('inv:' . $this->uid, 10, 60)) {
-            throw new ApiError('کمی صبر کنید.', 429, 'rate');
+            throw new ApiError('Please wait a moment.', 429, 'rate');
         }
         return ['link' => (new Payments($this->app))->invoiceLink($this->uid, (int) ($in['pkg'] ?? -1))];
     }

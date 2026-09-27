@@ -66,7 +66,7 @@ final class Handler
         $admin = new Admin($app);
         if ($cmd === 'cancel') {
             $app->users()->setState($uid, null);
-            $this->send($uid, '❌ لغو شد.', $this->mainKeyboard());
+            $this->send($uid, '❌ Cancelled.', $this->mainKeyboard());
             return;
         }
         if ($isAdmin && $user['state'] && $cmd === null) {
@@ -141,8 +141,8 @@ final class Handler
             $balance = $app->users()->addCoins($refId, $bonus, 'referral', (string) $uid);
             $app->tg()->safe('sendMessage', [
                 'chat_id' => $refId,
-                'text' => '🎉 <b>' . Texts::e($app->users()->displayName($user)) . '</b> با لینک دعوت شما وارد ربات شد!'
-                    . "\n➕ " . Texts::num($bonus) . ' سکه — موجودی: ' . Texts::num($balance),
+                'text' => '🎉 <b>' . Texts::e($app->users()->displayName($user)) . '</b> joined with your invite link!'
+                    . "\n➕ " . Texts::num($bonus) . ' coins — balance: ' . Texts::num($balance),
                 'parse_mode' => 'HTML',
             ]);
         }
@@ -169,10 +169,10 @@ final class Handler
     {
         $app = $this->app;
         return ['inline_keyboard' => [
-            [['text' => '🎨 ساخت ایموجی', 'web_app' => ['url' => $app->appUrl()], 'style' => 'primary']],
-            [['text' => '📦 پک‌های من', 'web_app' => ['url' => $app->appUrl('packs')]], ['text' => '💰 خرید سکه', 'web_app' => ['url' => $app->appUrl('shop')]]],
-            [['text' => '🎁 هدیه روزانه', 'callback_data' => 'gift'], ['text' => '👥 دعوت دوستان', 'callback_data' => 'invite']],
-            [['text' => '📖 راهنما', 'callback_data' => 'help']],
+            [['text' => '🎨 Create emoji', 'web_app' => ['url' => $app->appUrl()], 'style' => 'primary']],
+            [['text' => '📦 My packs', 'web_app' => ['url' => $app->appUrl('packs')]], ['text' => '💰 Buy coins', 'web_app' => ['url' => $app->appUrl('shop')]]],
+            [['text' => '🎁 Daily gift', 'callback_data' => 'gift'], ['text' => '👥 Invite friends', 'callback_data' => 'invite']],
+            [['text' => '📖 Help', 'callback_data' => 'help']],
         ]];
     }
 
@@ -180,15 +180,15 @@ final class Handler
     {
         $packs = $this->app->db()->all('SELECT * FROM packs WHERE user_id = ? AND deleted = 0 ORDER BY id DESC LIMIT 20', [$uid]);
         if (!$packs) {
-            $this->send($uid, 'هنوز پکی نساخته‌اید. 👇', $this->mainKeyboard());
+            $this->send($uid, "You haven't made any packs yet. 👇", $this->mainKeyboard());
             return;
         }
         $rows = [];
         foreach ($packs as $p) {
             $rows[] = [['text' => '✨ ' . mb_substr($p['title'], 0, 40) . ' (' . Texts::num((int) $p['emoji_count']) . ')', 'url' => PackService::link($p['name'])]];
         }
-        $rows[] = [['text' => '⚙️ مدیریت پک‌ها', 'web_app' => ['url' => $this->app->appUrl('packs')]]];
-        $this->send($uid, '📦 <b>پک‌های شما</b>', ['inline_keyboard' => $rows]);
+        $rows[] = [['text' => '⚙️ Manage packs', 'web_app' => ['url' => $this->app->appUrl('packs')]]];
+        $this->send($uid, '📦 <b>Your packs</b>', ['inline_keyboard' => $rows]);
     }
 
     private function onCallback(array $q): void
@@ -212,7 +212,7 @@ final class Handler
             return;
         }
         if (!$app->limiter()->hit("cb:$uid", 40, 60)) {
-            $answer('⏳ کمی آهسته‌تر!');
+            $answer('⏳ Slow down a little!');
             return;
         }
         if (str_starts_with($data, 'adm:')) {
@@ -232,27 +232,27 @@ final class Handler
         switch ($data) {
             case 'join':
                 if (Membership::isMember($app, $uid, true)) {
-                    $answer('✅ عضویت شما تایید شد');
+                    $answer('✅ Membership confirmed');
                     $this->welcome($uid, $messageId ?: null);
                 } else {
-                    $answer('هنوز عضو کانال نشده‌اید ❗️', true);
+                    $answer("You haven't joined the channel yet ❗️", true);
                 }
                 return;
             case 'gift':
                 $amount = $app->settings()->int('daily_gift');
                 $got = $app->users()->claimGift($uid, $amount);
                 if ($got > 0) {
-                    $answer('🎁 ' . Texts::num($got) . ' سکه هدیه گرفتید!', true);
+                    $answer('🎁 You got ' . Texts::num($got) . ' coins!', true);
                 } else {
                     $wait = 86400 - (time() - (int) $app->db()->val('SELECT last_gift_at FROM users WHERE id = ?', [$uid]));
-                    $answer($amount > 0 ? '⏳ هدیه بعدی تا ' . Texts::num(max(1, (int) ceil($wait / 3600))) . ' ساعت دیگر' : 'هدیه روزانه فعال نیست.', true);
+                    $answer($amount > 0 ? '⏳ Next gift in ' . Texts::num(max(1, (int) ceil($wait / 3600))) . ' hour(s)' : 'The daily gift is not active.', true);
                 }
                 return;
             case 'invite':
                 $link = 'https://t.me/' . $app->botUsername() . '?start=ref_' . $uid;
-                $share = 'https://t.me/share/url?' . http_build_query(['url' => $link, 'text' => '✨ با این ربات برای خودت ایموجی پریمیوم اختصاصی بساز!']);
+                $share = 'https://t.me/share/url?' . http_build_query(['url' => $link, 'text' => '✨ Create your own custom premium emoji with this bot!']);
                 $this->send($uid, Texts::invite($link, $app->settings()->int('referral_bonus')), ['inline_keyboard' => [
-                    [['text' => '📤 ارسال برای دوستان', 'url' => $share]],
+                    [['text' => '📤 Share with friends', 'url' => $share]],
                 ]]);
                 $answer();
                 return;

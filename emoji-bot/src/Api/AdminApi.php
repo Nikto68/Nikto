@@ -40,7 +40,7 @@ final class AdminApi
     {
         $row = $this->app->db()->one('SELECT * FROM templates WHERE id = ?', [$id]);
         if (!$row) {
-            throw new ApiError('قالب پیدا نشد.', 404, 'invalid');
+            throw new ApiError('Template not found.', 404, 'invalid');
         }
         return $row;
     }
@@ -88,10 +88,10 @@ final class AdminApi
     {
         $f = $_FILES['image'] ?? null;
         if (!$f || !is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) {
-            throw new ApiError('آپلود ناموفق بود.', 400, 'invalid');
+            throw new ApiError('Upload failed.', 400, 'invalid');
         }
         if ((int) $f['size'] > self::MAX_UPLOAD) {
-            throw new ApiError('حداکثر حجم تصویر ۵ مگابایت است.', 400, 'invalid');
+            throw new ApiError('The image must be 5 MB or smaller.', 400, 'invalid');
         }
         $kind = ($in['kind'] ?? 'base') === 'overlay' ? 'overlay' : 'base';
         $db = $this->app->db();
@@ -102,11 +102,11 @@ final class AdminApi
             $row = $this->row($id);
         } else {
             if ($kind === 'overlay') {
-                throw new ApiError('ابتدا تصویر اصلی را آپلود کنید.', 400, 'invalid');
+                throw new ApiError('Upload the main image first.', 400, 'invalid');
             }
             $id = $db->insert('templates', [
-                'title' => 'قالب جدید',
-                'category' => 'ویژه',
+                'title' => 'New template',
+                'category' => 'Special',
                 'emoji' => '✨',
                 'config' => '',
                 'sort' => (int) $db->val('SELECT COALESCE(MAX(sort), 0) + 1 FROM templates'),
@@ -149,14 +149,14 @@ final class AdminApi
             @unlink($this->app->storage('templates') . '/' . basename((string) $config['overlay']));
             $config['overlay'] = null;
         }
-        $title = mb_substr(trim((string) ($in['title'] ?? $row['title'])), 0, 64) ?: 'قالب';
+        $title = mb_substr(trim((string) ($in['title'] ?? $row['title'])), 0, 64) ?: 'Template';
         $category = mb_substr(trim((string) ($in['category'] ?? $row['category'])), 0, 64);
         $emoji = trim((string) ($in['emoji'] ?? $row['emoji']));
         if ($emoji === '' || mb_strlen($emoji) > 8 || preg_match('/[\p{L}\p{N}\s]/u', $emoji)) {
-            throw new ApiError('ایموجی نامعتبر است (فقط یک ایموجی).', 400, 'invalid');
+            throw new ApiError('Invalid emoji (use a single emoji).', 400, 'invalid');
         }
         if ($config['effect'] !== 'none' && !$this->app->video()->available()) {
-            throw new ApiError('ffmpeg روی سرور نیست؛ افکت متحرک ممکن نیست.', 400, 'invalid');
+            throw new ApiError('ffmpeg is not available on the server, so animations are disabled.', 400, 'invalid');
         }
         $this->app->db()->exec(
             'UPDATE templates SET title = ?, category = ?, emoji = ?, sort = ?, enabled = ?, config = ?, version = version + 1, updated_at = ? WHERE id = ?',
@@ -183,7 +183,7 @@ final class AdminApi
         $id = (string) ($in['id'] ?? '');
         $valid = array_map(fn ($t) => $t->id, [...ArtCatalog::all('', ''), ...Builtins::all()]);
         if (!in_array($id, $valid, true)) {
-            throw new ApiError('قالب نامعتبر.', 400, 'invalid');
+            throw new ApiError('Invalid template.', 400, 'invalid');
         }
         $this->app->templates()->setBuiltinEnabled($id, !empty($in['enabled']));
         return ['ok' => true];
@@ -210,7 +210,7 @@ final class AdminApi
         $file = ($in['kind'] ?? 'base') === 'overlay' ? ($config['overlay'] ?? '') : ($config['file'] ?? '');
         $path = $this->app->storage('templates') . '/' . basename((string) $file);
         if (!$file || !is_file($path)) {
-            throw new ApiError('تصویر پیدا نشد.', 404, 'invalid');
+            throw new ApiError('Image not found.', 404, 'invalid');
         }
         return ['src' => 'data:image/png;base64,' . base64_encode((string) file_get_contents($path))];
     }

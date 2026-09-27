@@ -104,7 +104,7 @@ final class Jobs
     {
         $rows = $this->app->db()->all("SELECT * FROM jobs WHERE status = 'running' AND started_at < ?", [time() - self::STALE_AFTER]);
         foreach ($rows as $job) {
-            $this->fail($job, 'زمان ساخت بیش از حد طول کشید. سکه‌ها برگشت داده شد.');
+            $this->fail($job, 'This took too long and was cancelled. Your coins were refunded.');
         }
     }
 
@@ -203,8 +203,8 @@ final class Jobs
                 'text' => Texts::packReady($title, $added, $job['type'] === 'add'),
                 'parse_mode' => 'HTML',
                 'reply_markup' => ['inline_keyboard' => [
-                    [['text' => '➕ افزودن به تلگرام', 'url' => PackService::link($name), 'style' => 'success']],
-                    [['text' => '🎨 ساخت پک جدید', 'web_app' => ['url' => $app->appUrl()]]],
+                    [['text' => '➕ Add to Telegram', 'url' => PackService::link($name), 'style' => 'success']],
+                    [['text' => '🎨 Create another pack', 'web_app' => ['url' => $app->appUrl()]]],
                 ]],
             ];
             // Show the new animated emoji right in the message. Telegram only allows custom emoji

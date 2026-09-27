@@ -74,10 +74,10 @@ final class LogoStore
     {
         $info = @getimagesize($tmpPath);
         if (!$info || !in_array($info[2], [IMAGETYPE_PNG, IMAGETYPE_WEBP, IMAGETYPE_JPEG, IMAGETYPE_GIF], true)) {
-            throw new RuntimeException('فرمت لوگو باید PNG / JPG / WEBP باشد.');
+            throw new RuntimeException('The logo must be a PNG, JPG or WEBP image.');
         }
         if ($info[0] < 32 || $info[1] < 32 || $info[0] > 6000 || $info[1] > 6000) {
-            throw new RuntimeException('ابعاد لوگو باید بین ۳۲ تا ۶۰۰۰ پیکسل باشد.');
+            throw new RuntimeException('The logo must be between 32 and 6000 pixels.');
         }
         $src = match ($info[2]) {
             IMAGETYPE_PNG => @imagecreatefrompng($tmpPath),
@@ -86,7 +86,7 @@ final class LogoStore
             IMAGETYPE_GIF => @imagecreatefromgif($tmpPath),
         };
         if (!$src) {
-            throw new RuntimeException('تصویر لوگو خراب است.');
+            throw new RuntimeException('The logo image is damaged.');
         }
         if (!imageistruecolor($src)) {
             imagepalettetotruecolor($src);
@@ -101,14 +101,14 @@ final class LogoStore
         self::removeFlatBackground($im);
         $im = self::trim($im);
         if ($im === null) {
-            throw new RuntimeException('لوگو خالی است (کاملاً شفاف).');
+            throw new RuntimeException('The logo is empty (fully transparent).');
         }
 
         $png = Gfx::png($im, 9);
         $ref = $userId . '/' . substr(sha1($png), 0, 20);
         $dir = $this->dir . '/' . $userId;
         if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
-            throw new RuntimeException('ذخیره لوگو ناموفق بود.');
+            throw new RuntimeException('Could not save the logo.');
         }
         file_put_contents($this->path($ref), $png, LOCK_EX);
         touch($this->path($ref));

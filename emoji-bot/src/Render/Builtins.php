@@ -16,8 +16,8 @@ final class Builtins
     public const CAT_CLASSIC = 'classic';
 
     public const CATEGORY_TITLES = [
-        self::CAT_ANIMATED => '✨ اشکال متحرک',
-        self::CAT_CLASSIC => 'اشکال ساده (ثابت)',
+        self::CAT_ANIMATED => '✨ Animated shapes',
+        self::CAT_CLASSIC => 'Classic shapes (static)',
     ];
 
     /** @return Template[] */
@@ -31,52 +31,52 @@ final class Builtins
         $C = self::CAT_CLASSIC;
 
         // ---- Animated ------------------------------------------------------
-        $add('b_flag_wave', 'پرچم مواج', $A, '🚩', 'wave', self::flag(false), [276, 205, 330, 190]);
-        $add('b_heart_beat', 'قلب تپنده', $A, '💓', 'beat', self::heart(...), [256, 236, 270, 150]);
-        $add('b_coin_flip', 'سکه چرخان', $A, '🪙', 'flip', self::coin(...), [256, 254, 270, 160]);
-        $add('b_shield_shine', 'سپر درخشان', $A, '🛡', 'shine', self::shield(...), [256, 222, 280, 150]);
-        $add('b_badge_pulse', 'نشان تپنده', $A, '✨', 'pulse', self::badge(...), [256, 256, 300, 170]);
-        $add('b_rainbow', 'متن رنگین‌کمان', $A, '🌈', 'rainbow', self::none(...), [256, 256, 470, 470], self::textPlain(...));
-        $add('b_neon', 'نئون', $A, '💡', 'glow', self::neon(...), [256, 256, 380, 300], self::textNeon(...));
-        $add('b_sign_wiggle', 'تابلو لرزان', $A, '👋', 'wiggle', self::sign(...), [256, 196, 370, 210], self::textDark(...));
-        $add('b_star_pulse', 'ستاره تپنده', $A, '⭐', 'pulse', self::star(...), [256, 284, 190, 100]);
-        $add('b_bounce', 'متن جهنده', $A, '🔥', 'bounce', self::none(...), [256, 256, 470, 470], self::textPlain(...));
-        $add('b_key_press', 'کلید فشاری', $A, '⌨️', 'press', self::keycap(...), [256, 226, 300, 200]);
-        $add('b_pin_float', 'پین شناور', $A, '📍', 'float', self::pin(...), [256, 206, 270, 170]);
-        $add('b_warn_blink', 'هشدار چشمک‌زن', $A, '⚠️', 'blink', self::warning(...), [256, 330, 230, 110]);
-        $add('b_bubble_shake', 'حباب لرزان', $A, '💬', 'shake', self::bubble(...), [256, 222, 360, 230]);
-        $add('b_seal_spin', 'مهر چرخان', $A, '🏵', 'spin_base', self::seal(...), [256, 256, 290, 170]);
-        $add('b_chart_grow', 'نمودار صعودی', $A, '📈', 'grow', self::chart(true), [104, 236, 118, 118]);
-        $add('b_chart_fall', 'نمودار نزولی', $A, '📉', 'grow', self::chart(false), [408, 236, 118, 118]);
+        $add('b_flag_wave', 'Waving flag', $A, '🚩', 'wave', self::flag(false), [276, 205, 330, 190]);
+        $add('b_heart_beat', 'Beating heart', $A, '💓', 'beat', self::heart(...), [256, 236, 270, 150]);
+        $add('b_coin_flip', 'Spinning coin', $A, '🪙', 'flip', self::coin(...), [256, 254, 270, 160]);
+        $add('b_shield_shine', 'Shiny shield', $A, '🛡', 'shine', self::shield(...), [256, 222, 280, 150]);
+        $add('b_badge_pulse', 'Pulsing badge', $A, '✨', 'pulse', self::badge(...), [256, 256, 300, 170]);
+        $add('b_rainbow', 'Rainbow text', $A, '🌈', 'rainbow', self::none(...), [256, 256, 470, 470], self::textPlain(...));
+        $add('b_neon', 'Neon', $A, '💡', 'glow', self::neon(...), [256, 256, 380, 300], self::textNeon(...));
+        $add('b_sign_wiggle', 'Wiggling sign', $A, '👋', 'wiggle', self::sign(...), [256, 196, 370, 210], self::textDark(...));
+        $add('b_star_pulse', 'Pulsing star', $A, '⭐', 'pulse', self::star(...), [256, 284, 190, 100]);
+        $add('b_bounce', 'Bouncing text', $A, '🔥', 'bounce', self::none(...), [256, 256, 470, 470], self::textPlain(...));
+        $add('b_key_press', 'Key press', $A, '⌨️', 'press', self::keycap(...), [256, 226, 300, 200]);
+        $add('b_pin_float', 'Floating pin', $A, '📍', 'float', self::pin(...), [256, 206, 270, 170]);
+        $add('b_warn_blink', 'Blinking warning', $A, '⚠️', 'blink', self::warning(...), [256, 330, 230, 110]);
+        $add('b_bubble_shake', 'Shaking bubble', $A, '💬', 'shake', self::bubble(...), [256, 222, 360, 230]);
+        $add('b_seal_spin', 'Spinning seal', $A, '🏵', 'spin_base', self::seal(...), [256, 256, 290, 170]);
+        $add('b_chart_grow', 'Chart up', $A, '📈', 'grow', self::chart(true), [104, 236, 118, 118]);
+        $add('b_chart_fall', 'Chart down', $A, '📉', 'grow', self::chart(false), [408, 236, 118, 118]);
 
         // ---- Classic (static) ---------------------------------------------
-        $add('b_shield', 'سپر', $C, '🛡', 'none', self::shield(...), [256, 222, 280, 150]);
-        $add('b_badge', 'نشان', $C, '🔵', 'none', self::badge(...), [256, 256, 300, 170]);
-        $add('b_keycap', 'کلید', $C, '⌨️', 'none', self::keycap(...), [256, 226, 300, 200]);
-        $add('b_heart', 'قلب', $C, '❤️', 'none', self::heart(...), [256, 236, 270, 150]);
-        $add('b_bubble', 'حباب گفتگو', $C, '💬', 'none', self::bubble(...), [256, 222, 360, 230]);
-        $add('b_pin', 'پین', $C, '📍', 'none', self::pin(...), [256, 206, 270, 170]);
-        $add('b_warning', 'مثلث', $C, '⚠️', 'none', self::warning(...), [256, 330, 230, 110]);
-        $add('b_star', 'ستاره', $C, '⭐', 'none', self::star(...), [256, 284, 190, 100]);
-        $add('b_hexagon', 'شش‌ضلعی', $C, '🔷', 'none', self::hexagon(...), [256, 256, 320, 180]);
-        $add('b_ribbon', 'روبان', $C, '🎗', 'none', self::ribbon(...), [256, 245, 360, 130]);
-        $add('b_sign', 'تابلو', $C, '👋', 'none', self::sign(...), [256, 196, 370, 210], self::textDark(...));
-        $add('b_coin', 'سکه', $C, '🪙', 'none', self::coin(...), [256, 254, 270, 160]);
-        $add('b_tag', 'برچسب', $C, '🏷', 'none', self::tag(...), [318, 256, 280, 200]);
-        $add('b_seal', 'مهر', $C, '🏵', 'none', self::seal(...), [256, 256, 290, 170]);
-        $add('b_flag', 'پرچم', $C, '🚩', 'none', self::flag(true), [276, 200, 330, 190]);
-        $add('b_pill', 'کپسول', $C, '💊', 'none', self::pill(...), [256, 256, 380, 150]);
-        $add('b_crown', 'تاج', $C, '👑', 'none', self::crown(...), [256, 300, 290, 150]);
-        $add('b_cloud', 'ابر', $C, '☁️', 'none', self::cloud(...), [256, 312, 350, 150]);
-        $add('b_diamond', 'لوزی', $C, '💎', 'none', self::diamond(...), [256, 256, 280, 150]);
-        $add('b_octagon', 'هشت‌ضلعی', $C, '🛑', 'none', self::octagon(...), [256, 256, 330, 180]);
-        $add('b_square', 'مربع', $C, '🟥', 'none', self::square(...), [256, 256, 380, 320]);
-        $add('b_circle', 'دایره', $C, '🔴', 'none', self::circle(...), [256, 256, 360, 220]);
-        $add('b_ticket', 'بلیت', $C, '🎟', 'none', self::ticket(...), [206, 256, 300, 190]);
-        $add('b_medal', 'مدال', $C, '🏅', 'none', self::medal(...), [256, 318, 240, 150]);
-        $add('b_plain', 'فقط متن', $C, '🔤', 'none', self::none(...), [256, 256, 470, 470], self::textPlain(...));
-        $add('b_chart_up', 'نمودار صعودی', $C, '📈', 'none', self::chart(true), [104, 236, 118, 118]);
-        $add('b_chart_down', 'نمودار نزولی', $C, '📉', 'none', self::chart(false), [408, 236, 118, 118]);
+        $add('b_shield', 'Shield', $C, '🛡', 'none', self::shield(...), [256, 222, 280, 150]);
+        $add('b_badge', 'Badge', $C, '🔵', 'none', self::badge(...), [256, 256, 300, 170]);
+        $add('b_keycap', 'Keycap', $C, '⌨️', 'none', self::keycap(...), [256, 226, 300, 200]);
+        $add('b_heart', 'Heart', $C, '❤️', 'none', self::heart(...), [256, 236, 270, 150]);
+        $add('b_bubble', 'Speech bubble', $C, '💬', 'none', self::bubble(...), [256, 222, 360, 230]);
+        $add('b_pin', 'Pin', $C, '📍', 'none', self::pin(...), [256, 206, 270, 170]);
+        $add('b_warning', 'Triangle', $C, '⚠️', 'none', self::warning(...), [256, 330, 230, 110]);
+        $add('b_star', 'Star', $C, '⭐', 'none', self::star(...), [256, 284, 190, 100]);
+        $add('b_hexagon', 'Hexagon', $C, '🔷', 'none', self::hexagon(...), [256, 256, 320, 180]);
+        $add('b_ribbon', 'Ribbon', $C, '🎗', 'none', self::ribbon(...), [256, 245, 360, 130]);
+        $add('b_sign', 'Sign', $C, '👋', 'none', self::sign(...), [256, 196, 370, 210], self::textDark(...));
+        $add('b_coin', 'Coin', $C, '🪙', 'none', self::coin(...), [256, 254, 270, 160]);
+        $add('b_tag', 'Tag', $C, '🏷', 'none', self::tag(...), [318, 256, 280, 200]);
+        $add('b_seal', 'Seal', $C, '🏵', 'none', self::seal(...), [256, 256, 290, 170]);
+        $add('b_flag', 'Flag', $C, '🚩', 'none', self::flag(true), [276, 200, 330, 190]);
+        $add('b_pill', 'Pill', $C, '💊', 'none', self::pill(...), [256, 256, 380, 150]);
+        $add('b_crown', 'Crown', $C, '👑', 'none', self::crown(...), [256, 300, 290, 150]);
+        $add('b_cloud', 'Cloud', $C, '☁️', 'none', self::cloud(...), [256, 312, 350, 150]);
+        $add('b_diamond', 'Diamond', $C, '💎', 'none', self::diamond(...), [256, 256, 280, 150]);
+        $add('b_octagon', 'Octagon', $C, '🛑', 'none', self::octagon(...), [256, 256, 330, 180]);
+        $add('b_square', 'Square', $C, '🟥', 'none', self::square(...), [256, 256, 380, 320]);
+        $add('b_circle', 'Circle', $C, '🔴', 'none', self::circle(...), [256, 256, 360, 220]);
+        $add('b_ticket', 'Ticket', $C, '🎟', 'none', self::ticket(...), [206, 256, 300, 190]);
+        $add('b_medal', 'Medal', $C, '🏅', 'none', self::medal(...), [256, 318, 240, 150]);
+        $add('b_plain', 'Text only', $C, '🔤', 'none', self::none(...), [256, 256, 470, 470], self::textPlain(...));
+        $add('b_chart_up', 'Chart up', $C, '📈', 'none', self::chart(true), [104, 236, 118, 118]);
+        $add('b_chart_down', 'Chart down', $C, '📉', 'none', self::chart(false), [408, 236, 118, 118]);
 
         return $T;
     }

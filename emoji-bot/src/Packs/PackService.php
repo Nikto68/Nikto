@@ -202,13 +202,13 @@ final class PackService
         $m = $e->getMessage();
         return match (true) {
             str_contains($m, 'PEER_ID_INVALID'), str_contains($m, 'user not found'), str_contains($m, 'USER_IS_BOT')
-                => 'ابتدا ربات را استارت کنید و دوباره امتحان کنید.',
-            str_contains($m, 'STICKERSET_INVALID') => 'این پک پیدا نشد یا حذف شده است.',
-            str_contains($m, 'STICKERS_TOO_MUCH'), str_contains($m, 'too much') => 'ظرفیت این پک پر شده است (حداکثر ۲۰۰ ایموجی).',
+                => 'Please start the bot first, then try again.',
+            str_contains($m, 'STICKERSET_INVALID') => 'This pack was not found or has been deleted.',
+            str_contains($m, 'STICKERS_TOO_MUCH'), str_contains($m, 'too much') => 'This pack is full (max 200 emoji).',
             str_contains($m, 'Too Many Requests'), $e instanceof TelegramError && $e->getCode() === 429
-                => 'تلگرام محدودیت موقت گذاشته است؛ چند دقیقه بعد دوباره امتحان کنید.',
-            str_contains($m, 'ffmpeg'), str_contains($m, '64 KB') => 'ساخت ایموجی متحرک ناموفق بود.',
-            default => 'ساخت پک ناموفق بود. لطفا دوباره تلاش کنید.',
+                => 'Telegram is rate-limiting us — please try again in a few minutes.',
+            str_contains($m, 'ffmpeg'), str_contains($m, '64 KB') => 'Could not create the animated emoji.',
+            default => 'Could not create the pack. Please try again.',
         };
     }
 }

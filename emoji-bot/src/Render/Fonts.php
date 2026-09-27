@@ -27,9 +27,9 @@ final class Fonts
         'pixel'      => ['Pixel',       'PressStart2P',    ['PressStart2P-Regular.ttf', 'Vazirmatn-Black.ttf']],
         'pacifico'   => ['Pacifico',    'Pacifico',        ['Pacifico-Regular.ttf', 'Sahel-Black.ttf', 'Vazirmatn-Black.ttf']],
         // Also draw Persian (used when the admin allows Persian text)
-        'vazir'      => ['وزیر',        'Vazirmatn',       ['Vazirmatn-Black.ttf']],
-        'lalezar'    => ['لاله‌زار',    'Lalezar',         ['Lalezar-Regular.ttf', 'Vazirmatn-Black.ttf']],
-        'sahel'      => ['ساحل',        'Sahel',           ['Sahel-Black.ttf', 'Vazirmatn-Black.ttf']],
+        'vazir'      => ['Vazir',        'Vazirmatn',       ['Vazirmatn-Black.ttf']],
+        'lalezar'    => ['Lalezar',    'Lalezar',         ['Lalezar-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'sahel'      => ['Sahel',        'Sahel',           ['Sahel-Black.ttf', 'Vazirmatn-Black.ttf']],
     ];
 
     public const DEFAULT = 'montserrat';

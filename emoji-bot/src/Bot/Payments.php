@@ -32,12 +32,12 @@ final class Payments
     {
         $pkg = $this->packages()[$index] ?? null;
         if (!$pkg) {
-            throw new \InvalidArgumentException('بسته نامعتبر است.');
+            throw new \InvalidArgumentException('Invalid package.');
         }
-        $label = Texts::num($pkg['coins']) . ' سکه';
+        $label = Texts::num($pkg['coins']) . ' coins';
         return (string) $this->app->tg()->call('createInvoiceLink', [
-            'title' => mb_substr('خرید ' . $label, 0, 32),
-            'description' => 'افزایش موجودی برای ساخت ایموجی پریمیوم اختصاصی (' . $label . ')',
+            'title' => mb_substr($label, 0, 32),
+            'description' => 'Top up your balance to create custom premium emoji (' . $label . ')',
             'payload' => sprintf('c:%d:%d:%s', $index, $userId, bin2hex(random_bytes(4))),
             'provider_token' => '',
             'currency' => 'XTR',
@@ -61,10 +61,10 @@ final class Payments
         $fromId = (int) ($q['from']['id'] ?? 0);
         $user = $this->app->users()->get($fromId);
         $error = match (true) {
-            $parsed === null => 'این فاکتور منقضی شده است. دوباره از مینی‌اپ اقدام کنید.',
-            ($q['currency'] ?? '') !== 'XTR' || (int) $q['total_amount'] !== $parsed[2]['stars'] => 'مبلغ فاکتور معتبر نیست.',
-            $parsed[1] !== $fromId => 'این فاکتور متعلق به شما نیست.',
-            !$user || (int) $user['banned'] === 1 => 'حساب شما مجاز به خرید نیست.',
+            $parsed === null => 'This invoice has expired. Please try again from the app.',
+            ($q['currency'] ?? '') !== 'XTR' || (int) $q['total_amount'] !== $parsed[2]['stars'] => 'Invalid invoice amount.',
+            $parsed[1] !== $fromId => 'This invoice is not yours.',
+            !$user || (int) $user['banned'] === 1 => 'Your account cannot make purchases.',
             default => null,
         };
         $this->app->tg()->call('answerPreCheckoutQuery', array_filter([
@@ -102,7 +102,7 @@ final class Payments
         $balance = $this->app->users()->addCoins($userId, $coins, 'purchase', substr($chargeId, 0, 64));
         $this->app->tg()->safe('sendMessage', [
             'chat_id' => $userId,
-            'text' => '✅ پرداخت موفق بود! <b>' . Texts::num($coins) . "</b> سکه به حساب شما اضافه شد.\n💰 موجودی: <b>" . Texts::num($balance) . '</b> سکه',
+            'text' => '✅ Payment successful! <b>' . Texts::num($coins) . "</b> coins were added.\n💰 Balance: <b>" . Texts::num($balance) . '</b> coins',
             'parse_mode' => 'HTML',
         ]);
     }

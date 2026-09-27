@@ -16,7 +16,7 @@ use RuntimeException;
  */
 final class CustomTemplate extends Template
 {
-    public const RECOLOR = ['none' => 'رنگ اصلی تصویر', 'duotone' => 'دو رنگ (تیره→رنگ۱، روشن→رنگ۲)', 'tint' => 'تغییر رنگ با حفظ سایه‌روشن'];
+    public const RECOLOR = ['none' => 'Original colors', 'duotone' => 'Two-tone (dark → color 1, light → color 2)', 'tint' => 'Tint (keeps shading)'];
 
     /** @var array<string, GdImage> */
     private static array $imageCache = [];
@@ -204,10 +204,10 @@ final class CustomTemplate extends Template
     {
         $info = @getimagesize($tmpPath);
         if (!$info || !in_array($info[2], [IMAGETYPE_PNG, IMAGETYPE_WEBP, IMAGETYPE_JPEG, IMAGETYPE_GIF], true)) {
-            throw new RuntimeException('فرمت تصویر باید PNG / WEBP / JPG باشد.');
+            throw new RuntimeException('The image must be PNG, WEBP or JPG.');
         }
         if ($info[0] < 64 || $info[1] < 64 || $info[0] > 4096 || $info[1] > 4096) {
-            throw new RuntimeException('ابعاد تصویر باید بین 64 تا 4096 پیکسل باشد.');
+            throw new RuntimeException('The image must be between 64 and 4096 pixels.');
         }
         $src = match ($info[2]) {
             IMAGETYPE_PNG => @imagecreatefrompng($tmpPath),
@@ -216,7 +216,7 @@ final class CustomTemplate extends Template
             IMAGETYPE_GIF => @imagecreatefromgif($tmpPath),
         };
         if (!$src) {
-            throw new RuntimeException('تصویر خراب است.');
+            throw new RuntimeException('The image is damaged.');
         }
         if (!imageistruecolor($src)) {
             imagepalettetotruecolor($src);
@@ -232,7 +232,7 @@ final class CustomTemplate extends Template
         imagecopyresampled($dst, $src, intdiv(512 - $nw, 2), intdiv(512 - $nh, 2), 0, 0, $nw, $nh, $w, $h);
         $file = preg_replace('/[^a-z0-9_-]/i', '', $name) . '.png';
         if (!imagepng($dst, $dir . '/' . $file, 9)) {
-            throw new RuntimeException('ذخیره تصویر ناموفق بود.');
+            throw new RuntimeException('Could not save the image.');
         }
         return $file;
     }

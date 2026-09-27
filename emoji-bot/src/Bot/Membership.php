@@ -69,8 +69,8 @@ final class Membership
     public static function keyboard(App $app): array
     {
         return ['inline_keyboard' => [
-            [['text' => '📢 عضویت در کانال', 'url' => self::url($app)]],
-            [['text' => '✅ عضو شدم', 'callback_data' => 'join', 'style' => 'success']],
+            [['text' => '📢 Join channel', 'url' => self::url($app)]],
+            [['text' => "✅ I've joined", 'callback_data' => 'join', 'style' => 'success']],
         ]];
     }
 }

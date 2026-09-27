@@ -4,7 +4,7 @@
   const tg = window.Telegram && window.Telegram.WebApp;
   const $ = (id) => document.getElementById(id);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const fa = (n) => Number(n || 0).toLocaleString('fa-IR');
+  const fa = (n) => Number(n || 0).toLocaleString('en-US');
   const ver = (v) => !!(tg && tg.isVersionAtLeast && tg.isVersionAtLeast(v));
 
   // ---------- storage (optional, per device) ----------
@@ -91,12 +91,12 @@
         body,
       });
     } catch {
-      throw new ApiErr('اتصال اینترنت را بررسی کنید.', 'network');
+      throw new ApiErr('Check your internet connection.', 'network');
     }
     let j = null;
     try { j = await res.json(); } catch { /* */ }
-    if (!j) throw new ApiErr('خطای ارتباط با سرور', 'network');
-    if (!j.ok) throw new ApiErr(j.error || 'خطا', j.code || 'error');
+    if (!j) throw new ApiErr('Could not reach the server.', 'network');
+    if (!j.ok) throw new ApiErr(j.error || 'Error', j.code || 'error');
     return j;
   }
   const api = (a, data = {}) => request(JSON.stringify({ a, ...data }), false);
@@ -207,23 +207,23 @@
 
   function showJoinGate() {
     const url = S.boot.join.url;
-    const check = h('button', { class: 'main-btn secondary', type: 'button', text: '✅ عضو شدم' });
+    const check = h('button', { class: 'main-btn secondary', type: 'button', text: "✅ I've joined" });
     check.onclick = async () => {
       check.disabled = true;
       try {
         const r = await api('check_join');
-        if (r.joined) { hap.ok(); $('gate').hidden = true; S.boot.join = null; start(); } else toast('هنوز عضو کانال نشده‌اید', true);
+        if (r.joined) { hap.ok(); $('gate').hidden = true; S.boot.join = null; start(); } else toast("You haven't joined the channel yet", true);
       } catch (e) { toast(e.message, true); }
       check.disabled = false;
     };
-    const join = h('button', { class: 'main-btn', type: 'button', text: '📢 عضویت در کانال', onclick: () => tg.openTelegramLink(url) });
-    showGate('🔒', 'عضویت در کانال', 'برای استفاده از ربات ابتدا عضو کانال ما شوید.', h('div', { class: 'stack', style: { width: '100%', maxWidth: '340px' } }, join, check));
+    const join = h('button', { class: 'main-btn', type: 'button', text: '📢 Join channel', onclick: () => tg.openTelegramLink(url) });
+    showGate('🔒', 'Join our channel', 'Please join our channel to use the bot.', h('div', { class: 'stack', style: { width: '100%', maxWidth: '340px' } }, join, check));
   }
 
   // ---------- boot ----------
   async function boot() {
     if (!tg || !tg.initData) {
-      showGate('📱', 'فقط داخل تلگرام', 'این صفحه را از داخل ربات در تلگرام باز کنید.');
+      showGate('📱', 'Open in Telegram', 'Please open this page from the bot inside Telegram.');
       return;
     }
     tg.ready();
@@ -235,13 +235,13 @@
     try {
       S.boot = await api('boot');
     } catch (e) {
-      showGate('⚠️', 'خطا', e.message, h('button', { class: 'main-btn', type: 'button', text: 'تلاش دوباره', onclick: () => location.reload() }));
+      showGate('⚠️', 'Error', e.message, h('button', { class: 'main-btn', type: 'button', text: 'Try again', onclick: () => location.reload() }));
       return;
     }
     S.user = S.boot.user;
     S.cfg = S.boot.config;
     if (S.cfg.maintenance) {
-      showGate('🛠', 'در حال بروزرسانی', 'ربات در حال بروزرسانی است. کمی بعد دوباره سر بزنید.');
+      showGate('🛠', 'Under maintenance', "We're updating the bot. Please check back soon.");
       return;
     }
     if (S.boot.join) {
@@ -333,7 +333,7 @@
       S.tint = !S.tint;
       store.set('tint', S.tint ? '1' : '0');
       paintSwatches();
-      toast(S.tint ? '🎨 قالب‌های ترند به رنگ اصلی شما درآمدند' : 'قالب‌ها با رنگ‌های اصلی خودشان');
+      toast(S.tint ? '🎨 Trending templates now use your main color' : 'Templates are back to their original colors');
       schedule();
     };
     $('c1Btn').onclick = () => { hap.tap(); openColors(1); };
@@ -343,7 +343,7 @@
     renderTarget();
   }
   // ---------- logo mode ----------
-  const LOGO_MODES = [['original', 'رنگ اصلی'], ['c1', 'رنگ ۱'], ['c2', 'رنگ ۲'], ['duo', 'دو رنگ']];
+  const LOGO_MODES = [['original', 'Original'], ['c1', 'Color 1'], ['c2', 'Color 2'], ['duo', 'Two-tone']];
   function setMode(mode, initial = false) {
     S.mode = mode === 'logo' ? 'logo' : 'text';
     store.set('mode', S.mode);
@@ -360,7 +360,7 @@
   function renderLogos() {
     const list = $('logoList');
     const items = (S.boot.logos || []).map((l) => {
-      const b = h('button', { type: 'button', class: l.ref === S.logo ? 'on' : '', 'aria-label': 'لوگو' });
+      const b = h('button', { type: 'button', class: l.ref === S.logo ? 'on' : '', 'aria-label': 'Logo' });
       b.style.backgroundImage = `url("${l.src}")`;
       b.onclick = () => { hap.sel(); S.logo = l.ref; store.set('logo', S.logo); renderLogos(); refreshSel(); schedule(); };
       return b;
@@ -381,15 +381,15 @@
     const f = input.files && input.files[0];
     input.value = '';
     if (!f) return;
-    if (f.size > 5 * 1024 * 1024) { toast('حداکثر حجم لوگو ۵ مگابایت است', true); return; }
-    toast('در حال آپلود لوگو…');
+    if (f.size > 5 * 1024 * 1024) { toast('The logo must be 5 MB or smaller', true); return; }
+    toast('Uploading logo…');
     try {
       const r = await apiForm('logo_upload', { image: f });
       S.boot.logos = r.logos;
       S.logo = r.logo;
       store.set('logo', S.logo);
       hap.ok();
-      toast('✅ لوگو آماده است — پس‌زمینه ساده خودکار حذف شد');
+      toast('✅ Logo ready — plain background removed automatically');
       renderLogos();
       refreshSel();
       schedule();
@@ -425,8 +425,8 @@
   }
   function localTextError() {
     if (S.mode === 'logo') return '';
-    if (/\p{Extended_Pictographic}/u.test(S.text)) return 'ایموجی داخل متن مجاز نیست؛ فقط حروف و اعداد.';
-    if (S.cfg.latin_only && /[^\x20-\x7E]/.test(S.text)) return 'فقط حروف انگلیسی، عدد و علامت‌های ساده (مثلاً: Sina)';
+    if (/\p{Extended_Pictographic}/u.test(S.text)) return 'Emoji are not allowed in the text — letters and numbers only.';
+    if (S.cfg.latin_only && /[^\x20-\x7E]/.test(S.text)) return 'English letters, numbers and basic symbols only (e.g. Sina)';
     return '';
   }
 
@@ -518,7 +518,7 @@
     S.cats = S.boot.categories;
     for (const cat of S.cats) {
       const grid = h('div', { class: 'grid' });
-      const selBtn = h('button', { class: 'sel-all', type: 'button' }, icon('checks'), h('span', { text: 'انتخاب همه' }));
+      const selBtn = h('button', { class: 'sel-all', type: 'button' }, icon('checks'), h('span', { text: 'Select all' }));
       const section = h('section', { class: 'cat' + (S.collapsed.has(cat.id) ? ' collapsed' : '') });
       const toggleBtn = h('button', { class: 'cat-toggle', type: 'button' }, icon('chevron'), h('span', { class: 'cat-title', text: cat.title }));
       toggleBtn.onclick = () => {
@@ -534,7 +534,7 @@
           if (all) S.selected.delete(i.id);
           else if (S.selected.size < S.cfg.max_per_pack) S.selected.add(i.id);
         }
-        if (!all && cat.items.some((i) => !S.selected.has(i.id))) toast(`حداکثر ${fa(S.cfg.max_per_pack)} ایموجی در هر ساخت`);
+        if (!all && cat.items.some((i) => !S.selected.has(i.id))) toast(`Up to ${fa(S.cfg.max_per_pack)} emoji per pack`);
         refreshSel();
       };
       cat.selBtn = selBtn;
@@ -558,12 +558,12 @@
       root.append(section);
     }
     for (const id of [...S.selected]) if (!ids.has(id)) S.selected.delete(id);
-    if (!n) root.append(h('div', { class: 'empty-state' }, h('span', { class: 'big', text: '🧩' }), 'هنوز قالبی فعال نیست.'));
+    if (!n) root.append(h('div', { class: 'empty-state' }, h('span', { class: 'big', text: '🧩' }), 'No templates are enabled yet.'));
   }
 
   function toggleTile(id) {
     if (S.selected.has(id)) S.selected.delete(id);
-    else if (S.selected.size >= S.cfg.max_per_pack) { toast(`حداکثر ${fa(S.cfg.max_per_pack)} ایموجی در هر ساخت`, true); return; } else S.selected.add(id);
+    else if (S.selected.size >= S.cfg.max_per_pack) { toast(`Up to ${fa(S.cfg.max_per_pack)} emoji per pack`, true); return; } else S.selected.add(id);
     hap.sel();
     refreshSel();
   }
@@ -579,10 +579,10 @@
     const hasText = hasContent();
     btn.disabled = !hasText || n === 0 || !!S.textError;
     btn.replaceChildren();
-    if (!hasText) btn.textContent = S.mode === 'logo' ? 'اول لوگو را آپلود کنید' : 'اول متن را بنویسید';
-    else if (!n) btn.textContent = 'قالب‌ها را انتخاب کنید';
+    if (!hasText) btn.textContent = S.mode === 'logo' ? 'Upload your logo first' : 'Type your text first';
+    else if (!n) btn.textContent = 'Select templates';
     else {
-      btn.append((S.target ? 'افزودن به پک' : 'ساخت پک') + ` (${fa(n)})`);
+      btn.append((S.target ? 'Add to pack' : 'Create pack') + ` (${fa(n)})`);
       if (S.cfg.price > 0) btn.append(h('small', { text: `  •  🪙 ${fa(n * S.cfg.price)}` }));
     }
   }
@@ -592,7 +592,7 @@
     const info = $('targetInfo');
     const pack = S.boot.packs.find((p) => p.id === S.target);
     if (!pack) { S.target = 0; info.hidden = true; $('targetBtn').classList.remove('active'); refreshSel(); return; }
-    fill(info, h('span', { text: `➕ افزودن به: ${pack.title}` }), h('button', { type: 'button', text: 'لغو', onclick: () => { S.target = 0; renderTarget(); } }));
+    fill(info, h('span', { text: `➕ Adding to: ${pack.title}` }), h('button', { type: 'button', text: 'Cancel', onclick: () => { S.target = 0; renderTarget(); } }));
     info.hidden = false;
     $('targetBtn').classList.add('active');
     refreshSel();
@@ -600,11 +600,11 @@
   function openTarget() {
     const list = h('div', { class: 'chips' });
     const mk = (id, label) => h('button', { class: 'chip' + (S.target === id ? ' on' : ''), type: 'button', text: label, onclick: () => { S.target = id; renderTarget(); closeSheet(); } });
-    list.append(mk(0, '✨ پک جدید'));
+    list.append(mk(0, '✨ New pack'));
     for (const p of S.boot.packs) {
       if (p.count < S.cfg.max_set) list.append(mk(p.id, `${p.title} (${fa(p.count)})`));
     }
-    openSheet(h('div', null, h('h2', { text: 'ایموجی‌ها کجا ساخته شوند؟' }), h('p', { text: 'می‌توانید پک جدید بسازید یا به پک‌های قبلی‌تان اضافه کنید.' }), list));
+    openSheet(h('div', null, h('h2', { text: 'Where should the emoji go?' }), h('p', { text: 'Create a new pack or add to one of your packs.' }), list));
   }
 
   // ---------- fonts ----------
@@ -612,11 +612,11 @@
     const grid = h('div', { class: 'font-grid' });
     for (const f of S.boot.fonts) {
       const b = h('button', { class: 'font-opt' + (f.id === S.font ? ' on' : ''), type: 'button', style: { fontFamily: `"${f.family}", Vazirmatn`, fontSize: /PressStart2P|RubikMonoOne/.test(f.family) ? '12px' : '' } },
-        h('span', { text: S.cfg.latin_only ? (S.text.trim() || 'Emoji') : 'سلام Abc' }), h('small', { text: f.title }));
+        h('span', { text: S.text.trim() || 'Emoji' }), h('small', { text: f.title }));
       b.onclick = () => { hap.sel(); S.font = f.id; store.set('font', f.id); paintSwatches(); schedule(); closeSheet(); };
       grid.append(b);
     }
-    openSheet(h('div', null, h('h2', { text: 'فونت' }), grid));
+    openSheet(h('div', null, h('h2', { text: 'Font' }), grid));
   }
 
   // ---------- colors ----------
@@ -626,8 +626,8 @@
     const draw = () => {
       const val = cur === 1 ? S.c1 : S.c2;
       const tabs = h('div', { class: 'tabs' },
-        h('button', { type: 'button', class: cur === 1 ? 'on' : '', onclick: () => { cur = 1; draw(); } }, h('i', { style: { background: S.c1 } }), 'رنگ اصلی'),
-        h('button', { type: 'button', class: cur === 2 ? 'on' : '', onclick: () => { cur = 2; draw(); } }, h('i', { style: { background: S.c2 } }), 'رنگ دوم'));
+        h('button', { type: 'button', class: cur === 1 ? 'on' : '', onclick: () => { cur = 1; draw(); } }, h('i', { style: { background: S.c1 } }), 'Main color'),
+        h('button', { type: 'button', class: cur === 2 ? 'on' : '', onclick: () => { cur = 2; draw(); } }, h('i', { style: { background: S.c2 } }), 'Second color'));
       const pal = h('div', { class: 'palette' });
       for (const c of PALETTE) {
         pal.append(h('button', { type: 'button', class: c === val ? 'on' : '', style: { background: c }, 'aria-label': c, onclick: () => setColor(cur, c) }));
@@ -639,9 +639,9 @@
       const picker = h('input', { type: 'color', value: val });
       picker.addEventListener('input', () => setColor(cur, picker.value.toLowerCase(), false));
       fill(body,
-        h('h2', { text: 'رنگ‌ها' }), tabs, pal,
-        h('div', { class: 'custom-color' }, picker, h('span', { text: 'رنگ دلخواه' })),
-        h('h3', { text: 'ترکیب‌های آماده' }), combos);
+        h('h2', { text: 'Colors' }), tabs, pal,
+        h('div', { class: 'custom-color' }, picker, h('span', { text: 'Custom color' })),
+        h('h3', { text: 'Presets' }), combos);
     };
     const setColor = (n, c, redraw = true) => {
       if (n === 1) S.c1 = c; else S.c2 = c;
@@ -665,10 +665,10 @@
     if (!n || !hasContent()) return;
     const cost = n * S.cfg.price;
     const pack = S.boot.packs.find((p) => p.id === S.target);
-    const title = h('input', { class: 'input', maxlength: '48', value: S.mode === 'logo' ? (store.get('packTitle', '') || 'My Emoji') : S.text.trim(), placeholder: 'نام پک' });
+    const title = h('input', { class: 'input', maxlength: '48', value: S.mode === 'logo' ? (store.get('packTitle', '') || 'My Emoji') : S.text.trim(), placeholder: 'Pack name' });
     title.addEventListener('input', () => store.set('packTitle', title.value));
     const enough = S.user.coins >= cost;
-    const go = h('button', { class: 'main-btn', type: 'button', text: enough ? (pack ? 'افزودن ایموجی‌ها' : 'ساخت پک') : 'خرید سکه' });
+    const go = h('button', { class: 'main-btn', type: 'button', text: enough ? (pack ? 'Add emoji' : 'Create pack') : 'Buy coins' });
     go.onclick = async () => {
       if (!enough) { openShop(); return; }
       go.disabled = true;
@@ -680,20 +680,20 @@
         showProgress(r.job_id);
       } catch (e) {
         go.disabled = false;
-        go.textContent = pack ? 'افزودن ایموجی‌ها' : 'ساخت پک';
+        go.textContent = pack ? 'Add emoji' : 'Create pack';
         if (e.code === 'coins') openShop();
         else if (e.code === 'busy' && S.boot.job) showProgress(S.boot.job);
         else toast(e.message, true);
       }
     };
     openSheet(h('div', null,
-      h('h2', { text: pack ? 'افزودن به پک' : 'ساخت پک جدید' }),
-      pack ? h('div', { class: 'note', text: `ایموجی‌ها به «${pack.title}» اضافه می‌شوند.` }) : h('label', { class: 'field' }, h('span', { text: 'نام پک' }), title),
+      h('h2', { text: pack ? 'Add to pack' : 'New pack' }),
+      pack ? h('div', { class: 'note', text: `Emoji will be added to “${pack.title}”.` }) : h('label', { class: 'field' }, h('span', { text: 'Pack name' }), title),
       h('div', { class: 'summary' },
-        h('div', null, h('span', { text: 'تعداد ایموجی' }), h('b', { text: fa(n) })),
-        h('div', null, h('span', { text: 'هزینه' }), h('b', { text: cost ? `🪙 ${fa(cost)}` : 'رایگان' })),
-        h('div', null, h('span', { text: 'موجودی شما' }), h('b', { text: `🪙 ${fa(S.user.coins)}` }))),
-      !S.user.premium ? h('div', { class: 'note warn', text: '💎 برای استفاده از ایموجی‌های سفارشی داخل پیام‌ها، اشتراک تلگرام پریمیوم لازم است.' }) : null,
+        h('div', null, h('span', { text: 'Emoji' }), h('b', { text: fa(n) })),
+        h('div', null, h('span', { text: 'Cost' }), h('b', { text: cost ? `🪙 ${fa(cost)}` : 'Free' })),
+        h('div', null, h('span', { text: 'Your balance' }), h('b', { text: `🪙 ${fa(S.user.coins)}` }))),
+      !S.user.premium ? h('div', { class: 'note warn', text: '💎 Using custom emoji in messages requires Telegram Premium.' }) : null,
       go));
   }
 
@@ -711,8 +711,8 @@
     svg.setAttribute('viewBox', '0 0 140 140');
     svg.append(bg, fg);
     const pct = h('div', { class: 'pct', text: '0%' });
-    const stage = h('h2', { text: 'در صف ساخت…' });
-    const sub = h('p', { text: 'می‌توانید مینی‌اپ را ببندید؛ پس از آماده شدن، ربات پیام می‌دهد.' });
+    const stage = h('h2', { text: 'In queue…' });
+    const sub = h('p', { text: "You can close the app — the bot will message you when it's ready." });
     openSheet(h('div', { class: 'progress-wrap' }, h('div', { class: 'ring' }, svg, pct), stage, sub));
     let alive = true;
     const prevClose = sheetClose;
@@ -728,9 +728,9 @@
       if (j.status === 'failed') { S.boot.job = null; showFailed(j.error); return; }
       const ratio = j.total ? j.progress / j.total : 0;
       let p = 0.03;
-      if (j.stage === 'render') { p = 0.05 + ratio * 0.6; stage.textContent = `طراحی ایموجی‌ها… ${fa(j.progress)}/${fa(j.total)}`; }
-      else if (j.stage === 'upload') { p = 0.65 + ratio * 0.35; stage.textContent = `ثبت در تلگرام… ${fa(j.progress)}/${fa(j.total)}`; }
-      else stage.textContent = 'در صف ساخت…';
+      if (j.stage === 'render') { p = 0.05 + ratio * 0.6; stage.textContent = `Rendering emoji… ${fa(j.progress)}/${fa(j.total)}`; }
+      else if (j.stage === 'upload') { p = 0.65 + ratio * 0.35; stage.textContent = `Uploading to Telegram… ${fa(j.progress)}/${fa(j.total)}`; }
+      else stage.textContent = 'In queue…';
       fg.style.strokeDashoffset = String(C * (1 - p));
       pct.textContent = Math.round(p * 100) + '%';
       setTimeout(tick, 1200);
@@ -742,11 +742,11 @@
     hap.ok();
     S.selected.clear();
     refreshSel();
-    const add = h('button', { class: 'main-btn', type: 'button', text: '➕ افزودن به تلگرام', onclick: () => tg.openTelegramLink(r.link) });
-    const again = h('button', { class: 'main-btn secondary', type: 'button', text: 'ساخت پک دیگر', onclick: () => closeSheet() });
+    const add = h('button', { class: 'main-btn', type: 'button', text: '➕ Add to Telegram', onclick: () => tg.openTelegramLink(r.link) });
+    const again = h('button', { class: 'main-btn secondary', type: 'button', text: 'Make another pack', onclick: () => closeSheet() });
     const done = h('div', { class: 'done-icon' });
     done.append(icon('check'));
-    openSheet(h('div', { class: 'progress-wrap' }, done, h('h2', { text: 'پک آماده شد! 🎉' }), h('p', { text: `«${r.title}» — ${fa(r.added)} ایموجی` }), h('div', { class: 'stack' }, add, again)));
+    openSheet(h('div', { class: 'progress-wrap' }, done, h('h2', { text: 'Your pack is ready! 🎉' }), h('p', { text: `“${r.title}” — ${fa(r.added)} emoji` }), h('div', { class: 'stack' }, add, again)));
     try {
       const p = await api('packs');
       S.boot.packs = p.packs;
@@ -759,8 +759,8 @@
     hap.err();
     const x = h('div', { class: 'done-icon err' });
     x.append(icon('x'));
-    openSheet(h('div', { class: 'progress-wrap' }, x, h('h2', { text: 'ساخت ناموفق بود' }), h('p', { text: msg || 'دوباره تلاش کنید.' }),
-      h('button', { class: 'main-btn secondary', type: 'button', text: 'باشه', onclick: () => closeSheet() })));
+    openSheet(h('div', { class: 'progress-wrap' }, x, h('h2', { text: 'Something went wrong' }), h('p', { text: msg || 'Please try again.' }),
+      h('button', { class: 'main-btn secondary', type: 'button', text: 'OK', onclick: () => closeSheet() })));
   }
 
   // ---------- packs ----------
@@ -769,17 +769,17 @@
     const draw = () => {
       const list = h('div');
       if (!S.boot.packs.length) {
-        list.append(h('div', { class: 'empty-state' }, h('span', { class: 'big', text: '📦' }), 'هنوز پکی نساخته‌اید.'));
+        list.append(h('div', { class: 'empty-state' }, h('span', { class: 'big', text: '📦' }), "You haven't made any packs yet."));
       }
       for (const p of S.boot.packs) {
         const cover = h('div', { class: 'cover' + (p.cover && p.cover.frames > 1 ? ' sprite' : '') });
         if (p.cover) cover.style.backgroundImage = `url("${p.cover.src}")`;
-        const open = h('button', { type: 'button', 'aria-label': 'باز کردن', onclick: () => tg.openTelegramLink(p.link) }, icon('link'));
-        const more = h('button', { class: 'add', type: 'button', 'aria-label': 'افزودن ایموجی', onclick: () => { S.target = p.id; renderTarget(); closeSheet(); toast('قالب‌ها را انتخاب کنید و «افزودن به پک» را بزنید'); } }, icon('plus'));
-        const del = h('button', { class: 'del', type: 'button', 'aria-label': 'حذف', onclick: () => confirmDelete(p, draw) }, icon('trash'));
-        list.append(h('div', { class: 'pack' }, cover, h('div', { class: 'info' }, h('b', { text: p.title }), h('small', { text: `${fa(p.count)} ایموجی` })), h('div', { class: 'acts' }, open, p.count < S.cfg.max_set ? more : null, del)));
+        const open = h('button', { type: 'button', 'aria-label': 'Open', onclick: () => tg.openTelegramLink(p.link) }, icon('link'));
+        const more = h('button', { class: 'add', type: 'button', 'aria-label': 'Add emoji', onclick: () => { S.target = p.id; renderTarget(); closeSheet(); toast('Select templates, then tap “Add to pack”'); } }, icon('plus'));
+        const del = h('button', { class: 'del', type: 'button', 'aria-label': 'Delete', onclick: () => confirmDelete(p, draw) }, icon('trash'));
+        list.append(h('div', { class: 'pack' }, cover, h('div', { class: 'info' }, h('b', { text: p.title }), h('small', { text: `${fa(p.count)} emoji` })), h('div', { class: 'acts' }, open, p.count < S.cfg.max_set ? more : null, del)));
       }
-      fill(body, h('h2', { text: 'پک‌های من' }), list);
+      fill(body, h('h2', { text: 'My packs' }), list);
     };
     draw();
     openSheet(body);
@@ -792,31 +792,31 @@
         S.boot.packs = r.packs;
         if (S.target === p.id) { S.target = 0; renderTarget(); }
         hap.ok();
-        toast('پک حذف شد');
+        toast('Pack deleted');
         redraw();
       } catch (e) { toast(e.message, true); }
     };
-    const msg = `پک «${p.title}» برای همیشه از تلگرام حذف شود؟`;
+    const msg = `Delete “${p.title}” from Telegram permanently?`;
     if (ver('6.2')) tg.showConfirm(msg, run); else run(window.confirm(msg));
   }
 
   // ---------- shop ----------
   function openShop() {
     const list = h('div');
-    if (!S.boot.packages.length) list.append(h('div', { class: 'empty-state', text: 'فعلا بسته‌ای برای فروش تعریف نشده است.' }));
+    if (!S.boot.packages.length) list.append(h('div', { class: 'empty-state', text: 'No coin packages are available yet.' }));
     for (const pkg of S.boot.packages) {
-      const b = h('button', { class: 'pkg', type: 'button' }, h('span', { class: 'coins-amt', text: `🪙 ${fa(pkg.coins)} سکه` }), h('span', { class: 'price', text: `⭐ ${fa(pkg.stars)}` }));
+      const b = h('button', { class: 'pkg', type: 'button' }, h('span', { class: 'coins-amt', text: `🪙 ${fa(pkg.coins)} coins` }), h('span', { class: 'price', text: `⭐ ${fa(pkg.stars)}` }));
       b.onclick = () => buy(pkg, b);
       list.append(b);
     }
     openSheet(h('div', null,
-      h('h2', { text: 'خرید سکه' }),
-      h('div', { class: 'balance' }, h('b', { text: fa(S.user.coins) }), h('span', { text: 'موجودی فعلی (سکه)' })),
-      S.cfg.price > 0 ? h('p', { text: `هر ایموجی ${fa(S.cfg.price)} سکه — پرداخت امن با Telegram Stars ⭐` }) : h('p', { text: 'پرداخت امن با Telegram Stars ⭐' }),
+      h('h2', { text: 'Buy coins' }),
+      h('div', { class: 'balance' }, h('b', { text: fa(S.user.coins) }), h('span', { text: 'Current balance (coins)' })),
+      S.cfg.price > 0 ? h('p', { text: `${fa(S.cfg.price)} coin(s) per emoji — secure payment with Telegram Stars ⭐` }) : h('p', { text: 'Secure payment with Telegram Stars ⭐' }),
       list));
   }
   async function buy(pkg, btn) {
-    if (!ver('6.1')) { toast('نسخه تلگرام شما قدیمی است؛ لطفا بروزرسانی کنید.', true); return; }
+    if (!ver('6.1')) { toast('Please update Telegram to use payments.', true); return; }
     btn.disabled = true;
     try {
       const r = await api('invoice', { pkg: pkg.id });
@@ -824,7 +824,7 @@
         btn.disabled = false;
         if (status === 'paid') {
           hap.ok();
-          toast('✅ پرداخت موفق بود');
+          toast('✅ Payment successful');
           const before = S.user.coins;
           for (let i = 0; i < 8; i++) {
             await sleep(1500);
@@ -836,7 +836,7 @@
             } catch { /* */ }
           }
           if (!$('sheet').hidden) openShop();
-        } else if (status === 'failed') toast('پرداخت ناموفق بود', true);
+        } else if (status === 'failed') toast('Payment failed', true);
       });
     } catch (e) {
       btn.disabled = false;
@@ -850,22 +850,22 @@
     const body = h('div');
     const draw = () => {
       clearInterval(giftTimer);
-      const parts = [h('h2', { text: 'هدیه و دعوت' })];
+      const parts = [h('h2', { text: 'Gifts & invites' })];
       if (S.cfg.daily_gift > 0) {
         const card = h('div', { class: 'card', style: { textAlign: 'center', marginBottom: '14px' } });
         if (S.user.gift_in === 0) {
-          const b = h('button', { class: 'main-btn', type: 'button', text: `🎁 دریافت ${fa(S.cfg.daily_gift)} سکه` });
+          const b = h('button', { class: 'main-btn', type: 'button', text: `🎁 Claim ${fa(S.cfg.daily_gift)} coins` });
           b.onclick = async () => {
             b.disabled = true;
             try {
               const r = await api('gift');
               S.user = r.user;
               updateCoins();
-              if (r.granted) { hap.ok(); toast(`🎁 ${fa(r.granted)} سکه دریافت شد`); }
+              if (r.granted) { hap.ok(); toast(`🎁 You got ${fa(r.granted)} coins`); }
               draw();
             } catch (e) { b.disabled = false; toast(e.message, true); }
           };
-          card.append(h('p', { text: 'هدیه روزانه شما آماده است!' }), b);
+          card.append(h('p', { text: 'Your daily gift is ready!' }), b);
         } else {
           const left = h('b', { style: { fontSize: '24px', direction: 'ltr', display: 'block' } });
           let end = Date.now() + S.user.gift_in * 1000;
@@ -877,16 +877,16 @@
           };
           upd();
           giftTimer = setInterval(upd, 1000);
-          card.append(h('p', { text: 'هدیه روزانه بعدی:' }), left);
+          card.append(h('p', { text: 'Next daily gift in:' }), left);
         }
         parts.push(card);
       }
       const link = S.boot.ref_link;
-      const copy = h('button', { class: 'main-btn secondary', type: 'button', text: 'کپی لینک', onclick: async () => { try { await navigator.clipboard.writeText(link); toast('کپی شد'); } catch { toast(link); } } });
-      const share = h('button', { class: 'main-btn', type: 'button', text: 'ارسال برای دوستان', onclick: () => tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('✨ با این ربات برای خودت ایموجی پریمیوم اختصاصی بساز!')) });
+      const copy = h('button', { class: 'main-btn secondary', type: 'button', text: 'Copy link', onclick: async () => { try { await navigator.clipboard.writeText(link); toast('Copied'); } catch { toast(link); } } });
+      const share = h('button', { class: 'main-btn', type: 'button', text: 'Share with friends', onclick: () => tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('✨ Create your own custom premium emoji with this bot!')) });
       parts.push(h('div', { class: 'card' },
-        h('b', { text: '👥 دعوت دوستان' }),
-        h('p', { style: { marginTop: '6px' }, text: S.cfg.referral_bonus > 0 ? `به ازای هر دوست ${fa(S.cfg.referral_bonus)} سکه هدیه بگیرید.` : 'ربات را به دوستانتان معرفی کنید.' }),
+        h('b', { text: '👥 Invite friends' }),
+        h('p', { style: { marginTop: '6px' }, text: S.cfg.referral_bonus > 0 ? `Get ${fa(S.cfg.referral_bonus)} coins for every friend who joins.` : 'Share the bot with your friends.' }),
         h('div', { class: 'input', style: { direction: 'ltr', display: 'flex', alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: '13px' }, text: link }),
         h('div', { class: 'row', style: { marginTop: '10px' } }, copy, share)));
       fill(body, ...parts);
@@ -934,7 +934,7 @@
     upload.onchange = async () => {
       const f = upload.files && upload.files[0];
       if (!f) return;
-      toast('در حال آپلود…');
+      toast('Uploading…');
       try {
         const r = await apiForm('adm_upload', { image: f, kind: 'base' });
         await loadAdminList();
@@ -944,7 +944,7 @@
     const rows = L.custom.map((t) => {
       const thumb = h('div', { class: 'thumb' });
       api('adm_image', { id: t.id }).then((r) => { thumb.style.backgroundImage = `url("${r.src}")`; }).catch(() => {});
-      const sw = h('button', { class: 'switch' + (t.enabled ? ' on' : ''), type: 'button', 'aria-label': 'فعال' });
+      const sw = h('button', { class: 'switch' + (t.enabled ? ' on' : ''), type: 'button', 'aria-label': 'Enabled' });
       sw.onclick = async () => {
         try {
           await api('adm_save', { id: t.id, enabled: !t.enabled, config: t.config });
@@ -962,16 +962,16 @@
       sw.onclick = async () => {
         try { await api('adm_builtin', { id: b.id, enabled: !b.enabled }); b.enabled = !b.enabled; sw.classList.toggle('on', b.enabled); hap.sel(); } catch (e) { toast(e.message, true); }
       };
-      return h('div', { class: 'tpl-row' }, h('div', { class: 'info' }, h('b', { text: b.title }), h('small', { text: b.category + (b.animated ? ' • متحرک' : '') })), sw);
+      return h('div', { class: 'tpl-row' }, h('div', { class: 'info' }, h('b', { text: b.title }), h('small', { text: b.category + (b.animated ? ' • animated' : '') })), sw);
     });
     fill(v,
-      h('h2', { text: '🧩 مدیریت قالب‌ها' }),
-      !L.video ? h('div', { class: 'note warn', text: 'ffmpeg روی سرور پیدا نشد؛ قالب‌های متحرک غیرفعال‌اند.' }) : null,
-      h('div', { class: 'note', text: 'تصویر شخصیت/طرح را (ترجیحاً PNG با پس‌زمینه شفاف، مربعی) آپلود کنید، سپس جای متن را روی تصویر مشخص کنید. حالت «دو رنگ» باعث می‌شود قالب با رنگ‌های انتخابی کاربر رنگ شود.' }),
-      h('label', { class: 'main-btn file-btn', style: { display: 'grid', placeItems: 'center', marginBottom: '16px' } }, '➕ افزودن قالب جدید', upload),
-      h('h3', { text: `قالب‌های اختصاصی (${fa(L.custom.length)})` }),
-      rows.length ? rows : h('div', { class: 'empty-state', text: 'هنوز قالبی آپلود نشده است.' }),
-      h('h3', { text: 'قالب‌های پیش‌فرض' }),
+      h('h2', { text: '🧩 Templates' }),
+      !L.video ? h('div', { class: 'note warn', text: 'ffmpeg was not found on the server; animated templates are disabled.' }) : null,
+      h('div', { class: 'note', text: 'Upload a character or design image (ideally a square PNG with a transparent background), then mark where the text goes. “Two-tone” coloring repaints the template with each user\'s colors.' }),
+      h('label', { class: 'main-btn file-btn', style: { display: 'grid', placeItems: 'center', marginBottom: '16px' } }, '➕ Add template', upload),
+      h('h3', { text: `Custom templates (${fa(L.custom.length)})` }),
+      rows.length ? rows : h('div', { class: 'empty-state', text: 'No custom templates yet.' }),
+      h('h3', { text: 'Built-in templates' }),
       builtins);
   }
 
@@ -984,7 +984,7 @@
     // stage with draggable text box
     const img = h('img', { alt: '' });
     api('adm_image', { id: t.id }).then((r) => { img.src = r.src; }).catch((e) => toast(e.message, true));
-    const label = h('span', { text: 'متن' });
+    const label = h('span', { text: 'Text' });
     const handle = h('div', { class: 'handle' });
     const box = h('div', { class: 'tbox' }, label, handle);
     const stage = h('div', { class: 'editor-stage' }, img, box);
@@ -1061,7 +1061,7 @@
       const el = h('input', { type: 'range', min, max, step, value: cfg[key] });
       el.addEventListener('input', () => { cfg[key] = parseFloat(el.value); out.textContent = el.value; if (key === 'angle') placeBox(); });
       el.addEventListener('change', refreshPreview);
-      return h('label', { class: 'slider' }, h('span', { class: 'slider-head' }, h('span', { text: key === 'angle' ? 'چرخش متن (درجه)' : 'ضخامت دورخط' }), out), el);
+      return h('label', { class: 'slider' }, h('span', { class: 'slider-head' }, h('span', { text: key === 'angle' ? 'Text rotation (°)' : 'Outline width' }), out), el);
     };
     const catList = h('datalist', { id: 'catlist' }, (A.list.categories || []).map((c) => h('option', { value: c })));
     const catInput = input('category', { list: 'catlist', maxlength: '64' });
@@ -1072,7 +1072,7 @@
     overlayIn.onchange = async () => {
       const f = overlayIn.files && overlayIn.files[0];
       if (!f) return;
-      try { const r = await apiForm('adm_upload', { image: f, kind: 'overlay', id: t.id }); cfg.overlay = r.template.config.overlay; toast('لایه رو اضافه شد'); refreshPreview(); } catch (e) { toast(e.message, true); }
+      try { const r = await apiForm('adm_upload', { image: f, kind: 'overlay', id: t.id }); cfg.overlay = r.template.config.overlay; toast('Overlay added'); refreshPreview(); } catch (e) { toast(e.message, true); }
     };
     const baseIn = h('input', { type: 'file', accept: 'image/png,image/webp,image/jpeg' });
     baseIn.onchange = async () => {
@@ -1087,53 +1087,53 @@
       } catch (e) { toast(e.message, true); }
     };
 
-    const save = h('button', { class: 'main-btn', type: 'button', text: '💾 ذخیره' });
+    const save = h('button', { class: 'main-btn', type: 'button', text: '💾 Save' });
     save.onclick = async () => {
       save.disabled = true;
       try {
         const r = await api('adm_save', { id: t.id, ...meta, config: cfg });
         Object.assign(t, r.template);
         hap.ok();
-        toast('ذخیره شد');
+        toast('Saved');
         navPop();
         await loadAdminList();
       } catch (e) { toast(e.message, true); }
       save.disabled = false;
     };
-    const del = h('button', { class: 'main-btn danger', type: 'button', text: '🗑 حذف قالب' });
+    const del = h('button', { class: 'main-btn danger', type: 'button', text: '🗑 Delete template' });
     del.onclick = () => {
       const run = async (ok) => {
         if (!ok) return;
-        try { A.list = await api('adm_delete', { id: t.id }); navPop(); renderAdminList(); toast('حذف شد'); } catch (e) { toast(e.message, true); }
+        try { A.list = await api('adm_delete', { id: t.id }); navPop(); renderAdminList(); toast('Deleted'); } catch (e) { toast(e.message, true); }
       };
-      if (ver('6.2')) tg.showConfirm('این قالب حذف شود؟', run); else run(window.confirm('حذف شود؟'));
+      if (ver('6.2')) tg.showConfirm('Delete this template?', run); else run(window.confirm('Delete?'));
     };
 
     fill(v,
-      h('h2', { text: '✏️ ویرایش قالب' }),
-      h('p', { class: 'note', text: 'کادر آبی را بکشید تا جای متن مشخص شود؛ دایره گوشه برای تغییر اندازه است. پیش‌نمایش با متن و رنگ‌های فعلی شما ساخته می‌شود.' }),
+      h('h2', { text: '✏️ Edit template' }),
+      h('p', { class: 'note', text: 'Drag the blue box to where the text goes; drag the corner dot to resize. The preview uses your current text and colors.' }),
       stage,
-      h('h3', { text: 'پیش‌نمایش' }), preview,
-      h('div', { class: 'grid2' }, field('عنوان', input('title', { maxlength: '64' })), field('ایموجی مرتبط', input('emoji', { maxlength: '8' }))),
-      h('div', { class: 'grid2' }, field('دسته‌بندی', catInput), field('ترتیب', input('sort', { type: 'number' }))),
+      h('h3', { text: 'Preview' }), preview,
+      h('div', { class: 'grid2' }, field('Title', input('title', { maxlength: '64' })), field('Emoji', input('emoji', { maxlength: '8' }))),
+      h('div', { class: 'grid2' }, field('Category', catInput), field('Order', input('sort', { type: 'number' }))),
       catList,
-      field('رنگ‌آمیزی تصویر', select(A.list.recolor, cfg.recolor, (x) => { cfg.recolor = x; })),
+      field('Image coloring', select(A.list.recolor, cfg.recolor, (x) => { cfg.recolor = x; })),
       h('div', { class: 'grid2' },
-        field('رنگ متن', select({ c2: 'رنگ دوم کاربر', c1: 'رنگ اصلی کاربر', fixed: 'رنگ ثابت' }, cfg.text_color, (x) => { cfg.text_color = x; })),
-        field('رنگ ثابت متن', color('text_fixed'))),
+        field('Text color', select({ c2: "User's second color", c1: "User's main color", fixed: 'Fixed color' }, cfg.text_color, (x) => { cfg.text_color = x; })),
+        field('Fixed text color', color('text_fixed'))),
       h('div', { class: 'grid2' },
-        field('دورخط متن', select({ none: 'ندارد', c1: 'رنگ اصلی', c2: 'رنگ دوم', fixed: 'رنگ ثابت' }, cfg.stroke, (x) => { cfg.stroke = x; })),
-        field('رنگ ثابت دورخط', color('stroke_fixed'))),
+        field('Text outline', select({ none: 'None', c1: 'Main color', c2: 'Second color', fixed: 'Fixed color' }, cfg.stroke, (x) => { cfg.stroke = x; })),
+        field('Fixed outline color', color('stroke_fixed'))),
       range('stroke_width', 0, 0.3, 0.01),
       range('angle', -45, 45, 1),
       h('div', { class: 'grid2' },
-        field('حداکثر خط', select({ 1: '۱ خط', 2: '۲ خط', 3: '۳ خط' }, String(cfg.max_lines), (x) => { cfg.max_lines = parseInt(x, 10); })),
-        field('افکت حرکتی', select(A.list.video ? A.list.effects : { none: A.list.effects.none }, cfg.effect, (x) => { cfg.effect = x; }))),
-      h('div', { class: 'check-row' }, h('span', { text: 'سایه متن' }), shadowSw),
-      h('div', { class: 'check-row' }, h('span', { text: 'فعال برای کاربران' }), enabledSw),
+        field('Max lines', select({ 1: '1 line', 2: '2 lines', 3: '3 lines' }, String(cfg.max_lines), (x) => { cfg.max_lines = parseInt(x, 10); })),
+        field('Animation', select(A.list.video ? A.list.effects : { none: A.list.effects.none }, cfg.effect, (x) => { cfg.effect = x; }))),
+      h('div', { class: 'check-row' }, h('span', { text: 'Text shadow' }), shadowSw),
+      h('div', { class: 'check-row' }, h('span', { text: 'Visible to users' }), enabledSw),
       h('div', { class: 'grid2', style: { marginBottom: '12px' } },
-        h('label', { class: 'main-btn secondary file-btn', style: { display: 'grid', placeItems: 'center', fontSize: '14px' } }, 'تعویض تصویر', baseIn),
-        h('label', { class: 'main-btn secondary file-btn', style: { display: 'grid', placeItems: 'center', fontSize: '14px' } }, cfg.overlay ? 'تعویض لایه رو' : 'لایه روی متن', overlayIn)),
+        h('label', { class: 'main-btn secondary file-btn', style: { display: 'grid', placeItems: 'center', fontSize: '14px' } }, 'Replace image', baseIn),
+        h('label', { class: 'main-btn secondary file-btn', style: { display: 'grid', placeItems: 'center', fontSize: '14px' } }, cfg.overlay ? 'Replace overlay' : 'Add overlay', overlayIn)),
       h('div', { class: 'stack' }, save, del));
     window.scrollTo(0, 0);
     refreshPreview();
