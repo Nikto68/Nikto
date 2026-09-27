@@ -20,6 +20,7 @@ final class Params
         public readonly string $c2,
         public readonly float $size,
         public readonly float $dy,
+        public readonly bool $tint = false,
     ) {
         $this->rgb1 = Gfx::rgb($c1);
         $this->rgb2 = Gfx::rgb($c2);
@@ -28,7 +29,10 @@ final class Params
     /**
      * @throws InvalidArgumentException with a user-facing (Persian) message
      */
-    public static function fromArray(array $a, Fonts $fonts, int $maxLen): self
+    /**
+     * @param bool $latinOnly only English letters, digits and basic symbols (default policy for users)
+     */
+    public static function fromArray(array $a, Fonts $fonts, int $maxLen, bool $latinOnly = false): self
     {
         $font = (string) ($a['font'] ?? Fonts::DEFAULT);
         if (!$fonts->exists($font)) {
@@ -40,6 +44,9 @@ final class Params
         }
         if (mb_strlen($text) > $maxLen) {
             throw new InvalidArgumentException("متن حداکثر $maxLen کاراکتر می‌تواند باشد.");
+        }
+        if ($latinOnly && preg_match('/[^\x20-\x7E]/', $text)) {
+            throw new InvalidArgumentException('فقط حروف انگلیسی، عدد و علامت‌های ساده مجاز است (مثلاً: Sina).');
         }
         foreach (Shaper::codepoints($text) as $cp) {
             if ($cp === 0x20 || $cp === 0x200C || $cp === 0x200D) {
@@ -56,6 +63,7 @@ final class Params
             self::color($a['c2'] ?? '#ffffff', '#ffffff'),
             round(max(0.5, min(1.6, (float) ($a['size'] ?? 1.0))), 2),
             round(max(-1.0, min(1.0, (float) ($a['dy'] ?? 0.0))), 2),
+            filter_var($a['tint'] ?? false, FILTER_VALIDATE_BOOLEAN),
         );
     }
 
@@ -81,7 +89,7 @@ final class Params
 
     public function toArray(): array
     {
-        return ['text' => $this->text, 'font' => $this->font, 'c1' => $this->c1, 'c2' => $this->c2, 'size' => $this->size, 'dy' => $this->dy];
+        return ['text' => $this->text, 'font' => $this->font, 'c1' => $this->c1, 'c2' => $this->c2, 'size' => $this->size, 'dy' => $this->dy, 'tint' => $this->tint];
     }
 
     public function key(): string

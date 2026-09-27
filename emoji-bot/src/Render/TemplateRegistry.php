@@ -19,7 +19,15 @@ final class TemplateRegistry
         private readonly Settings $settings,
         private readonly string $dir,
         private readonly bool $videoAvailable,
+        private readonly string $artDir = '',
+        private readonly string $cacheDir = '',
     ) {
+    }
+
+    /** @return ArtTemplate[] */
+    private function art(): array
+    {
+        return $this->artDir !== '' ? ArtCatalog::all($this->artDir, $this->cacheDir, $this->videoAvailable) : [];
     }
 
     /** @return string[] ids of disabled built-ins */
@@ -73,7 +81,7 @@ final class TemplateRegistry
             $out[$t->id] = $t;
         }
         $disabled = array_flip($this->disabledBuiltins());
-        foreach (Builtins::all() as $t) {
+        foreach ([...$this->art(), ...Builtins::all()] as $t) {
             if (isset($disabled[$t->id]) || ($t->animated() && !$this->videoAvailable)) {
                 continue;
             }
@@ -94,7 +102,7 @@ final class TemplateRegistry
             $row = $this->db->one('SELECT * FROM templates WHERE id = ?', [(int) $m[1]]);
             return $row ? $this->customFromRow($row) : null;
         }
-        foreach (Builtins::all() as $t) {
+        foreach ([...$this->art(), ...Builtins::all()] as $t) {
             if ($t->id === $id) {
                 return $t;
             }
@@ -114,7 +122,9 @@ final class TemplateRegistry
             if (!isset($groups[$key])) {
                 $groups[$key] = [
                     'id' => substr(md5($key), 0, 10),
-                    'title' => $t instanceof CustomTemplate ? ($t->category !== '' ? $t->category : 'ویژه') : (Builtins::CATEGORY_TITLES[$t->category] ?? $t->category),
+                    'title' => $t instanceof CustomTemplate
+                        ? ($t->category !== '' ? $t->category : 'ویژه')
+                        : (ArtCatalog::CATEGORY_TITLES[$t->category] ?? Builtins::CATEGORY_TITLES[$t->category] ?? $t->category),
                     'items' => [],
                 ];
             }

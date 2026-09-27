@@ -27,6 +27,8 @@ abstract class Template
         'glow' => 'نئون',
         'press' => 'فشردن',
         'spin_base' => 'چرخش پس‌زمینه',
+        'peek' => 'سرک کشیدن از پشت تابلو',
+        'hover' => 'معلق بالای روبان',
     ];
 
     public function __construct(
@@ -41,9 +43,17 @@ abstract class Template
 
     /**
      * Draws the non-text parts at $S x $S.
-     * @return array{base: GdImage, overlay: ?GdImage}
+     * @param bool $tint recolor artwork with the user's main color (only art templates use it)
+     * @return array{base: GdImage, overlay: ?GdImage, back?: ?GdImage} "back" is drawn behind "base"
+     *         and is what moves in the peek/hover effects
      */
-    abstract public function layers(int $S, array $c1, array $c2): array;
+    abstract public function layers(int $S, array $c1, array $c2, bool $tint = false): array;
+
+    /** True if the template looks different when the user's "tint" switch is on. */
+    public function tintable(): bool
+    {
+        return false;
+    }
 
     /** Text area in unit coordinates: [centerX, centerY, width, height, angleDeg]. */
     abstract public function box(): array;

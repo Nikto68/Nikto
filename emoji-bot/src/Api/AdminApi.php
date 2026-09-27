@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace EmojiBot\Api;
 
 use EmojiBot\App;
+use EmojiBot\Render\ArtCatalog;
 use EmojiBot\Render\Builtins;
 use EmojiBot\Render\CustomTemplate;
 use EmojiBot\Render\Params;
@@ -64,11 +65,11 @@ final class AdminApi
         $rows = $this->app->db()->all('SELECT * FROM templates ORDER BY sort ASC, id ASC');
         $disabled = array_flip($this->app->templates()->disabledBuiltins());
         $builtins = [];
-        foreach (Builtins::all() as $t) {
+        foreach ([...ArtCatalog::all('', ''), ...Builtins::all()] as $t) {
             $builtins[] = [
                 'id' => $t->id,
                 'title' => $t->title,
-                'category' => Builtins::CATEGORY_TITLES[$t->category] ?? $t->category,
+                'category' => ArtCatalog::CATEGORY_TITLES[$t->category] ?? Builtins::CATEGORY_TITLES[$t->category] ?? $t->category,
                 'animated' => $t->animated(),
                 'enabled' => !isset($disabled[$t->id]),
             ];
@@ -180,7 +181,7 @@ final class AdminApi
     private function builtin(array $in): array
     {
         $id = (string) ($in['id'] ?? '');
-        $valid = array_map(fn ($t) => $t->id, Builtins::all());
+        $valid = array_map(fn ($t) => $t->id, [...ArtCatalog::all('', ''), ...Builtins::all()]);
         if (!in_array($id, $valid, true)) {
             throw new ApiError('قالب نامعتبر.', 400, 'invalid');
         }

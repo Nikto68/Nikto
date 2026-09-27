@@ -12,15 +12,27 @@ final class Fonts
 {
     /** style id => [title shown in the mini app, css family, font files in fallback order] */
     public const STYLES = [
-        'vazir'    => ['وزیر',     'Vazirmatn', ['Vazirmatn-Black.ttf']],
-        'lalezar'  => ['لاله‌زار', 'Lalezar',   ['Lalezar-Regular.ttf', 'Vazirmatn-Black.ttf']],
-        'sahel'    => ['ساحل',     'Sahel',     ['Sahel-Black.ttf', 'Vazirmatn-Black.ttf']],
-        'lilita'   => ['Lilita',   'LilitaOne', ['LilitaOne-Regular.ttf', 'Vazirmatn-Black.ttf']],
-        'bungee'   => ['Bungee',   'Bungee',    ['Bungee-Regular.ttf', 'Lalezar-Regular.ttf', 'Vazirmatn-Black.ttf']],
-        'pacifico' => ['Pacifico', 'Pacifico',  ['Pacifico-Regular.ttf', 'Sahel-Black.ttf', 'Vazirmatn-Black.ttf']],
+        // English display fonts first (emoji text is English by default)
+        'montserrat' => ['Montserrat',  'Montserrat',      ['Montserrat-Black.ttf', 'Vazirmatn-Black.ttf']],
+        'unbounded'  => ['Unbounded',   'Unbounded',       ['Unbounded-Black.ttf', 'Vazirmatn-Black.ttf']],
+        'lilita'     => ['Lilita',      'LilitaOne',       ['LilitaOne-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'luckiest'   => ['Luckiest',    'LuckiestGuy',     ['LuckiestGuy-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'titan'      => ['Titan',       'TitanOne',        ['TitanOne-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'bangers'    => ['Bangers',     'Bangers',         ['Bangers-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'russo'      => ['Russo',       'RussoOne',        ['RussoOne-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'rubikmono'  => ['Rubik Mono',  'RubikMonoOne',    ['RubikMonoOne-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'blackops'   => ['Black Ops',   'BlackOpsOne',     ['BlackOpsOne-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'bungee'     => ['Bungee',      'Bungee',          ['Bungee-Regular.ttf', 'Lalezar-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'marker'     => ['Marker',      'PermanentMarker', ['PermanentMarker-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'pixel'      => ['Pixel',       'PressStart2P',    ['PressStart2P-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'pacifico'   => ['Pacifico',    'Pacifico',        ['Pacifico-Regular.ttf', 'Sahel-Black.ttf', 'Vazirmatn-Black.ttf']],
+        // Also draw Persian (used when the admin allows Persian text)
+        'vazir'      => ['وزیر',        'Vazirmatn',       ['Vazirmatn-Black.ttf']],
+        'lalezar'    => ['لاله‌زار',    'Lalezar',         ['Lalezar-Regular.ttf', 'Vazirmatn-Black.ttf']],
+        'sahel'      => ['ساحل',        'Sahel',           ['Sahel-Black.ttf', 'Vazirmatn-Black.ttf']],
     ];
 
-    public const DEFAULT = 'vazir';
+    public const DEFAULT = 'montserrat';
 
     /** @var array<string, array<int, true>> */
     private array $coverage = [];

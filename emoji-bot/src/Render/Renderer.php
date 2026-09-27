@@ -82,12 +82,13 @@ final class Renderer
 
     private function parts(Template $t, Params $p, int $S): array
     {
-        $key = $t->cacheKey() . '|' . $p->c1 . $p->c2 . '|' . $S;
+        $tint = $p->tint && $t->tintable();
+        $key = $t->cacheKey() . '|' . $p->c1 . $p->c2 . '|' . $S . ($tint ? '|t' : '');
         if (!isset($this->layerCache[$key])) {
             if (count($this->layerCache) > 16) {
                 $this->layerCache = [];
             }
-            $this->layerCache[$key] = $t->layers($S, $p->rgb1, $p->rgb2);
+            $this->layerCache[$key] = $t->layers($S, $p->rgb1, $p->rgb2, $tint);
         }
         $layers = $this->layerCache[$key];
         $ts = $t->textStyle($p->rgb1, $p->rgb2);
@@ -97,6 +98,7 @@ final class Renderer
             'S' => $S,
             'base' => $layers['base'],
             'overlay' => $layers['overlay'],
+            'back' => $layers['back'] ?? null,
             'ts' => $ts,
             'layout' => $layout,
             'cx' => $bx * $S,
@@ -123,10 +125,13 @@ final class Renderer
         return $l;
     }
 
-    private function flatten(array $P, GdImage $text, ?GdImage $base = null, bool $withOverlay = true): GdImage
+    private function flatten(array $P, GdImage $text, ?GdImage $base = null, bool $withOverlay = true, bool $withBack = true): GdImage
     {
         $S = $P['S'];
         $im = Gfx::canvas($S);
+        if ($withBack && $P['back']) {
+            imagecopy($im, $P['back'], 0, 0, 0, 0, $S, $S);
+        }
         imagecopy($im, $base ?? $P['base'], 0, 0, 0, 0, $S, $S);
         imagecopy($im, $text, 0, 0, 0, 0, $S, $S);
         if ($withOverlay && $P['overlay']) {
@@ -154,6 +159,12 @@ final class Renderer
             case 'bounce':
             case 'spin_base':
                 $fx['text'] = $this->textLayer($P);
+                break;
+            case 'peek':
+            case 'hover':
+                // The artwork ("back") moves; the sign/banner with the text stays still.
+                $fx['front'] = $this->flatten($P, $this->textLayer($P), null, true, false);
+                $fx['flat'] = $this->flatten($P, $this->textLayer($P));
                 break;
             case 'wave':
                 $W = $out * 2;
@@ -208,6 +219,26 @@ final class Renderer
             case 'float':
                 Gfx::placeScaled($dst, $fx['flat'], 0.92, 0.92, 0, -0.04 * $out * sin(2 * M_PI * $t));
                 return $dst;
+
+            case 'peek':
+            case 'hover':
+                if (!$P['back']) {
+                    Gfx::placeScaled($dst, $fx['flat'], 0.92, 0.92, 0, -0.04 * $out * sin(2 * M_PI * $t));
+                    return $dst;
+                }
+                $im = Gfx::canvas($S);
+                if ($effect === 'peek') {
+                    // Pops up from behind the sign, sways, sinks back.
+                    $s = 0.5 - 0.5 * cos(2 * M_PI * $t);
+                    $dy = $S * (0.045 - 0.085 * $s);
+                    $back = Gfx::rotate($P['back'], 5 * sin(2 * M_PI * 2 * $t) * $s);
+                } else {
+                    $dy = -0.035 * $S * sin(2 * M_PI * $t);
+                    $back = Gfx::rotate($P['back'], 3 * sin(2 * M_PI * $t + 1.2));
+                }
+                imagecopy($im, $back, 0, (int) round($dy), 0, 0, $S, $S);
+                imagecopy($im, $fx['front'], 0, 0, 0, 0, $S, $S);
+                return Gfx::resize($im, $out);
 
             case 'press':
                 $press = match (true) {

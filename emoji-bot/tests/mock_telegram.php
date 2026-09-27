@@ -78,7 +78,18 @@ $now = time();
 switch ($method) {
     case 'getMe':
         ok(['id' => 123456789, 'is_bot' => true, 'first_name' => 'Emoji Test', 'username' => $botUsername]);
+    case 'getStickerSet':
+        $list = [];
+        for ($i = 0; $i < 4; $i++) {
+            $list[] = ['file_id' => "f$i", 'file_unique_id' => "u$i", 'type' => 'custom_emoji', 'width' => 100, 'height' => 100, 'is_animated' => false, 'is_video' => true, 'emoji' => '⭐', 'custom_emoji_id' => (string) (5368324170671202000 + $i)];
+        }
+        ok(['name' => $params['name'] ?? '', 'title' => 'x', 'sticker_type' => 'custom_emoji', 'stickers' => $list]);
     case 'sendMessage':
+        // Simulate a bot whose owner has no Premium: custom emoji entities are refused.
+        if (str_contains((string) ($params['text'] ?? ''), '<tg-emoji')) {
+            fail('Bad Request: not enough rights to send custom emoji');
+        }
+        ok(['message_id' => random_int(100, 99999), 'date' => $now, 'chat' => ['id' => (int) ($params['chat_id'] ?? 0), 'type' => 'private'], 'text' => $params['text'] ?? '']);
     case 'editMessageText':
         ok(['message_id' => random_int(100, 99999), 'date' => $now, 'chat' => ['id' => (int) ($params['chat_id'] ?? 0), 'type' => 'private'], 'text' => $params['text'] ?? '']);
     case 'copyMessage':

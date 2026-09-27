@@ -16,8 +16,8 @@ final class Builtins
     public const CAT_CLASSIC = 'classic';
 
     public const CATEGORY_TITLES = [
-        self::CAT_ANIMATED => 'متحرک ✨',
-        self::CAT_CLASSIC => 'کلاسیک',
+        self::CAT_ANIMATED => '✨ اشکال متحرک',
+        self::CAT_CLASSIC => 'اشکال ساده (ثابت)',
     ];
 
     /** @return Template[] */

@@ -17,6 +17,7 @@ final class Settings
         'max_per_pack'      => [60,  'int',  'حداکثر ایموجی در هر ساخت', 1, 200],
         'daily_job_limit'   => [15,  'int',  'حداکثر ساخت روزانه هر کاربر', 1, 1000],
         'text_max'          => [20,  'int',  'حداکثر طول متن', 1, 40],
+        'allow_persian'     => [0,   'bool', 'اجازه متن فارسی روی ایموجی', 0, 1],
         'title_suffix'      => ['',  'str',  'پسوند عنوان پک (مثلا @MyBot)', 0, 30],
         'join_channel'      => ['',  'str',  'کانال جوین اجباری (@username)', 0, 64],
         'maintenance'       => [0,   'bool', 'حالت تعمیر', 0, 1],

@@ -29,7 +29,7 @@ final class BuiltinTemplate extends Template
         parent::__construct($id, $title, $category, $emoji, $effect, 1);
     }
 
-    public function layers(int $S, array $c1, array $c2): array
+    public function layers(int $S, array $c1, array $c2, bool $tint = false): array
     {
         $base = Gfx::canvas($S);
         $overlay = ($this->draw)($base, $S / 512, $c1, $c2);

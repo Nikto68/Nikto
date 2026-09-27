@@ -165,6 +165,26 @@ final class PackService
         return $added;
     }
 
+    /**
+     * HTML with up to $limit of the set's newest emoji as <tg-emoji> entities ('' if unavailable).
+     */
+    public function emojiPreview(string $name, int $newest, int $limit = 10): string
+    {
+        $set = $this->app->tg()->safe('getStickerSet', ['name' => $name]);
+        if (!is_array($set) || empty($set['stickers']) || !is_array($set['stickers'])) {
+            return '';
+        }
+        $stickers = array_slice($set['stickers'], -max(1, $newest));
+        $out = '';
+        foreach (array_slice($stickers, 0, $limit) as $s) {
+            if (!empty($s['custom_emoji_id']) && preg_match('/^\d{1,32}$/', (string) $s['custom_emoji_id'])) {
+                $fallback = htmlspecialchars((string) ($s['emoji'] ?? '⭐'), ENT_QUOTES, 'UTF-8');
+                $out .= '<tg-emoji emoji-id="' . $s['custom_emoji_id'] . '">' . $fallback . '</tg-emoji>';
+            }
+        }
+        return $out;
+    }
+
     public function deleteSet(string $name): void
     {
         try {

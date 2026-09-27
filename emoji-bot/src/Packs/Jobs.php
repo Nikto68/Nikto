@@ -198,7 +198,7 @@ final class Jobs
                 'result' => json_encode($result, JSON_UNESCAPED_UNICODE),
                 'finished_at' => time(),
             ]);
-            $app->tg()->safe('sendMessage', [
+            $message = [
                 'chat_id' => $userId,
                 'text' => Texts::packReady($title, $added, $job['type'] === 'add'),
                 'parse_mode' => 'HTML',
@@ -206,7 +206,14 @@ final class Jobs
                     [['text' => '➕ افزودن به تلگرام', 'url' => PackService::link($name), 'style' => 'success']],
                     [['text' => '🎨 ساخت پک جدید', 'web_app' => ['url' => $app->appUrl()]]],
                 ]],
-            ]);
+            ];
+            // Show the new animated emoji right in the message. Telegram only allows custom emoji
+            // in bot messages in some cases (e.g. the bot owner has Premium), so fall back to plain text.
+            $preview = $app->packs()->emojiPreview($name, $added);
+            $sent = $preview !== '' ? $app->tg()->safe('sendMessage', ['text' => $message['text'] . "\n\n" . $preview] + $message) : null;
+            if ($sent === null) {
+                $app->tg()->safe('sendMessage', $message);
+            }
         } catch (Throwable $e) {
             $app->log('job', 'failed', ['job' => $job['id'], 'err' => $e->getMessage()]);
             $this->fail($job, PackService::friendlyError($e));

@@ -5,6 +5,16 @@
 @font-face { font-family: "LilitaOne"; src: url("fonts/LilitaOne.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Bungee"; src: url("fonts/Bungee.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Pacifico"; src: url("fonts/Pacifico.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Montserrat"; src: url("fonts/Montserrat-Black.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Unbounded"; src: url("fonts/Unbounded-Black.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "LuckiestGuy"; src: url("fonts/LuckiestGuy.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "TitanOne"; src: url("fonts/TitanOne.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Bangers"; src: url("fonts/Bangers.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "RussoOne"; src: url("fonts/RussoOne.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "RubikMonoOne"; src: url("fonts/RubikMonoOne.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "BlackOpsOne"; src: url("fonts/BlackOpsOne.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "PermanentMarker"; src: url("fonts/PermanentMarker.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "PressStart2P"; src: url("fonts/PressStart2P.woff2") format("woff2"); font-display: swap; }
 
 :root {
   --bg: #0d1117;
@@ -96,6 +106,7 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 }
 .text-box:focus-within { border-color: var(--accent); }
 .text-box input {
+  unicode-bidi: plaintext;
   width: 100%; height: 100%; border: 0; outline: 0; background: transparent; text-align: center;
   font-size: 21px; font-weight: 900; letter-spacing: .5px; padding: 0 56px;
 }
@@ -115,6 +126,9 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   border: 1px solid var(--line); border-radius: var(--radius);
 }
 .font-btn { font-family: Georgia, "Times New Roman", serif; font-size: 30px; width: 36px; height: 40px; line-height: 40px; }
+.tint-btn { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; flex: none; color: var(--hint); border: 1.5px dashed var(--line2); }
+.tint-btn svg { width: 20px; height: 20px; }
+.tint-btn.on { color: var(--accent-ink); background: linear-gradient(135deg, var(--c1, #ff2d55), var(--accent)); border: 0; }
 .swatch { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line2); box-shadow: inset 0 0 0 2px rgba(0,0,0,.18); flex: none; }
 .bar-sep { width: 1px; align-self: stretch; background: var(--line2); margin: 0 2px; }
 .slider { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -223,9 +237,10 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border: 0; bo
 .note { font-size: 13px; color: var(--hint); background: var(--card); border: 1px dashed var(--line2); border-radius: 14px; padding: 10px 12px; margin-bottom: 14px; }
 .note.warn { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 40%, transparent); }
 
-.font-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.font-opt { height: 78px; border-radius: 18px; background: var(--card); border: 1.5px solid var(--line); font-size: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
-.font-opt small { font-family: "Vazirmatn"; font-size: 12px; color: var(--hint); }
+.font-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.font-opt { height: 74px; overflow: hidden; border-radius: 18px; background: var(--card); border: 1.5px solid var(--line); font-size: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
+.font-opt span { font-size: 21px; white-space: nowrap; }
+.font-opt small { font-family: "Vazirmatn"; font-size: 11.5px; color: var(--hint); }
 .font-opt.on { border-color: var(--accent); background: var(--accent-soft); }
 
 .palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; }

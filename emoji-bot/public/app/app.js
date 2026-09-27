@@ -113,7 +113,8 @@
     user: null,
     cfg: null,
     text: store.get('text', ''),
-    font: store.get('font', 'vazir'),
+    font: store.get('font', 'montserrat'),
+    tint: store.get('tint', '0') === '1',
     c1: store.get('c1', '#ff2d55'),
     c2: store.get('c2', '#ffffff'),
     size: parseFloat(store.get('size', '1')) || 1,
@@ -134,7 +135,7 @@
   const COMBOS = [['#ff2d55', '#ffffff'], ['#2aabee', '#ffffff'], ['#1c1c1e', '#ffffff'], ['#ffffff', '#1c1c1e'], ['#ffcc00', '#1c1c1e'], ['#34c759', '#fff59d'], ['#af52de', '#ffd1f7'], ['#ff9500', '#fff3e0']];
 
   const placeholderText = () => 'Emoji';
-  const currentParams = () => ({ text: S.text.trim() || placeholderText(), font: S.font, c1: S.c1, c2: S.c2, size: S.size, dy: S.dy });
+  const currentParams = () => ({ text: S.text.trim() || placeholderText(), font: S.font, c1: S.c1, c2: S.c2, size: S.size, dy: S.dy, tint: S.tint });
   const paramsKey = () => JSON.stringify(currentParams());
 
   // ---------- navigation (Telegram BackButton) ----------
@@ -243,6 +244,7 @@
   }
 
   function start() {
+    if (!S.boot.fonts.some((f) => f.id === S.font)) S.font = S.boot.fonts[0].id;
     $('loader').hidden = true;
     $('app').hidden = false;
     renderHeader();
@@ -312,6 +314,14 @@
     sync();
     paintSwatches();
     $('fontBtn').onclick = () => { hap.tap(); openFonts(); };
+    $('tintBtn').onclick = () => {
+      hap.sel();
+      S.tint = !S.tint;
+      store.set('tint', S.tint ? '1' : '0');
+      paintSwatches();
+      toast(S.tint ? '🎨 قالب‌های ترند به رنگ اصلی شما درآمدند' : 'قالب‌ها با رنگ‌های اصلی خودشان');
+      schedule();
+    };
     $('c1Btn').onclick = () => { hap.tap(); openColors(1); };
     $('c2Btn').onclick = () => { hap.tap(); openColors(2); };
     $('targetBtn').onclick = () => { hap.tap(); openTarget(); };
@@ -334,6 +344,8 @@
     $('c1Btn').style.background = S.c1;
     $('c2Btn').style.background = S.c2;
     $('fontBtn').style.fontFamily = (S.boot.fonts.find((f) => f.id === S.font) || {}).family || '';
+    $('tintBtn').classList.toggle('on', S.tint);
+    document.documentElement.style.setProperty('--c1', S.c1);
   }
   function setTextError(msg) {
     S.textError = msg || '';
@@ -344,21 +356,26 @@
   }
   function localTextError() {
     if (/\p{Extended_Pictographic}/u.test(S.text)) return 'ایموجی داخل متن مجاز نیست؛ فقط حروف و اعداد.';
+    if (S.cfg.latin_only && /[^\x20-\x7E]/.test(S.text)) return 'فقط حروف انگلیسی، عدد و علامت‌های ساده (مثلاً: Sina)';
     return '';
   }
 
   // ---------- previews ----------
   let observer = null;
   function markStale() {
+    if (localTextError()) return;
     const key = paramsKey();
     for (const t of S.tiles.values()) {
       if (t.key !== key && t.key !== null) t.el.classList.add('loading');
     }
   }
+  function clearLoading() {
+    for (const t of S.tiles.values()) t.el.classList.remove('loading');
+  }
   function onParamsChange() {
     const localErr = localTextError();
     setTextError(localErr);
-    if (localErr) return;
+    if (localErr) { S.queue.clear(); clearLoading(); return; }
     const key = paramsKey();
     S.queue.clear();
     for (const [id, t] of S.tiles) {
@@ -396,7 +413,7 @@
           if (key === paramsKey()) setTextError('');
         })
         .catch((e) => {
-          if (e.code === 'invalid') setTextError(e.message);
+          if (e.code === 'invalid') { setTextError(e.message); clearLoading(); }
           else if (e.code === 'rate') { ids.forEach((i) => S.queue.add(i)); setTimeout(pump, 3000); }
           else toast(e.message, true);
         })
@@ -524,8 +541,8 @@
   function openFonts() {
     const grid = h('div', { class: 'font-grid' });
     for (const f of S.boot.fonts) {
-      const b = h('button', { class: 'font-opt' + (f.id === S.font ? ' on' : ''), type: 'button', style: { fontFamily: `"${f.family}", Vazirmatn` } },
-        h('span', { text: 'سلام Abc' }), h('small', { text: f.title }));
+      const b = h('button', { class: 'font-opt' + (f.id === S.font ? ' on' : ''), type: 'button', style: { fontFamily: `"${f.family}", Vazirmatn`, fontSize: /PressStart2P|RubikMonoOne/.test(f.family) ? '12px' : '' } },
+        h('span', { text: S.cfg.latin_only ? (S.text.trim() || 'Emoji') : 'سلام Abc' }), h('small', { text: f.title }));
       b.onclick = () => { hap.sel(); S.font = f.id; store.set('font', f.id); paintSwatches(); schedule(); closeSheet(); };
       grid.append(b);
     }

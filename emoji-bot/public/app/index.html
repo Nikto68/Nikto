@@ -8,7 +8,7 @@
   <title>ساخت ایموجی پریمیوم</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preload" href="fonts/Vazirmatn-Medium.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="app.css?v=1">
+  <link rel="stylesheet" href="app.css?v=2">
 </head>
 <body>
   <div id="app" class="app" hidden>
@@ -37,7 +37,7 @@
     <section class="editor">
       <div class="text-row">
         <label class="text-box">
-          <input id="textInput" type="text" enterkeyhint="done" autocomplete="off" spellcheck="false" placeholder="متن ایموجی را بنویسید…">
+          <input id="textInput" type="text" dir="auto" enterkeyhint="done" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="متن انگلیسی… (مثلاً اسمت)">
           <span id="counter" class="counter">0/20</span>
         </label>
         <button id="targetBtn" class="icon-btn big" type="button" aria-label="مقصد پک">
@@ -50,6 +50,9 @@
         <button id="fontBtn" class="font-btn" type="button" aria-label="فونت">T</button>
         <button id="c1Btn" class="swatch" type="button" aria-label="رنگ اول"></button>
         <button id="c2Btn" class="swatch" type="button" aria-label="رنگ دوم"></button>
+        <button id="tintBtn" class="tint-btn" type="button" aria-label="رنگ‌آمیزی قالب‌ها با رنگ اصلی">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/></svg>
+        </button>
         <span class="bar-sep"></span>
         <label class="slider">
           <span class="slider-head"><span>اندازه</span><b id="sizeVal">1.0</b></span>
@@ -84,6 +87,6 @@
   <div id="toast" class="toast" hidden></div>
   <div id="loader" class="boot-loader"><div class="spinner"></div></div>
 
-  <script src="app.js?v=1"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

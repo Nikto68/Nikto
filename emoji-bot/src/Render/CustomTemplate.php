@@ -88,7 +88,7 @@ final class CustomTemplate extends Template
         return $c;
     }
 
-    public function layers(int $S, array $c1, array $c2): array
+    public function layers(int $S, array $c1, array $c2, bool $tint = false): array
     {
         $base = $this->loadRecolored((string) $this->config['file'], $c1, $c2, $S);
         $overlay = !empty($this->config['overlay']) ? $this->loadRecolored((string) $this->config['overlay'], $c1, $c2, $S) : null;

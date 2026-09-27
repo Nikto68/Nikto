@@ -156,6 +156,7 @@ final class Api
             'bot' => ['username' => $app->botUsername(), 'name' => $app->botName()],
             'config' => [
                 'text_max' => $s->int('text_max'),
+                'latin_only' => !$s->get('allow_persian'),
                 'price' => $this->isAdmin() ? 0 : $s->int('price_per_emoji'),
                 'max_per_pack' => $s->int('max_per_pack'),
                 'daily_gift' => $s->int('daily_gift'),
@@ -177,7 +178,12 @@ final class Api
 
     private function params(array $in): Params
     {
-        return Params::fromArray((array) ($in['params'] ?? []), $this->app->fonts(), $this->app->settings()->int('text_max'));
+        return Params::fromArray(
+            (array) ($in['params'] ?? []),
+            $this->app->fonts(),
+            $this->app->settings()->int('text_max'),
+            !$this->app->settings()->get('allow_persian'),
+        );
     }
 
     /** @return array{src: string, frames: int} */

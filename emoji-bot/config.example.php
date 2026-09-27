@@ -15,8 +15,9 @@ return [
     'admin_ids' => [6595849261],
 
     // آدرس HTTPS پوشه public روی هاست، بدون / آخر
-    // مثال: https://example.com/emoji-bot/public
-    'base_url' => 'https://example.com/emoji-bot/public',
+    // اگر پوشه emoji-bot را در ریشه دامنه آپلود کرده‌اید همین درست است؛
+    // اگر ریشه دامنه را روی پوشه public گذاشته‌اید: https://nikto.s14.telviprobot.top
+    'base_url' => 'https://nikto.s14.telviprobot.top/emoji-bot/public',
 
     // یک رشته تصادفی طولانی (حداقل ۳۲ کاراکتر، فقط A-Z a-z 0-9 _ -)
     // برای امنیت وبهوک، لینک setup و لینک cron استفاده می‌شود.

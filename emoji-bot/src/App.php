@@ -83,6 +83,8 @@ final class App
             $this->settings(),
             $this->storage('templates'),
             $this->video()->available(),
+            EMOJIBOT_ROOT . '/assets/art',
+            $this->storage('cache'),
         ));
     }
 

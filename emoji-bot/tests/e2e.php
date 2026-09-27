@@ -213,20 +213,34 @@ check(api($U1, 'boot', [], initData($U1, time() - 90000))['code'] === 401, 'expi
 $tampered = str_replace('User' . $U1, 'Hacker', initData($U1));
 check(api($U1, 'boot', [], $tampered)['code'] === 401, 'tampered initData rejected');
 $boot = api($U1, 'boot')['json'];
-check(($boot['ok'] ?? false) && count($boot['categories']) >= 2 && count($boot['fonts']) === 6, 'boot ok', $boot['error'] ?? null);
+check(($boot['ok'] ?? false) && count($boot['categories']) >= 5 && count($boot['fonts']) === 16, 'boot ok', $boot['error'] ?? null);
+check(($boot['categories'][0]['title'] ?? '') === '🔥 ترند متحرک' && ($boot['categories'][0]['items'][0]['animated'] ?? false) === true, 'trendy animated category first');
+$allItems = array_merge(...array_map(fn ($c) => $c['items'], $boot['categories']));
+$trendy = array_filter($allItems, fn ($i) => preg_match('/^a[lsb]_/', $i['id']));
+check(count($trendy) === 106 && count(array_filter($trendy, fn ($i) => $i['animated'])) === 106, 'all 106 trendy templates are animated', count($trendy));
+check(($boot['config']['latin_only'] ?? false) === true, 'English-only text by default');
 check(($boot['config']['price'] ?? 0) === 2, 'price visible in config');
 
 section('Previews');
-$r = api($U1, 'preview', ['ids' => ['b_shield', 'b_flag_wave', 'nope'], 'params' => ['text' => 'سینا', 'font' => 'lalezar', 'c1' => '#2aabee', 'c2' => '#ffffff', 'size' => 1.1, 'dy' => 0.2]])['json'];
+$r = api($U1, 'preview', ['ids' => ['b_shield', 'b_flag_wave', 'nope'], 'params' => ['text' => 'Numbix', 'font' => 'unbounded', 'c1' => '#2aabee', 'c2' => '#ffffff', 'size' => 1.1, 'dy' => 0.2]])['json'];
 $s = isset($r['items']['b_shield']) ? dataUriPng($r['items']['b_shield']['src']) : null;
 check($s && imagesx($s) === 176, 'static preview 176px');
 $a = isset($r['items']['b_flag_wave']) ? dataUriPng($r['items']['b_flag_wave']['src']) : null;
 check($a && imagesx($a) === 128 * 12 && $r['items']['b_flag_wave']['frames'] === 12, 'animated preview sprite 12 frames');
 check(!isset($r['items']['nope']), 'unknown template ignored');
+$r = api($U1, 'preview', ['ids' => ['as_cat_face', 'ab_rose', 'al_coin'], 'params' => ['text' => 'Sina', 'tint' => true]])['json'];
+check(count($r['items'] ?? []) === 3 && ($r['items']['as_cat_face']['frames'] ?? 0) === 12, 'trendy previews (peek/hover/flip) with tint', array_keys($r['items'] ?? []));
+$r = api($U1, 'preview', ['ids' => ['b_shield'], 'params' => ['text' => 'سینا']])['json'];
+check(($r['code'] ?? '') === 'invalid' && str_contains($r['error'] ?? '', 'انگلیسی'), 'Persian text rejected by default', $r);
 $r = api($U1, 'preview', ['ids' => ['b_shield'], 'params' => ['text' => 'hi 😀']])['json'];
 check(($r['code'] ?? '') === 'invalid', 'emoji in text rejected', $r);
 $r = api($U1, 'preview', ['ids' => ['b_shield'], 'params' => ['text' => str_repeat('a', 30)]])['json'];
 check(($r['code'] ?? '') === 'invalid', 'too long text rejected');
+
+cb($ADMIN, 'adm:set:allow_persian');
+$r = api($U1, 'preview', ['ids' => ['b_shield'], 'params' => ['text' => 'سینا', 'font' => 'lalezar']])['json'];
+check(isset($r['items']['b_shield']), 'Persian allowed after admin enables it');
+cb($ADMIN, 'adm:set:allow_persian');
 
 section('Payments (Telegram Stars)');
 $inv = api($U1, 'invoice', ['pkg' => 0])['json'];
@@ -246,8 +260,8 @@ webhook(['message' => $pay]);
 check(coins($U1) === 55, 'coins credited exactly once', coins($U1));
 
 section('Create pack');
-$params = ['text' => 'سینا جان', 'font' => 'vazir', 'c1' => '#ff2d55', 'c2' => '#ffffff', 'size' => 1, 'dy' => 0];
-$r = api($U1, 'create', ['params' => $params, 'ids' => ['b_shield', 'b_heart_beat', 'b_plain', 'b_rainbow'], 'title' => 'پک من'])['json'];
+$params = ['text' => 'Sina Jan', 'font' => 'montserrat', 'c1' => '#ff2d55', 'c2' => '#ffffff', 'size' => 1, 'dy' => 0];
+$r = api($U1, 'create', ['params' => $params, 'ids' => ['b_shield', 'as_cat_face', 'b_plain', 'al_coin'], 'title' => 'پک من'])['json'];
 check(($r['ok'] ?? false) && $r['cost'] === 8 && $r['coins'] === 47, 'job created, 8 coins charged', $r);
 $busy = api($U1, 'create', ['params' => $params, 'ids' => ['b_shield']])['json'];
 check(in_array($busy['code'] ?? '', ['busy'], true) || ($busy['ok'] ?? false) === false, 'second concurrent job refused', $busy);
@@ -261,7 +275,9 @@ check(str_ends_with($cs['params']['name'] ?? '', '_by_emojitestbot') && ($cs['pa
 check(($cs['params']['title'] ?? '') === 'پک من', 'title kept');
 $sizes = array_column($cs['files'] ?? [], 'size');
 check($sizes && max($sizes) <= 65536, 'every file <= 64KB', $sizes);
-check(str_contains(lastCall('sendMessage')['params']['text'] ?? '', 'آماده شد'), 'user notified by bot');
+check(str_contains(lastCall('sendMessage')['params']['text'] ?? '', 'آماده شد') && !str_contains(lastCall('sendMessage')['params']['text'], 'tg-emoji'), 'user notified (plain fallback after custom emoji refused)');
+$ready = array_values(array_filter(calls('sendMessage'), fn ($c) => str_contains($c['params']['text'] ?? '', 'tg-emoji')));
+check(count($ready) >= 1 && str_contains($ready[0]['params']['text'], 'emoji-id="5368324170671202'), 'tried to show new emoji inline via tg-emoji');
 check(coins($U1) === 47, 'balance after create', coins($U1));
 
 section('Add to pack, list, delete');
