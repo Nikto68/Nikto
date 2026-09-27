@@ -9,6 +9,7 @@ use EmojiBot\Bot\Payments;
 use EmojiBot\Packs\PackService;
 use EmojiBot\Render\Fonts;
 use EmojiBot\Render\Gfx;
+use EmojiBot\Render\LogoStore;
 use EmojiBot\Render\Params;
 use EmojiBot\Render\Renderer;
 use EmojiBot\Render\Template;
@@ -117,6 +118,7 @@ final class Api
             'gift' => $this->gift(),
             'invoice' => $this->invoice($in),
             'check_join' => ['joined' => Membership::isMember($this->app, $this->uid, true)],
+            'logo_upload' => $this->logoUpload(),
             'me' => ['user' => $this->userInfo()],
             default => throw new ApiError('unknown action', 404),
         };
@@ -171,6 +173,7 @@ final class Api
             'packages' => $packages,
             'join' => Membership::isMember($app, $this->uid) ? null : ['url' => Membership::url($app)],
             'ref_link' => 'https://t.me/' . $app->botUsername() . '?start=ref_' . $this->uid,
+            'logos' => $this->logoList(),
             'today' => $app->jobs()->todayCount($this->uid),
             'job' => $active ? (int) $active['id'] : null,
         ];
@@ -178,12 +181,17 @@ final class Api
 
     private function params(array $in): Params
     {
-        return Params::fromArray(
+        $p = Params::fromArray(
             (array) ($in['params'] ?? []),
             $this->app->fonts(),
             $this->app->settings()->int('text_max'),
             !$this->app->settings()->get('allow_persian'),
         );
+        // A user may only use their own uploaded logos.
+        if ($p->logo !== null && (LogoStore::owner($p->logo) !== $this->uid || !$this->app->logos()->exists($p->logo))) {
+            throw new ApiError('لوگو پیدا نشد؛ دوباره آپلود کنید.', 400, 'invalid');
+        }
+        return $p;
     }
 
     /** @return array{src: string, frames: int} */
@@ -280,7 +288,7 @@ final class Api
             $payload['pack_id'] = $packId;
             $type = 'add';
         } else {
-            $payload['title'] = $app->packs()->title((string) ($in['title'] ?? ''), $p->text);
+            $payload['title'] = $app->packs()->title((string) ($in['title'] ?? ''), $p->text !== '' ? $p->text : 'My Emoji');
             $type = 'create';
         }
 
@@ -368,6 +376,42 @@ final class Api
         }
         $this->app->db()->exec('UPDATE packs SET deleted = 1, updated_at = ? WHERE id = ?', [time(), $pack['id']]);
         return ['packs' => $this->packsList()];
+    }
+
+    /** @return array<array{ref: string, src: string}> the user's recent logos with small thumbnails */
+    private function logoList(): array
+    {
+        $out = [];
+        foreach ($this->app->logos()->recent($this->uid) as $ref) {
+            try {
+                $im = $this->app->logos()->load($ref);
+                $s = 96 / max(imagesx($im), imagesy($im));
+                $thumb = Gfx::resize($im, max(1, (int) round(imagesx($im) * $s)), max(1, (int) round(imagesy($im) * $s)));
+                $out[] = ['ref' => $ref, 'src' => 'data:image/png;base64,' . base64_encode(Gfx::png($thumb, 6))];
+            } catch (Throwable) {
+            }
+        }
+        return $out;
+    }
+
+    private function logoUpload(): array
+    {
+        if (!$this->app->limiter()->hit('logo:' . $this->uid, 10, 60)) {
+            throw new ApiError('کمی صبر کنید.', 429, 'rate');
+        }
+        $f = $_FILES['image'] ?? null;
+        if (!$f || !is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) {
+            throw new ApiError('آپلود لوگو ناموفق بود.', 400, 'invalid');
+        }
+        if ((int) $f['size'] > 5 * 1024 * 1024) {
+            throw new ApiError('حداکثر حجم لوگو ۵ مگابایت است.', 400, 'invalid');
+        }
+        try {
+            $ref = $this->app->logos()->save($this->uid, $f['tmp_name']);
+        } catch (\RuntimeException $e) {
+            throw new ApiError($e->getMessage(), 400, 'invalid');
+        }
+        return ['logo' => $ref, 'logos' => $this->logoList()];
     }
 
     private function gift(): array

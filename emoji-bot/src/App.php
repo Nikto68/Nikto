@@ -6,6 +6,7 @@ namespace EmojiBot;
 use EmojiBot\Packs\Jobs;
 use EmojiBot\Packs\PackService;
 use EmojiBot\Render\Fonts;
+use EmojiBot\Render\LogoStore;
 use EmojiBot\Render\Renderer;
 use EmojiBot\Render\TemplateRegistry;
 use EmojiBot\Render\VideoEncoder;
@@ -95,7 +96,12 @@ final class App
 
     public function renderer(): Renderer
     {
-        return $this->service('renderer', fn () => new Renderer($this->fonts(), $this->storage('cache')));
+        return $this->service('renderer', fn () => new Renderer($this->fonts(), $this->storage('cache'), $this->logos()));
+    }
+
+    public function logos(): LogoStore
+    {
+        return $this->service('logos', fn () => new LogoStore($this->storage('logos')));
     }
 
     public function packs(): PackService

@@ -10,6 +10,9 @@ use InvalidArgumentException;
  */
 final class Params
 {
+    /** original colors | solid main color | solid second color | two-tone (dark->c1, light->c2) */
+    public const LOGO_MODES = ['original', 'c1', 'c2', 'duo'];
+
     public readonly array $rgb1;
     public readonly array $rgb2;
 
@@ -21,6 +24,8 @@ final class Params
         public readonly float $size,
         public readonly float $dy,
         public readonly bool $tint = false,
+        public readonly ?string $logo = null,
+        public readonly string $logoMode = 'original',
     ) {
         $this->rgb1 = Gfx::rgb($c1);
         $this->rgb2 = Gfx::rgb($c2);
@@ -38,11 +43,13 @@ final class Params
         if (!$fonts->exists($font)) {
             $font = Fonts::DEFAULT;
         }
-        $text = self::normalizeText((string) ($a['text'] ?? ''));
-        if ($text === '') {
+        $logo = is_string($a['logo'] ?? null) && LogoStore::validRef($a['logo']) ? $a['logo'] : null;
+        $logoMode = in_array($a['logo_mode'] ?? '', self::LOGO_MODES, true) ? $a['logo_mode'] : 'original';
+        $text = $logo !== null ? '' : self::normalizeText((string) ($a['text'] ?? ''));
+        if ($text === '' && $logo === null) {
             throw new InvalidArgumentException('متن را وارد کنید.');
         }
-        if (mb_strlen($text) > $maxLen) {
+        if ($text !== '' && mb_strlen($text) > $maxLen) {
             throw new InvalidArgumentException("متن حداکثر $maxLen کاراکتر می‌تواند باشد.");
         }
         if ($latinOnly && preg_match('/[^\x20-\x7E]/', $text)) {
@@ -64,6 +71,8 @@ final class Params
             round(max(0.5, min(1.6, (float) ($a['size'] ?? 1.0))), 2),
             round(max(-1.0, min(1.0, (float) ($a['dy'] ?? 0.0))), 2),
             filter_var($a['tint'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            $logo,
+            $logoMode,
         );
     }
 
@@ -89,7 +98,11 @@ final class Params
 
     public function toArray(): array
     {
-        return ['text' => $this->text, 'font' => $this->font, 'c1' => $this->c1, 'c2' => $this->c2, 'size' => $this->size, 'dy' => $this->dy, 'tint' => $this->tint];
+        return [
+            'text' => $this->text, 'font' => $this->font, 'c1' => $this->c1, 'c2' => $this->c2,
+            'size' => $this->size, 'dy' => $this->dy, 'tint' => $this->tint,
+            'logo' => $this->logo, 'logo_mode' => $this->logoMode,
+        ];
     }
 
     public function key(): string

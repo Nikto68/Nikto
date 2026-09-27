@@ -29,6 +29,7 @@ abstract class Template
         'spin_base' => 'چرخش پس‌زمینه',
         'peek' => 'سرک کشیدن از پشت تابلو',
         'hover' => 'معلق بالای روبان',
+        'grow' => 'رشد نمودار',
     ];
 
     public function __construct(
@@ -48,6 +49,15 @@ abstract class Template
      *         and is what moves in the peek/hover effects
      */
     abstract public function layers(int $S, array $c1, array $c2, bool $tint = false): array;
+
+    /**
+     * How much taller than the text box a logo may be (logos are usually square, text is wide).
+     * Templates whose text sits on a board/banner keep logos inside it.
+     */
+    public function logoHeightFactor(): float
+    {
+        return 1.9;
+    }
 
     /** True if the template looks different when the user's "tint" switch is on. */
     public function tintable(): bool

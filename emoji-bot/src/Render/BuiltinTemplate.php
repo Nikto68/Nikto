@@ -12,7 +12,8 @@ use GdImage;
 final class BuiltinTemplate extends Template
 {
     /**
-     * @param Closure(GdImage, float, array, array): ?GdImage $draw draws the base, may return an overlay layer
+     * @param Closure(GdImage, float, array, array): (GdImage|array|null) $draw draws the base; may return an overlay
+     *        layer, or ['overlay' => ?GdImage, 'back' => ?GdImage] (back = moving layer behind the base)
      * @param array $box512 [cx, cy, w, h, angle] on the 512 grid
      * @param Closure(array, array): TextStyle $style
      */
@@ -32,8 +33,11 @@ final class BuiltinTemplate extends Template
     public function layers(int $S, array $c1, array $c2, bool $tint = false): array
     {
         $base = Gfx::canvas($S);
-        $overlay = ($this->draw)($base, $S / 512, $c1, $c2);
-        return ['base' => $base, 'overlay' => $overlay];
+        $res = ($this->draw)($base, $S / 512, $c1, $c2);
+        if (is_array($res)) {
+            return ['base' => $base, 'overlay' => $res['overlay'] ?? null, 'back' => $res['back'] ?? null];
+        }
+        return ['base' => $base, 'overlay' => $res];
     }
 
     public function box(): array

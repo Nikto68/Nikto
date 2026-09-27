@@ -48,6 +48,15 @@ final class ArtTemplate extends Template
         return true;
     }
 
+    public function logoHeightFactor(): float
+    {
+        return match ($this->layout) {
+            self::SIGN => 1.15,
+            self::BANNER => 1.2,
+            default => 1.9,
+        };
+    }
+
     public function layers(int $S, array $c1, array $c2, bool $tint = false): array
     {
         $art = $this->art($tint ? $c1 : null);

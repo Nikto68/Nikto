@@ -19,8 +19,14 @@ final class Renderer
     /** @var array<string, array> */
     private array $layerCache = [];
 
-    public function __construct(private readonly Fonts $fonts, private readonly string $cacheDir)
-    {
+    /** @var array<string, GdImage> recolored logos */
+    private array $logoCache = [];
+
+    public function __construct(
+        private readonly Fonts $fonts,
+        private readonly string $cacheDir,
+        private readonly ?LogoStore $logos = null,
+    ) {
         $this->text = new TextRenderer($fonts);
     }
 
@@ -93,8 +99,24 @@ final class Renderer
         $layers = $this->layerCache[$key];
         $ts = $t->textStyle($p->rgb1, $p->rgb2);
         [$bx, $by, $bw, $bh, $angle] = $t->box();
-        $layout = $this->text->layout($p->text, $p->font, $bw * $S, $bh * $S, $ts, $p->size);
+        $logo = null;
+        $logoW = $logoH = 0.0;
+        $layout = null;
+        if ($p->logo !== null) {
+            $logo = $this->logoImage($p);
+            // Logos are usually square: let them use more height than a line of text would.
+            $lw = $bw * $S;
+            $lh = max($bh * $S, min($bw * $S, $bh * $S * $t->logoHeightFactor()));
+            $scale = min($lw / imagesx($logo), $lh / imagesy($logo)) * $p->size;
+            $logoW = imagesx($logo) * $scale;
+            $logoH = imagesy($logo) * $scale;
+        } else {
+            $layout = $this->text->layout($p->text, $p->font, $bw * $S, $bh * $S, $ts, $p->size);
+        }
         return [
+            'logo' => $logo,
+            'logoW' => $logoW,
+            'logoH' => $logoH,
             'S' => $S,
             'base' => $layers['base'],
             'overlay' => $layers['overlay'],
@@ -109,16 +131,70 @@ final class Renderer
         ];
     }
 
+    /** Loads the user's logo recolored according to the logo mode. */
+    private function logoImage(Params $p): GdImage
+    {
+        if ($this->logos === null) {
+            throw new \RuntimeException('logo store not configured');
+        }
+        $key = $p->logo . '|' . $p->logoMode . '|' . $p->c1 . $p->c2;
+        if (!isset($this->logoCache[$key])) {
+            $src = $this->logos->load((string) $p->logo);
+            $this->logoCache[$key] = match ($p->logoMode) {
+                'c1' => LogoStore::silhouette($src, $p->rgb1),
+                'c2' => LogoStore::silhouette($src, $p->rgb2),
+                'duo' => CustomTemplate::recolor($src, 'duotone', $p->rgb1, $p->rgb2),
+                default => $src,
+            };
+        }
+        return $this->logoCache[$key];
+    }
+
+    /** Draws the user's content (text or logo) centered on ($cx, $cy). */
+    private function drawContent(GdImage $im, array $P, float $cx, float $cy, TextStyle $ts, ?array $fill = null, string $part = 'all'): void
+    {
+        if ($P['logo'] === null) {
+            $this->text->draw($im, $P['layout'], $cx, $cy, $ts, $fill, $part);
+            return;
+        }
+        $w = max(1, (int) round($P['logoW']));
+        $h = max(1, (int) round($P['logoH']));
+        $logo = Gfx::resize($P['logo'], $w, $h);
+        $x = (int) round($cx - $w / 2);
+        $y = (int) round($cy - $h / 2);
+        $unit = min($w, $h);
+        if ($part !== 'fill') {
+            if ($ts->shadow !== null) {
+                $off = max(1, (int) round($unit * 0.04));
+                $sh = LogoStore::silhouette($logo, $ts->shadow);
+                Gfx::fade($sh, 0.45);
+                imagecopy($im, $sh, $x + (int) round($off * 0.4), $y + $off, 0, 0, $w, $h);
+            }
+            $stroke = $ts->stroke !== null ? $ts->strokeRatio * 0.4 * $unit : 0.0;
+            if ($stroke >= 0.5) {
+                $sil = LogoStore::silhouette($logo, $ts->stroke);
+                $steps = $stroke > 6 ? 24 : 16;
+                for ($i = 0; $i < $steps; $i++) {
+                    $a = 2 * M_PI * $i / $steps;
+                    imagecopy($im, $sil, (int) round($x + $stroke * cos($a)), (int) round($y + $stroke * sin($a)), 0, 0, $w, $h);
+                }
+            }
+        }
+        if ($part !== 'stroke') {
+            imagecopy($im, $fill !== null ? LogoStore::silhouette($logo, $fill) : $logo, $x, $y, 0, 0, $w, $h);
+        }
+    }
+
     private function textLayer(array $P, ?array $fill = null, string $part = 'all'): GdImage
     {
         $S = $P['S'];
         if (abs($P['angle']) < 0.01) {
             $l = Gfx::canvas($S);
-            $this->text->draw($l, $P['layout'], $P['cx'], $P['cy'], $P['ts'], $fill, $part);
+            $this->drawContent($l, $P, $P['cx'], $P['cy'], $P['ts'], $fill, $part);
             return $l;
         }
         $tmp = Gfx::canvas($S);
-        $this->text->draw($tmp, $P['layout'], $S / 2, $S / 2, $P['ts'], $fill, $part);
+        $this->drawContent($tmp, $P, $S / 2, $S / 2, $P['ts'], $fill, $part);
         $rot = Gfx::rotate($tmp, -$P['angle']); // imagerotate is counter-clockwise; our angle is clockwise
         $l = Gfx::canvas($S);
         imagecopy($l, $rot, (int) round($P['cx'] - $S / 2), (int) round($P['cy'] - $S / 2), 0, 0, $S, $S);
@@ -152,7 +228,7 @@ final class Renderer
             case 'glow':
                 $glowStyle = new TextStyle($P['rgb1'], $P['rgb1'], 0.16, null, $P['ts']->maxLines);
                 $g = Gfx::canvas($P['S']);
-                $this->text->draw($g, $P['layout'], $P['cx'], $P['cy'], $glowStyle);
+                $this->drawContent($g, $P, $P['cx'], $P['cy'], $glowStyle, $P['rgb1']);
                 $fx['glow'] = Gfx::blur($g, 8);
                 $fx['text'] = $this->textLayer($P);
                 break;
@@ -162,6 +238,7 @@ final class Renderer
                 break;
             case 'peek':
             case 'hover':
+            case 'grow':
                 // The artwork ("back") moves; the sign/banner with the text stays still.
                 $fx['front'] = $this->flatten($P, $this->textLayer($P), null, true, false);
                 $fx['flat'] = $this->flatten($P, $this->textLayer($P));
@@ -219,6 +296,23 @@ final class Renderer
             case 'float':
                 Gfx::placeScaled($dst, $fx['flat'], 0.92, 0.92, 0, -0.04 * $out * sin(2 * M_PI * $t));
                 return $dst;
+
+            case 'grow':
+                // Bars grow from the bottom, hold, then drop back (seamless loop); the coin bobs.
+                $g = match (true) {
+                    $t < 0.35 => 0.15 + 0.85 * self::smooth($t / 0.35),
+                    $t < 0.85 => 1.0,
+                    default => 1.0 - 0.85 * self::smooth(($t - 0.85) / 0.15),
+                };
+                if (!$P['back']) {
+                    Gfx::placeScaled($dst, $fx['flat'], 0.94, 0.94 * $g, 0, $out * 0.94 * (1 - $g) / 2);
+                    return $dst;
+                }
+                $im = Gfx::canvas($S);
+                $h = max(1, (int) round($S * $g));
+                imagecopyresampled($im, $P['back'], 0, $S - $h, 0, 0, $S, $h, $S, $S);
+                imagecopy($im, $fx['front'], 0, (int) round(-0.03 * $S * sin(2 * M_PI * $t)), 0, 0, $S, $S);
+                return Gfx::resize($im, $out);
 
             case 'peek':
             case 'hover':

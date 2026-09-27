@@ -115,6 +115,9 @@
     text: store.get('text', ''),
     font: store.get('font', 'montserrat'),
     tint: store.get('tint', '0') === '1',
+    mode: store.get('mode', 'text') === 'logo' ? 'logo' : 'text',
+    logo: store.get('logo', ''),
+    logoMode: store.get('logoMode', 'original'),
     c1: store.get('c1', '#ff2d55'),
     c2: store.get('c2', '#ffffff'),
     size: parseFloat(store.get('size', '1')) || 1,
@@ -135,7 +138,12 @@
   const COMBOS = [['#ff2d55', '#ffffff'], ['#2aabee', '#ffffff'], ['#1c1c1e', '#ffffff'], ['#ffffff', '#1c1c1e'], ['#ffcc00', '#1c1c1e'], ['#34c759', '#fff59d'], ['#af52de', '#ffd1f7'], ['#ff9500', '#fff3e0']];
 
   const placeholderText = () => 'Emoji';
-  const currentParams = () => ({ text: S.text.trim() || placeholderText(), font: S.font, c1: S.c1, c2: S.c2, size: S.size, dy: S.dy, tint: S.tint });
+  const currentParams = () => {
+    const base = { font: S.font, c1: S.c1, c2: S.c2, size: S.size, dy: S.dy, tint: S.tint };
+    if (S.mode === 'logo') return S.logo ? { ...base, logo: S.logo, logo_mode: S.logoMode } : { ...base, text: 'LOGO' };
+    return { ...base, text: S.text.trim() || placeholderText() };
+  };
+  const hasContent = () => (S.mode === 'logo' ? !!S.logo : S.text.trim() !== '');
   const paramsKey = () => JSON.stringify(currentParams());
 
   // ---------- navigation (Telegram BackButton) ----------
@@ -314,6 +322,12 @@
     sync();
     paintSwatches();
     $('fontBtn').onclick = () => { hap.tap(); openFonts(); };
+    for (const b of $('modeTabs').querySelectorAll('button')) {
+      b.onclick = () => { hap.sel(); setMode(b.dataset.mode); };
+    }
+    $('logoInput').addEventListener('change', uploadLogo);
+    if (!(S.boot.logos || []).some((l) => l.ref === S.logo)) S.logo = '';
+    setMode(S.mode, true);
     $('tintBtn').onclick = () => {
       hap.sel();
       S.tint = !S.tint;
@@ -328,6 +342,60 @@
     $('createBtn').onclick = () => { hap.tap(); openCreate(); };
     renderTarget();
   }
+  // ---------- logo mode ----------
+  const LOGO_MODES = [['original', 'رنگ اصلی'], ['c1', 'رنگ ۱'], ['c2', 'رنگ ۲'], ['duo', 'دو رنگ']];
+  function setMode(mode, initial = false) {
+    S.mode = mode === 'logo' ? 'logo' : 'text';
+    store.set('mode', S.mode);
+    for (const b of $('modeTabs').querySelectorAll('button')) b.classList.toggle('on', b.dataset.mode === S.mode);
+    const logo = S.mode === 'logo';
+    $('textBox').hidden = logo;
+    $('logoRow').hidden = !logo;
+    $('logoModes').hidden = !logo;
+    if (logo) setTextError('');
+    renderLogos();
+    refreshSel();
+    if (!initial) schedule();
+  }
+  function renderLogos() {
+    const list = $('logoList');
+    const items = (S.boot.logos || []).map((l) => {
+      const b = h('button', { type: 'button', class: l.ref === S.logo ? 'on' : '', 'aria-label': 'لوگو' });
+      b.style.backgroundImage = `url("${l.src}")`;
+      b.onclick = () => { hap.sel(); S.logo = l.ref; store.set('logo', S.logo); renderLogos(); refreshSel(); schedule(); };
+      return b;
+    });
+    fill(list, items);
+    const cur = (S.boot.logos || []).find((l) => l.ref === S.logo);
+    const thumb = $('logoThumb');
+    thumb.style.backgroundImage = cur ? `url("${cur.src}")` : '';
+    thumb.textContent = cur ? '' : '+';
+    const modes = LOGO_MODES.map(([id, label]) => {
+      const dot = id === 'original' ? null : h('i', { style: { background: id === 'c1' ? S.c1 : id === 'c2' ? S.c2 : `linear-gradient(90deg, ${S.c1} 50%, ${S.c2} 50%)` } });
+      return h('button', { type: 'button', class: S.logoMode === id ? 'on' : '', onclick: () => { hap.sel(); S.logoMode = id; store.set('logoMode', id); renderLogos(); schedule(); } }, dot, label);
+    });
+    fill($('logoModes'), modes);
+  }
+  async function uploadLogo() {
+    const input = $('logoInput');
+    const f = input.files && input.files[0];
+    input.value = '';
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { toast('حداکثر حجم لوگو ۵ مگابایت است', true); return; }
+    toast('در حال آپلود لوگو…');
+    try {
+      const r = await apiForm('logo_upload', { image: f });
+      S.boot.logos = r.logos;
+      S.logo = r.logo;
+      store.set('logo', S.logo);
+      hap.ok();
+      toast('✅ لوگو آماده است — پس‌زمینه ساده خودکار حذف شد');
+      renderLogos();
+      refreshSel();
+      schedule();
+    } catch (e) { toast(e.message, true); }
+  }
+
   function schedule() {
     clearTimeout(paramsTimer);
     paramsTimer = setTimeout(() => onParamsChange(false), 380);
@@ -345,6 +413,7 @@
     $('c2Btn').style.background = S.c2;
     $('fontBtn').style.fontFamily = (S.boot.fonts.find((f) => f.id === S.font) || {}).family || '';
     $('tintBtn').classList.toggle('on', S.tint);
+    if (S.mode === 'logo') renderLogos();
     document.documentElement.style.setProperty('--c1', S.c1);
   }
   function setTextError(msg) {
@@ -355,6 +424,7 @@
     refreshSel();
   }
   function localTextError() {
+    if (S.mode === 'logo') return '';
     if (/\p{Extended_Pictographic}/u.test(S.text)) return 'ایموجی داخل متن مجاز نیست؛ فقط حروف و اعداد.';
     if (S.cfg.latin_only && /[^\x20-\x7E]/.test(S.text)) return 'فقط حروف انگلیسی، عدد و علامت‌های ساده (مثلاً: Sina)';
     return '';
@@ -506,10 +576,10 @@
     }
     const n = S.selected.size;
     const btn = $('createBtn');
-    const hasText = S.text.trim() !== '';
+    const hasText = hasContent();
     btn.disabled = !hasText || n === 0 || !!S.textError;
     btn.replaceChildren();
-    if (!hasText) btn.textContent = 'اول متن را بنویسید';
+    if (!hasText) btn.textContent = S.mode === 'logo' ? 'اول لوگو را آپلود کنید' : 'اول متن را بنویسید';
     else if (!n) btn.textContent = 'قالب‌ها را انتخاب کنید';
     else {
       btn.append((S.target ? 'افزودن به پک' : 'ساخت پک') + ` (${fa(n)})`);
@@ -592,10 +662,11 @@
   // ---------- create ----------
   function openCreate() {
     const n = S.selected.size;
-    if (!n || !S.text.trim()) return;
+    if (!n || !hasContent()) return;
     const cost = n * S.cfg.price;
     const pack = S.boot.packs.find((p) => p.id === S.target);
-    const title = h('input', { class: 'input', maxlength: '48', value: S.text.trim(), placeholder: 'نام پک' });
+    const title = h('input', { class: 'input', maxlength: '48', value: S.mode === 'logo' ? (store.get('packTitle', '') || 'My Emoji') : S.text.trim(), placeholder: 'نام پک' });
+    title.addEventListener('input', () => store.set('packTitle', title.value));
     const enough = S.user.coins >= cost;
     const go = h('button', { class: 'main-btn', type: 'button', text: enough ? (pack ? 'افزودن ایموجی‌ها' : 'ساخت پک') : 'خرید سکه' });
     go.onclick = async () => {

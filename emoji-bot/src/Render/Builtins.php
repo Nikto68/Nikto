@@ -46,6 +46,8 @@ final class Builtins
         $add('b_warn_blink', 'هشدار چشمک‌زن', $A, '⚠️', 'blink', self::warning(...), [256, 330, 230, 110]);
         $add('b_bubble_shake', 'حباب لرزان', $A, '💬', 'shake', self::bubble(...), [256, 222, 360, 230]);
         $add('b_seal_spin', 'مهر چرخان', $A, '🏵', 'spin_base', self::seal(...), [256, 256, 290, 170]);
+        $add('b_chart_grow', 'نمودار صعودی', $A, '📈', 'grow', self::chart(true), [104, 236, 118, 118]);
+        $add('b_chart_fall', 'نمودار نزولی', $A, '📉', 'grow', self::chart(false), [408, 236, 118, 118]);
 
         // ---- Classic (static) ---------------------------------------------
         $add('b_shield', 'سپر', $C, '🛡', 'none', self::shield(...), [256, 222, 280, 150]);
@@ -73,6 +75,8 @@ final class Builtins
         $add('b_ticket', 'بلیت', $C, '🎟', 'none', self::ticket(...), [206, 256, 300, 190]);
         $add('b_medal', 'مدال', $C, '🏅', 'none', self::medal(...), [256, 318, 240, 150]);
         $add('b_plain', 'فقط متن', $C, '🔤', 'none', self::none(...), [256, 256, 470, 470], self::textPlain(...));
+        $add('b_chart_up', 'نمودار صعودی', $C, '📈', 'none', self::chart(true), [104, 236, 118, 118]);
+        $add('b_chart_down', 'نمودار نزولی', $C, '📉', 'none', self::chart(false), [408, 236, 118, 118]);
 
         return $T;
     }
@@ -436,6 +440,46 @@ final class Builtins
             'gloss' => [210, 230, 200, 130],
         ]);
         return null;
+    }
+
+    /**
+     * Crypto-style bar chart (green up / red down) with a coin that carries the text or logo.
+     * The bars are a separate "back" layer so the grow effect can animate them.
+     */
+    private static function chart(bool $up): Closure
+    {
+        return static function (GdImage $im, float $k, array $c1, array $c2) use ($up): array {
+            $S = imagesx($im);
+            $color = $up ? [34, 197, 94] : [239, 68, 68];
+            $tops = $up ? [352, 226, 70] : [70, 226, 352];
+            $bars = Gfx::canvas($S);
+            $shapes = [];
+            foreach ([[40, 160], [196, 316], [352, 472]] as $i => [$x1, $x2]) {
+                $top = $tops[$i];
+                $shapes[] = static fn (GdImage $b, int $c, float $ox = 0, float $oy = 0) => Gfx::roundedRect($b, $x1 * $k, $top * $k, $x2 * $k, 486 * $k, 14 * $k, $c, $ox, $oy);
+            }
+            Gfx::outline($bars, self::union(...$shapes), Gfx::col($bars, Gfx::shade($color, -0.6)), 10 * $k);
+            $fill = Gfx::canvas($S);
+            foreach ($shapes as $i => $s) {
+                $s($fill, Gfx::col($fill, $color));
+                $x1 = [40, 196, 352][$i];
+                Gfx::roundedRect($fill, ($x1 + 14) * $k, ($tops[$i] + 14) * $k, ($x1 + 34) * $k, 470 * $k, 8 * $k, Gfx::col($fill, Gfx::shade($color, 0.45)));
+            }
+            Gfx::shadeV($fill, 60 * $k, 486 * $k, 150, 110);
+            imagecopy($bars, $fill, 0, 0, 0, 0, $S, $S);
+
+            // Coin above the shortest bar.
+            $cx = $up ? 100 : 412;
+            self::sticker($im, $k, self::disc($cx, 236, 86, $k), $c1, $c2, [
+                'outline' => 10,
+                'outlineColor' => Gfx::shade($c1, -0.55),
+                'y0' => 150,
+                'y1' => 322,
+                'decorate' => fn (GdImage $l) => self::ring($l, $cx, 236, 74, 6, Gfx::shade($c1, 0.35), $c1, $k),
+                'gloss' => [$cx - 20, 200, 90, 60],
+            ]);
+            return ['back' => $bars];
+        };
     }
 
     private static function neon(GdImage $im, float $k, array $c1, array $c2): ?GdImage

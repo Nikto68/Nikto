@@ -8,7 +8,7 @@
   <title>ساخت ایموجی پریمیوم</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preload" href="fonts/Vazirmatn-Medium.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="app.css?v=2">
+  <link rel="stylesheet" href="app.css?v=3">
 </head>
 <body>
   <div id="app" class="app" hidden>
@@ -35,8 +35,20 @@
     </header>
 
     <section class="editor">
+      <div class="mode-tabs" id="modeTabs">
+        <button type="button" data-mode="text">Aa &nbsp;متن</button>
+        <button type="button" data-mode="logo">🖼 &nbsp;لوگو</button>
+      </div>
       <div class="text-row">
-        <label class="text-box">
+        <div id="logoRow" class="logo-row" hidden>
+          <label class="logo-upload">
+            <span id="logoThumb" class="logo-thumb"></span>
+            <span class="logo-upload-text">آپلود لوگو</span>
+            <input id="logoInput" type="file" accept="image/png,image/jpeg,image/webp">
+          </label>
+          <div id="logoList" class="logo-list"></div>
+        </div>
+        <label class="text-box" id="textBox">
           <input id="textInput" type="text" dir="auto" enterkeyhint="done" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="متن انگلیسی… (مثلاً اسمت)">
           <span id="counter" class="counter">0/20</span>
         </label>
@@ -45,6 +57,7 @@
         </button>
       </div>
       <div id="textError" class="text-error" hidden></div>
+      <div id="logoModes" class="logo-modes" hidden></div>
       <div id="targetInfo" class="target-info" hidden></div>
       <div class="style-bar">
         <button id="fontBtn" class="font-btn" type="button" aria-label="فونت">T</button>
@@ -87,6 +100,6 @@
   <div id="toast" class="toast" hidden></div>
   <div id="loader" class="boot-loader"><div class="spinner"></div></div>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
