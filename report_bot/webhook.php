@@ -77,6 +77,7 @@ function reportDispatchMessage(array $msg): void {
     $text = $msg['text'] ?? '';
 
     if ($chat['type'] !== 'private') {
+        if (isset($msg['migrate_to_chat_id'])) { reportChatMigrated((int)$chat['id'], (int)$msg['migrate_to_chat_id']); return; }
         if (strncmp($text, '/setreporttopic', 15) === 0) { handleSetReportTopicCommand($msg); return; }
         if (strncmp($text, '/setsupporttopic', 16) === 0) { handleSetSupportTopicCommand($msg); return; }
         if (isset($msg['from']) && reportIsAdmin($msg['from']['id'])) {
@@ -114,12 +115,27 @@ function reportDispatchMessage(array $msg): void {
     handleStartCommand($msg);
 }
 
+function reportFinishResponse(): void {
+    if (function_exists('ignore_user_abort')) ignore_user_abort(true);
+    if (function_exists('set_time_limit')) set_time_limit(120);
+    http_response_code(200);
+    header('Content-Type: text/plain');
+    header('Content-Length: 2');
+    header('Connection: close');
+    echo 'ok';
+    if (function_exists('fastcgi_finish_request')) { fastcgi_finish_request(); return; }
+    if (function_exists('litespeed_finish_request')) { litespeed_finish_request(); return; }
+    while (ob_get_level() > 0) ob_end_flush();
+    flush();
+}
+
 if (!reportWebhookSecretOk()) {
     http_response_code(403);
     exit('forbidden');
 }
 
 $raw = file_get_contents('php://input');
+reportFinishResponse();
 $update = json_decode($raw, true);
 
 if (is_array($update)) {
@@ -129,6 +145,3 @@ if (is_array($update)) {
         reportLog('Exception: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
     }
 }
-
-http_response_code(200);
-echo 'ok';

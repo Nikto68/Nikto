@@ -131,12 +131,11 @@ function finalizeReportSubmission(array $msg, int $uid, int $anchorChat, ?int $a
     }
 
     submissionUpdate($subId, [
-        'group_chat_id' => (int)$groupId,
+        'group_chat_id' => (int)settingGet('report_group_id', $groupId),
         'group_message_id' => (int)$res['result']['message_id'],
     ]);
 
-    $t = botText('report_submitted');
-    $anchor = screenRender($anchorChat, $anchorMsg, $anchorPhoto, $t['text'], $t['entities'], kbStart(reportIsAdmin($uid)));
+    $anchor = renderWithStartPhoto($anchorChat, $anchorMsg, $anchorPhoto, botText('report_submitted'), kbStart(reportIsAdmin($uid)));
 
     submissionUpdate($subId, [
         'notify_chat_id' => $anchor['chat_id'],
@@ -174,9 +173,19 @@ function handleTagPick(array $cq, int $subId, int $tagId): void {
 }
 
 function notifySubmitter(array $sub, array $textPart): void {
-    $chatId = (int)$sub['src_chat_id'];
-    $kb = kbStart(reportIsAdmin((int)$sub['user_id']));
-    tgSendMessage($chatId, $textPart['text'], $textPart['entities'], ['reply_markup' => $kb]);
+    tgSendMessage((int)$sub['src_chat_id'], $textPart['text'], $textPart['entities'], ['reply_markup' => kbReportOnly()]);
+}
+
+function renderWithStartPhoto(int $chatId, ?int $messageId, bool $hasPhoto, array $t, array $keyboard): array {
+    $photo = settingGet('start_photo_file_id');
+    if ($photo && !$hasPhoto) {
+        $res = tgSendPhoto($chatId, $photo, $t['text'], $t['entities'], ['reply_markup' => $keyboard]);
+        if (!empty($res['ok'])) {
+            if ($messageId) tgDeleteMessage($chatId, $messageId);
+            return ['chat_id' => $chatId, 'message_id' => (int)$res['result']['message_id'], 'has_photo' => true];
+        }
+    }
+    return screenRender($chatId, $messageId, $hasPhoto, $t['text'], $t['entities'], $keyboard, $photo);
 }
 
 function handleDecision(array $cq, string $action, int $subId): void {

@@ -1,13 +1,12 @@
 <?php
 
-function tgCall(string $method, array $params = []) {
-    $params = array_filter($params, fn($v) => $v !== null);
-    $url = 'https://api.telegram.org/bot' . REPORT_BOT_TOKEN . '/' . $method;
-
-    $ch = curl_init($url);
+function tgHttp(string $method, array $params): array {
+    $base = getenv('REPORT_API_BASE') ?: 'https://api.telegram.org';
+    $ch = curl_init($base . '/bot' . REPORT_BOT_TOKEN . '/' . $method);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT => 25,
         CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
         CURLOPT_POSTFIELDS => json_encode($params, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
@@ -16,18 +15,37 @@ function tgCall(string $method, array $params = []) {
     $err = curl_error($ch);
     curl_close($ch);
 
-    if ($resp === false) {
-        reportLog("tgCall($method) curl error: $err");
-        return ['ok' => false, 'description' => $err];
-    }
+    if ($resp === false) return ['ok' => false, 'description' => "curl: $err"];
     $data = json_decode($resp, true);
-    if (!is_array($data)) {
-        reportLog("tgCall($method) bad response: $resp");
-        return ['ok' => false, 'description' => 'invalid json response'];
+    return is_array($data) ? $data : ['ok' => false, 'description' => 'invalid json response'];
+}
+
+function reportChatMigrated(int $oldId, int $newId): void {
+    foreach (['report_group_id', 'support_group_id'] as $k) {
+        if ((int)settingGet($k, 0) === $oldId) settingSet($k, $newId);
     }
-    if (empty($data['ok'])) {
-        reportLog("tgCall($method) failed: " . ($data['description'] ?? json_encode($data)));
+}
+
+function tgCall(string $method, array $params = []) {
+    $params = array_filter($params, fn($v) => $v !== null);
+
+    for ($attempt = 0; ; $attempt++) {
+        $data = tgHttp($method, $params);
+        if (!empty($data['ok']) || $attempt >= 2) break;
+
+        $migrateTo = $data['parameters']['migrate_to_chat_id'] ?? null;
+        $retryAfter = (int)($data['parameters']['retry_after'] ?? 0);
+        if ($migrateTo && isset($params['chat_id'])) {
+            reportChatMigrated((int)$params['chat_id'], (int)$migrateTo);
+            $params['chat_id'] = (int)$migrateTo;
+        } elseif ($retryAfter > 0 && $retryAfter <= 30) {
+            sleep($retryAfter);
+        } else {
+            break;
+        }
     }
+
+    if (empty($data['ok'])) reportLog("tgCall($method) failed: " . ($data['description'] ?? json_encode($data)));
     return $data;
 }
 

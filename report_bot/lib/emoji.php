@@ -30,17 +30,30 @@ function buttonLabelGet(string $slot): ?string {
     return settingGet("btnlabel:$slot");
 }
 
-function buttonLabelSet(string $slot, string $label): void {
+function buttonIconGet(string $slot): ?string {
+    return settingGet("btnicon:$slot");
+}
+
+function buttonLabelSet(string $slot, string $label, ?string $icon = null): void {
     settingSet("btnlabel:$slot", $label);
+    if ($icon) settingSet("btnicon:$slot", $icon);
+    else settingDel("btnicon:$slot");
 }
 
 function buttonLabelClear(string $slot): void {
     settingDel("btnlabel:$slot");
+    settingDel("btnicon:$slot");
 }
 
 function emojiBtn(string $slot, string $defaultLabel, string $callbackData, ?string $defaultStyle = null): array {
-    $label = buttonLabelGet($slot) ?? $defaultLabel;
-    $btn = ['text' => trim((REPORT_EMOJI_DEFAULTS[$slot] ?? '') . ' ' . $label), 'callback_data' => $callbackData];
+    $custom = buttonLabelGet($slot);
+    if ($custom !== null) {
+        $btn = ['text' => $custom, 'callback_data' => $callbackData];
+        $icon = buttonIconGet($slot);
+        if ($icon) $btn['icon_custom_emoji_id'] = $icon;
+    } else {
+        $btn = ['text' => trim((REPORT_EMOJI_DEFAULTS[$slot] ?? '') . ' ' . $defaultLabel), 'callback_data' => $callbackData];
+    }
     $style = styleGet($slot);
     if ($style === null) $style = $defaultStyle;
     if ($style) $btn['style'] = $style;

@@ -15,6 +15,10 @@ function kbStart(bool $isAdmin): array {
     return ['inline_keyboard' => $rows];
 }
 
+function kbReportOnly(): array {
+    return ['inline_keyboard' => [[emojiBtn('btn_report', 'ارسال گزارش', 'rep:new', 'primary')]]];
+}
+
 function kbBack(): array {
     return ['inline_keyboard' => [[emojiBtn('btn_back', 'بازگشت', 'nav:back')]]];
 }

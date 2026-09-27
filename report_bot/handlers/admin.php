@@ -309,7 +309,10 @@ function kbButtonLabelsList(): array {
     $rows = [];
     foreach (BUTTON_LABEL_SLOTS as $slot) {
         $cur = buttonLabelGet($slot) ?? BUTTON_LABEL_DEFAULTS[$slot];
-        $rows[] = [['text' => emojiSlotLabel($slot) . ' — ' . $cur, 'callback_data' => 'noop']];
+        $info = ['text' => emojiSlotLabel($slot) . ' — ' . $cur, 'callback_data' => 'noop'];
+        $icon = buttonIconGet($slot);
+        if ($icon) $info['icon_custom_emoji_id'] = $icon;
+        $rows[] = [$info];
         $rows[] = [
             ['text' => '✏️ تغییر', 'callback_data' => 'btled:' . $slot],
             ['text' => '↩️ پیش‌فرض', 'callback_data' => 'btlclr:' . $slot],
@@ -345,12 +348,23 @@ function handleAdminButtonLabelMessage(array $msg, string $slot, array $st = [])
 
     if (!in_array($slot, BUTTON_LABEL_SLOTS, true)) { stateClear($uid); return; }
 
-    $text = trim($msg['text'] ?? '');
+    $text = $msg['text'] ?? '';
+    $icon = null;
+    foreach (($msg['entities'] ?? []) as $e) {
+        if (($e['type'] ?? '') !== 'custom_emoji') continue;
+        $icon = (string)$e['custom_emoji_id'];
+        $u = mb_convert_encoding($text, 'UTF-16LE', 'UTF-8');
+        $from = (int)$e['offset'] * 2;
+        $to = ((int)$e['offset'] + (int)$e['length']) * 2;
+        $text = mb_convert_encoding(substr($u, 0, $from) . substr($u, $to), 'UTF-8', 'UTF-16LE');
+        break;
+    }
+    $text = trim(preg_replace('/\s+/u', ' ', $text));
     if ($text === '') {
         screenRender($anchorChat, $anchorMsg, $anchorPhoto, '⚠️ متن خالی است.', [], kbBack());
         return;
     }
-    buttonLabelSet($slot, $text);
+    buttonLabelSet($slot, $text, $icon);
     stateClear($uid);
     screenRender($anchorChat, $anchorMsg, $anchorPhoto, '✅ ذخیره شد.', [], kbButtonLabelsList());
 }

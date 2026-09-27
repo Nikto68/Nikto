@@ -41,8 +41,9 @@ function handleSupportMessage(array $msg, array $st = []): void {
         return;
     }
 
-    supportThreadCreate((int)$groupId, (int)$res['result']['message_id'], $uid);
-    if (!empty($hdr['ok'])) supportThreadCreate((int)$groupId, (int)$hdr['result']['message_id'], $uid);
+    $groupId = (int)settingGet('support_group_id', $groupId);
+    supportThreadCreate($groupId, (int)$res['result']['message_id'], $uid);
+    if (!empty($hdr['ok'])) supportThreadCreate($groupId, (int)$hdr['result']['message_id'], $uid);
 
     $t = botText('support_sent');
     tgSendMessage($chatId, $t['text'], $t['entities'], ['reply_markup' => kbStart(reportIsAdmin($uid))]);
