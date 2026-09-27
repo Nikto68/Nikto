@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>ساخت ایموجی پریمیوم</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preload" href="fonts/Vazirmatn-Medium.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="app.css?v=1">
+</head>
+<body>
+  <div id="app" class="app" hidden>
+    <header class="topbar">
+      <button id="coinsBtn" class="pill coins" type="button" aria-label="سکه‌ها">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M15.5 9.3A6 6 0 1 1 9.3 15.5"/><path d="M8 7.5h1.5v4"/></svg>
+        <span id="coins">0</span>
+        <span class="pill-sep"></span>
+        <span class="pill-plus">+</span>
+      </button>
+      <div class="topbar-actions">
+        <button id="giftBtn" class="icon-btn" type="button" aria-label="هدیه">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>
+          <i id="giftDot" class="dot" hidden></i>
+        </button>
+        <button id="packsBtn" class="icon-btn" type="button" aria-label="پک‌های من">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 21v-6h4v6"/></svg>
+        </button>
+        <button id="adminBtn" class="icon-btn" type="button" aria-label="مدیریت" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+        <div id="avatar" class="avatar" aria-hidden="true"></div>
+      </div>
+    </header>
+
+    <section class="editor">
+      <div class="text-row">
+        <label class="text-box">
+          <input id="textInput" type="text" enterkeyhint="done" autocomplete="off" spellcheck="false" placeholder="متن ایموجی را بنویسید…">
+          <span id="counter" class="counter">0/20</span>
+        </label>
+        <button id="targetBtn" class="icon-btn big" type="button" aria-label="مقصد پک">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+        </button>
+      </div>
+      <div id="textError" class="text-error" hidden></div>
+      <div id="targetInfo" class="target-info" hidden></div>
+      <div class="style-bar">
+        <button id="fontBtn" class="font-btn" type="button" aria-label="فونت">T</button>
+        <button id="c1Btn" class="swatch" type="button" aria-label="رنگ اول"></button>
+        <button id="c2Btn" class="swatch" type="button" aria-label="رنگ دوم"></button>
+        <span class="bar-sep"></span>
+        <label class="slider">
+          <span class="slider-head"><span>اندازه</span><b id="sizeVal">1.0</b></span>
+          <input id="sizeInput" type="range" min="0.5" max="1.6" step="0.05" value="1">
+        </label>
+        <label class="slider">
+          <span class="slider-head"><span>ارتفاع</span><b id="dyVal">0</b></span>
+          <input id="dyInput" type="range" min="-1" max="1" step="0.05" value="0">
+        </label>
+      </div>
+    </section>
+
+    <main id="cats" class="cats"></main>
+
+    <div class="bottom-bar">
+      <button id="createBtn" class="main-btn" type="button" disabled>انتخاب قالب</button>
+    </div>
+  </div>
+
+  <div id="adminView" class="admin-view" hidden></div>
+
+  <div id="gate" class="gate" hidden></div>
+
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div>
+      <div id="sheetBody" class="sheet-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <div id="loader" class="boot-loader"><div class="spinner"></div></div>
+
+  <script src="app.js?v=1"></script>
+</body>
+</html>
