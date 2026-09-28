@@ -3,7 +3,7 @@
 function svTplIg() {
     return <<<'HTML'
 <!doctype html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" style="--sd:__SPL__s">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -427,9 +427,7 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .spl.out{opacity:0;visibility:hidden}
 .sbar{position:absolute;top:calc(var(--top) + 14px);left:16px;right:16px;display:flex;gap:4px}
 .sbar i{position:relative;flex:1;height:3px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden;overflow:clip}
-.sbar i:after{content:"";position:absolute;inset:0;border-radius:3px;background:#fff;transform-origin:right center;transform:scaleX(0);animation:sbf .85s linear forwards}
-.sbar i:nth-child(2):after{animation-delay:.85s}
-.sbar i:nth-child(3):after{animation-delay:1.7s}
+.sbar i:after{content:"";position:absolute;inset:0;border-radius:3px;background:#fff;transform-origin:right center;transform:scaleX(var(--f,0));transition:transform .16s linear}
 @keyframes sbf{to{transform:scaleX(1)}}
 .spl .spc{display:flex;flex-direction:column;align-items:center;animation:spIn .8s cubic-bezier(.2,.85,.25,1) both;
   transition:transform .5s cubic-bezier(.5,0,.75,0),opacity .3s ease}
@@ -458,14 +456,23 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .spl h1{margin-top:22px;font-size:23px;font-weight:900;letter-spacing:-.3px;background:linear-gradient(90deg,#FEDA75,#FA7E1E 25%,#FF5FA2 55%,#C084FC 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent}
 .spl p{margin-top:4px;color:var(--dim);font-size:12px;max-width:280px;text-align:center}
-.spl .ld{position:absolute;left:0;right:0;bottom:calc(56px + var(--safe));text-align:center;transition:opacity .3s,transform .4s}
+.spl .ld{position:absolute;left:0;right:0;bottom:calc(40px + var(--safe));width:min(290px,82vw);margin:0 auto;text-align:center;transition:opacity .3s,transform .4s}
 .spl.out .ld{opacity:0;transform:translate3d(0,12px,0)}
-.dts{display:flex;justify-content:center;gap:7px}
-.dts i{width:9px;height:9px;border-radius:50%;background:#FF5FA2;box-shadow:0 0 10px rgba(255,95,162,.8);animation:dj 1s ease-in-out infinite}
+.spl .pc{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:11px}
+.spl .pc span{font-size:11px;font-weight:800;color:#FFE4F1;text-align:right}
+.spl .pc b{font-size:24px;font-weight:900;line-height:1;min-width:62px;text-align:left;background:linear-gradient(90deg,#FEDA75,#FF5FA2 55%,#C084FC);-webkit-background-clip:text;background-clip:text;color:transparent}
+.spl .br{position:relative;height:6px;border-radius:6px;overflow:hidden;overflow:clip;background:rgba(255,255,255,.12)}
+.spl .br i{position:absolute;inset:0;border-radius:6px;background:linear-gradient(270deg,#FEDA75,#FA7E1E 25%,#D62976 55%,#962FBF 80%,#4F5BD5);
+  transform-origin:right center;transform:scaleX(0);transition:transform .16s linear;will-change:transform;box-shadow:0 0 14px rgba(255,95,162,.8)}
+.dts{display:flex;justify-content:center;gap:7px;margin-top:13px}
+.dts i{width:8px;height:8px;border-radius:50%;background:#FF5FA2;box-shadow:0 0 10px rgba(255,95,162,.8);animation:dj 1s ease-in-out infinite}
 .dts i:nth-child(2){animation-delay:.15s;background:#C084FC;box-shadow:0 0 10px rgba(192,132,252,.8)}
 .dts i:nth-child(3){animation-delay:.3s;background:#FEDA75;box-shadow:0 0 10px rgba(254,218,117,.8)}
-@keyframes dj{0%,100%{transform:translate3d(0,0,0);opacity:.5}50%{transform:translate3d(0,-8px,0);opacity:1}}
-.spl .ld small{display:block;margin-top:12px;color:var(--dim);font-size:10.5px;font-weight:700}
+@keyframes dj{0%,100%{transform:translate3d(0,0,0);opacity:.5}50%{transform:translate3d(0,-6px,0);opacity:1}}
+.spl .stg{display:flex;justify-content:center;gap:6px;margin-top:12px}
+.spl .stg i{width:22px;height:4px;border-radius:4px;background:rgba(255,255,255,.14);transition:background .3s,box-shadow .3s,width .3s}
+.spl .stg i.on{width:30px;background:#FF5FA2;box-shadow:0 0 8px rgba(255,95,162,.85)}
+.spl .ld small{display:block;margin-top:10px;min-height:18px;color:var(--dim);font-size:10.5px;font-weight:700;transition:opacity .18s}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -509,7 +516,7 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 <div class="mesh" aria-hidden="true"><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><s class="sp"></s><s class="sp"></s><s class="sp"></s><s class="sp"></s><s class="sp"></s></div>
 
 <div class="spl" id="spl">
-  <div class="sbar"><i></i><i></i><i></i></div>
+  <div class="sbar" id="spSb"><i></i><i></i><i></i></div>
   <div class="spc">
     <div class="lgw"><i class="gl"></i>
       <div class="rw"><svg viewBox="0 0 120 120"><defs><linearGradient id="spg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".3" stop-color="#FA7E1E"/><stop offset=".6" stop-color="#D62976"/><stop offset=".85" stop-color="#962FBF"/><stop offset="1" stop-color="#4F5BD5"/></linearGradient></defs>
@@ -520,7 +527,9 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
     <h1>__TITLE__</h1>
     <p>__TAG__</p>
   </div>
-  <div class="ld"><div class="dts"><i></i><i></i><i></i></div><small id="spMsg">در حال اتصالِ امن…</small></div>
+  <div class="ld"><div class="pc"><span id="spMsg">در حال اتصالِ امن…</span><b id="spPct">۰٪</b></div>
+    <div class="br"><i id="spBar"></i></div><div class="stg" id="spStg"><i></i><i></i><i></i><i></i><i></i></div>
+    <small id="spTip"></small><div class="dts"><i></i><i></i><i></i></div></div>
 </div>
 
 <div class="app">
@@ -651,18 +660,37 @@ function openApp(url){
   location.href = url + h;
 }
 
-var SPL = { t0: Date.now(), gone: false, min: 1300 };
-try { var LO = Number(localStorage.getItem('sv_open_' + B.app)) || 0; if (SPL.t0 - LO >= 0 && SPL.t0 - LO < 1800000) SPL.min = 600;
-      localStorage.setItem('sv_open_' + B.app, String(SPL.t0)); } catch(e){}
+var SPL = { t0: (function(){ try { var o = performance.timeOrigin || performance.timing.navigationStart; if (o > 0 && Date.now() - o < 15000) return o; } catch(e){} return Date.now(); })(),
+            gone: false, min: Math.max(0, Math.min(20, Number(B.spl) || 0)) * 1000 };
+var SPM = ['در حال اتصالِ امن…', 'دریافتِ سرویس‌های اینستاگرام…', 'به‌روزرسانیِ قیمت‌ها…', 'بررسیِ کیف پول…', 'چیدنِ استوری‌ها…', 'آماده‌ست ✨'];
+var SPT = ['🔓 پیج باید عمومی (Public) باشد', '🔐 رمزِ اینستاگرام هرگز لازم نیست', '🛡 سرویس‌های ضمانت‌دار ریزش را جبران می‌کنند', '📊 پیشرفتِ سفارش را زنده در «سفارش‌ها» ببینید'];
+function splStep(){
+  if (SPL.gone) return false;
+  var el = Date.now() - SPL.t0, p = SPL.min ? Math.min(1, el / SPL.min) : 1;
+  var pc = $('spPct'), bar = $('spBar'), sb = $('spSb'), m = $('spMsg'), g = $('spStg'), t = $('spTip');
+  if (pc) pc.textContent = faD(Math.floor(p * 100)) + '٪';
+  if (bar) bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+  if (sb) [].forEach.call(sb.children, function(x, k){ var n = sb.children.length; x.style.setProperty('--f', Math.max(0, Math.min(1, p * n - k)).toFixed(4)); });
+  var mi = Math.min(SPM.length - 1, Math.floor(p * (SPM.length - 1) + (p >= 1 ? 1 : 0)));
+  if (m && SPL.mi !== mi) { SPL.mi = mi; m.textContent = SPM[mi]; }
+  if (g) [].forEach.call(g.children, function(x, k){ x.classList.toggle('on', p * g.children.length >= k + 1 - 0.001); });
+  var ti = Math.floor(el / 2600) % SPT.length;
+  if (t && SPL.ti !== ti) { SPL.ti = ti; t.style.opacity = 0; setTimeout(function(){ t.textContent = SPT[ti]; t.style.opacity = 1; }, 170); }
+  return true;
+}
+splStep();
+SPL.iv = setInterval(function(){ if (!splStep()) clearInterval(SPL.iv); }, 100);
 function hideSplash(now){
-  if (SPL.gone) return; SPL.gone = true;
+  if (SPL.gone || (SPL.hiding && !now)) return;
+  SPL.hiding = true;
   var wait = now ? 0 : Math.max(0, SPL.min - (Date.now() - SPL.t0));
-  setTimeout(function(){ var sp = $('spl'); if (!sp) return; sp.classList.add('out');
+  setTimeout(function(){
+    if (SPL.gone) return;
+    splStep(); SPL.gone = true; clearInterval(SPL.iv);
+    var sp = $('spl'); if (!sp) return; sp.classList.add('out');
     setTimeout(function(){ if (sp.parentNode) sp.parentNode.removeChild(sp); }, 700); }, wait);
 }
-setTimeout(function(){ hideSplash(false); }, 3000);
-[[900, 'دریافتِ سرویس‌ها…'], [1800, 'آماده‌ست ✨']].forEach(function(m){
-  setTimeout(function(){ var e = $('spMsg'); if (e && !SPL.gone) e.textContent = m[1]; }, m[0]); });
+setTimeout(function(){ hideSplash(false); }, Math.max(3000, SPL.min + 2500 - (Date.now() - SPL.t0)));
 var API = (function(){ try { if (/^https?:$/.test(location.protocol)) return location.origin + location.pathname + '?mapi=1'; } catch(e){} return ''; })();
 var READS = { me: 1, sv_orders: 1, sv_order: 1 };
 var GATED = false;

@@ -537,6 +537,42 @@ function pxTonUsd($fresh = false) { return pxPair('TON/USDT', $fresh); }
 
 function pxUsdtIrt($fresh = false) { return pxPair('USDT/IRT', $fresh); }
 
+// قیمتِ تتر به تومان برای فروشِ شماره و خدمات: اول والکس (همان بخشِ قیمت‌ها)، اگر نیامد نوبیتکس،
+// و اگر هیچ‌کدام نشد آخرین قیمتِ درستی که گرفته شده بود (تا ۳ روز).
+function pxUsdtToman() {
+    $r = (float)pxUsdtIrt();
+    if ($r > 0) {
+        if (!is_numeric(maCacheGet('px_usdt_last', 600))) maCachePut('px_usdt_last', $r);
+        return $r;
+    }
+    $fb = maCacheGet('px_usdt_fb', 600);
+    if (is_numeric($fb) && (float)$fb > 0) return (float)$fb;
+    if (!(function_exists('maNoNet') && maNoNet()) && !maCacheGet('px_usdt_fb_cool', 120)) {
+        $r = pxUsdtNobitex();
+        if ($r > 0) { maCachePut('px_usdt_fb', $r); maCachePut('px_usdt_last', $r); return $r; }
+        maCachePut('px_usdt_fb_cool', 1);
+    }
+    $last = maCacheGet('px_usdt_last', 3 * 86400);
+    return is_numeric($last) ? (float)$last : 0.0;
+}
+
+function pxUsdtNobitex() {
+    $url = defined('PX_NOBITEX_URL') ? PX_NOBITEX_URL : 'https://api.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls';
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 7, CURLOPT_CONNECTTIMEOUT => 5,
+                            CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; NumbixBot/1.0)', CURLOPT_HTTPHEADER => ['Accept: application/json']]);
+    $res = curl_exec($ch);
+    curl_close($ch);
+    $j = is_string($res) ? json_decode($res, true) : null;
+    $st = is_array($j['stats']['usdt-rls'] ?? null) ? $j['stats']['usdt-rls'] : null;
+    if (!$st) return 0.0;
+    foreach (['latest', 'bestSell', 'bestBuy'] as $k) {
+        $n = pxToNum($st[$k] ?? null);
+        if ($n !== null && $n > 10000) return round($n / 10);
+    }
+    return 0.0;
+}
+
 function pxRawToman($sym, $fresh = false) {
     $sym = strtoupper(trim((string)$sym));
     if ($sym === '') return 0.0;

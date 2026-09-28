@@ -596,6 +596,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         go($u === '' ? 'آدرسِ مینی‌اپ خالی شد و از آدرسِ وبهوک حدس زده می‌شود.' : 'آدرسِ مینی‌اپ ذخیره شد.');
     }
 
+    if ($a === 'ma_splash') {
+        $v = max(0, min(20, (int)maNum($_POST['splash'] ?? 8)));
+        maSetRoot(function (&$m) use ($v) { $m['splash'] = $v; });
+        go('صفحه‌ی لودینگِ هر سه مینی‌اپ ' . ($v > 0 ? fmtNum($v) . ' ثانیه' : 'خاموش (فقط تا آماده شدن)') . ' شد.');
+    }
+
     if ($a === 'api_num') {
         if (!function_exists('numSet')) go('بخشِ شماره مجازی در دسترس نیست.', 'err');
         $p = $_POST;
@@ -785,6 +791,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c['fx']      = max(0.0, $fx);
             $c['markup']  = max(0.0, min(1000.0, maNum($p['sv_markup'] ?? 0)));
             $c['timeout'] = max(5, min(60, (int)($p['sv_timeout'] ?? 20)));
+            $c['auto_on'] = !empty($p['sv_auto_on']) ? 1 : 0;
             foreach (array_keys(svApps()) as $app) {
                 $c['apps'][$app]['on'] = !empty($p['sv_on_' . $app]) ? 1 : 0;
                 $t  = mb_substr(trim((string)($p['sv_title_' . $app] ?? '')), 0, 40);
@@ -1250,6 +1257,15 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;accent-color:var(-
   border-radius:var(--r-sm);padding:11px 13px;color:var(--text-2);font-size:12.5px;line-height:1.85;margin-bottom:12px}
 .note.warn{border-inline-start-color:var(--warning)}
 .note.ok{border-inline-start-color:var(--success)}
+.cfm{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(3,6,14,.8);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.cfm.on{display:flex}
+.cfm-b{width:100%;max-width:420px;background:linear-gradient(var(--surface-2),var(--surface-2)),#0C1322;border:1px solid var(--border-soft);border-radius:16px;padding:20px 18px 16px;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,.8);text-align:center;animation:cfmIn .18s ease-out}
+.cfm-i{font-size:28px;line-height:1;margin-bottom:10px}
+.cfm-b p{margin:0 0 16px;color:var(--text);font-size:14px;line-height:1.9}
+.cfm-r{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.cfm-r .btn{min-width:130px}
+@keyframes cfmIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
 
 .crumb{color:var(--text-3);font-size:12.5px;margin-bottom:13px}
 .crumb b{color:var(--text)} .crumb span{margin:0 6px;opacity:.5}
@@ -1545,7 +1561,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
         <td class="muted num"><?= h((string)($o['created_at'] ?? '—')) ?></td>
         <td>
           <?php if ($ast === 'waiting' || $ast === 'buying'): ?>
-          <form method="post" onsubmit="return confirm('این شماره لغو و مبلغ به کیف پولِ کاربر برگردانده شود؟')">
+          <form method="post" data-confirm="این شماره لغو و مبلغ به کیف پولِ کاربر برگردانده شود؟">
             <?= fk('num_cancel', []) ?><input type="hidden" name="id" value="<?= h((string)$o['id']) ?>">
             <button class="btn r sm">لغو و برگشتِ وجه</button>
           </form>
@@ -1600,7 +1616,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       <br>درصدِ سود و «قیمت از فروشنده» در <a href="?tab=apis">API و اتصال‌ها ← ☎️ شماره مجازی</a> است.
     </div>
     <?php if (numReady()): ?>
-    <form method="post" onsubmit="return confirm('فهرست از فروشنده گرفته و کاتالوگ به‌روز شود؟')">
+    <form method="post" data-confirm="فهرست از فروشنده گرفته و کاتالوگ به‌روز شود؟">
       <?= fk('num_import', []) ?><button class="btn g">📥 وارد کردن و به‌روزرسانی</button>
     </form>
     <?php else: ?>
@@ -1614,7 +1630,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       <div class="note warn">«قیمت از فروشنده» روشن است؛ با ورودِ بعدی قیمت‌ها دوباره از فروشنده ساخته می‌شوند.
         برای سودِ ماندگار، درصدِ سود را در <a href="?tab=apis">API و اتصال‌ها</a> عوض کنید.</div>
     <?php endif; ?>
-    <form method="post" class="row fe" onsubmit="return confirm('قیمت‌ها عوض شوند؟')">
+    <form method="post" class="row fe" data-confirm="قیمت‌ها عوض شوند؟">
       <?= fk('num_bulk', []) ?>
       <div style="flex:2;min-width:190px"><label>کدام شماره‌ها</label><select name="cid">
         <option value="">همه‌ی کشورها</option>
@@ -1743,11 +1759,11 @@ tr.grp td{background:var(--surface-2);font-weight:800}
         <td>
           <?php if (($o['status'] ?? '') === Order::REVIEW): ?>
           <div class="row">
-            <form method="post" onsubmit="return confirm('این شارژ تایید و مبلغ به کیف پول اضافه شود؟')">
+            <form method="post" data-confirm="این شارژ تایید و مبلغ به کیف پول اضافه شود؟">
               <?= fk('approve_order', []) ?><input type="hidden" name="id" value="<?= h((string)$oid) ?>">
               <button class="btn g sm">تایید</button>
             </form>
-            <form method="post" onsubmit="return confirm('این شارژ رد شود؟')">
+            <form method="post" data-confirm="این شارژ رد شود؟">
               <?= fk('reject_order', []) ?><input type="hidden" name="id" value="<?= h((string)$oid) ?>">
               <button class="btn r sm">رد</button>
             </form>
@@ -1798,7 +1814,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       </div></div>
     </div>
     <hr>
-    <form method="post" onsubmit="return confirm('<?= !empty($uD['banned']) ? 'این کاربر آزاد شود؟' : 'این کاربر مسدود شود؟ دیگر نمی‌تواند از ربات استفاده کند.' ?>')">
+    <form method="post" data-confirm="<?= !empty($uD['banned']) ? 'این کاربر آزاد شود؟' : 'این کاربر مسدود شود؟ دیگر نمی‌تواند از ربات استفاده کند.' ?>">
       <?= fk('ban_user', []) ?><input type="hidden" name="user_id" value="<?= h($uid) ?>">
       <button class="btn <?= !empty($uD['banned']) ? 'g' : 'r' ?> sm"><?= !empty($uD['banned']) ? 'آزاد کردن' : 'مسدود کردن' ?></button>
     </form>
@@ -1810,7 +1826,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       <div class="stat ok"><div class="n amount"><?= h(fmtNum($uTopup)) ?></div><div class="l">مجموعِ شارژ</div></div>
       <div class="stat"><div class="n amount"><?= h(fmtNum($uSpent)) ?></div><div class="l">مجموعِ خریدِ شماره</div></div>
     </div>
-    <form method="post" class="row fe" onsubmit="return confirm('موجودیِ این کاربر عوض شود؟')">
+    <form method="post" class="row fe" data-confirm="موجودیِ این کاربر عوض شود؟">
       <?= fk('set_balance', []) ?><input type="hidden" name="user_id" value="<?= h($uid) ?>">
       <div style="flex:1;min-width:170px"><label>موجودیِ تازه (تومان)</label>
         <input name="balance" value="<?= h(fmtNum($uD['balance'] ?? 0)) ?>" inputmode="numeric" style="direction:ltr"></div>
@@ -2064,6 +2080,13 @@ tr.grp td{background:var(--surface-2);font-weight:800}
                placeholder="https://example.com/bot_master_membership.php" style="direction:ltr"></div>
       <button class="btn g">ذخیره</button>
     </form>
+    <form method="post" class="row fe" style="margin-top:12px">
+      <?= fk('ma_splash') ?>
+      <div style="flex:1;min-width:220px"><label>⏳ صفحه‌ی لودینگِ هر سه مینی‌اپ (ثانیه)</label>
+        <input name="splash" type="number" min="0" max="20" value="<?= (int)maSplashSec() ?>" style="direction:ltr">
+        <div class="hint">شماره مجازی، خدمات تلگرام و خدمات اینستاگرام — با درصد و مرحله‌ها. ۰ = فقط تا وقتی صفحه آماده شود.</div></div>
+      <button class="btn g">ذخیره</button>
+    </form>
   </div></div>
 
   <div class="card" id="api-num"><h2>☎️ ۲. فروشنده‌ی شماره مجازی <?= !empty($NUM['api']['on'])
@@ -2144,6 +2167,9 @@ tr.grp td{background:var(--surface-2);font-weight:800}
         <small class="muted">(آخرین تست: <?= h(date('Y-m-d H:i', (int)$SV['pbal_at'])) ?>)</small></div>
     <?php endif; ?>
     <?php if ($svNote !== ''): ?><div class="note warn" style="margin-top:10px">💱 <?= h($svNote) ?></div><?php endif; ?>
+    <?php if (svFx() <= 0): ?><div class="note warn" style="margin-top:10px">⚠️ <b>قیمتِ دلار معلوم نیست</b> — تا وقتی نیاید، قیمتِ فروشِ همه‌ی
+      سرویس‌ها صفر است و <b>هیچ محصولی در مینی‌اپ نشان داده نمی‌شود</b>. در کادرِ «هر دلار چند تومان؟» پایین نرخ را بنویسید و ذخیره کنید
+      (قیمتِ لحظه‌ای هر وقت برسد خودش جایگزین می‌شود).</div><?php endif; ?>
     <form method="post" style="margin-top:12px">
       <?= fk('sv_api') ?>
       <div class="grid2">
@@ -2155,7 +2181,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
             <button type="button" class="btn ghost sm" onclick="toggleSecret(this)">نمایش</button></div></div>
         <div><label>قیمت‌های پنل به چه واحدی است؟</label><select name="sv_cur" id="svCur" onchange="svCurShow()">
           <?php foreach (svCurrencies() as $ck => $cl): ?>
-            <option value="<?= h($ck) ?>" <?= (string)$SV['cur'] === $ck ? 'selected' : '' ?>><?= h($cl) ?></option>
+            <option value="<?= h($ck) ?>" <?= svCurEff() === $ck ? 'selected' : '' ?>><?= h($cl) ?></option>
           <?php endforeach; ?></select>
           <div class="hint"><?= $svJap ? 'JAP دلاری است — «دلار با قیمتِ لحظه‌ایِ تتر» بهترین انتخاب است.' : 'در صفحه‌ی سرویس‌های پنل ببینید قیمت‌ها با $ است یا تومان.' ?>
             اگر پنل موقعِ تست بگوید دلاری است، خودکار درست حساب می‌شود.</div></div>
@@ -2167,6 +2193,9 @@ tr.grp td{background:var(--surface-2);font-weight:800}
           <div class="hint">روی همه‌ی سرویس‌ها می‌نشیند، مگر سرویسی که قیمتش را دستی نوشته‌اید.</div></div>
         <div><label>مهلتِ هر تماس با پنل (ثانیه)</label>
           <input name="sv_timeout" type="number" min="5" max="60" value="<?= (int)$SV['timeout'] ?>"></div>
+        <div><label class="chk" style="margin-top:24px"><input type="checkbox" name="sv_auto_on" value="1" <?= !empty($SV['auto_on']) ? 'checked' : '' ?>>
+          سرویس‌های تازه‌ی تلگرام و اینستاگرام خودکار روشن شوند</label>
+          <div class="hint">با «دریافتِ سرویس‌ها» مستقیم در مینی‌اپ‌ها دیده می‌شوند؛ هرکدام را نخواستید خاموش کنید.</div></div>
       </div>
       <hr>
       <div class="grid2">
@@ -2186,7 +2215,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       </div>
     </form>
     <form method="post" id="svTest" hidden><?= fk('sv_test') ?></form>
-    <form method="post" id="svImp" hidden onsubmit="return confirm('فهرستِ سرویس‌ها از پنل گرفته شود؟ سرویس‌هایی که قبلا تنظیم کرده‌اید دست نمی‌خورند.')"><?= fk('sv_import') ?></form>
+    <form method="post" id="svImp" hidden data-confirm="فهرستِ سرویس‌ها از پنل گرفته شود؟ سرویس‌هایی که قبلا تنظیم کرده‌اید دست نمی‌خورند."><?= fk('sv_import') ?></form>
   </div></div>
   <script>
   function numProvShow(){ var v = document.getElementById('numProv').value;
@@ -2223,6 +2252,15 @@ tr.grp td{background:var(--surface-2);font-weight:800}
     <div class="stat"><div class="n"><?= h(fmtNum($mk)) ?>٪</div><div class="l">📈 سود روی قیمتِ پنل</div></div>
     <div class="stat<?= $fx > 0 ? '' : ' warn' ?>"><div class="n sm"><?= $fx > 0 ? h(fmtNum($fx)) : '—' ?></div><div class="l">💱 هر واحدِ پنل به تومان</div></div>
   </div>
+  <div class="card"><h2>🔎 وضعیتِ نمایش در مینی‌اپ‌ها</h2><div class="body"><div class="grid2">
+    <?php foreach (svApps() as $dA => $dI): $dg = svDiag($dA); ?>
+      <div class="note <?= $dg['shown'] > 0 ? 'ok' : 'warn' ?>" style="margin:0">
+        <b><?= h($dI['emoji'] . ' ' . $dI['name']) ?>:</b> <?= $dg['shown'] > 0 ? '✅ <b>' . h(fmtNum($dg['shown'])) . '</b> محصول در مینی‌اپ دیده می‌شود' : '❌ هیچ محصولی در مینی‌اپ نیست' ?>
+        <div class="hint">دریافت‌شده: <?= h(fmtNum($dg['all'])) ?> · روشن: <?= h(fmtNum($dg['on'])) ?> · نمایش: <?= h(fmtNum($dg['shown'])) ?></div>
+        <?php foreach ($dg['why'] as $w): ?><div>• <?= h($w) ?></div><?php endforeach; ?>
+      </div>
+    <?php endforeach; ?>
+  </div></div></div>
   <?php if (!svReady()): ?>
     <div class="note warn">پنلِ خدمات هنوز وصل نیست — اول در <a href="?tab=apis#api-svc">API و اتصال‌ها ← پنلِ خدمات</a> آدرس و کلید را بگذارید.</div>
   <?php endif; ?>
@@ -2274,21 +2312,21 @@ tr.grp td{background:var(--surface-2);font-weight:800}
     </div>
     <div class="row" style="margin-top:10px">
       <form method="post" style="display:inline"><?= fk('sv_fa', []) ?><button class="btn ghost sm">🔤 ترجمه‌ی دوباره‌ی نام‌ها به فارسی</button></form>
-      <form method="post" style="display:inline" onsubmit="return confirm('همه‌ی نام‌ها، حتی آن‌هایی که دستی نوشته‌اید، با ترجمه‌ی خودکار عوض شوند؟')"><?= fk('sv_fa', []) ?><input type="hidden" name="all" value="1"><button class="btn ghost sm">↺ همه‌ی نام‌ها (حتی دستی‌ها)</button></form>
+      <form method="post" style="display:inline" data-confirm="همه‌ی نام‌ها، حتی آن‌هایی که دستی نوشته‌اید، با ترجمه‌ی خودکار عوض شوند؟"><?= fk('sv_fa', []) ?><input type="hidden" name="all" value="1"><button class="btn ghost sm">↺ همه‌ی نام‌ها (حتی دستی‌ها)</button></form>
     </div>
   </div></div>
 
   <?php if (!$rows): ?>
     <div class="empty"><span class="ic">🧩</span><?= $SST['tg'] + $SST['ig'] + $SST['none'] === 0 ? 'هنوز سرویسی دریافت نشده — در API و اتصال‌ها «📥 دریافتِ سرویس‌ها» را بزنید.' : 'سرویسی با این فیلتر نیست.' ?></div>
   <?php else: ?>
-    <form method="post" id="svBulk" class="row" style="margin-bottom:10px" onsubmit="return confirm('همه‌ی سرویس‌های همین صفحه عوض شوند؟')">
+    <form method="post" id="svBulk" class="row" style="margin-bottom:10px" data-confirm="همه‌ی سرویس‌های همین صفحه عوض شوند؟">
       <?= fk('sv_bulk', []) ?>
       <?php foreach ($rows as $s): ?><input type="hidden" name="ids[]" value="<?= h($s['id']) ?>"><?php endforeach; ?>
       <button class="btn ghost sm" name="to" value="on">✅ روشن کردنِ همه‌ی این صفحه</button>
       <button class="btn ghost sm" name="to" value="off">⛔ خاموش کردنِ همه‌ی این صفحه</button>
     </form>
     <?php if (isset(svApps()[$f]) && $total > count($rows)): ?>
-    <form method="post" class="row" style="margin:-4px 0 10px" onsubmit="return confirm('همه‌ی <?= h((string)$total) ?> سرویسِ این فیلتر (همه‌ی صفحه‌ها) عوض شوند؟')">
+    <form method="post" class="row" style="margin:-4px 0 10px" data-confirm="همه‌ی <?= h((string)$total) ?> سرویسِ این فیلتر (همه‌ی صفحه‌ها) عوض شوند؟">
       <?= fk('sv_bulk', []) ?><input type="hidden" name="scope" value="filter">
       <input type="hidden" name="f" value="<?= h($f) ?>"><input type="hidden" name="st" value="<?= h($sf) ?>">
       <input type="hidden" name="c" value="<?= h($fc) ?>"><input type="hidden" name="pc" value="<?= h($fpc) ?>"><input type="hidden" name="q" value="<?= h($qs) ?>">
@@ -2351,6 +2389,8 @@ tr.grp td{background:var(--surface-2);font-weight:800}
     <div class="stat ok"><div class="n"><?= h(fmtNum($SST['today'])) ?></div><div class="l">سفارشِ امروز</div></div>
     <div class="stat"><div class="n amount"><?= h(fmtNum($SST['sum'])) ?></div><div class="l">فروشِ امروز (تومان)</div></div>
   </div>
+  <div class="note">⛔ <b>لغو و برگشتِ پول</b> سفارش را همان لحظه در پنلِ خدمات لغو می‌کند و چند ثانیه منتظرِ جواب می‌ماند؛ پول دقیقا به اندازه‌ای
+    که پنل برمی‌گرداند به کاربر برمی‌گردد (لغوِ کامل همه، ناقص فقط مابقی)، پس ضرری نمی‌کنید. اگر پنل لغو را نپذیرد، پولی برنمی‌گردد و دلیلش نشان داده می‌شود.</div>
   <?php if ($SST['check']): ?>
     <div class="note warn">«نیاز به بررسی» یعنی پنلِ خدمات موقعِ ثبت جواب نداد و معلوم نیست سفارش آنجا ثبت شده یا نه. در پنلِ خدمات
       (با لینک و زمان) نگاه کنید: اگر ثبت شده «✅ انجام‌شده» و اگر نه «↩️ برگشتِ پول» بزنید.</div>
@@ -2388,17 +2428,17 @@ tr.grp td{background:var(--surface-2);font-weight:800}
           <?php if ($o['err'] !== '' && in_array($o['status'], ['failed', 'check'], true)): ?><div class="hint"><?= h(mb_substr($o['err'], 0, 90)) ?></div><?php endif; ?></td>
         <td class="muted num"><?= h(date('Y-m-d H:i', (int)$o['created'])) ?></td>
         <td>
+          <?php $oid = h($o['id']); $cxOn = (int)($o['cxat'] ?? 0) > 0; ?>
           <?php if ($o['status'] === 'run'): ?>
-            <form method="post" style="display:inline"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= h($o['id']) ?>"><button class="btn ghost sm" name="how" value="sync" title="به‌روزرسانیِ وضعیت">🔄</button></form>
-            <?php if ((string)$o['pid'] !== '' && !empty(svService((string)$o['sid'])['cancel'])): ?>
-              <form method="post" style="display:inline" onsubmit="return confirm('درخواستِ لغو به پنلِ خدمات فرستاده شود؟ بعد از تاییدِ پنل، پول خودکار برمی‌گردد.')"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= h($o['id']) ?>"><button class="btn ghost sm" name="how" value="cancel">⛔ لغو در پنل</button></form>
+            <form method="post" style="display:inline"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= $oid ?>"><button class="btn ghost sm" name="how" value="sync" title="به‌روزرسانیِ وضعیت">🔄</button></form>
+            <?php if ((string)$o['pid'] !== ''): ?>
+              <form method="post" style="display:inline" data-confirm="سفارش همین حالا در پنلِ خدمات لغو شود؟ پول به همان اندازه‌ای که پنل برمی‌گرداند به کاربر برمی‌گردد (لغوِ کامل = همه‌ی پول، ناقص = مابقی) — بدونِ ضرر."><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= $oid ?>"><button class="btn r sm" name="how" value="cancel"><?= $cxOn ? '⏳ لغوِ دوباره' : '⛔ لغو و برگشتِ پول' ?></button></form>
+              <form method="post" style="display:inline" data-confirm="⚠️ پول بدونِ لغو در پنل برگردد؟ پنلِ خدمات کار را ادامه می‌دهد و هزینه‌اش از حسابِ شما کم می‌شود — یعنی ضرر. فقط وقتی بزنید که مطمئنید سفارش در پنل انجام نمی‌شود."><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= $oid ?>"><button class="btn ghost sm" name="how" value="force" title="با ضرر">↩️ بدونِ لغو</button></form>
             <?php endif; ?>
           <?php endif; ?>
           <?php if ($o['status'] === 'check'): ?>
-            <form method="post" style="display:inline" onsubmit="return confirm('این سفارش در پنلِ خدمات ثبت شده و انجام‌شده حساب شود؟')"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= h($o['id']) ?>"><button class="btn g sm" name="how" value="done">✅ انجام‌شده</button></form>
-          <?php endif; ?>
-          <?php if ($o['status'] === 'run' || $o['status'] === 'check'): ?>
-            <form method="post" style="display:inline" onsubmit="return confirm('سفارش لغو و کلِ مبلغ به کیف پولِ کاربر برگردانده شود؟ (اگر در پنلِ خدمات هنوز در حالِ انجام است، آنجا هم لغوش کنید.)')"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= h($o['id']) ?>"><button class="btn r sm" name="how" value="refund">↩️ برگشتِ پول</button></form>
+            <form method="post" style="display:inline" data-confirm="این سفارش در پنلِ خدمات ثبت شده و انجام‌شده حساب شود؟"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= $oid ?>"><button class="btn g sm" name="how" value="done">✅ انجام‌شده</button></form>
+            <form method="post" style="display:inline" data-confirm="در پنلِ خدمات نگاه کردید و این سفارش آنجا ثبت نشده؟ کلِ مبلغ به کیف پولِ کاربر برگردد؟"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= $oid ?>"><button class="btn r sm" name="how" value="refund">↩️ برگشتِ پول</button></form>
           <?php endif; ?>
         </td>
       </tr>
@@ -2541,7 +2581,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
           <td><code><?= h((string)($c2['chat_id'] ?? '')) ?></code></td>
           <td><?= !empty($c2['url']) ? '<a href="' . h($c2['url']) . '" target="_blank" rel="noopener">باز کردن</a>' : '<span class="muted">—</span>' ?></td>
           <td>
-            <form method="post" onsubmit="return confirm('این کانال از عضویت اجباری حذف شود؟')">
+            <form method="post" data-confirm="این کانال از عضویت اجباری حذف شود؟">
               <?= fk('del_join_channel', []) ?><input type="hidden" name="i" value="<?= (int)$i ?>">
               <button class="btn r sm">حذف</button>
             </form>
@@ -2617,6 +2657,44 @@ function copyText(text, btn) {
   try { document.execCommand('copy'); done(); } catch (e) {}
   document.body.removeChild(ta);
 }
+
+// تاییدِ داخلِ صفحه به‌جای confirm() مرورگر — در مرورگرِ داخلیِ تلگرام confirm() گاهی بی‌صدا «نه» برمی‌گرداند و دکمه کار نمی‌کرد
+(function () {
+  var M = null, pend = null, last = null;
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('button, input[type="submit"]');
+    if (b && (b.type || 'submit') === 'submit') last = b;
+  }, true);
+  function close() { pend = null; if (M) M.classList.remove('on'); }
+  function ask(msg, ok) {
+    if (!M) {
+      M = document.createElement('div'); M.className = 'cfm'; M.setAttribute('role', 'dialog');
+      M.innerHTML = '<div class="cfm-b"><div class="cfm-i">⚠️</div><p></p><div class="cfm-r">' +
+        '<button type="button" class="btn g" data-y>بله، انجام بده</button><button type="button" class="btn ghost" data-n>انصراف</button></div></div>';
+      document.body.appendChild(M);
+      M.addEventListener('click', function (e) {
+        if (e.target.closest('[data-y]')) { var f = pend; close(); if (f) f(); }
+        else if (e.target.closest('[data-n]') || e.target === M) close();
+      });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    }
+    M.querySelector('p').textContent = msg; pend = ok; M.classList.add('on');
+    setTimeout(function () { var y = M.querySelector('[data-y]'); if (y) y.focus(); }, 30);
+  }
+  document.addEventListener('submit', function (ev) {
+    var f = ev.target, msg = f && f.getAttribute ? f.getAttribute('data-confirm') : null;
+    if (!msg) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    var sub = ev.submitter || (last && last.form === f ? last : null);
+    ask(msg, function () {
+      if (sub && sub.name) {
+        var h = document.createElement('input'); h.type = 'hidden'; h.name = sub.name; h.value = sub.value; f.appendChild(h);
+      }
+      if (sub) { sub.disabled = true; sub.textContent = 'در حال انجام…'; }
+      HTMLFormElement.prototype.submit.call(f);
+    });
+  }, true);
+})();
 
 document.querySelectorAll('form').forEach(function (f) {
   f.addEventListener('submit', function (ev) {

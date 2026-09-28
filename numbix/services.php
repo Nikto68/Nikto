@@ -58,6 +58,7 @@ function svDefaults() {
         'pbal_at' => 0,
         'markup'  => 30,
         'timeout' => 20,
+        'auto_on' => 1,
         'apps'    => [
             'tg' => ['on' => 1, 'title' => 'خدمات تلگرام',
                      'tagline' => 'ممبر، بازدید و ری‌اکشن — شروعِ خودکار در چند دقیقه'],
@@ -183,7 +184,7 @@ function svDb() {
     $added = svDbCols($db, 'svc', ['man' => 'INTEGER NOT NULL DEFAULT 0', 'fa' => 'INTEGER NOT NULL DEFAULT 0']);
     svDbCols($db, 'svo', ['ans' => 'INTEGER NOT NULL DEFAULT 0', 'rfid' => "TEXT NOT NULL DEFAULT ''",
                           'rfst' => "TEXT NOT NULL DEFAULT ''", 'rfat' => 'INTEGER NOT NULL DEFAULT 0',
-                          'rfck' => 'INTEGER NOT NULL DEFAULT 0']);
+                          'rfck' => 'INTEGER NOT NULL DEFAULT 0', 'cxat' => 'INTEGER NOT NULL DEFAULT 0']);
     // سرویس‌هایی که قبلا با نامِ انگلیسیِ پنل دریافت شده بودند، یک بار فارسی می‌شوند
     if (in_array('fa', $added, true)) {
         try { svFaRename(false); } catch (Throwable $e) { error_log('[services] fa rename: ' . $e->getMessage()); }
@@ -208,15 +209,17 @@ function svFx() {
         case 'rial':  return 0.1;
         case 'usd_live':
             if ((float)$c['fx_live'] > 0) return (float)$c['fx_live'];
-            return (float)$c['fx'];
+            if ((float)$c['fx'] > 0) return (float)$c['fx'];
+            return function_exists('numVal') ? max(0.0, (float)numVal('api.rate', 0)) : 0.0;
         default: return (float)$c['fx'];
     }
 }
 
 function svFxRefresh() {
-    if (svCurEff() !== 'usd_live' || !function_exists('pxUsdtIrt')) return 0.0;
-    $r = (float)pxUsdtIrt();
-    if ($r > 0) svSet(function (&$c) use ($r) { $c['fx_live'] = round($r, 2); });
+    if (svCurEff() !== 'usd_live') return 0.0;
+    $r = function_exists('pxUsdtToman') ? (float)pxUsdtToman() : 0.0;
+    if ($r <= 0 && function_exists('numVal')) $r = (float)numVal('api.rate', 0);
+    if ($r > 0 && abs($r - (float)svCfg()['fx_live']) >= 0.5) svSet(function (&$c) use ($r) { $c['fx_live'] = round($r, 2); });
     return $r;
 }
 
@@ -689,14 +692,15 @@ function svImport() {
     svFxRefresh();
 
     $seen = [];
-    $new = $upd = $tgN = $igN = $skip = $moved = 0;
+    $new = $upd = $tgN = $igN = $skip = $moved = $autoN = 0;
     $now = time();
     $db->exec('BEGIN IMMEDIATE');
     try {
         $get = $db->prepare('SELECT id, app, cat, active, man FROM svc WHERE id = :id');
         $mv  = $db->prepare('UPDATE svc SET app = :app, cat = :cat, active = CASE WHEN :app = \'\' THEN 0 ELSE active END WHERE id = :id');
         $ins = $db->prepare('INSERT INTO svc (id, app, cat, active, name, pname, pcat, type, rate, min, max, refill, cancel, gone, pos, at)
-                             VALUES (:id, :app, :cat, 0, :name, :pname, :pcat, :type, :rate, :min, :max, :refill, :cancel, 0, :pos, :at)');
+                             VALUES (:id, :app, :cat, :on, :name, :pname, :pcat, :type, :rate, :min, :max, :refill, :cancel, 0, :pos, :at)');
+        $autoOn = !empty(svCfg()['auto_on']);
         $up  = $db->prepare('UPDATE svc SET pname = :pname, pcat = :pcat, type = :type, rate = :rate, min = :min, max = :max,
                              refill = :refill, cancel = :cancel, gone = 0, at = :at WHERE id = :id');
         $pos = 0;
@@ -745,8 +749,11 @@ function svImport() {
             $ins->bindValue(':cat', $cat, SQLITE3_TEXT);
             $ins->bindValue(':name', $pname, SQLITE3_TEXT);
             $ins->bindValue(':pos', $pos, SQLITE3_INTEGER);
+            $isOn = $autoOn && $app !== '' && svTypeOk($vals[':type']) ? 1 : 0;
+            $ins->bindValue(':on', $isOn, SQLITE3_INTEGER);
             $ins->execute(); $ins->reset();
             $new++;
+            $autoN += $isOn;
         }
         $gone = 0;
         $res = $db->query('SELECT id FROM svc WHERE gone = 0');
@@ -761,13 +768,57 @@ function svImport() {
         return [false, 'ذخیره‌ی سرویس‌ها نشد: ' . $e->getMessage()];
     }
     $faN = svFaRename(false);
+    if (!empty(svCfg()['auto_on'])) $autoN += svAutoOnEmpty();
     $note = svCurNote();
+    $fxWarn = svFx() <= 0 ? "\n⚠️ قیمتِ دلار معلوم نیست؛ تا وقتی نیاید قیمتِ سرویس‌ها صفر است و در مینی‌اپ نشان داده نمی‌شوند — " .
+                             'در «API و اتصال‌ها ← پنلِ خدمات» نرخِ هر دلار را بنویسید.' : '';
     return [true, 'از ' . svPanelName() . ' ' . fmtNum(count($seen)) . ' سرویس خوانده شد — تازه: ' . fmtNum($new) .
                   ' (تلگرام ' . fmtNum($tgN) . '، اینستاگرام ' . fmtNum($igN) . '، بقیه‌ی شبکه‌ها ' . fmtNum($skip) . ')' .
                   ' · به‌روزشده: ' . fmtNum($upd) . ($moved ? ' · دسته‌بندیِ دوباره: ' . fmtNum($moved) : '') .
                   ' · حذف‌شده از پنل: ' . fmtNum($gone) . ($faN ? ' · نامِ فارسی: ' . fmtNum($faN) : '') .
-                  ($new ? "\nسرویس‌های تازه خاموش‌اند؛ در «سرویس‌ها» آن‌هایی را که می‌خواهید بفروشید روشن کنید." : '') .
-                  ($note !== '' ? "\n" . $note : '')];
+                  ($autoN ? "\n✅ " . fmtNum($autoN) . ' سرویسِ قابلِ فروش خودکار روشن شد و در مینی‌اپ‌ها دیده می‌شود؛ هرکدام را نمی‌خواهید در «سرویس‌ها و قیمت‌ها» خاموش کنید.'
+                          : ($new ? "\nسرویس‌های تازه خاموش‌اند؛ در «سرویس‌ها» آن‌هایی را که می‌خواهید بفروشید روشن کنید." : '')) .
+                  ($note !== '' ? "\n" . $note : '') . $fxWarn];
+}
+
+// اگر در یک مینی‌اپ هیچ سرویسی روشن نیست، همه‌ی سرویس‌های قابلِ فروشِ آن روشن می‌شوند (بارِ اول، تا مینی‌اپ خالی نماند)
+function svAutoOnEmpty() {
+    $db = svDb();
+    if (!$db) return 0;
+    $n = 0;
+    foreach (array_keys(svApps()) as $a) {
+        $st = $db->prepare('SELECT COUNT(*) n FROM svc WHERE app = :a AND active = 1 AND gone = 0');
+        $st->bindValue(':a', $a, SQLITE3_TEXT);
+        if ((int)(($st->execute()->fetchArray(SQLITE3_ASSOC))['n'] ?? 0) > 0) continue;
+        $sel = $db->prepare('SELECT id, type FROM svc WHERE app = :a AND gone = 0 AND active = 0');
+        $sel->bindValue(':a', $a, SQLITE3_TEXT);
+        $res = $sel->execute();
+        $ids = [];
+        while ($res && ($r = $res->fetchArray(SQLITE3_ASSOC))) if (svTypeOk($r['type'])) $ids[] = (string)$r['id'];
+        $n += svServiceBulk($ids, true);
+    }
+    return $n;
+}
+
+// چرا محصولی در مینی‌اپ نیست؟ — شمارش و دلیل‌ها برای پنلِ وب
+function svDiag($app) {
+    $db = svDb();
+    $o = ['all' => 0, 'on' => 0, 'sell' => 0, 'shown' => 0, 'why' => []];
+    if (!$db) { $o['why'][] = 'دیتابیسِ خدمات باز نشد (SQLite روی سرور فعال نیست).'; return $o; }
+    $st = $db->prepare('SELECT COUNT(*) a, COALESCE(SUM(active), 0) o FROM svc WHERE app = :a AND gone = 0');
+    $st->bindValue(':a', $app, SQLITE3_TEXT);
+    $r = $st->execute()->fetchArray(SQLITE3_ASSOC);
+    $o['all'] = (int)($r['a'] ?? 0); $o['on'] = (int)($r['o'] ?? 0);
+    foreach (svServices($app) as $s) if (svTypeOk($s['type'])) $o['sell']++;
+    $o['shown'] = count(svPublic($app)['items']);
+    if (!svReady()) $o['why'][] = 'کلیدِ API پنلِ خدمات ثبت نشده.';
+    if (empty(svCfg()['apps'][$app]['on'])) $o['why'][] = 'این مینی‌اپ خاموش است (تیکِ «باز باشد» در پنلِ خدمات).';
+    if (svUrl($app) === '') $o['why'][] = 'آدرسِ https مینی‌اپ معلوم نیست (دامنه‌ی سرور باید https باشد).';
+    if (!$o['all']) $o['why'][] = 'هنوز سرویسی دریافت نشده — «📥 دریافتِ سرویس‌ها از پنل» را بزنید.';
+    elseif (!$o['on']) $o['why'][] = 'همه‌ی سرویس‌ها خاموش‌اند — در «سرویس‌ها و قیمت‌ها» روشن کنید.';
+    if ($o['sell'] > 0 && svFx() <= 0) $o['why'][] = 'قیمتِ دلار معلوم نیست، پس قیمتِ فروش صفر است و سرویس‌ها پنهان می‌مانند — نرخِ هر دلار را بنویسید.';
+    elseif ($o['sell'] > $o['shown']) $o['why'][] = fmtNum($o['sell'] - $o['shown']) . ' سرویسِ روشن قیمتِ صفر دارد و پنهان است.';
+    return $o;
 }
 
 function svServiceSave($id, array $f) {
@@ -973,7 +1024,8 @@ function svRow($o) {
     $r = [
         'id' => (string)$o['id'], 'app' => (string)$o['app'], 'n' => (string)$o['name'], 'c' => (string)$o['cat'],
         'l' => (string)$o['link'], 'q' => $qty, 't' => (float)$o['total'], 'rf' => (float)$o['refunded'],
-        'st' => (string)$o['status'], 'sx' => svStatusText((string)$o['status'], (string)$o['pst']),
+        'st' => (string)$o['status'],
+        'sx' => (string)$o['status'] === 'run' && (int)($o['cxat'] ?? 0) > 0 ? 'در حالِ لغو' : svStatusText((string)$o['status'], (string)$o['pst']),
         'sc' => (int)$o['start'], 'rm' => $rem, 'pc' => $done, 'at' => (int)$o['created'],
     ];
     if ((int)($o['ans'] ?? 0) > 0) $r['an'] = (int)$o['ans'];
@@ -1294,9 +1346,10 @@ function svApplyStatus(array $o, array $st) {
 function svSync($limit = 40, $uid = 0, $minAge = 50) {
     $db = svDb();
     if (!$db || !svReady()) return 0;
-    $st = $db->prepare("SELECT * FROM svo WHERE status = 'run' AND pid <> '' AND checked < :cut" .
-                       ($uid ? ' AND uid = :u' : '') . ' ORDER BY checked ASC LIMIT :n');
+    $st = $db->prepare("SELECT * FROM svo WHERE status = 'run' AND pid <> '' AND (checked < :cut OR (cxat > 0 AND checked < :cx))" .
+                       ($uid ? ' AND uid = :u' : '') . ' ORDER BY (cxat > 0) DESC, checked ASC LIMIT :n');
     $st->bindValue(':cut', time() - max(5, (int)$minAge), SQLITE3_INTEGER);
+    $st->bindValue(':cx', time() - 15, SQLITE3_INTEGER);
     if ($uid) $st->bindValue(':u', (int)$uid, SQLITE3_INTEGER);
     $st->bindValue(':n', max(1, min(100, (int)$limit)), SQLITE3_INTEGER);
     $res = $st->execute();
@@ -1342,15 +1395,63 @@ function svTick() {
     if (!svReady()) return 0;
     $fx = DATA_DIR . '/.svc_fx_at';
     if (time() - (@filemtime($fx) ?: 0) >= 600) { @touch($fx); svFxRefresh(); }
+    // یک بار: سرویس‌هایی که قبلا دریافت شده ولی همه خاموش مانده بودند روشن شوند تا مینی‌اپ خالی نماند
+    $ao = DATA_DIR . '/.svc_auto_on_v1';
+    if (!is_file($ao) && !empty(svCfg()['auto_on'])) { @touch($ao); try { svAutoOnEmpty(); } catch (Throwable $e) {} }
     try { $n = svSync(60); } catch (Throwable $e) { error_log('[services] sync: ' . $e->getMessage()); }
     try { $n += svRefillSync(40); } catch (Throwable $e) { error_log('[services] refill sync: ' . $e->getMessage()); }
     return $n;
 }
 
+// لغو در پنلِ خدمات. پول فقط به اندازه‌ای برمی‌گردد که خودِ پنل برمی‌گرداند (لغوِ کامل = همه، ناقص = مابقی)،
+// پس از لغو هیچ ضرری نمی‌شود.
+function svPanelCancel(array $o) {
+    [$j, $err, $kind] = svHttp(['action' => 'cancel', 'orders' => (string)$o['pid']], 20);
+    if (!is_array($j)) return [false, $kind === 'api' ? mb_substr((string)$err, 0, 150) : $err];
+    $one = null;
+    foreach ((isset($j[0]) ? $j : [$j]) as $x)
+        if (is_array($x) && (!isset($x['order']) || (string)$x['order'] === (string)$o['pid'])) { $one = $x; break; }
+    $c = $one['cancel'] ?? null;
+    if (is_array($c) || empty($c))
+        return [false, mb_substr((string)(is_array($c) ? ($c['error'] ?? json_encode($c)) : ($one['error'] ?? 'این سفارش لغوشدنی نیست')), 0, 150)];
+    return [true, ''];
+}
+
+function svCancelNow($id) {
+    $o = svOrder($id);
+    if (!$o) return [false, 'سفارش پیدا نشد.'];
+    if ($o['status'] !== 'run' || (string)$o['pid'] === '') return [false, 'فقط سفارشِ «در حالِ انجام» که در پنل ثبت شده لغوشدنی است.'];
+    if ((int)$o['cxat'] === 0 || (int)$o['cxat'] < time() - 600) {
+        [$ok, $why] = svPanelCancel($o);
+        if (!$ok) return [false, 'پنلِ خدمات لغو را نپذیرفت (' . $why . '). سفارش همچنان در حالِ انجام است؛ ' .
+                                 'اگر الان پول را برگردانید ضرر می‌کنید، چون پنل کار را ادامه می‌دهد. اگر باز هم می‌خواهید، «برگشتِ پول بدونِ لغو» را بزنید.', 'nocancel'];
+        svOrderSet($id, ['cxat' => time()], 'run');
+    }
+    // چند ثانیه وضعیت را همین‌جا می‌پرسیم تا اگر پنل فوری لغو کرد، پول همین حالا برگردد
+    for ($k = 0; $k < 4; $k++) {
+        if ($k) usleep(1500000);
+        [$st] = svHttp(['action' => 'status', 'order' => (string)$o['pid']], 10);
+        $cur = svOrder($id);
+        if (!$cur || $cur['status'] !== 'run') break;
+        if (is_array($st) && svApplyStatus($cur, $st)) break;
+    }
+    $n = svOrder($id);
+    if ($n && $n['status'] !== 'run') {
+        $back = (float)$n['refunded'];
+        return [true, 'نتیجه‌ی لغو: ' . svStatusText((string)$n['status']) . ($back > 0 ? '؛ ' . fmtNum($back) . ' تومان به کیف پولِ کاربر برگشت (به اندازه‌ی برگشتیِ پنل).' : '.')];
+    }
+    return [true, 'درخواستِ لغو در پنلِ خدمات ثبت شد و هر ۱۵ ثانیه پیگیری می‌شود. به محضِ اینکه پنل لغو را انجام دهد، ' .
+                  'پول (یا مابقیِ انجام‌نشده) خودکار به کاربر برمی‌گردد — تا آن موقع پولی برنمی‌گردد که ضرر نشود.'];
+}
+
 function svAdminResolve($id, $how) {
     $o = svOrder($id);
     if (!$o) return [false, 'سفارش پیدا نشد.'];
-    if ($how === 'refund') {
+    if ($how === 'cancel' || ($how === 'refund' && $o['status'] === 'run' && (string)$o['pid'] !== '')) {
+        $r = svCancelNow($id);
+        return [$r[0], $r[1]];
+    }
+    if ($how === 'refund' || $how === 'force') {
         if (!in_array($o['status'], ['check', 'run'], true)) return [false, 'این سفارش باز نیست.'];
         if (!svOrderSet($id, ['status' => 'canceled', 'pst' => 'admin'], (string)$o['status'])) return [false, 'وضعیت همین الان عوض شد.'];
         $back = svRefund($id, (float)$o['total'] - (float)$o['refunded'], 'لغو توسط پشتیبانی');
@@ -1372,19 +1473,6 @@ function svAdminResolve($id, $how) {
         svApplyStatus($o, $j);
         $n = svOrder($id);
         return [true, 'وضعیت: ' . svStatusText((string)$n['status'], (string)$n['pst'])];
-    }
-    if ($how === 'cancel') {
-        if ($o['status'] !== 'run' || (string)$o['pid'] === '') return [false, 'فقط سفارشِ «در حالِ انجام» که در پنل ثبت شده لغوشدنی است.'];
-        [$j, $err, $kind] = svHttp(['action' => 'cancel', 'orders' => (string)$o['pid']], 20);
-        if (!is_array($j)) return [false, $kind === 'api' ? 'پنل لغو را نپذیرفت: ' . mb_substr((string)$err, 0, 150) : $err];
-        $one = null;
-        foreach ((isset($j[0]) ? $j : [$j]) as $x)
-            if (is_array($x) && (!isset($x['order']) || (string)$x['order'] === (string)$o['pid'])) { $one = $x; break; }
-        $c = $one['cancel'] ?? null;
-        if (is_array($c) || empty($c))
-            return [false, 'پنل لغو را نپذیرفت: ' . mb_substr((string)(is_array($c) ? ($c['error'] ?? json_encode($c)) : ($one['error'] ?? 'این سفارش لغوشدنی نیست')), 0, 150)];
-        svOrderSet($id, ['checked' => 0], 'run');
-        return [true, 'درخواستِ لغو به پنل رفت. وقتی پنل لغو را تایید کند، مبلغ (یا مابقیِ انجام‌نشده) خودکار به کیف پولِ کاربر برمی‌گردد.'];
     }
     return [false, 'کارِ ناشناخته'];
 }
@@ -1430,6 +1518,7 @@ function svBoot($app) {
         'topup'   => maTopupInfo(),
         'bot'     => (string)botUsername(),
         'links'   => $links,
+        'spl'     => function_exists('maSplashSec') ? maSplashSec() : 8,
     ];
 }
 
@@ -1447,6 +1536,7 @@ function svView($app, array $boot) {
             : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800;900&display=swap">',
         '__BOOT__'  => json_encode($boot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG |
                                           JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+        '__SPL__'   => (string)(int)($boot['spl'] ?? 8),
     ]);
 }
 

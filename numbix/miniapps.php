@@ -18,6 +18,7 @@ function maDefaultConfig() {
         'rate_ip'      => 600,
         'rate_user'    => 40,
         'trust_proxy'  => false,
+        'splash'       => 8,
         'cats'         => [],
         'items'        => [],
     ];
@@ -54,6 +55,11 @@ function maSetRoot(callable $fn) {
 }
 
 function maCats()  { return maCfg()['cats']; }
+
+// مدتِ صفحه‌ی لودینگِ هر سه مینی‌اپ (ثانیه) — از پنلِ وب ← API و اتصال‌ها
+function maSplashSec() {
+    return max(0, min(20, (int)(maCfg()['splash'] ?? 8)));
+}
 function maItems() { return maCfg()['items']; }
 
 function maFindCat($cid) {
@@ -1510,6 +1516,7 @@ function maBoot() {
         'bot'     => (string)botUsername(),
         'wait'    => function_exists('numVal') ? (int)numVal('wait', 900) : 900,
         'amax'    => MA_ACTIVE_MAX,
+        'spl'     => maSplashSec(),
     ];
 }
 

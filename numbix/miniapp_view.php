@@ -15,13 +15,14 @@ function maView($boot) {
             : '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800;900&display=swap">',
         '__BOOT__'  => json_encode($boot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG |
                                           JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+        '__SPL__'   => (string)(int)($boot['spl'] ?? 8),
     ]);
 }
 
 function maViewTpl() {
     return <<<'HTML'
 <!doctype html>
-<html lang="fa" dir="rtl" class="boot">
+<html lang="fa" dir="rtl" class="boot" style="--sd:__SPL__s">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -567,14 +568,20 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
 .splash .lg img{width:104px;height:104px;border-radius:32px;object-fit:cover;box-shadow:0 22px 50px -10px rgba(59,130,246,.75)}
 .splash h1{position:relative;margin-top:26px;font-size:22px;font-weight:900;letter-spacing:-.3px}
 .splash p{position:relative;margin-top:4px;color:var(--dim);font-size:12px;max-width:280px;text-align:center}
-.splash .ld{position:absolute;left:0;right:0;bottom:calc(46px + var(--safe));width:180px;margin:0 auto;text-align:center;transition:opacity .35s ease,transform .45s ease}
+.splash .ld{position:absolute;left:0;right:0;bottom:calc(40px + var(--safe));width:min(290px,82vw);margin:0 auto;text-align:center;transition:opacity .35s ease,transform .45s ease}
 .splash.out .ld{opacity:0;transform:translate3d(0,12px,0)}
-.splash .ld .bar{position:relative;height:4px;overflow:hidden}
-.splash .ld .bar i{position:absolute;inset:0;width:auto;transform:translate3d(100%,0,0);animation:ldb 1.1s cubic-bezier(.3,.1,.7,.95) forwards;will-change:transform}
+.splash .ld .pc{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:9px}
+.splash .ld .pc span{font-size:11px;font-weight:800;color:var(--ink);opacity:.9;text-align:right;transition:opacity .2s}
+.splash .ld .pc b{font-size:24px;font-weight:900;line-height:1;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;min-width:62px;text-align:left}
+.splash .ld .bar{position:relative;height:7px;border-radius:7px;overflow:hidden;overflow:clip;background:rgba(148,163,184,.16);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+.splash .ld .bar i{position:absolute;inset:0;border-radius:7px;background:var(--grad);transform:translate3d(100%,0,0);transition:transform .16s linear;will-change:transform;
+  box-shadow:0 0 14px rgba(59,130,246,.75)}
 .splash .ld .bar i:after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:ldg 1.3s linear infinite}
-@keyframes ldb{to{transform:translate3d(0,0,0)}}
 @keyframes ldg{from{transform:translate3d(-100%,0,0)}to{transform:translate3d(260%,0,0)}}
-.splash .ld small{display:block;margin-top:8px;color:var(--dim2);font-size:10px;font-weight:700}
+.splash .ld .stg{display:flex;justify-content:center;gap:6px;margin-top:11px}
+.splash .ld .stg i{width:22px;height:4px;border-radius:4px;background:rgba(148,163,184,.22);transition:background .3s,box-shadow .3s,width .3s}
+.splash .ld .stg i.on{width:30px;background:var(--green);box-shadow:0 0 8px rgba(74,222,128,.8)}
+.splash .ld small{display:block;margin-top:10px;min-height:18px;color:var(--dim);font-size:10.5px;font-weight:700;transition:opacity .18s}
 
 .gate{position:fixed;inset:0;z-index:95;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
 .gate svg{width:70px;height:70px;color:var(--blue2);margin-bottom:14px}
@@ -794,7 +801,8 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
     <h1>__TITLE__</h1>
     <p>__TAG__</p>
   </div>
-  <div class="ld"><div class="bar"><i></i></div><small id="spMsg">در حال اتصال امن…</small></div>
+  <div class="ld"><div class="pc"><span id="spMsg">در حال اتصال امن…</span><b id="spPct">۰٪</b></div>
+    <div class="bar"><i id="spBar"></i></div><div class="stg" id="spStg"><i></i><i></i><i></i><i></i><i></i></div><small id="spTip"></small></div>
 </div>
 
 <div class="app">
@@ -1151,17 +1159,33 @@ function gate(msg){
   if (b) b.onclick = function(){ openLink('https://t.me/' + B.bot); };
 }
 
-var SPL = { t0: Date.now(), ready: false, gone: false, min: 1200 };
-try {
-  var lastOpen = Number(localStorage.getItem('nbx_open')) || 0;
-  if (SPL.t0 - lastOpen >= 0 && SPL.t0 - lastOpen < 1800000) SPL.min = 500;
-  localStorage.setItem('nbx_open', String(SPL.t0));
-} catch(e){}
+var SPL = { t0: (function(){ try { var o = performance.timeOrigin || performance.timing.navigationStart; if (o > 0 && Date.now() - o < 15000) return o; } catch(e){} return Date.now(); })(),
+            ready: false, gone: false, min: Math.max(0, Math.min(20, Number(B.spl) || 0)) * 1000 };
+var SPM = ['در حال اتصالِ امن…', 'بررسیِ حسابِ شما…', 'دریافتِ کشورها و قیمت‌ها…', 'بررسیِ موجودیِ شماره‌ها…', 'آماده‌سازیِ فروشگاه…', 'آماده است!'];
+var SPT = ['⚡ تحویلِ شماره آنی و خودکار است', '💬 کدِ تایید همین‌جا داخلِ مینی‌اپ می‌آید', '💰 کیف پول را از «کیف پول» شارژ کنید', '📦 همه‌ی شماره‌ها در «سفارش‌ها» می‌ماند'];
+function splStep(){
+  if (SPL.gone) return false;
+  var el = Date.now() - SPL.t0, p = SPL.min ? Math.min(1, el / SPL.min) : 1;
+  var pc = $('spPct'), bar = $('spBar'), m = $('spMsg'), g = $('spStg'), t = $('spTip');
+  if (pc) pc.textContent = faD(Math.floor(p * 100)) + '٪';
+  if (bar) bar.style.transform = 'translate3d(' + ((1 - p) * 100).toFixed(2) + '%,0,0)';
+  var mi = Math.min(SPM.length - 1, Math.floor(p * (SPM.length - 1) + (p >= 1 ? 1 : 0)));
+  if (m && SPL.mi !== mi) { SPL.mi = mi; m.textContent = SPM[mi]; }
+  if (g) [].forEach.call(g.children, function(x, k){ x.classList.toggle('on', p * g.children.length >= k + 1 - 0.001); });
+  var ti = Math.floor(el / 2600) % SPT.length;
+  if (t && SPL.ti !== ti) { SPL.ti = ti; t.style.opacity = 0; setTimeout(function(){ t.textContent = SPT[ti]; t.style.opacity = 1; }, 170); }
+  return true;
+}
+splStep();
+SPL.iv = setInterval(function(){ if (!splStep()) clearInterval(SPL.iv); }, 100);
 function hideSplash(now){
-  if (SPL.gone) return;
+  if (SPL.gone || (SPL.hiding && !now)) return;
+  SPL.hiding = true;
   var wait = now ? 0 : Math.max(0, SPL.min - (Date.now() - SPL.t0));
-  SPL.gone = true;
   setTimeout(function(){
+    if (SPL.gone) return;
+    splStep();
+    SPL.gone = true; clearInterval(SPL.iv);
     var s = $('splash'), done = false;
     var reveal = function(){
       if (done) return;
@@ -1176,8 +1200,7 @@ function hideSplash(now){
     setTimeout(reveal, 250);
   }, wait);
 }
-setTimeout(function(){ hideSplash(false); }, 3000);
-setTimeout(function(){ var m = $('spMsg'); if (m && !SPL.gone) m.textContent = 'در حال آماده‌سازی فروشگاه…'; }, 1600);
+setTimeout(function(){ hideSplash(false); }, Math.max(3000, SPL.min + 2500 - (Date.now() - SPL.t0)));
 var CATS = B.cats || [], ITEMS = B.items || [];
 var CAT = {}, ITEM = {}, BYCAT = {};
 CATS.forEach(function(c){ CAT[c.id] = c; c.k = norm(c.name); });
@@ -1256,7 +1279,7 @@ function setNotes(n){
 function avaHtml(url){
   var n = (U.first_name || U.username || '؟').trim();
   var ini = esc(n.charAt(0).toUpperCase());
-  return url ? '<img src="' + esc(url) + '" alt="" onerror="this.parentNode.textContent=\'' + ini.replace(/'/g, '') + '\'">' : ini;
+  return url ? '<img src="' + esc(url) + '" alt="" onerror="if(this.parentNode)this.parentNode.textContent=\'' + ini.replace(/'/g, '') + '\'">' : ini;
 }
 function drawSelf(avatar){
   var name = ((U.first_name || '') + ' ' + (U.last_name || '')).trim() || (U.username ? '@' + U.username : 'کاربر');

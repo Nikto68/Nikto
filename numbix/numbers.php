@@ -134,9 +134,14 @@ function numRate() {
     if (!numNeedsRate()) return 1.0;
     $own = (float)numVal('api.rate', 0);
     if ($own > 0) return $own;
-    if (function_exists('pxRawToman')) {
-        $r = (float)pxRawToman('USDT');
+    if (function_exists('pxUsdtToman')) {
+        $r = (float)pxUsdtToman();
         if ($r > 0) return $r;
+    }
+    // آخرین راه: نرخِ دلاری که برای پنلِ خدمات گرفته یا نوشته شده
+    if (function_exists('svCfg')) {
+        $c = svCfg();
+        foreach (['fx_live', 'fx'] as $k) if ((float)($c[$k] ?? 0) > 0) return (float)$c[$k];
     }
     return 0.0;
 }

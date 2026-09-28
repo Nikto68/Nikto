@@ -3,7 +3,7 @@
 function svTplTg() {
     return <<<'HTML'
 <!doctype html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" style="--sd:__SPL__s">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -432,16 +432,20 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .spl h1{margin-top:22px;font-size:23px;font-weight:900;letter-spacing:-.3px;background:linear-gradient(90deg,#fff,#BAE6FD 45%,#99F6E4);
   -webkit-background-clip:text;background-clip:text;color:transparent}
 .spl p{margin-top:4px;color:var(--dim);font-size:12px;max-width:280px;text-align:center}
-.spl .ld{position:absolute;left:0;right:0;bottom:calc(54px + var(--safe));width:220px;margin:0 auto;text-align:center;transition:opacity .3s,transform .4s}
+.spl .ld{position:absolute;left:0;right:0;bottom:calc(40px + var(--safe));width:min(290px,82vw);margin:0 auto;text-align:center;transition:opacity .3s,transform .4s}
 .spl.out .ld{opacity:0;transform:translate3d(0,12px,0)}
-.trk{position:relative;height:4px;border-radius:4px;background:rgba(143,169,199,.16)}
-.trk .fl{position:absolute;inset:0;border-radius:4px;background:var(--grad);box-shadow:0 0 12px rgba(56,189,248,.8);transform-origin:right center;transform:scaleX(0);
-  animation:tfl 2.6s cubic-bezier(.25,.1,.25,1) forwards}
-@keyframes tfl{to{transform:scaleX(.92)}}
-.trk b{position:absolute;top:50%;right:0;width:20px;height:20px;margin:-10px -10px 0 0;color:#fff;animation:tmv 2.6s cubic-bezier(.25,.1,.25,1) forwards}
+.spl .pc{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:12px}
+.spl .pc span{font-size:11px;font-weight:800;color:#E0F2FE;text-align:right}
+.spl .pc b{font-size:24px;font-weight:900;line-height:1;min-width:62px;text-align:left;background:linear-gradient(90deg,#7DD3FC,#5EEAD4);-webkit-background-clip:text;background-clip:text;color:transparent}
+.trk{position:relative;height:5px;border-radius:5px;background:rgba(143,169,199,.16)}
+.trk .fl{position:absolute;inset:0;border-radius:5px;background:var(--grad);box-shadow:0 0 12px rgba(56,189,248,.8);transform-origin:right center;transform:scaleX(0);
+  transition:transform .16s linear;will-change:transform}
+.trk b{position:absolute;top:50%;right:0;width:22px;height:22px;margin:-11px -11px 0 0;color:#fff;transition:transform .16s linear;will-change:transform}
 .trk b svg{width:100%;height:100%;transform:rotate(-135deg);filter:drop-shadow(0 0 6px rgba(56,189,248,.95))}
-@keyframes tmv{to{transform:translate3d(-202px,0,0)}}
-.spl .ld small{display:block;margin-top:14px;color:var(--dim);font-size:10.5px;font-weight:700;transition:opacity .2s}
+.spl .stg{display:flex;justify-content:center;gap:6px;margin-top:14px}
+.spl .stg i{width:22px;height:4px;border-radius:4px;background:rgba(143,169,199,.22);transition:background .3s,box-shadow .3s,width .3s}
+.spl .stg i.on{width:30px;background:var(--cy);box-shadow:0 0 8px rgba(94,234,212,.85)}
+.spl .ld small{display:block;margin-top:10px;min-height:18px;color:var(--dim);font-size:10.5px;font-weight:700;transition:opacity .18s}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -489,7 +493,9 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
     <h1>__TITLE__</h1>
     <p>__TAG__</p>
   </div>
-  <div class="ld"><div class="trk"><i class="fl"></i><b><svg><use href="#i-plane"/></svg></b></div><small id="spMsg">در حال اتصالِ امن…</small></div>
+  <div class="ld"><div class="pc"><span id="spMsg">در حال اتصالِ امن…</span><b id="spPct">۰٪</b></div>
+    <div class="trk" id="spTrk"><i class="fl" id="spBar"></i><b id="spPl"><svg><use href="#i-plane"/></svg></b></div>
+    <div class="stg" id="spStg"><i></i><i></i><i></i><i></i><i></i></div><small id="spTip"></small></div>
 </div>
 
 <div class="app">
@@ -630,18 +636,37 @@ function openApp(url){
   location.href = url + h;
 }
 
-var SPL = { t0: Date.now(), gone: false, min: 1300 };
-try { var LO = Number(localStorage.getItem('sv_open_' + B.app)) || 0; if (SPL.t0 - LO >= 0 && SPL.t0 - LO < 1800000) SPL.min = 600;
-      localStorage.setItem('sv_open_' + B.app, String(SPL.t0)); } catch(e){}
+var SPL = { t0: (function(){ try { var o = performance.timeOrigin || performance.timing.navigationStart; if (o > 0 && Date.now() - o < 15000) return o; } catch(e){} return Date.now(); })(),
+            gone: false, min: Math.max(0, Math.min(20, Number(B.spl) || 0)) * 1000 };
+var SPM = ['در حال اتصالِ امن…', 'دریافتِ سرویس‌های تلگرام…', 'به‌روزرسانیِ قیمت‌ها…', 'بررسیِ کیف پول…', 'آماده‌سازیِ باند…', 'آماده‌ی پرواز ✈️'];
+var SPT = ['📢 کانال یا گروه باید عمومی باشد', '⚡ شروعِ خودکار، چند دقیقه بعد از پرداخت', '🛡 سرویس‌های ضمانت‌دار ریزش را جبران می‌کنند', '📊 پیشرفتِ سفارش را زنده در «سفارش‌ها» ببینید'];
+function splStep(){
+  if (SPL.gone) return false;
+  var el = Date.now() - SPL.t0, p = SPL.min ? Math.min(1, el / SPL.min) : 1;
+  var pc = $('spPct'), bar = $('spBar'), pl = $('spPl'), tr = $('spTrk'), m = $('spMsg'), g = $('spStg'), t = $('spTip');
+  if (pc) pc.textContent = faD(Math.floor(p * 100)) + '٪';
+  if (bar) bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+  if (pl && tr) pl.style.transform = 'translate3d(' + (-p * tr.clientWidth).toFixed(1) + 'px,0,0)';
+  var mi = Math.min(SPM.length - 1, Math.floor(p * (SPM.length - 1) + (p >= 1 ? 1 : 0)));
+  if (m && SPL.mi !== mi) { SPL.mi = mi; m.textContent = SPM[mi]; }
+  if (g) [].forEach.call(g.children, function(x, k){ x.classList.toggle('on', p * g.children.length >= k + 1 - 0.001); });
+  var ti = Math.floor(el / 2600) % SPT.length;
+  if (t && SPL.ti !== ti) { SPL.ti = ti; t.style.opacity = 0; setTimeout(function(){ t.textContent = SPT[ti]; t.style.opacity = 1; }, 170); }
+  return true;
+}
+splStep();
+SPL.iv = setInterval(function(){ if (!splStep()) clearInterval(SPL.iv); }, 100);
 function hideSplash(now){
-  if (SPL.gone) return; SPL.gone = true;
+  if (SPL.gone || (SPL.hiding && !now)) return;
+  SPL.hiding = true;
   var wait = now ? 0 : Math.max(0, SPL.min - (Date.now() - SPL.t0));
-  setTimeout(function(){ var sp = $('spl'); if (!sp) return; sp.classList.add('out');
+  setTimeout(function(){
+    if (SPL.gone) return;
+    splStep(); SPL.gone = true; clearInterval(SPL.iv);
+    var sp = $('spl'); if (!sp) return; sp.classList.add('out');
     setTimeout(function(){ if (sp.parentNode) sp.parentNode.removeChild(sp); }, 700); }, wait);
 }
-setTimeout(function(){ hideSplash(false); }, 3000);
-[[900, 'دریافتِ سرویس‌ها…'], [1800, 'آماده‌ی پرواز…']].forEach(function(m){
-  setTimeout(function(){ var e = $('spMsg'); if (e && !SPL.gone) e.textContent = m[1]; }, m[0]); });
+setTimeout(function(){ hideSplash(false); }, Math.max(3000, SPL.min + 2500 - (Date.now() - SPL.t0)));
 var API = (function(){ try { if (/^https?:$/.test(location.protocol)) return location.origin + location.pathname + '?mapi=1'; } catch(e){} return ''; })();
 var READS = { me: 1, sv_orders: 1, sv_order: 1 };
 var GATED = false;
