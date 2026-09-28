@@ -130,6 +130,17 @@ function maCatalogPublic() {
 function maSoldByCat() {
     $hit = maCacheGet('sold_by_cat', 300);
     if (is_array($hit)) return $hit;
+    $stale = maCacheGet('sold_by_cat', 0);
+    if (is_array($stale)) {
+        maAfterResponse('sold_by_cat', function () {
+            if (!is_array(maCacheGet('sold_by_cat', 300, true))) maSoldByCatBuild();
+        });
+        return $stale;
+    }
+    return maSoldByCatBuild();
+}
+
+function maSoldByCatBuild() {
     $byItem = [];
     $db = maOrdersDb();
     if ($db) {
@@ -263,6 +274,24 @@ function maCachePrune() {
             if (!is_array($x) || ($now - (int)($x['at'] ?? 0)) > $maxAge) unset($c[$k]);
         }
     });
+}
+
+function maAfterResponse($key, callable $fn) {
+    static $jobs = null;
+    if ($jobs === null) {
+        $jobs = [];
+        register_shutdown_function(function () use (&$jobs) {
+            if (!$jobs) return;
+            ignore_user_abort(true);
+            if (function_exists('fastcgi_finish_request'))       @fastcgi_finish_request();
+            elseif (function_exists('litespeed_finish_request')) @litespeed_finish_request();
+            foreach ($jobs as $k => $job) {
+                try { $job(); } catch (Throwable $e) { error_log('[maAfterResponse/' . $k . '] ' . $e->getMessage()); }
+            }
+            $jobs = [];
+        });
+    }
+    $jobs[(string)$key] = $fn;
 }
 
 function maNoNet($on = null) {
@@ -524,7 +553,7 @@ class MaOrder
     public static function doneCount($uid) {
         $db = maOrdersDb();
         if (!$db) return 0;
-        $stmt = $db->prepare("SELECT COUNT(*) c FROM orders WHERE user_id = :u AND app = 'num' AND status = :s");
+        $stmt = $db->prepare("SELECT COUNT(*) c FROM orders WHERE user_id = :u AND +app = 'num' AND +status = :s");
         $stmt->bindValue(':u', (int)$uid, SQLITE3_INTEGER);
         $stmt->bindValue(':s', self::DONE, SQLITE3_TEXT);
         $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
@@ -609,6 +638,7 @@ function maOrdersDb() {
     )');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_ma_orders_user   ON orders(user_id, created_at)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_ma_orders_status ON orders(status)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_ma_orders_feed   ON orders(status, app, created_at)');
     $db->exec('CREATE TABLE IF NOT EXISTS orders_old (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
 
     if ($fresh) maOrdersImportFromJson($db);
