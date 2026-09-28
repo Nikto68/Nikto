@@ -4936,6 +4936,7 @@ if (isset($_GET['cron'])) {
          ' · games: ' . gmTick(50) .
          ' · numbers: ' . numTick(50) .
          ' · services: ' . (function_exists('svSync') ? svSync(100) : 0) .
+         ' · refills: ' . (function_exists('svRefillSync') ? svRefillSync(60) : 0) .
          ' · archive: ' . (ordersArchive() + maOrdersArchive()) .
          ' · mine: ' . (function_exists('mnTick') ? mnTick(50) : 0) .
          ' · bank: ' . (function_exists('bkPendSweep') ? bkPendSweep(200) : 0) .

@@ -1,6 +1,8 @@
 <?php
 
 if (!defined('SV_OPEN_MAX')) define('SV_OPEN_MAX', 10);
+if (!defined('SV_DEFAULT_URL')) define('SV_DEFAULT_URL', 'https://justanotherpanel.com/api/v2');
+if (!defined('SV_REFILL_GAP')) define('SV_REFILL_GAP', 86400);
 
 function svApps() {
     return [
@@ -46,11 +48,14 @@ function svCurrencies() {
 
 function svDefaults() {
     return [
-        'url'     => '',
+        'url'     => SV_DEFAULT_URL,
         'key'     => '',
-        'cur'     => 'toman',
+        'cur'     => 'usd_live',
         'fx'      => 0,
         'fx_live' => 0,
+        'pcur'    => '',
+        'pbal'    => 0,
+        'pbal_at' => 0,
         'markup'  => 30,
         'timeout' => 20,
         'apps'    => [
@@ -64,7 +69,35 @@ function svDefaults() {
 
 function svCfg() {
     $s = cfg()['svc'] ?? null;
-    return array_replace_recursive(svDefaults(), is_array($s) ? $s : []);
+    $c = array_replace_recursive(svDefaults(), is_array($s) ? $s : []);
+    if (trim((string)$c['url']) === '') $c['url'] = SV_DEFAULT_URL;
+    return $c;
+}
+
+function svHost($url = null) {
+    return strtolower((string)parse_url(trim((string)($url ?? svCfg()['url'])), PHP_URL_HOST));
+}
+
+function svIsJap($url = null) {
+    return (bool)preg_match('/(^|\.)justanotherpanel\.com$/', svHost($url));
+}
+
+function svPanelName() {
+    return svIsJap() ? 'JustAnotherPanel' : (svHost() ?: 'پنلِ خدمات');
+}
+
+// واحدی که واقعا با آن حساب می‌شود: اگر پنل خودش گفته دلاری است (یا JAP است) ولی در تنظیمات «تومان/ریال» مانده،
+// قیمت‌ها هزار برابر ارزان فروخته می‌شدند — پس خودکار «دلار با قیمتِ لحظه‌ای» حساب می‌شود.
+function svCurEff() {
+    $c   = svCfg();
+    $cur = (string)$c['cur'];
+    if (!isset(svCurrencies()[$cur])) $cur = 'usd_live';
+    $pc  = mb_strtoupper(trim((string)$c['pcur']));
+    $usd = $cur === 'usd' || $cur === 'usd_live';
+    if (!$usd && ($pc === 'USD' || $pc === 'USDT' || ($pc === '' && svIsJap()))) return 'usd_live';
+    if ($usd && in_array($pc, ['IRT', 'TOMAN', 'TMN', 'تومان'], true)) return 'toman';
+    if ($usd && in_array($pc, ['IRR', 'RIAL', 'ریال'], true)) return 'rial';
+    return $cur;
 }
 
 function svSet(callable $fn) {
@@ -147,13 +180,30 @@ function svDb() {
         checked INTEGER NOT NULL DEFAULT 0, tries INTEGER NOT NULL DEFAULT 0)");
     $db->exec('CREATE INDEX IF NOT EXISTS svo_user ON svo(uid, created)');
     $db->exec('CREATE INDEX IF NOT EXISTS svo_open ON svo(status, checked)');
+    $added = svDbCols($db, 'svc', ['man' => 'INTEGER NOT NULL DEFAULT 0', 'fa' => 'INTEGER NOT NULL DEFAULT 0']);
+    svDbCols($db, 'svo', ['ans' => 'INTEGER NOT NULL DEFAULT 0', 'rfid' => "TEXT NOT NULL DEFAULT ''",
+                          'rfst' => "TEXT NOT NULL DEFAULT ''", 'rfat' => 'INTEGER NOT NULL DEFAULT 0',
+                          'rfck' => 'INTEGER NOT NULL DEFAULT 0']);
+    // سرویس‌هایی که قبلا با نامِ انگلیسیِ پنل دریافت شده بودند، یک بار فارسی می‌شوند
+    if (in_array('fa', $added, true)) {
+        try { svFaRename(false); } catch (Throwable $e) { error_log('[services] fa rename: ' . $e->getMessage()); }
+    }
     return $db;
+}
+
+function svDbCols(SQLite3 $db, $table, array $cols) {
+    $have = $added = [];
+    $res = $db->query('PRAGMA table_info(' . $table . ')');
+    while ($res && ($r = $res->fetchArray(SQLITE3_ASSOC))) $have[(string)$r['name']] = 1;
+    foreach ($cols as $name => $def)
+        if (!isset($have[$name]) && @$db->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $name . ' ' . $def)) $added[] = $name;
+    return $added;
 }
 
 
 function svFx() {
     $c = svCfg();
-    switch ((string)$c['cur']) {
+    switch (svCurEff()) {
         case 'toman': return 1.0;
         case 'rial':  return 0.1;
         case 'usd_live':
@@ -164,7 +214,7 @@ function svFx() {
 }
 
 function svFxRefresh() {
-    if ((string)svCfg()['cur'] !== 'usd_live' || !function_exists('pxUsdtIrt')) return 0.0;
+    if (svCurEff() !== 'usd_live' || !function_exists('pxUsdtIrt')) return 0.0;
     $r = (float)pxUsdtIrt();
     if ($r > 0) svSet(function (&$c) use ($r) { $c['fx_live'] = round($r, 2); });
     return $r;
@@ -189,35 +239,73 @@ function svTotal($p1k, $qty) {
     return max(1.0, (float)ceil((float)$p1k * (int)$qty / 1000 - 1e-9));
 }
 
-function svTypeOk($type) {
+// «Default» = لینک + تعداد. «Poll» = همان به‌علاوه‌ی شماره‌ی گزینه. بقیه (Package، کامنتِ دلخواه، منشن، اشتراکِ خودکار…)
+// پارامترها یا قیمت‌گذاریِ دیگری دارند و فروخته نمی‌شوند.
+function svKind($type) {
     $t = strtolower(trim((string)$type));
-    return $t === '' || $t === 'default';
+    if ($t === '' || $t === 'default') return 'default';
+    if ($t === 'poll') return 'poll';
+    return '';
+}
+
+function svTypeOk($type) {
+    return svKind($type) !== '';
 }
 
 
+function svGuessApp($s) {
+    if ($s === '') return null;
+    if (preg_match('/threads|تردز|website|web\s*traffic|\bseo\b/u', $s)) return '';
+    $ig = (bool)preg_match('/instagram|\binsta\b|اینستا|\big\b|\bigtv\b/u', $s);
+    $tg = (bool)preg_match('/telegram|تلگرام|\btg\b/u', $s);
+    if ($ig !== $tg) return $ig ? 'ig' : 'tg';
+    if ($ig && $tg) return '';
+    if (preg_match('/facebook|\bfb\b|youtube|tik\s?tok|twitter|\bx\s*\(|\bx\.com|spotify|soundcloud|twitch|discord|linkedin|pinterest|' .
+                   'snapchat|reddit|quora|\bkick\b|whatsapp|\bvk\b|website|web traffic|google|apple music|deezer|shazam|audiomack|' .
+                   'likee|rumble|clubhouse|tidal|trovo|vimeo|dailymotion|kwai|tumblr|bluesky|mixcloud|napster|boomplay|anghami|' .
+                   'yandex|trustpilot|\bsteam\b|kakao|viber|\bline\b|snack video|تیک.?تاک|یوتیوب|توییتر|فیسبوک|واتساپ/u', $s)) return '';
+    return null;
+}
+
+function svGuessCat($app, $s) {
+    if ($s === '') return 'other';
+    if ($app === 'ig') {
+        $map = [
+            'story'     => '/stor(y|ies)|استوری/u',
+            'followers' => '/follow|فالو/u',
+            'likes'     => '/comments?\s*likes?|لایک.?کامنت/u',
+            'comments'  => '/comment|repl(y|ies)|کامنت/u',
+            'likes2'    => '/like|لایک/u',
+            'saves'     => '/save|share|repost|سیو|اشتراک|ذخیره/u',
+            'views'     => '/view|reel|play|igtv|video|impression|reach|visit|\blive\b|watch|ویو|بازدید|ریلز/u',
+        ];
+    } else {
+        $s = preg_replace('/non[\s\-_]*premium|no[\s\-_]+premium|بدون\s*پریمیوم/u', ' ', $s);
+        $map = [
+            'reactions' => '/reaction|react|emoji|ری.?اکشن|واکنش/u',
+            'votes'     => '/vote|poll|رای|رأی|نظرسنجی/u',
+            'comments'  => '/comment|repl(y|ies)|کامنت/u',
+            'premium'   => '/premium[^|\]\)]{0,24}?(member|subscriber|user|account)|(member|subscriber)s?[^|]{0,14}premium|boost|بوست|ممبر.?پریمیوم|پریمیوم.?ممبر/u',
+            'views'     => '/view|stor(y|ies)|seen|بازدید|سین|ویو/u',
+            'members'   => '/member|subscriber|join|ممبر|عضو|سابسکرایبر/u',
+            'premium2'  => '/premium|پریمیوم/u',
+        ];
+    }
+    foreach ($map as $cat => $rx) if (preg_match($rx, $s)) return rtrim($cat, '2');
+    return 'other';
+}
+
+// اول «دسته»ی پنل (مثلا «Telegram Members» یا «Instagram Story Views») و بعد نامِ سرویس.
 function svGuess($pname, $pcat) {
-    $s = mb_strtolower($pname . ' ' . $pcat);
-    $isIg = preg_match('/instagram|insta\b|اینستا|\big\b/u', $s);
-    $isTg = preg_match('/telegram|تلگرام|\btg\b/u', $s);
-    if ($isIg && !$isTg) {
-        $map = [
-            'followers' => '/follower|فالو/u', 'likes' => '/like|لایک/u', 'story' => '/story|استوری/u',
-            'comments'  => '/comment|کامنت/u', 'saves' => '/save|share|سیو|اشتراک/u',
-            'views'     => '/view|reel|play|igtv|video|ویو|بازدید/u',
-        ];
-        foreach ($map as $cat => $rx) if (preg_match($rx, $s)) return ['ig', $cat];
-        return ['ig', 'other'];
-    }
-    if ($isTg) {
-        $map = [
-            'members'   => '/member|subscriber|ممبر|عضو/u', 'reactions' => '/reaction|ری.?اکشن|emoji/u',
-            'premium'   => '/premium|boost|star|پریمیوم|بوست/u', 'votes' => '/vote|poll|رای/u',
-            'comments'  => '/comment|کامنت/u', 'views' => '/view|بازدید|سین/u',
-        ];
-        foreach ($map as $cat => $rx) if (preg_match($rx, $s)) return ['tg', $cat];
-        return ['tg', 'other'];
-    }
-    return ['', 'other'];
+    $c = mb_strtolower(trim((string)$pcat));
+    $n = mb_strtolower(trim((string)$pname));
+    if (preg_match('/threads|تردز/u', $c . ' ' . $n)) return ['', 'other'];
+    $app = svGuessApp($c);
+    if ($app === null) $app = svGuessApp($n);
+    if (!$app) return ['', 'other'];
+    $cat = svGuessCat($app, $c);
+    if ($cat === 'other') $cat = svGuessCat($app, $n);
+    return [$app, $cat];
 }
 
 function svCleanName($pname) {
@@ -225,10 +313,221 @@ function svCleanName($pname) {
     return mb_substr($n, 0, 90);
 }
 
+
+// ---------- نامِ فارسیِ خودکار برای سرویس‌های پنل (JAP و مشابه) ----------
+function svFaDigits($s) {
+    return strtr((string)$s, ['0' => '۰', '1' => '۱', '2' => '۲', '3' => '۳', '4' => '۴', '5' => '۵', '6' => '۶', '7' => '۷', '8' => '۸', '9' => '۹', '.' => '٫']);
+}
+
+function svFaAmount($num, $unit = '') {
+    $n = (float)str_replace(',', '', (string)$num);
+    $u = strtolower((string)$unit);
+    if ($u === 'k') $n *= 1000; elseif ($u === 'm') $n *= 1000000; elseif ($u === 'b') $n *= 1000000000;
+    if ($n <= 0) return '';
+    [$v, $w] = $n >= 1000000 ? [$n / 1000000, ' میلیون'] : ($n >= 1000 ? [$n / 1000, ' هزار'] : [$n, '']);
+    return svFaDigits(rtrim(rtrim(number_format($v, 1, '.', ''), '0'), '.')) . $w;
+}
+
+function svFaTime($a, $b, $unit) {
+    $u = strtolower($unit);
+    $w = str_starts_with($u, 'd') ? 'روز' : (str_starts_with($u, 'h') ? 'ساعت' : 'دقیقه');
+    return svFaDigits($a) . ($b !== '' && $b !== null ? ' تا ' . svFaDigits($b) : '') . ' ' . $w;
+}
+
+function svFaBase($app, $cat, $s) {
+    $has = fn($rx) => (bool)preg_match($rx, $s);
+    if ($app === 'ig') {
+        switch ($cat) {
+            case 'followers': return 'فالوور';
+            case 'likes':
+                if ($has('/comments?\s*likes?/')) return 'لایکِ کامنت';
+                if ($has('/stor(y|ies)/')) return 'لایکِ استوری';
+                if ($has('/reel/')) return 'لایکِ ریلز';
+                if ($has('/\blive\b/')) return 'لایکِ لایو';
+                return 'لایک';
+            case 'comments':
+                if ($has('/\blive\b/')) return 'کامنتِ لایو';
+                if ($has('/repl(y|ies)/')) return 'ریپلای کامنت';
+                return 'کامنت';
+            case 'story':
+                if ($has('/poll|vote/')) return 'رای نظرسنجیِ استوری';
+                if ($has('/like/')) return 'لایکِ استوری';
+                if ($has('/link\s*click|sticker/')) return 'کلیکِ لینکِ استوری';
+                return 'بازدیدِ استوری';
+            case 'saves':
+                return $has('/share|repost|send/') && !$has('/save/') ? 'اشتراکِ پست' : 'سیوِ پست';
+            case 'views':
+                if ($has('/impression|reach/')) return 'ایمپرشن و ریچ';
+                if ($has('/profile|visit/')) return 'بازدیدِ پروفایل';
+                if ($has('/\blive\b/')) return 'بیننده‌ی لایو';
+                if ($has('/reel/')) return 'ویوی ریلز';
+                if ($has('/igtv/')) return 'ویوی IGTV';
+                if ($has('/video/')) return 'ویوی ویدیو';
+                return 'ویو';
+        }
+        if ($has('/channel/')) return 'عضوِ کانالِ اینستاگرام';
+        if ($has('/poll|vote/')) return 'رای نظرسنجی';
+        if ($has('/mention/')) return 'منشن';
+        if ($has('/direct|\bdm\b/')) return 'دایرکت';
+        return 'سرویسِ اینستاگرام';
+    }
+    switch ($cat) {
+        case 'members':
+            $g = $has('/group|گروه/'); $c = $has('/channel|کانال/');
+            return $g && !$c ? 'ممبرِ گروه' : ($c && !$g ? 'ممبرِ کانال' : 'ممبرِ کانال و گروه');
+        case 'premium':
+            return $has('/boost|بوست/') ? 'بوستِ کانال' : 'ممبرِ پریمیوم';
+        case 'views':
+            if ($has('/stor(y|ies)/')) return 'بازدیدِ استوری';
+            if ($has('/(auto|future|next\s*\d+)/')) return 'بازدیدِ خودکار';
+            if ($has('/premium/')) return 'بازدیدِ پریمیوم';
+            return 'بازدیدِ پست';
+        case 'reactions':
+            if ($has('/stor(y|ies)/')) return 'ری‌اکشنِ استوری';
+            if ($has('/premium/')) return 'ری‌اکشنِ پریمیوم';
+            return 'ری‌اکشن';
+        case 'votes': return 'رای نظرسنجی';
+        case 'comments': return 'کامنت';
+    }
+    if ($has('/\bbot\b|start/')) return 'استارتِ ربات';
+    if ($has('/share|forward/')) return 'اشتراکِ پست';
+    return 'سرویسِ تلگرام';
+}
+
+function svFaName($pname, $pcat, $app, $cat, $refill = 0) {
+    if ($app === '' || !isset(svApps()[$app])) return svCleanName($pname);
+    $s = mb_strtolower(trim((string)$pname) . ' | ' . trim((string)$pcat));
+    $n = mb_strtolower((string)$pname);
+    $base = svFaBase($app, $cat, $s);
+
+    $adj = [];
+    $add = function ($w) use (&$adj) { if ($w !== '' && !in_array($w, $adj, true)) $adj[] = $w; };
+    $tests = [
+        '/non[\s\-_]*premium|no[\s\-_]+premium/' => 'معمولی',
+        '/real[\s\-]*look/'                       => 'شبیهِ واقعی',
+        '/\breal\b(?![\s\-]*look)|\bhuman\b|organic/' => 'واقعی',
+        '/\bhq\b|high[\s\-]*quality/'             => 'باکیفیت',
+        '/\blq\b|low[\s\-]*quality|cheap/'        => 'اقتصادی',
+        '/verified|blue\s*tick/'                  => 'تیک‌آبی',
+        '/\bpower\b/'                             => 'قدرتی',
+        '/\bactive\b/'                            => 'فعال',
+        '/best\s*sell|recommended|popular/'       => 'پرفروش',
+        '/positive/'                              => 'مثبت',
+        '/negative/'                              => 'منفی',
+        '/custom/'                                => 'دلخواه',
+        '/random/'                                => 'تصادفی',
+        '/\bmix(ed)?\b/'                          => 'ترکیبی',
+        '/old\s*accounts?|aged/'                  => 'اکانتِ قدیمی',
+        '/slow|gradual|drip/'                     => 'تدریجی',
+        '/\bfast\b|super\s*fast|\bquick\b|speedy/' => 'سریع',
+    ];
+    if ($app === 'ig' && !in_array($cat, ['story'], true)) $tests['/premium|\bvip\b/'] = 'ویژه';
+    if ($cat === 'comments') $tests['/emoji/'] = 'ایموجی';
+    foreach ($tests as $rx => $w) if (preg_match($rx . 'u', $s)) $add($w);
+    $geo = [
+        '/\biran(ian)?\b|persian|ایرانی/' => 'ایرانی', '/\busa\b|\bu\.s\.a?\b|united\s*states|\bamerica(n)?\b/' => 'آمریکایی',
+        '/\barab(ic)?\b|saudi|\buae\b|emirates|egypt/' => 'عرب', '/turk(ey|ish)?\b|türkiye/' => 'ترک',
+        '/russia(n)?/' => 'روس', '/\bindia(n)?\b/' => 'هندی', '/brazil/' => 'برزیلی', '/europe/' => 'اروپایی',
+        '/\buk\b|british|england/' => 'انگلیسی', '/german/' => 'آلمانی', '/france|french/' => 'فرانسوی',
+        '/spain|spanish/' => 'اسپانیایی', '/ital(y|ian)/' => 'ایتالیایی', '/indonesia/' => 'اندونزیایی', '/korea/' => 'کره‌ای',
+        '/japan/' => 'ژاپنی', '/china|chinese/' => 'چینی', '/\basia(n)?\b/' => 'آسیایی', '/africa/' => 'آفریقایی',
+        '/latin|latam/' => 'آمریکای لاتین', '/pakistan/' => 'پاکستانی', '/uzbek/' => 'ازبک', '/azer/' => 'آذربایجانی',
+        '/global|worldwide|international/' => 'جهانی',
+    ];
+    $lead = [];
+    if (preg_match('/female|women|girls?\b/u', $n)) $lead[] = 'خانم';
+    elseif (preg_match('/\bmale\b|\bmen\b/u', $n)) $lead[] = 'آقا';
+    foreach ($geo as $rx => $w) if (preg_match($rx . 'u', $n)) { $lead[] = $w; break; }
+    $adj = array_merge($lead, $adj);
+    if (preg_match('/\+\s*(views?|reach|impressions?|likes?|saves?|shares?)/u', $n, $m)) {
+        $plus = ['view' => 'بازدید', 'reac' => 'ریچ', 'impr' => 'ایمپرشن', 'like' => 'لایک', 'save' => 'سیو', 'shar' => 'اشتراک'][substr($m[1], 0, 4)] ?? '';
+        if ($plus !== '' && !str_contains($base, $plus) && !($plus === 'بازدید' && str_contains($base, 'ویو'))) $add('+ ' . $plus);
+    }
+
+    $f = [];
+    if (preg_match('/non[\s\-]*drop|no[\s\-]*drop|0%\s*drop|zero\s*drop/u', $n)) $f[] = 'بدونِ ریزش';
+    elseif (preg_match('/low[\s\-]*drop/u', $n)) $f[] = 'ریزشِ کم';
+    if (preg_match('/(?:refill|guarantee(?:d)?|ضمانت)\s*[:\-]?\s*(\d+)\s*(d|days?|روز)\b/u', $n, $m)
+        || preg_match('/(\d+)\s*(d|days?)\s*(?:refill|guarantee)/u', $n, $m)) $f[] = 'ضمانتِ ' . svFaDigits($m[1]) . ' روزه';
+    elseif (preg_match('/(?:refill|guarantee(?:d)?)\s*[:\-]?\s*(\d+)\s*(months?|m)\b|(\d+)\s*months?\s*refill/u', $n, $m))
+        $f[] = 'ضمانتِ ' . svFaDigits($m[1] !== '' ? $m[1] : $m[3]) . ' ماهه';
+    elseif (preg_match('/lifetime|life\s*time/u', $n)) $f[] = 'ضمانتِ همیشگی';
+    elseif (preg_match('/\br(\d{2,3})\b/u', $n, $m)) $f[] = 'ضمانتِ ' . svFaDigits($m[1]) . ' روزه';
+    elseif (preg_match('/no\s*refill|non[\s\-]*refill|refill\s*[:\-]?\s*(no\b|none|❌)|without\s*refill/u', $n)) $f[] = 'بدونِ ضمانت';
+    elseif ($refill || str_contains($n, '♻') || preg_match('/\brefill\b|guarantee/u', $n)) $f[] = 'ضمانت‌دار';
+
+    if (preg_match('/(last|latest)\s*(\d+)\s*posts?/u', $n, $m)) $f[] = svFaDigits($m[2]) . ' پستِ آخر';
+    elseif (preg_match('/(next|future)\s*(\d+)\s*posts?/u', $n, $m)) $f[] = svFaDigits($m[2]) . ' پستِ بعدی';
+    elseif (preg_match('/\b1\s*post\b|single\s*post/u', $n)) $f[] = 'یک پست';
+
+    if ($app === 'tg' && $cat === 'premium' && preg_match('/(\d+)\s*(d|days?)\b/u', $n, $m)) $f[] = svFaDigits($m[1]) . ' روزه';
+    $nd = preg_replace('/start(?:\s*time)?\s*[:\-]?\s*[\w\s\-–]{0,14}/u', ' ', $n);
+    if (preg_match('/(\d+)\s*(minutes?|mins?)\b/u', $nd, $m)) $f[] = svFaDigits($m[1]) . ' دقیقه';
+
+    if (preg_match('/\bmax(?:imum)?\s*[:\-]?\s*([\d][\d.,]*)\s*([kmb])?\b/u', $n, $m)) {
+        $a = svFaAmount($m[1], $m[2] ?? '');
+        if ($a !== '') $f[] = 'سقفِ ' . $a;
+    }
+    if (preg_match('/start(?:\s*time)?\s*[:\-]?\s*(instant|immediate)/u', $n)) $f[] = 'شروعِ فوری';
+    elseif (preg_match('/start(?:\s*time)?\s*[:\-]?\s*(\d+)\s*(?:-|to|–)\s*(\d+)\s*(min|minutes?|mins?|m|hrs?|hours?|h|days?|d)\b/u', $n, $m))
+        $f[] = 'شروعِ ' . svFaTime($m[1], $m[2], $m[3]);
+    elseif (preg_match('/start(?:\s*time)?\s*[:\-]?\s*(\d+)\s*(min|minutes?|mins?|m|hrs?|hours?|h|days?|d)\b/u', $n, $m))
+        $f[] = 'شروعِ ' . svFaTime($m[1], '', $m[2]);
+    elseif (preg_match('/\binstant\b/u', $n)) $f[] = 'شروعِ فوری';
+
+    if (preg_match('/speed\s*[:\-]?\s*([\d][\d.,]*)\s*([km])?\s*(?:\/|per)\s*(d|day|h|hr|hour)\b/u', $n, $m)
+        || preg_match('/\b(?:day|daily)\s*[:\-]?\s*([\d][\d.,]*)\s*([km])?\b()/u', $n, $m)
+        || preg_match('/([\d][\d.,]*)\s*([km])?\s*\/\s*(d|day|h|hr|hour)\b/u', $n, $m)) {
+        $a = svFaAmount($m[1], $m[2] ?? '');
+        $per = isset($m[3]) && $m[3] !== '' && $m[3][0] === 'h' ? 'در ساعت' : 'در روز';
+        if ($a !== '') $f[] = 'سرعتِ ' . $a . ' ' . $per;
+    }
+    if ($app === 'tg' && $cat === 'reactions' && preg_match_all('/[\x{1F300}-\x{1FAFF}\x{2764}\x{2600}-\x{26FF}]\x{FE0F}?/u', (string)$pname, $em)) {
+        $e = implode('', array_slice(array_unique(array_filter($em[0], fn($x) => !preg_match('/^[\x{267B}\x{26A1}]/u', $x))), 0, 6));
+        if ($e !== '') $f[] = $e;
+    }
+
+    $out = $base . ($adj ? ' ' . implode(' ', $adj) : '');
+    foreach ($f as $k => $x) {
+        $try = $out . ($k === 0 ? ' — ' : ' · ') . $x;
+        if (mb_strlen($try) > 90) break;
+        $out = $try;
+    }
+    return mb_substr($out, 0, 90);
+}
+
+// نامی که هنوز خودکار است (ادمین دستی عوضش نکرده) — با فارسیِ تازه جایگزین می‌شود
+function svNameAuto(array $s) {
+    return !empty($s['fa']) || (string)$s['name'] === '' || (string)$s['name'] === (string)$s['pname'];
+}
+
+function svFaRename($all = false) {
+    $db = svDb();
+    if (!$db) return 0;
+    $res = $db->query('SELECT id, app, cat, name, pname, pcat, refill, fa FROM svc');
+    $rows = [];
+    while ($res && ($r = $res->fetchArray(SQLITE3_ASSOC))) $rows[] = $r;
+    $st = $db->prepare('UPDATE svc SET name = :n, fa = 1 WHERE id = :id');
+    $n = 0;
+    $db->exec('BEGIN');
+    foreach ($rows as $r) {
+        if (!$all && !svNameAuto($r)) continue;
+        $new = svFaName($r['pname'], $r['pcat'], (string)$r['app'], (string)$r['cat'], (int)$r['refill']);
+        if ($new === (string)$r['name'] && (int)$r['fa']) continue;
+        $st->bindValue(':n', $new, SQLITE3_TEXT);
+        $st->bindValue(':id', (string)$r['id'], SQLITE3_TEXT);
+        $st->execute(); $st->reset();
+        $n++;
+    }
+    $db->exec('COMMIT');
+    return $n;
+}
+
 function svRowOf(array $r) {
     $r['active'] = (int)$r['active']; $r['min'] = (int)$r['min']; $r['max'] = (int)$r['max'];
     $r['refill'] = (int)$r['refill']; $r['cancel'] = (int)$r['cancel']; $r['gone'] = (int)$r['gone'];
     $r['rate'] = (float)$r['rate']; $r['price'] = (float)$r['price']; $r['pos'] = (int)$r['pos'];
+    $r['man'] = (int)($r['man'] ?? 0); $r['fa'] = (int)($r['fa'] ?? 0);
     return $r;
 }
 
@@ -274,11 +573,13 @@ function svPublic($app) {
         $c = isset($cats[$s['cat']]) ? $s['cat'] : 'other';
         $n[$c] = ($n[$c] ?? 0) + 1;
         if (!isset($from[$c]) || $p < $from[$c]) $from[$c] = $p;
-        $items[] = [
+        $it = [
             'i' => (string)$s['id'], 'c' => $c, 'n' => $s['name'] !== '' ? $s['name'] : svCleanName($s['pname']),
             'p' => $p, 'mn' => max(1, $s['min']), 'mx' => max(max(1, $s['min']), $s['max']),
             'r' => $s['refill'] ? 1 : 0,
         ];
+        if (svKind($s['type']) === 'poll') $it['y'] = 'poll';
+        $items[] = $it;
     }
     $outC = [];
     foreach ($cats as $id => [$name, $ic]) {
@@ -355,7 +656,24 @@ function svBalance() {
     [$j, $err, $kind] = svHttp(['action' => 'balance'], 15);
     if ($j === null) return [0.0, '', $kind === 'api' ? svErrText($err) : $err];
     if (!isset($j['balance'])) return [0.0, '', 'پاسخِ «balance» پنل ناقص بود.'];
-    return [(float)$j['balance'], strtoupper(trim((string)($j['currency'] ?? ''))), ''];
+    $bal = (float)str_replace(',', '', (string)$j['balance']);
+    $cur = mb_strtoupper(mb_substr(trim((string)($j['currency'] ?? '')), 0, 10));
+    $was = svCurEff();
+    svSet(function (&$c) use ($bal, $cur) {
+        $c['pbal'] = $bal; $c['pbal_at'] = time();
+        if ($cur !== '') $c['pcur'] = $cur;
+    });
+    if (svCurEff() === 'usd_live' && ($was !== 'usd_live' || svFx() <= 0)) svFxRefresh();
+    return [$bal, $cur, ''];
+}
+
+// توضیحِ کوتاه وقتی واحدِ پنل با تنظیمات جور نبود و خودکار عوض شد
+function svCurNote() {
+    $set = (string)svCfg()['cur'];
+    $eff = svCurEff();
+    if ($set === $eff) return '';
+    return 'پنل گفته قیمت‌هایش به ' . (mb_strtoupper((string)svCfg()['pcur']) ?: 'دلار') . ' است؛ برای همین قیمت‌ها با «' .
+           svCurrencies()[$eff] . '» حساب می‌شوند (نه «' . (svCurrencies()[$set] ?? $set) . '»).';
 }
 
 function svImport() {
@@ -367,14 +685,16 @@ function svImport() {
 
     $db = svDb();
     if (!$db) return [false, 'دیتابیسِ خدمات باز نشد.'];
+    if (trim((string)svCfg()['pcur']) === '') svBalance();
     svFxRefresh();
 
     $seen = [];
-    $new = $upd = $tgN = $igN = $skip = 0;
+    $new = $upd = $tgN = $igN = $skip = $moved = 0;
     $now = time();
     $db->exec('BEGIN IMMEDIATE');
     try {
-        $get = $db->prepare('SELECT id FROM svc WHERE id = :id');
+        $get = $db->prepare('SELECT id, app, cat, active, man FROM svc WHERE id = :id');
+        $mv  = $db->prepare('UPDATE svc SET app = :app, cat = :cat, active = CASE WHEN :app = \'\' THEN 0 ELSE active END WHERE id = :id');
         $ins = $db->prepare('INSERT INTO svc (id, app, cat, active, name, pname, pcat, type, rate, min, max, refill, cancel, gone, pos, at)
                              VALUES (:id, :app, :cat, 0, :name, :pname, :pcat, :type, :rate, :min, :max, :refill, :cancel, 0, :pos, :at)');
         $up  = $db->prepare('UPDATE svc SET pname = :pname, pcat = :pcat, type = :type, rate = :rate, min = :min, max = :max,
@@ -403,6 +723,19 @@ function svImport() {
                 foreach ($vals as $k => $v) $up->bindValue($k, $v);
                 $up->execute(); $up->reset();
                 $upd++;
+                // دسته‌بندیِ خودکار دوباره حساب می‌شود، مگر ادمین خودش بخش/دسته را عوض کرده باشد
+                // یا سرویسِ روشن بخواهد از یک مینی‌اپ به دیگری برود.
+                if (!(int)$have['man']) {
+                    [$gApp, $gCat] = svGuess($pname, $pcat);
+                    $oApp = (string)$have['app'];
+                    if (($gApp !== $oApp || $gCat !== (string)$have['cat']) && !((int)$have['active'] && $gApp !== $oApp)) {
+                        $mv->bindValue(':app', $gApp, SQLITE3_TEXT);
+                        $mv->bindValue(':cat', $gCat, SQLITE3_TEXT);
+                        $mv->bindValue(':id', $id, SQLITE3_TEXT);
+                        $mv->execute(); $mv->reset();
+                        $moved++;
+                    }
+                }
                 continue;
             }
             [$app, $cat] = svGuess($pname, $pcat);
@@ -427,10 +760,14 @@ function svImport() {
         error_log('[services] import: ' . $e->getMessage());
         return [false, 'ذخیره‌ی سرویس‌ها نشد: ' . $e->getMessage()];
     }
-    return [true, 'از پنل ' . fmtNum(count($seen)) . ' سرویس خوانده شد — تازه: ' . fmtNum($new) .
-                  ' (تلگرام ' . fmtNum($tgN) . '، اینستاگرام ' . fmtNum($igN) . '، نامشخص ' . fmtNum($skip) . ')' .
-                  ' · به‌روزشده: ' . fmtNum($upd) . ' · حذف‌شده از پنل: ' . fmtNum($gone) .
-                  ($new ? "\nسرویس‌های تازه خاموش‌اند؛ در «سرویس‌ها» آن‌هایی را که می‌خواهید بفروشید روشن کنید." : '')];
+    $faN = svFaRename(false);
+    $note = svCurNote();
+    return [true, 'از ' . svPanelName() . ' ' . fmtNum(count($seen)) . ' سرویس خوانده شد — تازه: ' . fmtNum($new) .
+                  ' (تلگرام ' . fmtNum($tgN) . '، اینستاگرام ' . fmtNum($igN) . '، بقیه‌ی شبکه‌ها ' . fmtNum($skip) . ')' .
+                  ' · به‌روزشده: ' . fmtNum($upd) . ($moved ? ' · دسته‌بندیِ دوباره: ' . fmtNum($moved) : '') .
+                  ' · حذف‌شده از پنل: ' . fmtNum($gone) . ($faN ? ' · نامِ فارسی: ' . fmtNum($faN) : '') .
+                  ($new ? "\nسرویس‌های تازه خاموش‌اند؛ در «سرویس‌ها» آن‌هایی را که می‌خواهید بفروشید روشن کنید." : '') .
+                  ($note !== '' ? "\n" . $note : '')];
 }
 
 function svServiceSave($id, array $f) {
@@ -442,7 +779,17 @@ function svServiceSave($id, array $f) {
     $cats = $app !== '' ? svCats($app) : [];
     $cat = isset($cats[$f['cat'] ?? '']) ? (string)$f['cat'] : (isset($cats[$s['cat']]) ? $s['cat'] : 'other');
     $name = mb_substr(trim((string)($f['name'] ?? '')), 0, 90);
-    $st = $db->prepare('UPDATE svc SET app = :app, cat = :cat, active = :on, name = :name, price = :price WHERE id = :id');
+    $man = ($app !== $s['app'] || $cat !== $s['cat']) ? 1 : (int)($s['man'] ?? 0);
+    // خالی = نامِ فارسیِ خودکار · همان نامِ قبلی = دست نخورده · هر چیزِ دیگر = نامِ دستیِ ادمین
+    if ($name === '' || ($name === $s['name'] && svNameAuto($s))) {
+        $fa = 1;
+        $name = svFaName($s['pname'], $s['pcat'], $app, $cat, $s['refill']);
+    } else {
+        $fa = $name === $s['name'] ? (int)$s['fa'] : 0;
+    }
+    $st = $db->prepare('UPDATE svc SET app = :app, cat = :cat, active = :on, name = :name, price = :price, man = :man, fa = :fa WHERE id = :id');
+    $st->bindValue(':man', $man, SQLITE3_INTEGER);
+    $st->bindValue(':fa', $fa, SQLITE3_INTEGER);
     $st->bindValue(':app', $app, SQLITE3_TEXT);
     $st->bindValue(':cat', $cat, SQLITE3_TEXT);
     $st->bindValue(':on', (!empty($f['on']) && $app !== '' && !$s['gone'] && svTypeOk($s['type'])) ? 1 : 0, SQLITE3_INTEGER);
@@ -471,7 +818,7 @@ function svServiceBulk(array $ids, $on) {
     return $n;
 }
 
-function svAdminList($app, $q, $onlyOn, $page, $per) {
+function svAdminList($app, $q, $onlyOn, $page, $per, $cat = '', $pcat = '') {
     $db = svDb();
     if (!$db) return [[], 0];
     $w = ['gone = 0'];
@@ -480,6 +827,8 @@ function svAdminList($app, $q, $onlyOn, $page, $per) {
     elseif ($app !== 'all') { $w[] = 'app = :app'; $b[':app'] = $app; }
     if ($onlyOn === 'on')  $w[] = 'active = 1';
     if ($onlyOn === 'off') $w[] = 'active = 0';
+    if ($cat !== '')  { $w[] = 'cat = :cat'; $b[':cat'] = $cat; }
+    if ($pcat !== '') { $w[] = 'pcat = :pcat'; $b[':pcat'] = $pcat; }
     if ($q !== '') {
         $w[] = "(id = :qe OR name LIKE :q ESCAPE '\\' OR pname LIKE :q ESCAPE '\\' OR pcat LIKE :q ESCAPE '\\')";
         $b[':qe'] = $q;
@@ -497,6 +846,21 @@ function svAdminList($app, $q, $onlyOn, $page, $per) {
     $out = [];
     while ($res && ($r = $res->fetchArray(SQLITE3_ASSOC))) $out[] = svRowOf($r);
     return [$out, $total];
+}
+
+// دسته‌های خودِ پنل (مثلا «Telegram Members») با تعداد، برای فیلترِ صفحه‌ی سرویس‌ها
+function svPcats($app) {
+    $db = svDb();
+    if (!$db) return [];
+    $w = 'gone = 0';
+    if ($app === 'none') $w .= " AND app = ''";
+    elseif ($app !== 'all') $w .= ' AND app = :app';
+    $st = $db->prepare('SELECT pcat, COUNT(*) n, SUM(active) a FROM svc WHERE ' . $w . ' GROUP BY pcat ORDER BY MIN(pos) ASC');
+    if ($app !== 'none' && $app !== 'all') $st->bindValue(':app', (string)$app, SQLITE3_TEXT);
+    $res = $st->execute();
+    $out = [];
+    while ($res && ($r = $res->fetchArray(SQLITE3_ASSOC))) $out[(string)$r['pcat']] = [(int)$r['n'], (int)$r['a']];
+    return $out;
 }
 
 function svStats() {
@@ -606,12 +970,139 @@ function svRow($o) {
     $done = 0;
     if ($o['status'] === 'done') $done = 100;
     elseif ($rem >= 0 && $qty > 0) $done = (int)max(0, min(100, round(($qty - $rem) * 100 / $qty)));
-    return [
+    $r = [
         'id' => (string)$o['id'], 'app' => (string)$o['app'], 'n' => (string)$o['name'], 'c' => (string)$o['cat'],
         'l' => (string)$o['link'], 'q' => $qty, 't' => (float)$o['total'], 'rf' => (float)$o['refunded'],
         'st' => (string)$o['status'], 'sx' => svStatusText((string)$o['status'], (string)$o['pst']),
         'sc' => (int)$o['start'], 'rm' => $rem, 'pc' => $done, 'at' => (int)$o['created'],
     ];
+    if ((int)($o['ans'] ?? 0) > 0) $r['an'] = (int)$o['ans'];
+    if (svRefillable($o)) $r['rb'] = 1;
+    if ((string)($o['rfid'] ?? '') !== '') $r['rs'] = svRefillText((string)$o['rfst']);
+    return $r;
+}
+
+
+// ---------- ریفیل (جبرانِ ریزش) ----------
+function svRefillIds() {
+    static $ids = null;
+    if ($ids !== null) return $ids;
+    $ids = [];
+    $db = svDb();
+    if (!$db) return $ids;
+    $res = $db->query('SELECT id FROM svc WHERE refill = 1');
+    while ($res && ($r = $res->fetchArray(SQLITE3_ASSOC))) $ids[(string)$r['id']] = 1;
+    return $ids;
+}
+
+function svRefillDone($st) {
+    return in_array(strtolower(trim((string)$st)), ['completed', 'complete', 'done', 'rejected', 'canceled', 'cancelled', 'error', 'failed', 'expired'], true);
+}
+
+function svRefillText($st) {
+    $s = strtolower(trim((string)$st));
+    return [
+        '' => 'ریفیل در صف', 'pending' => 'ریفیل در صف', 'in progress' => 'ریفیل در حالِ انجام', 'processing' => 'ریفیل در حالِ انجام',
+        'completed' => 'ریفیل انجام شد', 'complete' => 'ریفیل انجام شد', 'done' => 'ریفیل انجام شد',
+        'rejected' => 'ریفیل رد شد', 'canceled' => 'ریفیل لغو شد', 'cancelled' => 'ریفیل لغو شد',
+        'error' => 'ریفیل ثبت نشد', 'failed' => 'ریفیل ثبت نشد', 'expired' => 'ریفیل بی‌جواب ماند',
+    ][$s] ?? ('ریفیل: ' . mb_substr($s, 0, 20));
+}
+
+function svRefillable($o) {
+    if (!in_array((string)$o['status'], ['done', 'partial'], true) || (string)$o['pid'] === '') return false;
+    if (!isset(svRefillIds()[(string)$o['sid']])) return false;
+    if ((int)$o['created'] < time() - 400 * 86400) return false;
+    if ((string)($o['rfid'] ?? '') === '') return true;
+    return svRefillDone((string)$o['rfst']) && (int)$o['rfat'] <= time() - SV_REFILL_GAP;
+}
+
+function svRefillErr($raw) {
+    $e = mb_strtolower((string)$raw);
+    if (str_contains($e, 'api key') || str_contains($e, 'invalid key')) return 'اتصال به پنلِ خدمات مشکل دارد؛ کمی بعد امتحان کنید.';
+    if (str_contains($e, 'already') || str_contains($e, 'wait') || str_contains($e, '24') || str_contains($e, 'recently'))
+        return 'برای این سفارش همین تازگی ریفیل ثبت شده؛ بعدا دوباره امتحان کنید.';
+    if (str_contains($e, 'expire') || str_contains($e, 'period') || str_contains($e, 'days'))
+        return 'مهلتِ ضمانتِ این سفارش تمام شده است.';
+    if (str_contains($e, 'not') || str_contains($e, 'disabled') || str_contains($e, 'unavailable'))
+        return 'فعلا ریزشی برای جبران نیست یا ریفیلِ این سفارش ممکن نیست.';
+    return 'پنلِ خدمات ریفیل را نپذیرفت: ' . mb_substr((string)$raw, 0, 120);
+}
+
+function svRefillReq($uid, $id) {
+    $o = svOrder($id);
+    if (!$o || (int)$o['uid'] !== (int)$uid) return [false, 'not_found', 'این سفارش پیدا نشد.', []];
+    if (!svRefillable($o)) {
+        $why = (string)$o['rfid'] !== '' && !svRefillDone((string)$o['rfst'])
+            ? 'ریفیلِ قبلیِ این سفارش هنوز در حالِ انجام است.'
+            : ((string)$o['rfid'] !== '' ? 'هر ۲۴ ساعت یک بار می‌شود ریفیل خواست.' : 'این سفارش ریفیل ندارد.');
+        return [false, 'no_refill', $why, ['row' => svRow($o)]];
+    }
+    [$j, $err, $kind] = svHttp(['action' => 'refill', 'order' => (string)$o['pid']], 20);
+    $rid = '';
+    if (is_array($j)) {
+        $one = isset($j[0]) && is_array($j[0]) ? $j[0] : $j;
+        $v = $one['refill'] ?? null;
+        if (is_array($v)) { $err = (string)($v['error'] ?? 'refill rejected'); $kind = 'api'; }
+        elseif ($v !== null && trim((string)$v) !== '' && trim((string)$v) !== '0') $rid = mb_substr(trim((string)$v), 0, 40);
+        elseif (isset($one['error'])) { $err = (string)$one['error']; $kind = 'api'; }
+        else { $err = 'پاسخِ ناشناخته'; $kind = 'api'; }
+    }
+    if ($rid === '') {
+        $msg = $kind === 'api' ? svRefillErr($err) : 'اتصال به پنلِ خدمات برقرار نشد؛ کمی بعد دوباره بزنید.';
+        return [false, 'refill_failed', $msg, ['row' => svRow($o)]];
+    }
+    svOrderSet((string)$o['id'], ['rfid' => $rid, 'rfst' => 'pending', 'rfat' => time(), 'rfck' => time()]);
+    maNoteAdd((int)$uid, "♻️ <b>درخواستِ ریفیل ثبت شد</b>\n\n📦 " . h((string)$o['name']) . "\n🧾 <code>" . h((string)$o['id']) . '</code>');
+    return [true, '', '', ['row' => svRow(svOrder((string)$o['id']))]];
+}
+
+function svRefillApply(array $o, $st) {
+    $s = strtolower(trim(is_string($st) ? $st : ''));
+    if (is_array($st)) $s = 'error';
+    if ($s === '') return false;
+    $was = strtolower((string)$o['rfst']);
+    svOrderSet((string)$o['id'], ['rfst' => mb_substr($s, 0, 20), 'rfck' => time()]);
+    if ($s === $was || !svRefillDone($s)) return false;
+    $ok = in_array($s, ['completed', 'complete', 'done'], true);
+    $txt = ($ok ? "♻️ <b>ریفیلِ سفارشِ شما انجام شد</b>" : "♻️ <b>ریفیلِ سفارش انجام نشد</b>") .
+           "\n\n📦 " . h((string)$o['name']) . "\n📝 " . h(svRefillText($s)) . "\n🧾 <code>" . h((string)$o['id']) . '</code>';
+    maNoteAdd((int)$o['uid'], $txt);
+    sendMsg(BOT_TOKEN, (int)$o['uid'], $txt, svOpenKb((string)$o['app'], 'orders'));
+    return true;
+}
+
+function svRefillSync($limit = 30) {
+    $db = svDb();
+    if (!$db || !svReady()) return 0;
+    $st = $db->prepare("SELECT * FROM svo WHERE rfid <> '' AND rfst NOT IN ('completed','complete','done','rejected','canceled','cancelled','error','failed','expired')
+                        AND rfck < :cut ORDER BY rfck ASC LIMIT :n");
+    $st->bindValue(':cut', time() - 240, SQLITE3_INTEGER);
+    $st->bindValue(':n', max(1, min(100, (int)$limit)), SQLITE3_INTEGER);
+    $res = $st->execute();
+    $rows = [];
+    while ($res && ($r = $res->fetchArray(SQLITE3_ASSOC))) {
+        if ((int)$r['rfat'] < time() - 20 * 86400) { svOrderSet((string)$r['id'], ['rfst' => 'expired', 'rfck' => time()]); continue; }
+        $rows[(string)$r['rfid']] = $r;
+    }
+    if (!$rows) return 0;
+    foreach ($rows as $r) svOrderSet((string)$r['id'], ['rfck' => time()]);
+    $n = 0;
+    if (count($rows) === 1) {
+        $rid = (string)array_key_first($rows);
+        [$j] = svHttp(['action' => 'refill_status', 'refill' => $rid], 15);
+        if (is_array($j) && isset($j['status']) && svRefillApply($rows[$rid], $j['status'])) $n++;
+        return $n;
+    }
+    [$j] = svHttp(['action' => 'refill_status', 'refills' => implode(',', array_keys($rows))], 25);
+    if (!is_array($j)) return 0;
+    foreach ($j as $k => $one) {
+        if (!is_array($one)) continue;
+        $rid = (string)($one['refill'] ?? $k);
+        if (!isset($rows[$rid]) || !array_key_exists('status', $one)) continue;
+        if (svRefillApply($rows[$rid], $one['status'])) $n++;
+    }
+    return $n;
 }
 
 function svOrderCreate($uid, $uname, $app, array $s, $link, $qty, $unit, $total) {
@@ -668,11 +1159,15 @@ function svRefund($id, $amount, $note, $tell = true) {
 }
 
 
-function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0) {
+function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0, $ans = 0) {
     if (!svAppOn($app)) return [false, 'closed', 'این بخش موقتا بسته است — کمی بعد دوباره امتحان کنید.', []];
     $s = svService($sid);
     if (!$s || $s['app'] !== $app || !$s['active'] || $s['gone'] || !svTypeOk($s['type']))
         return [false, 'bad_item', 'این سرویس دیگر فعال نیست — صفحه را دوباره باز کنید.', []];
+    $poll = svKind($s['type']) === 'poll';
+    $ans  = (int)$ans;
+    if ($poll && ($ans < 1 || $ans > 20))
+        return [false, 'bad_answer', 'شماره‌ی گزینه‌ی نظرسنجی را بنویسید (گزینه‌ی اول = ۱).', []];
 
     $qty = (int)$qty;
     $mn  = max(1, $s['min']);
@@ -692,7 +1187,7 @@ function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0) {
 
     if (svOpenCount($uid) >= SV_OPEN_MAX)
         return [false, 'too_many', 'الان ' . SV_OPEN_MAX . ' سفارشِ در حالِ انجام دارید؛ کمی صبر کنید تا تمام شوند.', []];
-    if (maDuplicateOrder($uid, 'sv_' . $app, (string)$sid, $qty, $link, 30))
+    if (maDuplicateOrder($uid, 'sv_' . $app, (string)$sid, $qty, $link . ($poll ? '#' . $ans : ''), 30))
         return [false, 'duplicate', 'همین سفارش چند لحظه پیش ثبت شد — در «سفارش‌ها» ببینید.', []];
 
     $bal = (float)(getUser($uid)['balance'] ?? 0);
@@ -708,7 +1203,9 @@ function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0) {
         return [false, 'no_balance', 'موجودی کافی نیست.', ['balance' => $bal, 'need' => maMoney($total - $bal), 'total' => $total]];
     }
 
-    [$j, $err, $kind] = svHttp(['action' => 'add', 'service' => (string)$sid, 'link' => $link, 'quantity' => $qty]);
+    $params = ['action' => 'add', 'service' => (string)$sid, 'link' => $link, 'quantity' => $qty];
+    if ($poll) { $params['answer_number'] = $ans; svOrderSet($id, ['ans' => $ans]); }
+    [$j, $err, $kind] = svHttp($params);
     $balNow = fn() => (float)(getUser($uid)['balance'] ?? 0);
 
     if ($j !== null && isset($j['order']) && trim((string)$j['order']) !== '') {
@@ -828,6 +1325,7 @@ function svSync($limit = 40, $uid = 0, $minAge = 50) {
         $one = $j[$pid] ?? $j[(int)$pid] ?? null;
         if (!is_array($one)) continue;
         $multi = true;
+        if (isset($one['error']) && !isset($one['status'])) continue;
         if (svApplyStatus($r, $one)) $n++;
     }
     if (!$multi) {
@@ -845,6 +1343,7 @@ function svTick() {
     $fx = DATA_DIR . '/.svc_fx_at';
     if (time() - (@filemtime($fx) ?: 0) >= 600) { @touch($fx); svFxRefresh(); }
     try { $n = svSync(60); } catch (Throwable $e) { error_log('[services] sync: ' . $e->getMessage()); }
+    try { $n += svRefillSync(40); } catch (Throwable $e) { error_log('[services] refill sync: ' . $e->getMessage()); }
     return $n;
 }
 
@@ -873,6 +1372,19 @@ function svAdminResolve($id, $how) {
         svApplyStatus($o, $j);
         $n = svOrder($id);
         return [true, 'وضعیت: ' . svStatusText((string)$n['status'], (string)$n['pst'])];
+    }
+    if ($how === 'cancel') {
+        if ($o['status'] !== 'run' || (string)$o['pid'] === '') return [false, 'فقط سفارشِ «در حالِ انجام» که در پنل ثبت شده لغوشدنی است.'];
+        [$j, $err, $kind] = svHttp(['action' => 'cancel', 'orders' => (string)$o['pid']], 20);
+        if (!is_array($j)) return [false, $kind === 'api' ? 'پنل لغو را نپذیرفت: ' . mb_substr((string)$err, 0, 150) : $err];
+        $one = null;
+        foreach ((isset($j[0]) ? $j : [$j]) as $x)
+            if (is_array($x) && (!isset($x['order']) || (string)$x['order'] === (string)$o['pid'])) { $one = $x; break; }
+        $c = $one['cancel'] ?? null;
+        if (is_array($c) || empty($c))
+            return [false, 'پنل لغو را نپذیرفت: ' . mb_substr((string)(is_array($c) ? ($c['error'] ?? json_encode($c)) : ($one['error'] ?? 'این سفارش لغوشدنی نیست')), 0, 150)];
+        svOrderSet($id, ['checked' => 0], 'run');
+        return [true, 'درخواستِ لغو به پنل رفت. وقتی پنل لغو را تایید کند، مبلغ (یا مابقیِ انجام‌نشده) خودکار به کیف پولِ کاربر برمی‌گردد.'];
     }
     return [false, 'کارِ ناشناخته'];
 }
@@ -972,7 +1484,7 @@ function svApiAction($action, array $body, $uid, $uname, $initData) {
                       'message' => "برای سفارش، اول در کانال‌های زیر عضو شوید:\n" . implode('، ', $names)], 403);
         }
         [$ok, $err, $msg, $data] = svBuy($uid, $uname, $app, (string)($body['sid'] ?? ''), (string)($body['link'] ?? ''),
-                                         (int)maNum($body['qty'] ?? 0), maNum($body['seen'] ?? 0));
+                                         (int)maNum($body['qty'] ?? 0), maNum($body['seen'] ?? 0), (int)maNum($body['ans'] ?? 0));
         if (!$ok) {
             $code = ['no_balance' => 402, 'price_changed' => 409, 'duplicate' => 409, 'too_many' => 409, 'closed' => 503][$err] ?? 400;
             maApiOut(['ok' => false, 'error' => $err, 'message' => $msg] + $data, $code);
@@ -996,6 +1508,14 @@ function svApiAction($action, array $body, $uid, $uname, $initData) {
             $o = svOrder((string)$o['id']);
         }
         maApiOut(['ok' => true, 'row' => svRow($o), 'balance' => $bal()]);
+    }
+
+    if ($action === 'sv_refill') {
+        if (!maRateOk('svrf', $uid, 6, 300))
+            maApiOut(['ok' => false, 'error' => 'rate_limited', 'message' => 'چند دقیقه صبر کنید و دوباره بزنید.'], 429);
+        [$ok, $err, $msg, $data] = svRefillReq($uid, (string)($body['id'] ?? ''));
+        if (!$ok) maApiOut(['ok' => false, 'error' => $err, 'message' => $msg] + $data, $err === 'not_found' ? 404 : 409);
+        maApiOut(['ok' => true, 'message' => 'درخواستِ ریفیل ثبت شد؛ ریزش‌ها جبران می‌شود.'] + $data);
     }
 
     maApiOut(['ok' => false, 'error' => 'unknown_action'], 400);
@@ -1081,7 +1601,9 @@ function svAdmHome($chatId, $msgId = null) {
     $c  = svCfg();
     $st = svStats();
     $t  = "🧩 <b>مینی‌اپ‌های خدمات تلگرام و اینستاگرام</b>\n\n";
-    $t .= '🔌 پنلِ خدمات (API): ' . (svReady() ? '✅ وصل' : '❌ ثبت نشده') . "\n";
+    $t .= '🔌 ' . h(svPanelName()) . ': ' . (svReady() ? '✅ کلید ثبت شده' : '❌ کلیدِ API ثبت نشده') .
+          ((int)$c['pbal_at'] > 0 ? ' · موجودی: <b>' . h(rtrim(rtrim(number_format((float)$c['pbal'], 2, '.', ','), '0'), '.')) . ' ' .
+                                    h((string)$c['pcur']) . '</b>' : '') . "\n";
     foreach (svApps() as $a => $ai) {
         $t .= $ai['emoji'] . ' ' . h($ai['name']) . ': ' . (!empty($c['apps'][$a]['on']) ? '✅ باز' : '❌ بسته') .
               ' · سرویسِ فعال: <b>' . fmtNum($st[$a . '_on']) . '</b> از ' . fmtNum($st[$a]) . "\n";

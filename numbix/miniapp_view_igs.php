@@ -218,6 +218,54 @@ svg{display:block}
 .tile .ft i svg{width:15px;height:15px}
 .tile .rf{position:absolute;top:12px;left:12px;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;background:rgba(74,222,128,.12);color:var(--ok);border:1px solid rgba(74,222,128,.25)}
 .tile:active{transform:scale(.98)}
+.tile .fcs{margin-top:7px}
+.tile .fc{height:22px;padding:0 8px;font-size:9.5px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.list{display:grid;gap:11px}
+.prd{position:relative;overflow:hidden;overflow:clip;isolation:isolate;display:block;width:100%;text-align:right;padding:13px 13px 12px;border-radius:24px;
+  border:1px solid transparent;
+  background:linear-gradient(160deg,rgba(58,20,62,.82) 0%,rgba(30,10,36,.86) 55%,rgba(24,10,40,.86) 100%) padding-box,
+             linear-gradient(135deg,rgba(254,218,117,.6),rgba(221,42,123,.5) 35%,rgba(129,52,175,.4) 65%,rgba(81,91,212,.55)) border-box;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 34px -26px rgba(221,42,123,.95);
+  animation:up .5s cubic-bezier(.2,.85,.25,1) backwards;animation-delay:calc(var(--i,0) * 45ms);transition:transform .15s}
+.prd:before{content:"";position:absolute;z-index:-1;right:-50px;top:-70px;width:180px;height:180px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(221,42,123,.28),transparent)}
+.prd.c1:before{background:radial-gradient(closest-side,rgba(245,133,41,.26),transparent)}
+.prd.c3:before{background:radial-gradient(closest-side,rgba(81,91,212,.32),transparent)}
+.prd.c4:before{background:radial-gradient(closest-side,rgba(254,218,117,.2),transparent)}
+.prd:after{content:"";position:absolute;z-index:2;top:-20%;bottom:-20%;left:0;width:32%;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);transform:translate3d(-130%,0,0) skewX(-20deg);
+  animation:shine 7s ease-in-out infinite;animation-delay:calc(var(--i,0) * .8s)}
+.prd:nth-child(n+4):after{display:none}
+.prd:active{transform:scale(.985)}
+.prd .pt{display:flex;align-items:center;gap:11px}
+.prd .ic{flex:0 0 auto;width:48px;height:48px;border-radius:17px;display:grid;place-items:center;color:#fff;background:var(--grad);
+  box-shadow:0 10px 20px -10px rgba(221,42,123,.9),inset 0 1px 0 rgba(255,255,255,.35)}
+.prd .ic svg{width:23px;height:23px}
+.prd.c1 .ic{background:linear-gradient(135deg,#F58529,#DD2A7B)}
+.prd.c2 .ic{background:linear-gradient(135deg,#DD2A7B,#8134AF)}
+.prd.c3 .ic{background:linear-gradient(135deg,#8134AF,#515BD4)}
+.prd.c4 .ic{background:linear-gradient(135deg,#FEDA75,#F58529);color:#3A1500}
+.prd .tt{flex:1;min-width:0}
+.prd .tt b{display:block;font-size:13.5px;font-weight:900;line-height:1.5;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.prd .tt small{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-top:3px;font-size:10.5px;font-weight:700;color:var(--dim)}
+.prd .lv{position:relative;width:7px;height:7px;border-radius:50%;background:var(--ok);flex:0 0 auto;box-shadow:0 0 8px rgba(74,222,128,.8)}
+.prd:nth-child(-n+5) .lv:after{content:"";position:absolute;inset:0;border-radius:50%;background:inherit;animation:ping 1.8s ease-out infinite}
+.fcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.fc{display:inline-flex;align-items:center;gap:4px;height:25px;padding:0 10px;border-radius:13px;font-size:10.5px;font-weight:800;white-space:nowrap;
+  color:#FFC2DD;background:rgba(255,95,162,.1);border:1px solid rgba(255,95,162,.24)}
+.fc svg{width:12.5px;height:12.5px;flex:0 0 auto}
+.fc.ok{color:var(--ok);background:rgba(74,222,128,.09);border-color:rgba(74,222,128,.25)}
+.fc.no{color:var(--dim);background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+.fc.hot{color:var(--y);background:rgba(254,218,117,.09);border-color:rgba(254,218,117,.25)}
+.fc.em{font-size:13px;letter-spacing:1px}
+.prd .pb{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08)}
+.prd .pr{min-width:0}
+.prd .pr b{font-size:19px;font-weight:900;line-height:1.2;background:linear-gradient(90deg,#FEDA75,#FF5FA2 55%,#B58CFF);-webkit-background-clip:text;background-clip:text;color:transparent}
+.prd .pr b i{font-style:normal;font-size:11px;font-weight:800;margin-right:3px;color:var(--dim);-webkit-text-fill-color:var(--dim)}
+.prd .pr small{display:block;margin-top:2px;font-size:9.5px;font-weight:700;color:var(--dim2)}
+.prd .go{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;height:40px;padding:0 17px 0 12px;border-radius:20px;background:var(--grad);color:#fff;
+  font-size:12.5px;font-weight:900;box-shadow:0 12px 22px -12px rgba(221,42,123,.95),inset 0 1px 0 rgba(255,255,255,.3)}
+.prd .go svg{width:15px;height:15px}
 
 .srch{display:flex;align-items:center;gap:8px;height:46px;margin-top:2px;padding:0 14px;border-radius:23px;
   background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.015)),var(--glass);border:1px solid var(--line2)}
@@ -241,6 +289,7 @@ svg{display:block}
 .or .h{display:flex;align-items:flex-start;gap:10px}
 .or .h div{flex:1;min-width:0}
 .or .h b{display:block;font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .or .h small{font-size:10px;color:var(--dim)}
 .pill{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:900;padding:3px 9px;border-radius:20px;background:rgba(255,95,162,.14);color:var(--pk)}
 .pill.run:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;animation:twk 1.4s ease-in-out infinite}
@@ -257,6 +306,13 @@ svg{display:block}
 .lnk{margin-top:8px;display:flex;align-items:center;gap:6px;font-size:10.5px;color:#7DB9FF;direction:ltr;overflow:hidden;overflow:clip}
 .lnk span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lnk svg{width:13px;height:13px;flex:0 0 auto}
+.rfr{margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.rfs{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:800;color:var(--dim)}
+.rfs svg{width:13px;height:13px}
+.rfb{height:34px;padding:0 14px;border-radius:17px;display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto;
+  font-size:11px;font-weight:900;color:#fff;background:var(--grad);border:0;box-shadow:0 8px 18px -10px rgba(221,42,123,.9)}
+.rfb svg{width:15px;height:15px}
+.rfb:disabled{opacity:.55}
 
 .wal{position:relative;overflow:hidden;overflow:clip;isolation:isolate;margin-top:2px;border-radius:24px;padding:16px 18px 18px;color:#fff;
   box-shadow:0 24px 44px -24px rgba(221,42,123,.9),inset 0 1px 0 rgba(255,255,255,.25)}
@@ -441,6 +497,11 @@ svg{display:block}
     <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="18" height="18" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.3" cy="6.7" r="1" fill="currentColor"/></symbol>
     <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M21.5 3.5 2.8 10.6c-.9.3-.9 1.5 0 1.8l4.7 1.6 1.8 5.6c.3.8 1.3 1 1.8.4l2.7-2.8 4.6 3.4c.7.5 1.6.1 1.8-.7L23 4.7c.2-.9-.7-1.6-1.5-1.2z"/></symbol>
     <symbol id="i-sim" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M7 2.5h7l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 6 20V4a1.5 1.5 0 0 1 1-1.5z"/><rect x="9" y="11" width="6" height="6" rx="1"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 4.5 5.8v5.6c0 4.6 3.1 8.3 7.5 9.8 4.4-1.5 7.5-5.2 7.5-9.8V5.8z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17a8.5 8.5 0 1 1 17 0"/><path d="m12 17 4.2-5.6"/><circle cx="12" cy="17" r="1.3" fill="currentColor"/></symbol>
     <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></symbol>
     <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="8" y="8" width="12.5" height="12.5" rx="2.5"/><path d="M16 8V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7.5A2.5 2.5 0 0 0 6 16h2"/></symbol>
   </defs>
@@ -492,7 +553,7 @@ svg{display:block}
   <section class="pg" id="pg-list">
     <div class="srch"><svg><use href="#i-search"/></svg><input id="q" type="search" placeholder="جست‌وجو: فالوور، لایک…" autocomplete="off"></div>
     <div class="stories" id="stL"></div>
-    <div class="grid" id="slist"></div>
+    <div class="list" id="slist"></div>
   </section>
 
   <section class="pg" id="pg-orders">
@@ -694,11 +755,35 @@ function stories(active){
       return '<button class="story' + (active === c.id ? ' on' : '') + '" style="--i:' + (k + 1) + '" data-go="list" data-cat="' + esc(c.id) + '"><div class="rg"><div class="in"><div>' + ico(c.ic) + '</div></div></div><small>' + esc(c.n) + '</small></button>';
     }).join('');
 }
+function nm(n){ n = String(n || ''); var k = n.indexOf(' — '); return { t: k > 0 ? n.slice(0, k) : n, f: k > 0 ? n.slice(k + 3).split(' · ').filter(Boolean) : [] }; }
+function faS(n){ n = Number(n) || 0; if (n >= 1e6) return faD(String(Math.round(n / 1e5) / 10)).replace('.', '٫') + ' میلیون'; if (n >= 1e4) return fa(Math.round(n / 1000)) + ' هزار'; return fa(n); }
+var FT = [[/^بدونِ ضمانت/, 'shield', 'no'], [/ضمانت|ریزش/, 'shield', 'ok'], [/^شروع/, 'bolt', 'hot'], [/^سقف/, 'chart', ''],
+          [/^سرعت/, 'gauge', ''], [/پست/, 'receipt', ''], [/(روزه|دقیقه)$/, 'clock', '']];
+function feats(i, max){
+  var f = nm(i.n).f, out = [];
+  if (i.r && !f.some(function(x){ return /ضمانت/.test(x); })) f = ['ضمانت‌دار'].concat(f);
+  f.slice(0, max || 9).forEach(function(x){
+    var m = null; for (var k = 0; k < FT.length; k++) if (FT[k][0].test(x)) { m = FT[k]; break; }
+    var em = !m && !/[؀-ۿ]/.test(x);
+    out.push('<span class="fc' + (m && m[2] ? ' ' + m[2] : '') + (em ? ' em' : '') + '">' + (m ? ico(m[1]) : '') + esc(x) + '</span>');
+  });
+  return out.join('');
+}
 function tile(i, k){
-  var c = CAT[i.c] || {};
-  return '<button class="tile ' + (c.tone || 'c1') + '" style="--i:' + Math.min(k || 0, 12) + '" data-sv="' + esc(i.i) + '">' + (i.r ? '<span class="rf">ضمانت</span>' : '') +
-    '<span class="ic">' + ico(c.ic || 'spark') + '</span><b>' + esc(i.n) + '</b><small><i></i>' + fa(i.mn) + ' تا ' + fa(i.mx) + '</small>' +
+  var c = CAT[i.c] || {}, f = feats(i, 1);
+  return '<button class="tile ' + (c.tone || 'c1') + '" style="--i:' + Math.min(k || 0, 12) + '" data-sv="' + esc(i.i) + '">' +
+    '<span class="ic">' + ico(c.ic || 'spark') + '</span><b dir="auto">' + esc(nm(i.n).t) + '</b><small><i></i>' + faS(i.mn) + ' تا ' + faS(i.mx) + '</small>' +
+    (f ? '<span class="fcs">' + f + '</span>' : '') +
     '<span class="ft"><span><b>' + fa(i.p) + '</b> تومان<br>هر ۱۰۰۰ تا</span><i>' + ico('plus') + '</i></span></button>';
+}
+function card(i, k){
+  var c = CAT[i.c] || {}, t = nm(i.n);
+  return '<button class="prd ' + (c.tone || 'c1') + '" style="--i:' + Math.min(k || 0, 14) + '" data-sv="' + esc(i.i) + '">' +
+    '<span class="pt"><span class="ic">' + ico(c.ic || 'spark') + '</span><span class="tt"><b dir="auto">' + esc(t.t) + '</b>' +
+      '<small><i class="lv"></i>' + esc(c.n || 'فعال') + ' · ' + faS(i.mn) + ' تا ' + faS(i.mx) + '</small></span></span>' +
+    '<span class="fcs">' + feats(i, 4) + '</span>' +
+    '<span class="pb"><span class="pr"><b>' + fa(i.p) + '<i>تومان</i></b><small>برای هر ۱۰۰۰ تا</small></span>' +
+      '<span class="go">سفارش' + ico('chev') + '</span></span></button>';
 }
 function drawHome(){
   $('stH').innerHTML = stories(null);
@@ -726,7 +811,7 @@ function drawList(force){
   $('stL').innerHTML = stories(S.cat);
   var q = S.q.trim().toLowerCase();
   var l = ITEMS.filter(function(i){ return (!S.cat || i.c === S.cat) && (!q || i.k.indexOf(q) >= 0); });
-  $('slist').innerHTML = l.length ? l.map(tile).join('') : (ITEMS.length
+  $('slist').innerHTML = l.length ? l.map(card).join('') : (ITEMS.length
     ? '<div class="emp" style="grid-column:1/-1">' + ico('search') + '<b>چیزی پیدا نشد</b>دسته یا کلمه‌ی دیگری امتحان کنید.</div>'
     : '<div class="emp" style="grid-column:1/-1">' + ico('spark') + '<b>به‌زودی</b>سرویس‌ها به‌زودی اضافه می‌شوند.</div>');
 }
@@ -747,9 +832,13 @@ function openOrder(id){
   var chips = [i.mn, 1000, 5000, 10000, 50000, i.mx].filter(function(v, k, a){ return v >= i.mn && v <= i.mx && a.indexOf(v) === k; })
     .sort(function(a, b){ return a - b; }).slice(0, 5);
   $('shB').innerHTML =
-    '<div class="st"><span class="ic">' + ico(c.ic || 'spark') + '</span><div style="flex:1;min-width:0"><b>' + esc(i.n) + '</b><small>' +
+    '<div class="st"><span class="ic">' + ico(c.ic || 'spark') + '</span><div style="flex:1;min-width:0"><b dir="auto">' + esc(nm(i.n).t) + '</b><small>' +
       fa(i.p) + ' تومان برای هر ۱۰۰۰ تا · حداقل ' + fa(i.mn) + ' · حداکثر ' + fa(i.mx) + '</small></div><button class="x" id="shX">' + ico('x') + '</button></div>' +
+    (feats(i) ? '<div class="fcs" style="margin-top:10px">' + feats(i) + '</div>' : '') +
     '<div class="fld"><label>' + esc(h[0]) + '</label><input id="oLink" class="ltr" placeholder="' + esc(h[1]) + '" autocomplete="off" autocapitalize="off" spellcheck="false"><small id="oLinkH">پیج باید عمومی (Public) باشد؛ رمز لازم نیست.</small></div>' +
+    (i.y === 'poll' ? '<div class="fld"><label>رای به کدام گزینه برود؟</label><div class="qchips" id="aC">' +
+      [1, 2, 3, 4].map(function(v){ return '<button data-a="' + v + '">گزینه‌ی ' + fa(v) + '</button>'; }).join('') +
+      '</div><small>از بالا بشمارید — گزینه‌ی اول = ۱</small></div>' : '') +
     '<div class="fld"><label>تعداد</label><div class="qrow"><button id="qM" aria-label="کم">−</button><input id="oQty" inputmode="numeric"><button id="qP" aria-label="زیاد">+</button></div>' +
     '<div class="qchips" id="qC">' + chips.map(function(v){ return '<button data-q="' + v + '">' + fa(v) + '</button>'; }).join('') + '</div></div>' +
     '<div class="sum"><div><span>قیمتِ هر ۱۰۰۰ تا</span><b>' + fa(i.p) + ' تومان</b></div><div><span>موجودیِ شما</span><b id="oBal">' + fa(S.bal) + ' تومان</b></div>' +
@@ -772,6 +861,9 @@ function openOrder(id){
   $('qP').onclick = function(){ tap(); setQ(q() + step()); };
   $('qC').onclick = function(ev){ var b = ev.target.closest('[data-q]'); if (b) { tap(); setQ(+b.getAttribute('data-q')); } };
   qi.oninput = function(){ var n = q(); qi.value = n ? fa(n) : ''; upd(); };
+  var ans = 0;
+  if ($('aC')) $('aC').onclick = function(ev){ var b = ev.target.closest('[data-a]'); if (!b) return; tap(); ans = +b.getAttribute('data-a');
+    [].forEach.call(this.children, function(x){ x.classList.toggle('on', x === b); }); };
   $('oLink').oninput = function(){ var v = this.value.trim(); var hs = $('oLinkH');
     if (v && !linkOk(v)) { hs.textContent = 'مثل ' + h[1] + ' یا لینکِ کاملِ اینستاگرام بفرستید.'; hs.className = 'er'; }
     else { hs.textContent = 'پیج باید عمومی (Public) باشد؛ رمز لازم نیست.'; hs.className = ''; } };
@@ -781,8 +873,9 @@ function openOrder(id){
     if (n < i.mn || n > i.mx) { toast('تعداد باید بین ' + fa(i.mn) + ' و ' + fa(i.mx) + ' باشد.'); return; }
     if (t > S.bal) { closeSheet(); WAL.pre = t - S.bal; go('wallet'); return; }
     if (!linkOk(link)) { toast('لینک یا آیدیِ درست وارد کنید.'); $('oLink').focus(); return; }
+    if (i.y === 'poll' && !ans) { toast('گزینه‌ای را که رای بگیرد انتخاب کنید.'); return; }
     var b = $('oGo'); b.disabled = true; $('oGoT').textContent = 'در حال ثبت…';
-    api('sv_buy', { app: B.app, sid: i.i, link: link, qty: n, seen: t }, function(j){
+    api('sv_buy', { app: B.app, sid: i.i, link: link, qty: n, seen: t, ans: ans }, function(j){
       b.disabled = false; setBal(j.balance); closeSheet(); S.orders = null; buzz('success');
       toast(j.warn || 'سفارش ثبت شد و به‌زودی شروع می‌شود.', true);
       go('orders');
@@ -819,15 +912,29 @@ function drawOrders(){
   $('ordN').textContent = fa(run); $('ordN').classList.toggle('on', run > 0);
   if (!l.length) { $('olist').innerHTML = '<div class="emp">' + ico('receipt') + '<b>هنوز سفارشی ندارید</b>اولین سفارش‌تان را از «سرویس‌ها» ثبت کنید.<button class="cta" data-go="list">' + ico('explore') + 'دیدنِ سرویس‌ها</button></div>'; return; }
   $('olist').innerHTML = l.map(function(o, k){
-    return '<div class="or ' + esc(o.st) + '" style="--i:' + Math.min(k, 10) + '"><div class="h"><div><b>' + esc(o.n) + '</b><small>' + ago(o.at) + ' · ' + fa(o.t) + ' تومان</small></div>' +
+    return '<div class="or ' + esc(o.st) + '" style="--i:' + Math.min(k, 10) + '"><div class="h"><div><b dir="auto">' + esc(nm(o.n).t) + '</b><small>' + ago(o.at) + ' · ' + fa(o.t) + ' تومان</small></div>' +
       '<span class="pill ' + esc(o.st) + '">' + esc(o.sx) + '</span></div>' +
       (o.st === 'run' || o.st === 'done' || o.st === 'partial' ? '<div class="prog' + (o.st === 'run' ? ' run' : '') + '"><i style="width:' + Math.max(o.st === 'run' ? 4 : 0, o.pc) + '%"></i></div>' : '<div style="height:8px"></div>') +
       '<div class="kv"><span>تعداد: <b>' + fa(o.q) + '</b></span>' + (o.sc >= 0 ? '<span>شروع از: <b>' + fa(o.sc) + '</b></span>' : '') +
       (o.rm >= 0 && o.st === 'run' ? '<span>مانده: <b>' + fa(o.rm) + '</b></span>' : '') + (o.rf > 0 ? '<span>برگشتی: <b>' + fa(o.rf) + '</b> تومان</span>' : '') +
+      (o.an ? '<span>گزینه: <b>' + fa(o.an) + '</b></span>' : '') +
       '<span class="ltr">#' + esc(o.id) + '</span></div>' +
-      '<div class="lnk">' + ico('link') + '<span>' + esc(o.l) + '</span></div></div>';
+      '<div class="lnk">' + ico('link') + '<span>' + esc(o.l) + '</span></div>' + rfRow(o) + '</div>';
   }).join('');
 }
+function rfRow(o){
+  if (!o.rb && !o.rs) return '';
+  return '<div class="rfr">' + (o.rs ? '<span class="rfs">' + ico('refresh') + esc(o.rs) + '</span>' : '') +
+    (o.rb ? '<button class="rfb" data-rf="' + esc(o.id) + '">' + ico('refresh') + 'درخواستِ ریفیل (جبرانِ ریزش)</button>' : '') + '</div>';
+}
+$('olist').addEventListener('click', function(ev){
+  var b = ev.target.closest('[data-rf]'); if (!b || b.disabled) return;
+  tap('medium'); b.disabled = true;
+  var id = b.getAttribute('data-rf');
+  function put(row){ if (!row || !S.orders) return; S.orders = S.orders.map(function(o){ return o.id === row.id ? row : o; }); drawOrders(); }
+  api('sv_refill', { app: B.app, id: id }, function(j){ buzz('success'); toast(j.message || 'درخواستِ ریفیل ثبت شد.', true); put(j.row); },
+    function(j){ b.disabled = false; toast((j && j.message) || 'ثبت نشد — دوباره امتحان کنید.'); if (j && j.row) put(j.row); });
+});
 $('oRef').onclick = function(){ tap(); loadOrders(); };
 
 var WAL = { pre: 0, busy: false };

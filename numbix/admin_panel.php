@@ -220,7 +220,7 @@ function go($flash = null, $type = 'ok') {
     if ($flash !== null) $_SESSION['flash'] = ['msg' => $flash, 'type' => $type];
     $q = ['tab' => (string)($_POST['tab'] ?? $_GET['tab'] ?? 'dashboard')];
     parse_str((string)($_POST['ret'] ?? ''), $r);
-    foreach (['s', 'st', 'f', 'q', 'page', 'id', 'banned'] as $k)
+    foreach (['s', 'st', 'f', 'q', 'page', 'id', 'banned', 'c', 'pc'] as $k)
         if (isset($r[$k]) && is_scalar($r[$k]) && (string)$r[$k] !== '') $q[$k] = (string)$r[$k];
     $open = preg_replace('/[^A-Za-z0-9_]/', '', (string)($r['open'] ?? ''));
     if ($open !== '') $q['open'] = $open;
@@ -772,10 +772,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $p   = $_POST;
         $url = trim((string)($p['sv_url'] ?? ''));
         if ($url !== '' && !preg_match('#^https?://\S+$#i', $url)) go('آدرسِ API باید با https:// شروع شود و فاصله نداشته باشد.', 'err');
-        $cur = array_key_exists((string)($p['sv_cur'] ?? ''), svCurrencies()) ? (string)$p['sv_cur'] : 'toman';
+        $cur = array_key_exists((string)($p['sv_cur'] ?? ''), svCurrencies()) ? (string)$p['sv_cur'] : 'usd_live';
         $fx  = maNum($p['sv_fx'] ?? 0);
         if ($cur === 'usd' && $fx <= 0) go('برای «دلار با نرخِ ثابت»، نرخِ هر دلار به تومان را بنویسید.', 'err');
-        svSet(function (&$c) use ($p, $url, $cur, $fx) {
+        $oldUrl = rtrim((string)svCfg()['url'], '/');
+        svSet(function (&$c) use ($p, $url, $cur, $fx, $oldUrl) {
+            if (rtrim($url !== '' ? $url : SV_DEFAULT_URL, '/') !== $oldUrl) { $c['pcur'] = ''; $c['pbal'] = 0; $c['pbal_at'] = 0; }
             $c['url']     = $url;
             $k = preg_replace('/\s+/', '', (string)($p['sv_key'] ?? ''));
             if ($k !== '') $c['key'] = $k;
@@ -791,16 +793,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($tg !== '') $c['apps'][$app]['tagline'] = $tg;
             }
         });
-        if ($cur === 'usd_live') svFxRefresh();
-        go('تنظیماتِ پنلِ خدمات ذخیره شد.' . ($cur === 'usd_live' && svFx() <= 0
-            ? ' ⚠️ قیمتِ لحظه‌ایِ تتر در دسترس نیست؛ تا وقتی نیاید، نرخِ ثابتی که نوشته‌اید استفاده می‌شود.' : ''));
+        if (svCurEff() === 'usd_live') svFxRefresh();
+        $note = svCurNote();
+        go('تنظیماتِ پنلِ خدمات (' . svPanelName() . ') ذخیره شد.' . (svCurEff() === 'usd_live' && svFx() <= 0
+            ? ' ⚠️ قیمتِ لحظه‌ایِ تتر در دسترس نیست؛ تا وقتی نیاید، نرخِ ثابتی که نوشته‌اید استفاده می‌شود.' : '') .
+            ($note !== '' ? ' ' . $note : ''));
     }
     if ($a === 'sv_test') {
+        if (!svReady()) go('اول کلیدِ API را بگذارید و «ذخیره» بزنید.', 'err');
         $t0 = microtime(true);
         [$bal, $cur, $err] = svBalance();
         $ms = round((microtime(true) - $t0) * 1000);
-        if ($err !== '') go('🔴 ' . $err . ' (' . $ms . 'ms)', 'err');
-        go('✅ پنلِ خدمات وصل است — موجودی: ' . fmtNum($bal) . ' ' . ($cur !== '' ? $cur : '') . ' (' . $ms . 'ms)');
+        if ($err !== '') go('🔴 ' . svPanelName() . ': ' . $err . ' (' . $ms . 'ms)', 'err');
+        $note = svCurNote();
+        go('✅ ' . svPanelName() . ' وصل است — موجودی: ' . rtrim(rtrim(number_format($bal, 4, '.', ','), '0'), '.') . ' ' . $cur .
+           (svCurEff() === 'usd_live' ? ' · هر دلار: ' . (svFx() > 0 ? fmtNum(svFx()) . ' تومان' : 'نامعلوم') : '') .
+           ' (' . $ms . 'ms)' . ($note !== '' ? ' — ' . $note : ''));
     }
     if ($a === 'sv_import') {
         if (!svReady()) go('اول آدرس و کلیدِ API پنلِ خدمات را ذخیره کنید.', 'err');
@@ -822,8 +830,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($a === 'sv_bulk') {
         $ids = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? [])), fn($x) => $x !== ''));
         $on  = ($_POST['to'] ?? '') === 'on';
+        if (($_POST['scope'] ?? '') === 'filter') {
+            $fa = (string)($_POST['f'] ?? '');
+            if (!isset(svApps()[$fa])) go('برای کارِ گروهی، اول «تلگرام» یا «اینستاگرام» را انتخاب کنید.', 'err');
+            $fs = in_array($_POST['st'] ?? '', ['on', 'off'], true) ? (string)$_POST['st'] : 'all';
+            $fc = (string)($_POST['c'] ?? '');
+            if ($fc !== '' && !isset(svCats($fa)[$fc])) $fc = '';
+            [$all] = svAdminList($fa, trim((string)($_POST['q'] ?? '')), $fs, 1, 5000, $fc, (string)($_POST['pc'] ?? ''));
+            $ids = array_map(fn($s) => (string)$s['id'], $all);
+        }
         $n   = svServiceBulk($ids, $on);
         go(fmtNum($n) . ' سرویس ' . ($on ? 'روشن' : 'خاموش') . ' شد.');
+    }
+    if ($a === 'sv_fa') {
+        $all = ($_POST['all'] ?? '') === '1';
+        $n = svFaRename($all);
+        go('نامِ فارسیِ ' . fmtNum($n) . ' سرویس ساخته شد' . ($all ? ' (نام‌های دستی هم عوض شدند).' : '؛ نام‌هایی که دستی نوشته بودید دست نخوردند.'));
     }
     if ($a === 'svo_act') {
         [$ok, $msg] = svAdminResolve((string)($_POST['id'] ?? ''), (string)($_POST['how'] ?? ''));
@@ -985,7 +1007,7 @@ $NAV = [
     ['svc', [
       ['تلگرام',       'f=tg',   fn() => (($_GET['f'] ?? 'tg') === 'tg')],
       ['اینستاگرام',   'f=ig',   fn() => (($_GET['f'] ?? '') === 'ig')],
-      ['نامشخص',       'f=none', fn() => (($_GET['f'] ?? '') === 'none')],
+      ['بقیه‌ی شبکه‌ها', 'f=none', fn() => (($_GET['f'] ?? '') === 'none')],
     ]],
   ],
   'مالی و کاربران' => [
@@ -1227,6 +1249,7 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;accent-color:var(-
 .note{background:var(--surface-2);border:1px solid var(--border-soft);border-inline-start:3px solid var(--primary);
   border-radius:var(--r-sm);padding:11px 13px;color:var(--text-2);font-size:12.5px;line-height:1.85;margin-bottom:12px}
 .note.warn{border-inline-start-color:var(--warning)}
+.note.ok{border-inline-start-color:var(--success)}
 
 .crumb{color:var(--text-3);font-size:12.5px;margin-bottom:13px}
 .crumb b{color:var(--text)} .crumb span{margin:0 6px;opacity:.5}
@@ -2100,19 +2123,33 @@ tr.grp td{background:var(--surface-2);font-weight:800}
     <form method="post" id="numTest" hidden><?= fk('api_num_test') ?></form>
   </div></div>
 
-  <div class="card" id="api-svc"><h2>🧩 ۳. پنلِ خدمات — ممبر، بازدید، فالوور، لایک <?= svReady()
-      ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></h2><div class="body">
+  <?php $svJap = svIsJap(); $svNote = svCurNote(); ?>
+  <div class="card" id="api-svc"><h2>🧩 ۳. پنلِ خدمات — <?= h(svPanelName()) ?> <?= svReady()
+      ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">فقط کلید مانده</span>' ?></h2><div class="body">
     <div class="note">
-      پنلِ خدمات (SMM) همان سایتی است که ممبر، بازدید، فالوور و لایک را انجام می‌دهد. تقریبا همه‌ی این پنل‌ها
-      یک صفحه به اسمِ <b>API</b> دارند که <b>آدرس</b> (معمولا به <code>/api/v2</code> ختم می‌شود) و <b>کلید</b> را نشان می‌دهد.
-      <br>۱) آدرس و کلید را بگذارید ۲) واحدِ قیمتِ پنل و سودتان را انتخاب کنید ۳) ذخیره ← «🧪 تست» ←
-      «📥 دریافتِ سرویس‌ها» ۴) در <a href="?tab=svc">سرویس‌ها و قیمت‌ها</a> سرویس‌هایی را که می‌خواهید بفروشید روشن کنید.
+      <?php if ($svJap): ?>
+      پیش‌فرض روی <b>JustAnotherPanel</b> تنظیم است — آدرس خودش پر شده و <b>فقط کلیدِ API</b> را بگذارید.
+      کلید را در سایتِ <a href="https://justanotherpanel.com/account" target="_blank" rel="noopener noreferrer">justanotherpanel.com ← Account</a>
+      (بخشِ <b>API key</b> ← Generate) بردارید. قیمت‌های JAP دلاری است و با قیمتِ لحظه‌ایِ تتر به تومان تبدیل می‌شود.
+      <?php else: ?>
+      پنلِ خدمات (SMM) همان سایتی است که ممبر، بازدید، فالوور و لایک را انجام می‌دهد. صفحه‌ی <b>API</b> پنل
+      <b>آدرس</b> (معمولا به <code>/api/v2</code> ختم می‌شود) و <b>کلید</b> را نشان می‌دهد. برای برگشت به JustAnotherPanel آدرس را خالی کنید.
+      <?php endif; ?>
+      <br>۱) کلید را بگذارید و ذخیره ۲) «🧪 تست» ۳) «📥 دریافتِ سرویس‌ها» — خدماتِ اینستاگرام خودکار به مینی‌اپِ اینستاگرام و خدماتِ تلگرام
+      به مینی‌اپِ تلگرام می‌روند (با دسته‌ی درست) و بقیه‌ی شبکه‌ها کنار می‌مانند ۴) در <a href="?tab=svc">سرویس‌ها و قیمت‌ها</a>
+      سرویس‌هایی را که می‌خواهید بفروشید روشن کنید.
     </div>
+    <?php if ((int)$SV['pbal_at'] > 0): ?>
+      <div class="note ok" style="margin-top:10px">💰 موجودیِ حسابِ پنل: <b class="ltr"><?= h(rtrim(rtrim(number_format((float)$SV['pbal'], 4, '.', ','), '0'), '.') . ' ' . $SV['pcur']) ?></b>
+        <small class="muted">(آخرین تست: <?= h(date('Y-m-d H:i', (int)$SV['pbal_at'])) ?>)</small></div>
+    <?php endif; ?>
+    <?php if ($svNote !== ''): ?><div class="note warn" style="margin-top:10px">💱 <?= h($svNote) ?></div><?php endif; ?>
     <form method="post" style="margin-top:12px">
       <?= fk('sv_api') ?>
       <div class="grid2">
-        <div><label>آدرسِ API پنل</label>
-          <input name="sv_url" value="<?= h((string)$SV['url']) ?>" placeholder="https://example.com/api/v2" style="direction:ltr"></div>
+        <div><label>آدرسِ API پنل <small class="muted">(پیش‌فرض: JustAnotherPanel)</small></label>
+          <input name="sv_url" value="<?= h((string)$SV['url']) ?>" placeholder="<?= h(SV_DEFAULT_URL) ?>" style="direction:ltr">
+          <div class="hint">خالی = <span class="ltr"><?= h(SV_DEFAULT_URL) ?></span></div></div>
         <div><label>کلیدِ API <small class="muted">(خالی = همان قبلی)</small></label>
           <div class="secretin"><input type="password" name="sv_key" value="" autocomplete="off" placeholder="<?= h($set($SV['key'])) ?>" style="direction:ltr">
             <button type="button" class="btn ghost sm" onclick="toggleSecret(this)">نمایش</button></div></div>
@@ -2120,7 +2157,8 @@ tr.grp td{background:var(--surface-2);font-weight:800}
           <?php foreach (svCurrencies() as $ck => $cl): ?>
             <option value="<?= h($ck) ?>" <?= (string)$SV['cur'] === $ck ? 'selected' : '' ?>><?= h($cl) ?></option>
           <?php endforeach; ?></select>
-          <div class="hint">در صفحه‌ی سرویس‌های پنل ببینید قیمت‌ها با $ است یا تومان.</div></div>
+          <div class="hint"><?= $svJap ? 'JAP دلاری است — «دلار با قیمتِ لحظه‌ایِ تتر» بهترین انتخاب است.' : 'در صفحه‌ی سرویس‌های پنل ببینید قیمت‌ها با $ است یا تومان.' ?>
+            اگر پنل موقعِ تست بگوید دلاری است، خودکار درست حساب می‌شود.</div></div>
         <div data-cur="usd usd_live"><label>هر دلار چند تومان؟ <small class="muted" data-cur="usd_live">(اگر قیمتِ لحظه‌ای نیامد)</small></label>
           <input name="sv_fx" value="<?= h(fmtNum($SV['fx'])) ?>" inputmode="numeric" style="direction:ltr">
           <div class="hint" data-cur="usd_live">الان: <?= svFx() > 0 ? h(fmtNum(svFx())) . ' تومان' : 'نامعلوم' ?></div></div>
@@ -2164,11 +2202,20 @@ tr.grp td{background:var(--surface-2);font-weight:800}
   if (!in_array($f, ['tg', 'ig', 'none', 'all'], true)) $f = 'tg';
   $sf = (string)($_GET['st'] ?? 'all');
   if (!in_array($sf, ['all', 'on', 'off'], true)) $sf = 'all';
+  $fc = (string)($_GET['c'] ?? '');
+  if ($fc !== '' && !(isset(svApps()[$f]) && isset(svCats($f)[$fc]))) $fc = '';
+  $PC = svPcats($f);
+  $fpc = (string)($_GET['pc'] ?? '');
+  if ($fpc !== '' && !isset($PC[$fpc])) $fpc = '';
   $SST = svStats();
-  [$rows, $total] = svAdminList($f, $qs, $sf, $pg, 40);
+  [$rows, $total] = svAdminList($f, $qs, $sf, $pg, 40, $fc, $fpc);
   $pages = max(1, (int)ceil($total / 40));
   $fx = svFx();
   $mk = (float)svCfg()['markup'];
+  $svq = function (array $o) use ($f, $sf, $fc, $fpc, $qs) {
+      $p = array_merge(['tab' => 'svc', 'f' => $f, 'st' => $sf, 'c' => $fc, 'pc' => $fpc, 'q' => $qs], $o);
+      return '?' . http_build_query(array_filter($p, fn($v) => $v !== '' && $v !== null));
+  };
 ?>
   <div class="stats">
     <div class="stat acc"><div class="n"><?= h(fmtNum($SST['tg_on'])) ?> <small class="muted">/ <?= h(fmtNum($SST['tg'])) ?></small></div><div class="l">✈️ سرویسِ فعالِ تلگرام</div></div>
@@ -2182,22 +2229,52 @@ tr.grp td{background:var(--surface-2);font-weight:800}
   <div class="card"><div class="body">
     <form method="get" class="searchbar">
       <input type="hidden" name="tab" value="svc"><input type="hidden" name="f" value="<?= h($f) ?>"><input type="hidden" name="st" value="<?= h($sf) ?>">
+      <?php if ($fc !== ''): ?><input type="hidden" name="c" value="<?= h($fc) ?>"><?php endif; ?>
+      <?php if ($fpc !== ''): ?><input type="hidden" name="pc" value="<?= h($fpc) ?>"><?php endif; ?>
       <input name="q" value="<?= h($qs) ?>" placeholder="نام، دسته یا شماره‌ی سرویس…">
       <button class="btn">جست‌وجو</button>
-      <?php if ($qs !== ''): ?><a class="btn ghost" href="?tab=svc&amp;f=<?= h($f) ?>&amp;st=<?= h($sf) ?>">پاک کردن</a><?php endif; ?>
+      <?php if ($qs !== ''): ?><a class="btn ghost" href="<?= h($svq(['q' => ''])) ?>">پاک کردن</a><?php endif; ?>
     </form>
     <div class="row">
-      <?php foreach (['tg' => '✈️ تلگرام', 'ig' => '📸 اینستاگرام', 'none' => '❔ نامشخص', 'all' => 'همه'] as $k => $lbl): ?>
-        <a class="btn <?= $f === $k ? '' : 'ghost' ?> sm" href="?tab=svc&amp;f=<?= $k ?>&amp;st=<?= h($sf) ?><?= $qs !== '' ? '&amp;q=' . urlencode($qs) : '' ?>"><?= $lbl ?></a>
+      <?php foreach (['tg' => '✈️ تلگرام', 'ig' => '📸 اینستاگرام', 'none' => '❔ بقیه‌ی شبکه‌ها', 'all' => 'همه'] as $k => $lbl): ?>
+        <a class="btn <?= $f === $k ? '' : 'ghost' ?> sm" href="<?= h($svq(['f' => $k, 'c' => '', 'pc' => ''])) ?>"><?= $lbl ?></a>
       <?php endforeach; ?>
       <span class="muted" style="margin:0 6px">|</span>
       <?php foreach (['all' => 'همه', 'on' => 'روشن', 'off' => 'خاموش'] as $k => $lbl): ?>
-        <a class="btn <?= $sf === $k ? '' : 'ghost' ?> sm" href="?tab=svc&amp;f=<?= h($f) ?>&amp;st=<?= $k ?><?= $qs !== '' ? '&amp;q=' . urlencode($qs) : '' ?>"><?= $lbl ?></a>
+        <a class="btn <?= $sf === $k ? '' : 'ghost' ?> sm" href="<?= h($svq(['st' => $k])) ?>"><?= $lbl ?></a>
       <?php endforeach; ?>
     </div>
+    <?php if (isset(svApps()[$f])): ?>
+    <div class="row" style="margin-top:8px">
+      <a class="btn <?= $fc === '' ? '' : 'ghost' ?> sm" href="<?= h($svq(['c' => ''])) ?>">همه‌ی دسته‌ها</a>
+      <?php foreach (svCats($f) as $ck => [$cn]): ?>
+        <a class="btn <?= $fc === $ck ? '' : 'ghost' ?> sm" href="<?= h($svq(['c' => $ck])) ?>"><?= h($cn) ?></a>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+    <?php if (count($PC) > 1 || $fpc !== ''): ?>
+    <form method="get" class="row" style="margin-top:8px">
+      <input type="hidden" name="tab" value="svc"><input type="hidden" name="f" value="<?= h($f) ?>"><input type="hidden" name="st" value="<?= h($sf) ?>">
+      <?php if ($fc !== ''): ?><input type="hidden" name="c" value="<?= h($fc) ?>"><?php endif; ?>
+      <?php if ($qs !== ''): ?><input type="hidden" name="q" value="<?= h($qs) ?>"><?php endif; ?>
+      <label style="margin:0">دسته‌ی خودِ پنل:</label>
+      <select name="pc" onchange="this.form.submit()" style="max-width:420px;direction:ltr">
+        <option value="">— همه (<?= h(fmtNum(count($PC))) ?> دسته) —</option>
+        <?php foreach ($PC as $pcn => [$pcN, $pcA]): ?>
+          <option value="<?= h($pcn) ?>" <?= $fpc === (string)$pcn ? 'selected' : '' ?>><?= h(((string)$pcn !== '' ? mb_substr((string)$pcn, 0, 70) : '(بدونِ دسته)') . ' — ' . $pcN . ($pcA ? ' · ' . $pcA . ' on' : '')) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </form>
+    <?php endif; ?>
     <div class="hint" style="margin-top:10px">
       «قیمتِ فروش» خودکار = قیمتِ پنل × نرخ × (۱ + سود). اگر در ستونِ «قیمتِ دستی» عددی بنویسید، همان عدد (برای هر ۱۰۰۰ تا) فروخته می‌شود؛ ۰ یعنی خودکار.
-      سرویس‌هایی که نوعشان «Default» نیست (مثلا کامنتِ دلخواه) پشتیبانی نمی‌شوند و روشن نمی‌شوند.
+      فقط نوعِ «Default» (لینک + تعداد) و «Poll» (رای نظرسنجی — شماره‌ی گزینه از مشتری گرفته می‌شود) فروختنی است؛ Package، کامنت/منشنِ دلخواه و اشتراکِ خودکار روشن نمی‌شوند.
+      بخش و دسته‌ای که دستی عوض کنید، با «دریافتِ دوباره‌ی سرویس‌ها» دست نمی‌خورد.
+      <br>🔤 نامِ سرویس‌ها خودکار از انگلیسیِ پنل به فارسی ترجمه می‌شود (نامِ اصلی زیرِ هر ردیف هست). اگر نامی را دستی بنویسید همان می‌ماند؛ خالی‌اش کنید و ذخیره بزنید تا دوباره خودکار شود.
+    </div>
+    <div class="row" style="margin-top:10px">
+      <form method="post" style="display:inline"><?= fk('sv_fa', []) ?><button class="btn ghost sm">🔤 ترجمه‌ی دوباره‌ی نام‌ها به فارسی</button></form>
+      <form method="post" style="display:inline" onsubmit="return confirm('همه‌ی نام‌ها، حتی آن‌هایی که دستی نوشته‌اید، با ترجمه‌ی خودکار عوض شوند؟')"><?= fk('sv_fa', []) ?><input type="hidden" name="all" value="1"><button class="btn ghost sm">↺ همه‌ی نام‌ها (حتی دستی‌ها)</button></form>
     </div>
   </div></div>
 
@@ -2210,6 +2287,15 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       <button class="btn ghost sm" name="to" value="on">✅ روشن کردنِ همه‌ی این صفحه</button>
       <button class="btn ghost sm" name="to" value="off">⛔ خاموش کردنِ همه‌ی این صفحه</button>
     </form>
+    <?php if (isset(svApps()[$f]) && $total > count($rows)): ?>
+    <form method="post" class="row" style="margin:-4px 0 10px" onsubmit="return confirm('همه‌ی <?= h((string)$total) ?> سرویسِ این فیلتر (همه‌ی صفحه‌ها) عوض شوند؟')">
+      <?= fk('sv_bulk', []) ?><input type="hidden" name="scope" value="filter">
+      <input type="hidden" name="f" value="<?= h($f) ?>"><input type="hidden" name="st" value="<?= h($sf) ?>">
+      <input type="hidden" name="c" value="<?= h($fc) ?>"><input type="hidden" name="pc" value="<?= h($fpc) ?>"><input type="hidden" name="q" value="<?= h($qs) ?>">
+      <button class="btn ghost sm" name="to" value="on">✅ روشن کردنِ همه‌ی <?= h(fmtNum($total)) ?> نتیجه</button>
+      <button class="btn ghost sm" name="to" value="off">⛔ خاموش کردنِ همه‌ی <?= h(fmtNum($total)) ?> نتیجه</button>
+    </form>
+    <?php endif; ?>
     <form method="post">
       <?= fk('sv_save', []) ?>
       <div class="tw"><table class="its" style="min-width:860px">
@@ -2218,11 +2304,11 @@ tr.grp td{background:var(--surface-2);font-weight:800}
         <?php foreach ($rows as $s): $sid = h($s['id']); $ok = svTypeOk($s['type']); $auto = svPrice1k(['rate' => $s['rate'], 'price' => 0]); ?>
           <tr>
             <td><input type="checkbox" name="sv[<?= $sid ?>][on]" value="1" <?= $s['active'] ? 'checked' : '' ?> <?= $ok ? '' : 'disabled' ?>></td>
-            <td style="min-width:240px"><input name="sv[<?= $sid ?>][name]" value="<?= h($s['name']) ?>" maxlength="90">
+            <td style="min-width:240px"><input name="sv[<?= $sid ?>][name]" value="<?= h($s['name']) ?>" maxlength="90" dir="auto">
               <div class="hint"><code>#<?= $sid ?></code> <?= h(mb_substr($s['pname'], 0, 70)) ?><?= $s['pcat'] !== '' ? ' · ' . h(mb_substr($s['pcat'], 0, 40)) : '' ?>
-                <?= $ok ? '' : ' · <span class="badge red">نوعِ ' . h($s['type']) . ' پشتیبانی نمی‌شود</span>' ?><?= $s['refill'] ? ' · ♻️ ریفیل' : '' ?></div></td>
+                <?= $ok ? '' : ' · <span class="badge red">نوعِ ' . h($s['type']) . ' پشتیبانی نمی‌شود</span>' ?><?= svKind($s['type']) === 'poll' ? ' · 🗳 نظرسنجی' : '' ?><?= $s['refill'] ? ' · ♻️ ریفیل' : '' ?><?= $s['cancel'] ? ' · ⛔ لغوپذیر' : '' ?><?= $s['man'] ? ' · ✋ دستی' : '' ?></div></td>
             <td style="min-width:170px"><select name="sv[<?= $sid ?>][app]" onchange="svAppCats(this)">
-                <option value="" <?= $s['app'] === '' ? 'selected' : '' ?>>❔ نامشخص</option>
+                <option value="" <?= $s['app'] === '' ? 'selected' : '' ?>>❔ هیچ‌کدام (نفروش)</option>
                 <?php foreach (svApps() as $ak => $ai): ?><option value="<?= h($ak) ?>" <?= $s['app'] === $ak ? 'selected' : '' ?>><?= h($ai['emoji'] . ' ' . $ai['short']) ?></option><?php endforeach; ?>
               </select>
               <select name="sv[<?= $sid ?>][cat]" data-cat="<?= h($s['cat']) ?>" style="margin-top:6px">
@@ -2294,7 +2380,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       <tr>
         <td><?= uLink(['user_id' => $o['uid'], 'username' => $o['uname']]) ?></td>
         <td><?= h((svApps()[$o['app']]['emoji'] ?? '') . ' ' . $o['name']) ?>
-          <div class="hint"><code><?= h($o['id']) ?></code><?= $o['pid'] !== '' ? ' · پنل: <code>' . h($o['pid']) . '</code>' : '' ?> · سرویسِ <code><?= h($o['sid']) ?></code></div></td>
+          <div class="hint"><code><?= h($o['id']) ?></code><?= $o['pid'] !== '' ? ' · پنل: <code>' . h($o['pid']) . '</code>' : '' ?> · سرویسِ <code><?= h($o['sid']) ?></code><?= (int)($o['ans'] ?? 0) > 0 ? ' · 🗳 گزینه‌ی ' . (int)$o['ans'] : '' ?><?= (string)($o['rfid'] ?? '') !== '' ? ' · ♻️ ' . h(svRefillText((string)$o['rfst'])) . ' <code>' . h((string)$o['rfid']) . '</code>' : '' ?></div></td>
         <td style="max-width:220px"><a href="<?= h($o['link']) ?>" target="_blank" rel="noopener noreferrer" class="ltr" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= h($o['link']) ?></a></td>
         <td class="num"><?= h(fmtNum($o['qty'])) ?><?= $r['st'] === 'run' && $r['rm'] >= 0 ? '<div class="hint">مانده: ' . h(fmtNum($r['rm'])) . '</div>' : '' ?></td>
         <td class="num"><?= h(fmtNum($o['total'])) ?><?= (float)$o['refunded'] > 0 ? '<div class="hint">برگشتی: ' . h(fmtNum($o['refunded'])) . '</div>' : '' ?></td>
@@ -2303,7 +2389,10 @@ tr.grp td{background:var(--surface-2);font-weight:800}
         <td class="muted num"><?= h(date('Y-m-d H:i', (int)$o['created'])) ?></td>
         <td>
           <?php if ($o['status'] === 'run'): ?>
-            <form method="post" style="display:inline"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= h($o['id']) ?>"><button class="btn ghost sm" name="how" value="sync">🔄</button></form>
+            <form method="post" style="display:inline"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= h($o['id']) ?>"><button class="btn ghost sm" name="how" value="sync" title="به‌روزرسانیِ وضعیت">🔄</button></form>
+            <?php if ((string)$o['pid'] !== '' && !empty(svService((string)$o['sid'])['cancel'])): ?>
+              <form method="post" style="display:inline" onsubmit="return confirm('درخواستِ لغو به پنلِ خدمات فرستاده شود؟ بعد از تاییدِ پنل، پول خودکار برمی‌گردد.')"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= h($o['id']) ?>"><button class="btn ghost sm" name="how" value="cancel">⛔ لغو در پنل</button></form>
+            <?php endif; ?>
           <?php endif; ?>
           <?php if ($o['status'] === 'check'): ?>
             <form method="post" style="display:inline" onsubmit="return confirm('این سفارش در پنلِ خدمات ثبت شده و انجام‌شده حساب شود؟')"><?= fk('svo_act', []) ?><input type="hidden" name="id" value="<?= h($o['id']) ?>"><button class="btn g sm" name="how" value="done">✅ انجام‌شده</button></form>
