@@ -425,8 +425,14 @@ function setBal(v){ if (v == null || isNaN(Number(v))) return; S.bal = Number(v)
 function drawSelf(avatar){
   var n = ((U.first_name || '') + ' ' + (U.last_name || '')).trim() || (U.username ? '@' + U.username : 'کاربر');
   $('uName').textContent = n;
-  var ini = esc(n.charAt(0).toUpperCase());
-  $('ava').innerHTML = avatar ? '<img src="' + esc(avatar) + '" alt="" onerror="this.parentNode.textContent=\'' + ini.replace(/'/g, '') + '\'">' : ini;
+  var box = $('ava'), im;
+  if (avatar) S.ava = avatar; else avatar = S.ava;
+  box.textContent = n.charAt(0).toUpperCase();
+  box._im = null;
+  if (!avatar) return;
+  im = new Image(); im.alt = ''; box._im = im;
+  im.onload = function(){ if (box._im === im) { box.textContent = ''; box.appendChild(im); } };
+  im.src = avatar;
 }
 
 var PAGES = ['home', 'list', 'orders', 'wallet'];

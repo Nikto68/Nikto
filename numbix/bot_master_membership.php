@@ -5341,6 +5341,52 @@ function runBackgroundQueues() {
     migrateOnce('v17_bank_on', function () {
         if (function_exists('bkSet')) bkSet(function (&$c) { $c['on'] = 1; $c['group_only'] = 0; });
     });
+    migrateOnce('v18_shop_ui', function () {
+        cfgSet(function (&$c) {
+            $kash = str_contains(implode(' ', array_map('strval', (array)($c['ui_texts'] ?? []))), 'ـ');
+            $shop = (string)($c['texts']['shop'] ?? '');
+            if ($shop !== '' && str_contains($shop, 'اپراتور')) {
+                if (str_contains($shop, '<tg-emoji'))
+                    $c['texts']['shop'] =
+                        "<tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> <b>ثـبـت سـفـارش</b>\n" .
+                        "<blockquote><tg-emoji emoji-id=\"5258073068852485953\">✈️</tg-emoji>    خدمات تلگرام: ممبر، بازدید، ری‌اکشن و بوست</blockquote>\n" .
+                        "<blockquote>📸    خدمات اینستاگرام: فالوور، لایک، ویو و کامنت</blockquote>\n" .
+                        "<blockquote><tg-emoji emoji-id=\"5319227750970573446\">📱</tg-emoji>    شماره مجازی: تحویل آنی، کد همین‌جا</blockquote>\n" .
+                        "<tg-emoji emoji-id=\"5445353829304387411\">💳</tg-emoji> موجودی شما: <b>{balance}</b> تومان\n\n" .
+                        "<tg-emoji emoji-id=\"5305265301917549162\">📎</tg-emoji> <b>سفارش‌های قبلی را با دکمه‌ی بالا ببینید.</b>";
+                else unset($c['texts']['shop']);
+            }
+            if (str_contains(str_replace('ـ', '', (string)($c['ui_texts']['open_app'] ?? '')), 'فروشگاه')) {
+                unset($c['ui_texts']['open_app'], $c['ui_icons']['open_app']);
+                $c['ui_colors']['open_app'] = 'success';
+            }
+            if ($kash) {
+                foreach (['shop_orders' => ['سـفـارش هـای ثـبـت شـده', '5444856076954520455'],
+                          'open_tgs'    => ['خـدمـات تـلـگـرام', '5931391527023546946'],
+                          'open_igs'    => ['📸 خـدمـات اینـسـتـاگـرام', ''],
+                          'open_app'    => ['شـمـاره مـجـازی', '5766910798030966025']] as $k => [$t, $ic]) {
+                    if (isset($c['ui_texts'][$k])) continue;
+                    $c['ui_texts'][$k] = $t;
+                    if ($ic !== '' && !isset($c['ui_icons'][$k])) $c['ui_icons'][$k] = $ic;
+                }
+            }
+        });
+        if (function_exists('gmSet')) gmSet(function (&$c) {
+            $open = (string)($c['texts']['duel_open'] ?? '');
+            if (str_contains($open, 'دوز') && !isset($c['texts']['ttt_open'])) {
+                $c['texts']['ttt_open']  = $open;
+                $c['texts']['duel_open'] = str_replace('دوز', 'چالش', $open);
+            }
+            $how = (string)($c['texts']['duel_how'] ?? '');
+            if ($how !== '' && !isset($c['texts']['ttt_how']))
+                $c['texts']['ttt_how'] = preg_replace('/چ[ـ]*ا[ـ]*ل[ـ]*ش/u', 'دوز', $how);
+        });
+        if (function_exists('bkSet')) bkSet(function (&$c) {
+            foreach (['word_hack', 'manual_protect', 'shield_after', 'hack_cooldown', 'rng'] as $k) unset($c[$k]);
+            foreach (array_keys((array)($c['texts'] ?? [])) as $k)
+                if (preg_match('/^(hack_|risk_|btn_risk_)|^(protected|protect_still)$/', (string)$k)) unset($c['texts'][$k]);
+        });
+    });
     migrateOnce('v7_ttl', function () {
         if (function_exists('pxSet'))
             pxSet(function (&$c) { if ((int)($c['ttl'] ?? 0) < 60) $c['ttl'] = 60; });

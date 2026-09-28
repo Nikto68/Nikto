@@ -94,7 +94,7 @@ function svUrl($app, $page = '') {
 }
 
 function svVisible($app) {
-    return svAppOn($app) && svUrl($app) !== '' && svCount($app) > 0;
+    return isset(svApps()[$app]) && !empty(svCfg()['apps'][$app]['on']) && svUrl($app) !== '';
 }
 
 function svOpenBtn($app, $page = '', $label = null) {
@@ -941,7 +941,7 @@ function svView($app, array $boot) {
 
 function svServe($key) {
     $app = svAppOfKey($key);
-    if ($app === '' || !svAppOn($app)) {
+    if ($app === '' || !svVisible($app)) {
         http_response_code(200);
         header('Content-Type: text/html; charset=utf-8');
         echo maClosedPage();
