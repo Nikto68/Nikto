@@ -1,0 +1,274 @@
+<?php
+
+if (is_file(__DIR__ . '/config.local.php')) {
+    require_once __DIR__ . '/config.local.php';
+}
+
+define('H_TOKEN', defined('BOT_TOKEN') ? BOT_TOKEN : (string)getenv('BOT_TOKEN'));
+$H_KEY = defined('HEALTH_KEY') ? HEALTH_KEY : (string)getenv('HEALTH_KEY');
+
+if (!is_string($H_KEY) || strlen($H_KEY) < 16) {
+    http_response_code(404);
+    exit('Not Found');
+}
+
+$given  = (string)($_POST['key'] ?? $_GET['key'] ?? '');
+$viaKey = hash_equals($H_KEY, $given);
+
+$viaCookie = false;
+$cookieRaw = (string)($_COOKIE['h_auth'] ?? '');
+if ($cookieRaw !== '' && strpos($cookieRaw, '.') !== false) {
+    [$cExp, $cSig] = explode('.', $cookieRaw, 2);
+    $cExp = (int)$cExp;
+    if ($cExp > time() && hash_equals(hash_hmac('sha256', (string)$cExp, $H_KEY), $cSig)) {
+        $viaCookie = true;
+    }
+}
+
+if (!$viaKey && !$viaCookie) {
+    usleep(300000);
+    http_response_code(404);
+    exit('Not Found');
+}
+
+if ($viaKey) {
+    $exp = time() + 1800;
+    setcookie('h_auth', $exp . '.' . hash_hmac('sha256', (string)$exp, $H_KEY), [
+        'expires'  => $exp,
+        'path'     => rtrim(dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/')), '/') ?: '/',
+        'httponly' => true,
+        'samesite' => 'Strict',
+        'secure'   => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+    ]);
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['key'])) {
+        header('Location: ' . strtok((string)($_SERVER['REQUEST_URI'] ?? ''), '?'));
+        exit;
+    }
+}
+
+function h_mask($t) {
+    $t = (string)$t;
+    if ($t === '') return '—';
+    $p = strpos($t, ':');
+    return ($p > 0 ? substr($t, 0, $p) : substr($t, 0, 4)) . ':••••••••';
+}
+
+header('Content-Type: text/html; charset=utf-8');
+
+$rows = [];
+function row(&$rows, $ok, $title, $detail = '', $fix = '', $rawDetail = false) {
+    $rows[] = ['ok' => $ok, 'title' => $title, 'detail' => $detail,
+               'fix' => $fix, 'raw' => (bool)$rawDetail];
+}
+
+$phpOk = version_compare(PHP_VERSION, '8.0', '>=');
+row($rows, $phpOk, 'نسخه PHP', PHP_VERSION . ($phpOk ? ' — مناسب' : ' — خیلی قدیمی'),
+    'ربات به PHP 8.0 یا بالاتر نیاز دارد (8.1 یا 8.2 بهتر). ' .
+    'در cPanel: «Select PHP Version» ← نسخه را روی 8.1 بگذارید و Set as current را بزنید. ' .
+    '⚠️ افزونه‌ها برای هر نسخه جداگانه‌اند — بعد از عوض کردن نسخه، دوباره تیک curl و sqlite3 و mbstring را بزنید.');
+
+row($rows, function_exists('curl_init'), 'افزونه curl',
+    function_exists('curl_init') ? 'فعال' : 'غیرفعال',
+    'افزونه curl را از کنترل‌پنل هاست فعال کنید.');
+row($rows, function_exists('json_encode'), 'افزونه json',
+    function_exists('json_encode') ? 'فعال' : 'غیرفعال', 'افزونه json را فعال کنید.');
+row($rows, class_exists('SQLite3'), 'افزونه sqlite3 (ذخیره‌ی کاربران)',
+    class_exists('SQLite3') ? 'فعال' : 'غیرفعال — بدونش هیچ کاربری ذخیره نمی‌شود!',
+    'در سی‌پنل: Select PHP Version ← Extensions ← تیک sqlite3 را بزنید و Save کنید. ' .
+    'چیزی دستی ساخته نمی‌شود؛ فایلِ دیتابیس را خودِ ربات داخل data_master می‌سازد — فقط این افزونه باید روشن باشد.');
+row($rows, function_exists('mb_substr'), 'افزونه mbstring',
+    function_exists('mb_substr') ? 'فعال' : 'غیرفعال',
+    'افزونه mbstring را فعال کنید — بدون آن متن فارسی درست بریده نمی‌شود.');
+
+$opOn   = function_exists('opcache_get_status') && filter_var(ini_get('opcache.enable'), FILTER_VALIDATE_BOOLEAN);
+$opStat = $opOn && function_exists('opcache_get_status') ? @opcache_get_status(false) : null;
+$opUsed = is_array($opStat) && !empty($opStat['opcache_enabled']);
+
+$opDetail = '';
+if (!function_exists('opcache_get_status')) {
+    $opDetail = 'افزونه‌ی opcache روی این سرور نصب نیست';
+} elseif (!$opUsed) {
+    $opDetail = 'نصب هست ولی خاموش است';
+} else {
+    $mem  = $opStat['memory_usage'] ?? [];
+    $used = (float)($mem['used_memory'] ?? 0) / 1048576;
+    $free = (float)($mem['free_memory'] ?? 0) / 1048576;
+    $hits = (float)($opStat['opcache_statistics']['opcache_hit_rate'] ?? 0);
+    $n    = (int)($opStat['opcache_statistics']['num_cached_scripts'] ?? 0);
+    $opDetail = sprintf('روشن — %d فایل در کش · %.1f٪ اصابت · %.0f مگابایت مصرف از %.0f آزاد',
+                        $n, $hits, $used, $free);
+    if ($free < 8) $opDetail .= ' ⚠️ حافظه‌اش دارد تمام می‌شود';
+}
+row($rows, $opUsed, '⚡️ opcache (سرعت کل ربات)', $opDetail,
+    'در php.ini این‌ها را بگذارید و PHP را ری‌استارت کنید:<br>' .
+    '<code>opcache.enable=1</code><br>' .
+    '<code>opcache.memory_consumption=128</code><br>' .
+    '<code>opcache.max_accelerated_files=10000</code><br>' .
+    '<code>opcache.validate_timestamps=1</code><br>' .
+    '<code>opcache.revalidate_freq=2</code><br>' .
+    'در سی‌پنل: Select PHP Version ← Extensions ← تیک opcache. ' .
+    'این تنها تغییری است که سرعتِ کلِ ربات را چند برابر می‌کند.');
+
+$need = ['bot_master_membership.php', 'miniapps.php', 'miniapp_view.php', 'numbers.php', 'admin_panel.php'];
+$missing = [];
+foreach ($need as $f) if (!is_file(__DIR__ . '/' . $f)) $missing[] = $f;
+row($rows, !$missing, 'فایل‌های ربات',
+    $missing ? 'پیدا نشد: ' . implode('، ', $missing) : 'همه‌ی فایل‌ها کنار هم هستند',
+    'همه‌ی این فایل‌ها باید در همین پوشه (' . __DIR__ . ') کنار هم باشند.');
+
+$dir = __DIR__ . '/data_master';
+if (!is_dir($dir)) @mkdir($dir, 0755, true);
+$canWrite = is_dir($dir) && is_writable($dir);
+row($rows, $canWrite, 'پوشه داده (data_master)',
+    $canWrite ? 'قابل نوشتن است' : (is_dir($dir) ? 'ساخته شد ولی قابل نوشتن نیست' : 'ساخته نشد'),
+    'دسترسی پوشه را روی 755 (یا در صورت نیاز 775) بگذارید و مالکش را کاربر وب‌سرور کنید.');
+
+$syntax = 'بررسی نشد';
+$syntaxOk = true;
+if (is_file(__DIR__ . '/bot_master_membership.php') && function_exists('exec') && !in_array('exec', array_map('trim', explode(',', (string)ini_get('disable_functions'))), true)) {
+    $out = []; $code = 0;
+    @exec('php -l ' . escapeshellarg(__DIR__ . '/bot_master_membership.php') . ' 2>&1', $out, $code);
+    if ($out) {
+        $syntax   = implode(' ', $out);
+        $syntaxOk = ($code === 0);
+    }
+}
+row($rows, $syntaxOk, 'بررسی نحوی فایل ربات', $syntax,
+    'اگر خطای نحوی دارد یعنی فایل موقع آپلود ناقص یا خراب شده — دوباره آپلود کنید (حتما در حالت Binary نه ASCII).');
+
+function h_api($method, $data = []) {
+    $url = 'https://api.telegram.org/bot' . H_TOKEN . '/' . $method;
+    $ch  = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $data,
+    ]);
+    $res = curl_exec($ch);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($res === false) return ['ok' => false, 'description' => 'خطای اتصال: ' . $err];
+    $j = json_decode($res, true);
+    return is_array($j) ? $j : ['ok' => false, 'description' => 'پاسخ نامعتبر: ' . substr((string)$res, 0, 200)];
+}
+
+$me = function_exists('curl_init') ? h_api('getMe') : ['ok' => false, 'description' => 'curl ندارد'];
+row($rows, H_TOKEN !== '', 'توکن از کجا خوانده شد',
+    H_TOKEN !== '' ? h_mask(H_TOKEN) . ' — از config.local.php یا متغیر محیطی' : 'هیچ توکنی تنظیم نشده',
+    'کنار همین فایل یک <code>config.local.php</code> بسازید و داخلش ' .
+    "<code>define('BOT_TOKEN', '…');</code> بگذارید.");
+
+row($rows, !empty($me['ok']), 'توکن ربات',
+    !empty($me['ok'])
+        ? '@' . ($me['result']['username'] ?? '?') . ' — ' . ($me['result']['first_name'] ?? '')
+        : ($me['description'] ?? 'نامشخص'),
+    'اگر اینجا خطا می‌دهد یعنی سرور به تلگرام دسترسی ندارد (تحریم/فایروال) یا توکن اشتباه است. ' .
+    'روی هاست ایرانی معمولا باید دامنه api.telegram.org را از فایروال باز کنید یا از هاست خارجی استفاده کنید.');
+
+$wh = function_exists('curl_init') ? h_api('getWebhookInfo') : ['ok' => false];
+$whUrl = $wh['result']['url'] ?? '';
+$guess = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' .
+         ($_SERVER['HTTP_HOST'] ?? 'DOMAIN') .
+         rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/') . '/bot_master_membership.php';
+
+row($rows, $whUrl !== '', 'آدرس وبهوک',
+    $whUrl !== '' ? htmlspecialchars($whUrl, ENT_QUOTES, 'UTF-8') : '<b>ست نشده</b>',
+    'وبهوک ست نشده. از دکمه‌ی زیر استفاده کنید (توکن عمدا اینجا چاپ نمی‌شود ' .
+    'تا اگر کسی این صفحه را دید نتواند ربات را بدزدد):<br>' .
+    '<form method="post" style="display:inline"><input type="hidden" name="key" value="' . htmlspecialchars($given, ENT_QUOTES, 'UTF-8') . '">' .
+    '<input type="hidden" name="setwebhook" value="1">' .
+    '<button type="submit" class="fixbtn">🔗 وبهوک را همین‌جا ست کن</button></form>' .
+    '<br><span class="muted">مقصد: <code>' . htmlspecialchars($guess, ENT_QUOTES, 'UTF-8') . '</code></span>',
+    true);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['setwebhook']) && function_exists('curl_init')) {
+    $sw = h_api('setWebhook', ['url' => $guess, 'drop_pending_updates' => 'true',
+                              'allowed_updates' => json_encode(['message', 'callback_query', 'my_chat_member']),
+                              'secret_token' => defined('WEBHOOK_SECRET') ? WEBHOOK_SECRET : '']);
+    row($rows, !empty($sw['ok']), 'ست کردن وبهوک',
+        !empty($sw['ok']) ? 'انجام شد → ' . $guess : ($sw['description'] ?? 'ناموفق'),
+        'اگر ناموفق بود یعنی سرور به تلگرام دسترسی ندارد یا آدرس https معتبر نیست.');
+    $wh    = h_api('getWebhookInfo');
+    $whUrl = $wh['result']['url'] ?? '';
+}
+
+$sameFile = $whUrl !== '' && strpos($whUrl, 'bot_master_membership.php') !== false;
+if ($whUrl !== '') {
+    row($rows, $sameFile, 'وبهوک به فایل درست وصل است؟',
+        $sameFile ? 'بله' : 'وبهوک به فایل دیگری وصل است',
+        'وبهوک باید دقیقا به <code>bot_master_membership.php</code> وصل باشد.');
+}
+
+$lastErr  = $wh['result']['last_error_message'] ?? '';
+$lastDate = !empty($wh['result']['last_error_date']) ? date('Y-m-d H:i:s', (int)$wh['result']['last_error_date']) : '';
+row($rows, $lastErr === '', 'آخرین خطای وبهوک',
+    $lastErr === '' ? 'خطایی ثبت نشده' : ($lastErr . ($lastDate ? ' — ' . $lastDate : '')),
+    'این پیام دقیقا می‌گوید تلگرام موقع صدا زدن ربات چه دیده. ' .
+    '«500 Internal Server Error» یعنی خطای PHP (معمولا نسخه PHP قدیمی)؛ ' .
+    '«SSL error» یعنی گواهی https سالم نیست؛ «404» یعنی آدرس اشتباه است.');
+
+$pending = (int)($wh['result']['pending_update_count'] ?? 0);
+row($rows, $pending < 20, 'پیام‌های منتظر پردازش', (string)$pending,
+    'اگر عدد بالا و ثابت است یعنی ربات جواب نمی‌دهد و پیام‌ها روی هم انباشته شده‌اند.');
+
+$base = '';
+$cfgFile = $dir . '/config.json';
+if (is_file($cfgFile)) {
+    $c = json_decode((string)@file_get_contents($cfgFile), true);
+    $base = $c['miniapps']['base_url'] ?? '';
+}
+row($rows, $base !== '', 'آدرس عمومی مینی‌اپ',
+    $base !== '' ? $base : 'هنوز ثبت نشده',
+    'پنلِ وب ← API و اتصال‌ها ← 🌐 آدرس، یا داخلِ ربات: /panel ← 🚀 مینی‌اپ ← 🔗 آدرس عمومی ← <code>' . htmlspecialchars($guess) . '</code>');
+
+$bad  = array_values(array_filter($rows, function ($r) { return !$r['ok']; }));
+$good = count($rows) - count($bad);
+?>
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>تشخیص سلامت ربات</title>
+<style>
+body{background:#0B0E14;color:#E6EAF2;font-family:Tahoma,system-ui,sans-serif;margin:0;padding:20px;line-height:1.9}
+.box{max-width:760px;margin:0 auto}
+h1{font-size:21px;margin:0 0 6px}
+.sum{font-size:13px;color:#8B93A7;margin-bottom:20px}
+.item{border:1px solid #1E2533;border-radius:14px;padding:14px 16px;margin-bottom:11px;background:#111621}
+.item.bad{border-color:#5A1E28;background:#180F13}
+.t{font-weight:700;font-size:14.5px;display:flex;gap:8px;align-items:center}
+.d{font-size:13px;color:#9FB0C9;margin-top:5px;word-break:break-all;direction:ltr;text-align:left}
+.d.fa{direction:rtl;text-align:right}
+.f{font-size:12.5px;color:#FFC46B;margin-top:9px;padding-top:9px;border-top:1px dashed #2A3242}
+code{background:#0A0D14;padding:2px 6px;border-radius:6px;font-size:12px;word-break:break-all}
+.ok{color:#4ADE80}.no{color:#F87171}
+.muted{color:#6E7891}
+.fixbtn{display:inline-block;margin-top:8px;background:#1D4ED8;color:#fff;text-decoration:none;
+        padding:8px 15px;border-radius:10px;font-size:13px}
+</style>
+</head>
+<body><div class="box">
+<h1>🩺 تشخیص سلامت ربات</h1>
+<div class="sum"><?= $good ?> مورد سالم · <?= count($bad) ?> مورد نیازمند رسیدگی</div>
+
+<?php foreach ($rows as $r): ?>
+  <div class="item<?= $r['ok'] ? '' : ' bad' ?>">
+    <div class="t"><span class="<?= $r['ok'] ? 'ok' : 'no' ?>"><?= $r['ok'] ? '✔' : '✖' ?></span><?= htmlspecialchars((string)$r['title'], ENT_QUOTES, 'UTF-8') ?></div>
+    <div class="d<?= preg_match('/[\x{0600}-\x{06FF}]/u', strip_tags((string)$r['detail'])) ? ' fa' : '' ?>"><?=
+      empty($r['raw']) ? htmlspecialchars((string)$r['detail'], ENT_QUOTES, 'UTF-8') : $r['detail'] ?></div>
+    <?php if (!$r['ok'] && $r['fix']): ?><div class="f">🔧 <?= $r['fix'] ?></div><?php endif; ?>
+  </div>
+<?php endforeach; ?>
+
+<div class="item">
+  <div class="t">📍 مسیر روی سرور</div>
+  <div class="d"><?= htmlspecialchars(__DIR__) ?></div>
+  <div class="d">آدرس حدسی ربات: <?= htmlspecialchars($guess) ?></div>
+</div>
+
+<div class="sum" style="margin-top:18px">بعد از رفع مشکل، این فایل (health.php) را از هاست پاک کنید.</div>
+</div></body>
+</html>
