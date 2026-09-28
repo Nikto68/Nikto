@@ -6,11 +6,7 @@ function bkDefaults() {
         'on'         => false,
         'group_only' => 1,
         'word_bank'  => 'بانک,حساب بانکی',
-        'word_hack'  => 'سرقت الماس',
 
-        'manual_protect' => 900,
-        'shield_after'   => 300,
-        'hack_cooldown'  => 1200,
         'level_step'     => 500000,
         'top_n'          => 10,
         'card_image'     => 1,
@@ -29,37 +25,9 @@ function bkDefaults() {
             ],
         ],
 
-        'rng' => [
-            'base_success'  => 42.0,
-            'success_floor' => 18.0,
-            'success_ceil'  => 72.0,
-            'jitter_pct'    => 12.0,
-            'jackpot_pct'   => 0.4,
-            'perfect_pct'   => 7.0,
-            'critfail_pct'  => 22.0,
-            'partial_share' => 0.35,
-
-            'jackpot_min'  => 25.0, 'jackpot_max' => 40.0,
-            'perfect_min'  => 10.0, 'perfect_max' => 16.0,
-            'success_min'  => 4.0,  'success_max' => 10.0,
-            'partial_min'  => 1.0,  'partial_max' => 4.0,
-            'critfail_min' => 5.0,  'critfail_max' => 15.0,
-        ],
-
-        'risk' => [
-            'high'   => ['success_mul' => 0.55, 'amount_mul' => 2.40, 'critfail_mul' => 2.60, 'cooldown_mul' => 1.35],
-            'normal' => ['success_mul' => 1.00, 'amount_mul' => 1.00, 'critfail_mul' => 1.00, 'cooldown_mul' => 1.00],
-            'low'    => ['success_mul' => 1.55, 'amount_mul' => 0.40, 'critfail_mul' => 0.30, 'cooldown_mul' => 0.75],
-        ],
-
-        'icons' => ['btn_protect' => '', 'btn_send' => '', 'btn_send_confirm' => '', 'btn_back' => '',
-                    'btn_dep' => '', 'btn_wd' => '',
-                    'btn_risk_high' => '', 'btn_risk_normal' => '', 'btn_risk_low' => ''],
+        'icons' => ['btn_send' => '', 'btn_send_confirm' => '', 'btn_back' => '',
+                    'btn_dep' => '', 'btn_wd' => ''],
         'btns'  => [
-            'btn_risk_high'    => ['color' => 'danger'],
-            'btn_risk_normal'  => ['color' => 'primary'],
-            'btn_risk_low'     => ['color' => 'success'],
-            'btn_protect'      => ['color' => 'primary'],
             'btn_dep'          => ['color' => 'success'],
             'btn_wd'           => ['color' => 'none'],
             'btn_send'         => ['color' => 'none'],
@@ -68,7 +36,6 @@ function bkDefaults() {
         ],
 
         'texts' => [
-            'btn_protect'  => '🛡 حفاظت از بانک',
             'btn_dep'          => '🏦 انتقال به بانک',
             'btn_wd'           => '💸 برداشت از بانک',
             'btn_send'         => '🎁 ارسال به کاربر',
@@ -77,21 +44,11 @@ function bkDefaults() {
 
             'card' => "🏦 <b>BANK</b>\n\n" .
                       "👤 User: {name}\n\n" .
-                      "💎 موجودیِ کیف‌پول (قابلِ سرقت): <b>{wallet}</b>\n" .
-                      "🏦 موجودیِ بانک (امن): <b>{vault}</b>\n" .
+                      "💎 موجودیِ کیف‌پول: <b>{wallet}</b>\n" .
+                      "🏦 موجودیِ بانک: <b>{vault}</b>\n" .
                       "📈 سودِ روزانه: <b>{rate}٪</b>\n\n" .
-                      "🔐 Security: {sec_status}\n" .
-                      "⏱ Protection: {protect_left}\n\n" .
-                      "📊 Bank Level: {level}\n" .
-                      "🔥 Successful Heists: {wins}\n" .
-                      "💰 Total Stolen: {stolen}\n\n" .
+                      "📊 Bank Level: {level}\n\n" .
                       "━━━━━━━━━━━━━━",
-
-            'protected' => "🛡 <b>BANK PROTECTED</b>\n\n" .
-                           "بانک شما با موفقیت محافظت شد.\n\n" .
-                           "⏱ مدت حفاظت: {mins} دقیقه\n\n" .
-                           "🔐 Status: ACTIVE",
-            'protect_still' => "🛡 بانک شما همین الان هم محافظت‌شده است.\n⏱ {left} باقی مانده.",
 
             'dep_ask' => "🏦 <b>انتقال به بانک</b>\n\n" .
                          "چند الماس به صندوقِ بانک منتقل شود؟ عدد را بفرستید.\n\n" .
@@ -126,40 +83,8 @@ function bkDefaults() {
             'send_confirm'   => "🎁 <b>تاییدِ ارسال</b>\n\n💎 مقدار: <b>{amount}</b>\n👤 گیرنده: {to_tag}\n\nبرایِ تاییدِ نهایی بزن:",
             'send_ok'        => "✅ <b>SEND SUCCESS</b>\n\n💎 Sent: {amount}\n👤 From: {from_tag}\n👤 To: {to_tag}\n\n━━━━━━━━━━━━━━\n\n💎 Wallet: <b>{wallet}</b>",
 
-            'hack_how'      => "🔫 برای هک، روی پیامِ همون کاربر ریپلای کن و بنویس «{word}» یا /hack",
-            'hack_self'     => "😄 نمی‌تونی خودتو هک کنی.",
-            'hack_no_target'=> "❌ Target not found",
-            'hack_protected'=> "🛡 <b>HACK BLOCKED</b>\n\nاین بانک در حال حاضر تحت حفاظت است.\n\n⏱ Protection remaining: {left}",
-            'hack_empty'    => "❌ <b>EMPTY BANK</b>\n\nاین بانک الماسی برای سرقت ندارد.",
-
-            'hack_menu'     => "<b>هدف قفل شد</b>\n\n" .
-                               "قربانی: {tn}\n" .
-                               "موجودیِ قابلِ سرقت: <b>{bal}</b>\n\n" .
-                               "چطور می‌خواهی بزنی؟\n\n" .
-                               "| <b>پرریسک</b> — غنیمتِ سنگین، ولی احتمالِ دستگیری بالا\n" .
-                               "| <b>معمولی</b> — تعادلِ شانس و غنیمت\n" .
-                               "| <b>کم‌ریسک</b> — تقریبا همیشه می‌گیری، ولی کم\n\n" .
-                               "<i>فقط {hn} می‌تواند انتخاب کند.</i>",
-            'btn_risk_high'   => 'سرقت (پرریسک)',
-            'btn_risk_normal' => 'سرقت (معمولی)',
-            'btn_risk_low'    => 'سرقت (کم‌ریسک)',
-            'hack_not_yours'  => '🔒 این سرقتِ تو نیست.',
-            'hack_menu_gone'  => '⌛️ این درخواست منقضی شده — دوباره ریپلای کن.',
-            'risk_line'       => "\n\n🎚 سطح: <b>{risk}</b>",
-            'risk_high'       => 'پرریسک',
-            'risk_normal'     => 'معمولی',
-            'risk_low'        => 'کم‌ریسک',
-            'hack_cooldown' => "⏳ <b>HACK COOLDOWN</b>\n\nدوباره می‌توانید Hack کنید:\n\n{left}\n\nباقی مانده است.",
-
-            'hack_jackpot'  => "🎯 <b>JACKPOT!</b>\n\n{hn} بانکِ {tn} رو به فنا داد!\n\n💎 +{amount} ({pct}%)\n🏦 موجودیِ بانکِ تو: <b>{bank}</b>",
-            'hack_perfect'  => "🟢 <b>PERFECT HEIST</b>\n\n{hn} یه سرقتِ حرفه‌ای از بانکِ {tn} زد!\n\n💎 +{amount} ({pct}%)\n🏦 موجودیِ بانکِ تو: <b>{bank}</b>",
-            'hack_success'  => "🟢 <b>SUCCESS</b>\n\n{hn} از بانکِ {tn} دزدید.\n\n💎 +{amount} ({pct}%)\n🏦 موجودیِ بانکِ تو: <b>{bank}</b>",
-            'hack_partial'  => "🟡 <b>PARTIAL SUCCESS</b>\n\n{hn} یه مقدارِ کم از بانکِ {tn} برداشت.\n\n💎 +{amount} ({pct}%)\n🏦 موجودیِ بانکِ تو: <b>{bank}</b>",
-            'hack_critfail' => "💥 <b>CRITICAL FAILURE</b>\n\nسیستمِ امنیتیِ بانکِ {tn} فعال شد و {hn} جریمه شد!\n\n💎 −{fine}\n🏦 موجودیِ بانکِ تو: <b>{bank}</b>",
-            'hack_failed'   => "🔴 <b>FAILED</b>\n\n{hn} تلاش کرد بانکِ {tn} رو هک کنه، ولی شکست خورد.",
-
             'top_head' => "🏆 <b>برترین‌های بانک</b>\n",
-            'top_row'  => "{rank}. {name} — 🏦 <b>{bank}</b> (🔥 {wins})",
+            'top_row'  => "{rank}. {name} — 🏦 <b>{bank}</b>",
             'top_none' => "هنوز کسی بانکی نساخته.",
         ],
     ];
@@ -189,7 +114,7 @@ function bkVal($path, $default = null) {
 function bkOn() { return !empty(bkVal('on')); }
 
 function bkIsButtonKey($slug) {
-    return in_array($slug, ['btn_protect', 'btn_send', 'btn_send_confirm', 'btn_back',
+    return in_array($slug, ['btn_send', 'btn_send_confirm', 'btn_back',
                             'btn_dep', 'btn_wd'], true);
 }
 
@@ -217,23 +142,11 @@ function bkUserTag($id, $name, $uname) {
     return h($label) . ($u !== '' ? ' (@' . h($u) . ')' : '');
 }
 
-function bkLeftStr($untilTs) {
-    $left = (int)$untilTs - time();
-    if ($left <= 0) return '—';
-    $m = intdiv($left, 60); $s = $left % 60;
-    return ($m > 0 ? $m . ' دقیقه و ' : '') . $s . ' ثانیه';
-}
-
 
 function bkUserDefault($uid) {
     return [
         'id' => (int)$uid, 'name' => '', 'username' => '',
-        'protection_until' => 0, 'shield_until' => 0,
         'vault' => 0.0, 'vault_at' => 0,
-        'bank_level' => 1, 'security_level' => 1,
-        'successful_hacks' => 0, 'failed_hacks' => 0, 'win_streak' => 0,
-        'total_stolen' => 0.0, 'total_lost' => 0.0,
-        'hack_cooldown_until' => 0,
         'created_at' => time(), 'updated_at' => time(),
     ];
 }
@@ -327,9 +240,9 @@ function bkUserSet($uid, callable $fn) {
     }
 }
 
-function bkLevelFromStolen($stolen) {
+function bkLevel($vault) {
     $step = max(1, (int)bkVal('level_step', 500000));
-    return min(1000, (int)floor(max(0, (float)$stolen) / $step) + 1);
+    return min(1000, (int)floor(max(0, (float)$vault) / $step) + 1);
 }
 
 function bkTop($n = 10) {
@@ -421,110 +334,24 @@ function bkResolveTarget($raw) {
 }
 
 
-function bkRollPercent($min, $max) {
-    $min = (float)$min; $max = (float)$max;
-    if ($max < $min) [$min, $max] = [$max, $min];
-    $lo = (int)round($min * 10); $hi = (int)round($max * 10);
-    if ($hi <= $lo) return round($min, 1);
-    return random_int($lo, $hi) / 10.0;
-}
-
-function bkRisk($risk) {
-    $all = (array)bkVal('risk', bkDefaults()['risk']);
-    $d   = $all['normal'] ?? ['success_mul' => 1, 'amount_mul' => 1, 'critfail_mul' => 1, 'cooldown_mul' => 1];
-    return (array)($all[(string)$risk] ?? $d) + $d;
-}
-function bkRiskLabel($risk) { return bkT('risk_' . (string)$risk); }
-function bkHackRoll(array $hacker, array $target, $risk = 'normal') {
-    $r  = bkVal('rng', bkDefaults()['rng']);
-    $rk = bkRisk($risk);
-
-    $hackerLevel = max(1, (int)($hacker['bank_level'] ?? 1));
-    $targetSec   = max(1, (int)($target['security_level'] ?? 1));
-    $streak      = max(0, (int)($hacker['win_streak'] ?? 0));
-
-    $edge = ($hackerLevel - $targetSec) * 1.8;
-    $edge = max(-20.0, min(20.0, $edge));
-
-    $streakPenalty = -min(18.0, $streak * 6.0);
-
-    $base = (float)$r['base_success'] + $edge + $streakPenalty;
-
-    $jitter = max(1.0, (float)$r['jitter_pct']);
-    $base  += random_int((int)round(-$jitter * 10), (int)round($jitter * 10)) / 10.0;
-
-    $base   = $base * (float)$rk['success_mul'];
-    $chance = max((float)$r['success_floor'], min((float)$r['success_ceil'], $base));
-
-    $ticket = random_int(1, 100000);
-
-    $amtMul = max(0.05, (float)$rk['amount_mul']);
-    $pc = function ($min, $max) use ($amtMul) {
-        return round(min(95.0, bkRollPercent($min, $max) * $amtMul), 2);
-    };
-
-    $jackpotSlice  = max(0, (int)round((float)$r['jackpot_pct']  * 1000 * $amtMul));
-    $critFailSlice = max(0, (int)round((float)$r['critfail_pct'] * 1000 * (float)$rk['critfail_mul']));
-    $perfectSlice  = max(0, (int)round((float)$r['perfect_pct']  * 1000));
-
-    if ($ticket <= $jackpotSlice) {
-        return ['tier' => 'jackpot', 'pct' => $pc($r['jackpot_min'], $r['jackpot_max'])];
-    }
-    $ticket -= $jackpotSlice;
-
-    if ($ticket <= $critFailSlice) {
-        return ['tier' => 'critfail', 'fine_pct' => round(bkRollPercent($r['critfail_min'], $r['critfail_max']) * (float)$rk['critfail_mul'], 2)];
-    }
-    $ticket -= $critFailSlice;
-
-    if ($ticket <= $perfectSlice) {
-        return ['tier' => 'perfect', 'pct' => $pc($r['perfect_min'], $r['perfect_max'])];
-    }
-    $ticket -= $perfectSlice;
-
-    $remaining    = max(1, 100000 - $jackpotSlice - $critFailSlice - $perfectSlice);
-    $successShare = max(0.0, min(1.0, $chance / 100.0));
-    $successSlice = (int)round($remaining * $successShare * (1 - (float)$r['partial_share']));
-    $partialSlice = (int)round($remaining * $successShare * (float)$r['partial_share']);
-
-    if ($ticket <= $successSlice) {
-        return ['tier' => 'success', 'pct' => $pc($r['success_min'], $r['success_max'])];
-    }
-    $ticket -= $successSlice;
-
-    if ($ticket <= $partialSlice) {
-        return ['tier' => 'partial', 'pct' => $pc($r['partial_min'], $r['partial_max'])];
-    }
-
-    return ['tier' => 'fail'];
-}
-
-
-function bkCardText($uid, $name) {
-    $u = bkUser($uid) ?? bkUserDefault($uid);
-    $now = time();
-    $protUntil = max((int)($u['protection_until'] ?? 0), (int)($u['shield_until'] ?? 0));
-    $active    = $protUntil > $now;
-
+function bkCardText($uid, $name, $vault = null) {
     $wallet = gmPoints($uid);
-    $vault  = bkVaultOf($uid);
-    return bkT('card', [
-        'name'         => h($name),
-        'wallet'       => bkNum($wallet),
-        'vault'        => bkNum($vault),
-        'rate'         => rtrim(rtrim(number_format(bkRate($vault), 2, '.', ''), '0'), '.'),
-        'bank'         => bkNum($vault),
-        'sec_status'   => $active ? 'ACTIVE' : 'INACTIVE',
-        'protect_left' => $active ? bkLeftStr($protUntil) : '—',
-        'level'        => (int)($u['bank_level'] ?? 1),
-        'wins'         => bkNum($u['successful_hacks'] ?? 0),
-        'stolen'       => bkNum($u['total_stolen'] ?? 0),
+    $vault  = $vault ?? bkVaultOf($uid);
+    $tpl = preg_replace('/^[^\n]*\{(sec_status|protect_left|wins|stolen)\}[^\n]*\n?/mu', '', bkT('card'));
+    $tpl = str_replace([' (قابلِ سرقت)', ' (امن)'], '', $tpl);
+    $tpl = preg_replace('/\n{3,}/u', "\n\n", $tpl);
+    return strtr($tpl, [
+        '{name}'   => h($name),
+        '{wallet}' => bkNum($wallet),
+        '{vault}'  => bkNum($vault),
+        '{rate}'   => rtrim(rtrim(number_format(bkRate($vault), 2, '.', ''), '0'), '.'),
+        '{bank}'   => bkNum($vault),
+        '{level}'  => bkLevel($vault),
     ]);
 }
 
 function bkKb($uid) {
     return inlineKb([
-        [bkBtn('btn_protect', [], 'bk_protect_' . (int)$uid)],
         [bkBtn('btn_dep', [], 'bk_dep_' . (int)$uid), bkBtn('btn_wd', [], 'bk_wd_' . (int)$uid)],
         [bkBtn('btn_send', [], 'bk_send_' . (int)$uid)],
     ]);
@@ -549,7 +376,8 @@ function bkBackKb($uid) {
 }
 
 function bkShow($uid, $chatId, $name, $editMsgId = null, $replyToMsgId = null) {
-    $text = bkCardText($uid, $name);
+    $vault = bkVaultOf($uid);
+    $text  = bkCardText($uid, $name, $vault);
     if ($editMsgId) { editMsg(BOT_TOKEN, $chatId, $editMsgId, $text, bkKb($uid)); return; }
 
     $extra = $replyToMsgId ? ['reply_to_message_id' => (int)$replyToMsgId] : [];
@@ -561,8 +389,8 @@ function bkShow($uid, $chatId, $name, $editMsgId = null, $replyToMsgId = null) {
             'name'     => $name,
             'username' => (string)($u['username'] ?? ''),
             'card_no'  => (string)($u['card_no'] ?? ''),
-            'locked'   => bkVaultOf($uid),
-            'level'    => (int)($u['bank_level'] ?? 1),
+            'locked'   => $vault,
+            'level'    => bkLevel($vault),
             'rank'     => 0,
             'footer'   => (string)bkVal('card_footer', 'کارتِ اختصاصیِ شما'),
         ], bkKb($uid), $extra);
@@ -708,211 +536,17 @@ function bkVaultOf($uid) {
     return $out;
 }
 
-function bkProtect($uid) {
-    $secs = max(60, (int)bkVal('manual_protect', 900));
-    $now  = time();
-    $left = 0;
-    bkUserSet($uid, function (&$u) use ($secs, $now, &$left) {
-        $manual = (int)($u['protection_until'] ?? 0);
-        $until  = $now + $secs;
-        if ($manual >= $until) { $left = $manual - $now; return; }
-        $u['protection_until'] = $until;
-    });
-    if ($left > 0) {
-        $m = intdiv($left, 60); $s = $left % 60;
-        return [false, bkT('protect_still', ['left' => ($m > 0 ? $m . ' دقیقه و ' : '') . $s . ' ثانیه'])];
-    }
-    return [true, bkT('protected', ['mins' => (int)round($secs / 60)])];
-}
-
-
-function bkHack($hackerId, $hackerName, $hackerUname, $targetId, $risk = 'normal') {
-    $now = time();
-    $out = ['err' => null];
-    $db = bankDb();
-    if (!$db) { $out['err'] = 'empty'; return $out; }
-
-    $hk = (int)$hackerId; $tg = (int)$targetId;
-
-    $fetch = function ($id) use ($db) {
-        $stmt = $db->prepare('SELECT data FROM bank_users WHERE id = :id');
-        $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
-        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
-        $u = $row ? json_decode($row['data'], true) : null;
-        return is_array($u) ? $u : bkUserDefault($id);
-    };
-    $save = function ($id, $u) use ($db) {
-        $stmt = $db->prepare('INSERT OR REPLACE INTO bank_users (id, data) VALUES (:id, :data)');
-        $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
-        $stmt->bindValue(':data', json_encode($u, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
-        $stmt->execute();
-    };
-
-    $db->exec('BEGIN IMMEDIATE');
-    try {
-        $hacker = $fetch($hk);
-        $target = $hk === $tg ? $hacker : $fetch($tg);
-
-        if ($hackerName !== '')  $hacker['name'] = $hackerName;
-        if ($hackerUname !== '') $hacker['username'] = $hackerUname;
-
-        if ((float)($hacker['hack_cooldown_until'] ?? 0) > $now) {
-            $out['err'] = 'cooldown'; $out['left'] = (int)$hacker['hack_cooldown_until'] - $now;
-        } elseif (max((int)($target['protection_until'] ?? 0), (int)($target['shield_until'] ?? 0)) > $now) {
-            $shield = max((int)($target['protection_until'] ?? 0), (int)($target['shield_until'] ?? 0));
-            $out['err'] = 'protected'; $out['left'] = $shield - $now;
-        } elseif (gmPoints($tg) <= 0) {
-            $out['err'] = 'empty';
-        } else {
-            $bal = gmPoints($tg);
-            $roll = bkHackRoll($hacker, $target, $risk);
-            $cooldown = max(60, (int)round(bkVal('hack_cooldown', 1200) * (float)bkRisk($risk)['cooldown_mul']));
-            $cooldown = max(60, $cooldown);
-            $shieldSecs = max(0, (int)bkVal('shield_after', 300));
-            $hacker['hack_cooldown_until'] = $now + $cooldown;
-            $target['shield_until'] = $now + $shieldSecs;
-
-            $out['tier'] = $roll['tier'];
-
-            if (in_array($roll['tier'], ['jackpot', 'perfect', 'success', 'partial'], true)) {
-                $amt = min($bal, floor($bal * $roll['pct'] / 100));
-                $amt = max(0.0, $amt);
-                if ($amt <= 0) {
-                    $out['tier'] = 'fail';
-                    $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
-                    $hacker['win_streak']   = 0;
-                } elseif (gmAdd($tg, -$amt)) {
-                    gmAdd($hk, $amt, $hackerName, $hackerUname);
-                    $hacker['successful_hacks'] = (int)($hacker['successful_hacks'] ?? 0) + 1;
-                    $hacker['win_streak']       = (int)($hacker['win_streak'] ?? 0) + 1;
-                    $hacker['total_stolen']     = (float)($hacker['total_stolen'] ?? 0) + $amt;
-                    $target['total_lost']       = (float)($target['total_lost'] ?? 0) + $amt;
-                    $hacker['bank_level']       = bkLevelFromStolen($hacker['total_stolen']);
-                    $out['amount'] = $amt; $out['pct'] = $roll['pct'];
-                    $out['hackerBank'] = gmPoints($hk);
-                } else {
-                    $out['tier'] = 'fail';
-                    $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
-                    $hacker['win_streak']   = 0;
-                }
-            } elseif ($roll['tier'] === 'critfail') {
-                $ownBal = gmPoints($hk);
-                $fine = min($ownBal, floor($ownBal * $roll['fine_pct'] / 100));
-                $deducted = $fine > 0 && gmAdd($hk, -$fine);
-                $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
-                $hacker['win_streak']   = 0;
-                $out['fine'] = $deducted ? $fine : 0; $out['hackerBank'] = gmPoints($hk);
-            } else {
-                $hacker['failed_hacks'] = (int)($hacker['failed_hacks'] ?? 0) + 1;
-                $hacker['win_streak']   = 0;
-            }
-        }
-
-        $hacker['updated_at'] = time();
-        $save($hk, $hacker);
-        if ($hk !== $tg) { $target['updated_at'] = time(); $save($tg, $target); }
-        $db->exec('COMMIT');
-    } catch (Throwable $e) {
-        $db->exec('ROLLBACK');
-        error_log('[bank] bkHack خطا: ' . $e->getMessage());
-        return ['err' => 'empty'];
-    }
-
-    return $out;
-}
-
-function bkRiskKb($hackerId, $targetId) {
-    $suf = '_' . (int)$hackerId . '_' . (int)$targetId;
-    return inlineKb([
-        [bkBtn('btn_risk_high',   [], 'bk_h_high'   . $suf)],
-        [bkBtn('btn_risk_normal', [], 'bk_h_normal' . $suf),
-         bkBtn('btn_risk_low',    [], 'bk_h_low'    . $suf)],
-    ]);
-}
-
-function bkHackCmd($uid, $chatId, $name, $uname, $replyTo, $msg) {
-    $extra = $replyTo ? ['reply_to_message_id' => $replyTo] : [];
-    $to = $msg['reply_to_message']['from'] ?? null;
-
-    if (!$to || !empty($to['is_bot'])) {
-        $firstWord = trim(explode(',', (string)bkVal('word_hack', 'سرقت الماس'))[0]) ?: 'سرقت الماس';
-        sendMsg(BOT_TOKEN, $chatId, bkT('hack_how', ['word' => $firstWord]), null, $extra);
-        return;
-    }
-    $targetId = (int)$to['id'];
-    if ($targetId === (int)$uid) { sendMsg(BOT_TOKEN, $chatId, bkT('hack_self'), null, $extra); return; }
-
-    $hu = function_exists('getUser') ? getUser($uid) : null;
-    if ($hu && !empty($hu['banned'])) return;
-    $tuRaw = function_exists('getUser') ? getUser($targetId) : null;
-    if ($tuRaw && !empty($tuRaw['banned'])) {
-        sendMsg(BOT_TOKEN, $chatId, bkT('hack_no_target'), null, $extra); return;
-    }
-
-    $bal = function_exists('gmPoints') ? gmPoints($targetId) : 0;
-    if ($bal <= 0) { sendMsg(BOT_TOKEN, $chatId, bkT('hack_empty'), null, $extra); return; }
-
-    sendMsg(BOT_TOKEN, $chatId, bkT('hack_menu', [
-        'hn'  => h($name),
-        'tn'  => h((string)($to['first_name'] ?? ($to['username'] ?? 'کاربر'))),
-        'bal' => bkNum($bal),
-    ]), bkRiskKb($uid, $targetId), $extra);
-}
-
-function bkRunHack($uid, $chatId, $msgId, $name, $uname, $targetId, $risk) {
-    $res = bkHack($uid, $name, $uname, $targetId, $risk);
-
-    $tn = 'کاربر';
-    $tu = function_exists('getUser') ? getUser($targetId) : null;
-    if ($tu) $tn = (string)($tu['first_name'] ?? ($tu['username'] ?? 'کاربر'));
-
-    if ($res['err'] === 'cooldown') {
-        editMsg(BOT_TOKEN, $chatId, $msgId, bkT('hack_cooldown', ['left' => bkLeftStr(time() + $res['left'])]), null);
-        return;
-    }
-    if ($res['err'] === 'protected') {
-        editMsg(BOT_TOKEN, $chatId, $msgId, bkT('hack_protected', ['left' => bkLeftStr(time() + $res['left'])]), null);
-        return;
-    }
-    if ($res['err'] === 'empty') {
-        editMsg(BOT_TOKEN, $chatId, $msgId, bkT('hack_empty'), null);
-        return;
-    }
-
-    $vars = ['hn' => h($name), 'tn' => h($tn)];
-    switch ($res['tier']) {
-        case 'jackpot':
-            $text = bkT('hack_jackpot', $vars + ['amount' => bkNum($res['amount']), 'pct' => $res['pct'], 'bank' => bkNum($res['hackerBank'])]);
-            break;
-        case 'perfect':
-            $text = bkT('hack_perfect', $vars + ['amount' => bkNum($res['amount']), 'pct' => $res['pct'], 'bank' => bkNum($res['hackerBank'])]);
-            break;
-        case 'success':
-            $text = bkT('hack_success', $vars + ['amount' => bkNum($res['amount']), 'pct' => $res['pct'], 'bank' => bkNum($res['hackerBank'])]);
-            break;
-        case 'partial':
-            $text = bkT('hack_partial', $vars + ['amount' => bkNum($res['amount']), 'pct' => $res['pct'], 'bank' => bkNum($res['hackerBank'])]);
-            break;
-        case 'critfail':
-            $text = bkT('hack_critfail', $vars + ['fine' => bkNum($res['fine']), 'bank' => bkNum($res['hackerBank'])]);
-            break;
-        default:
-            $text = bkT('hack_failed', $vars);
-    }
-    $text .= bkT('risk_line', ['risk' => bkRiskLabel($risk)]);
-    editMsg(BOT_TOKEN, $chatId, $msgId, $text, null);
-}
-
-
 function bkTopText($n = null) {
     $rows = bkTop($n ?? (int)bkVal('top_n', 10));
     if (!$rows) return bkT('top_none');
     $out = bkT('top_head');
     $i = 1;
     foreach ($rows as $u) {
-        $nm = trim((string)($u['name'] ?? '')) !== '' ? (string)$u['name'] : ((string)($u['id'] ?? ''));
+        $nm = trim((string)($u['name'] ?? ''));
+        if ($nm === '' && function_exists('getUser')) $nm = trim((string)(getUser((int)($u['id'] ?? 0))['first_name'] ?? ''));
+        if ($nm === '') $nm = (string)($u['id'] ?? '');
         $out .= "\n" . bkT('top_row', [
-            'rank' => $i, 'name' => h($nm), 'bank' => bkNum($u['bank_balance'] ?? 0), 'wins' => (int)($u['successful_hacks'] ?? 0),
+            'rank' => $i, 'name' => h($nm), 'bank' => bkNum($u['bank_balance'] ?? 0),
         ]);
         $i++;
     }
@@ -1020,13 +654,6 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
     }
     if ($isBank) { bkShow($uid, $chatId, $name, null, $msg['message_id'] ?? null); return true; }
 
-    $isHack = false;
-    foreach (explode(',', (string)bkVal('word_hack', 'سرقت الماس')) as $w) {
-        $w = trim($w);
-        if ($w !== '' && mb_strtolower($raw) === mb_strtolower($w)) { $isHack = true; break; }
-    }
-    if ($isHack) { bkHackCmd($uid, $chatId, $name, $uname, $replyTo, $msg ?? []); return true; }
-
     return false;
 }
 
@@ -1034,14 +661,8 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
 function bkCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
     if ($data === 'bk_nop') { answerCb(BOT_TOKEN, $cbId); return true; }
 
-    if (preg_match('/^bk_h_(high|normal|low)_(\d+)_(\d+)$/', (string)$data, $m)) {
-        [$_, $risk, $owner, $target] = $m;
-        if (!bkOn()) { answerCb(BOT_TOKEN, $cbId); return true; }
-        if ((int)$owner !== (int)$uid) { answerCb(BOT_TOKEN, $cbId, bkT('hack_not_yours'), true); return true; }
-        answerCb(BOT_TOKEN, $cbId, '🎯');
-        bkRunHack((int)$uid, $chatId, (int)$msgId,
-            (string)($from['first_name'] ?? ''), (string)($from['username'] ?? ''),
-            (int)$target, $risk);
+    if (preg_match('/^bk_h_(high|normal|low)_\d+_\d+$/', (string)$data)) {
+        answerCb(BOT_TOKEN, $cbId, bkT('ask_expired'), true);
         return true;
     }
 
@@ -1058,13 +679,7 @@ function bkCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
     $name  = (string)($from['first_name'] ?? '');
     $uname = (string)($from['username'] ?? '');
 
-    if ($action === 'protect') {
-        [$ok, $t] = bkProtect($uid);
-        answerCb(BOT_TOKEN, $cbId, $ok ? '🛡' : '', !$ok);
-        bkEditCard($chatId, $msgId, $t, bkBackKb($uid));
-        return true;
-    }
-    if ($action === 'back') {
+    if ($action === 'protect' || $action === 'back') {
         answerCb(BOT_TOKEN, $cbId);
         bkPendClear($uid, $chatId);
         bkEditCard($chatId, $msgId, bkCardText($uid, $name), bkKb($uid));
@@ -1110,45 +725,30 @@ function bkCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
 
 function bkLabels() {
     return [
-        'card' => 'کارتِ بانک', 'protected' => 'حفاظتِ دستی — موفق', 'protect_still' => 'حفاظتِ دستی — از قبل فعال',
+        'card' => 'کارتِ بانک',
         'ask_bad_num' => 'عددِ نامعتبر', 'ask_expired' => 'درخواستِ منقضی', 'not_your_card' => 'کارتِ کسِ دیگری — رد شد',
-        'hack_how' => 'هک — راهنما', 'hack_self' => 'هک — خودت', 'hack_no_target' => 'هک — هدف نیست',
-        'hack_protected' => 'هک — هدف محافظت‌شده', 'hack_empty' => 'هک — بانکِ خالی', 'hack_cooldown' => 'هک — کول‌داون',
-        'hack_jackpot' => 'هک — JACKPOT', 'hack_perfect' => 'هک — PERFECT', 'hack_success' => 'هک — SUCCESS',
-        'hack_partial' => 'هک — PARTIAL', 'hack_critfail' => 'هک — CRITICAL FAIL', 'hack_failed' => 'هک — FAILED',
         'top_head' => 'برترین‌ها — سر', 'top_row' => 'برترین‌ها — ردیف', 'top_none' => 'برترین‌ها — خالی',
         'ask_send_amt' => 'ارسال — مقدار', 'ask_send_id' => 'ارسال — آیدی', 'ask_send_badid' => 'ارسال — آیدیِ بد',
         'send_need_reply' => 'ارسال — بدونِ ریپلای',
         'send_self' => 'ارسال — به خودت', 'send_no_target' => 'ارسال — گیرنده ناشناس',
         'send_low_wallet' => 'ارسال — کیف‌پول کم', 'send_confirm' => 'ارسال — تاییدیه', 'send_ok' => 'ارسال — موفق',
-        'btn_protect' => 'دکمه: حفاظت',
         'btn_dep' => 'دکمه: انتقال به بانک', 'btn_wd' => 'دکمه: برداشت از بانک',
         'dep_ask' => 'انتقال به بانک — پرسشِ مبلغ', 'dep_ok' => 'انتقال به بانک — موفق',
         'int_on' => 'سودِ بانک',
         'dep_low' => 'انتقال به بانک — کیفِ‌پول کم',
         'wd_ask' => 'برداشت از بانک — پرسشِ مبلغ', 'wd_ok' => 'برداشت از بانک — موفق',
         'wd_low' => 'برداشت از بانک — صندوق کم',
-        'btn_risk_high' => 'دکمه: سرقت پرریسک', 'btn_risk_normal' => 'دکمه: سرقت معمولی',
-        'btn_risk_low'  => 'دکمه: سرقت کم‌ریسک',
-        'hack_menu' => 'سرقت — منویِ انتخابِ سطح', 'hack_not_yours' => 'سرقت — منویِ کسِ دیگری',
-        'hack_menu_gone' => 'سرقت — منوی منقضی', 'risk_line' => 'سرقت — خطِ سطحِ ریسک',
-        'risk_high' => 'نامِ سطح: پرریسک', 'risk_normal' => 'نامِ سطح: معمولی', 'risk_low' => 'نامِ سطح: کم‌ریسک',
         'btn_send' => 'دکمه: ارسال به کاربر', 'btn_send_confirm' => 'دکمه: تاییدِ ارسال', 'btn_back' => 'دکمه: برگشت',
     ];
 }
 function bkLabel($k) { return bkLabels()[$k] ?? $k; }
-function bkBtnKeys() { return ['btn_protect', 'btn_dep', 'btn_wd', 'btn_send', 'btn_send_confirm',
-                               'btn_back', 'btn_risk_high', 'btn_risk_normal', 'btn_risk_low']; }
+function bkBtnKeys() { return ['btn_dep', 'btn_wd', 'btn_send', 'btn_send_confirm', 'btn_back']; }
 
 function bkAdminHome($chatId, $msgId = null) {
     $c = bkCfg();
     $t  = "🏦 <b>بانک</b>\n\n";
     $t .= 'وضعیت: ' . (bkOn() ? '✅ روشن' : '❌ خاموش') . "\n\n";
     $t .= 'کلمه‌ی باز کردنِ بانک: <code>' . h($c['word_bank']) . "</code>\n";
-    $t .= 'کلمه‌های هک: <code>' . h($c['word_hack']) . "</code>\n\n";
-    $t .= '🛡 حفاظتِ دستی: <b>' . (int)round($c['manual_protect'] / 60) . "</b> دقیقه\n";
-    $t .= '⏳ کول‌داونِ هک: <b>' . (int)round($c['hack_cooldown'] / 60) . "</b> دقیقه\n";
-    $t .= '🛡 شیلدِ خودکار بعدِ هک: <b>' . (int)$c['shield_after'] . "</b> ثانیه\n";
     if (!empty($c['interest']['on'])) {
         $rs = [];
         foreach ((array)($c['interest']['tiers'] ?? []) as $tt)
@@ -1164,8 +764,6 @@ function bkAdminHome($chatId, $msgId = null) {
         [btnCb('🎨 رنگِ دکمه‌ها', 'bkacolors', 'admin'),
          btnCb('🔤 فونتِ کارت', 'bkafont', 'admin')],
         [btnCb(!empty(bkVal('interest.on', true)) ? '📈 سودِ بانک: روشن' : '📈 سودِ بانک: خاموش', 'bkaint', 'info')],
-        [btnCb('🛡 حفاظتِ دستی (دقیقه)', 'bkaprot', 'admin'), btnCb('🛡 شیلدِ خودکار (ثانیه)', 'bkashield', 'admin')],
-        [btnCb('⏳ کول‌داونِ هک (دقیقه)', 'bkacool', 'admin')],
         [btnCb(UT('back'), 'ag_games', 'nav')],
     ];
     if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
@@ -1174,9 +772,9 @@ function bkAdminHome($chatId, $msgId = null) {
 
 function bkTextsCfg() {
     return [
-        'title' => 'متن‌های بانک (سرقت الماس)',
-        'keys'  => array_keys((array)bkVal('texts', [])),
-        'popup' => ['ask_expired', 'not_your_card', 'hack_not_yours', 'hack_menu_gone'],
+        'title' => 'متن‌های بانک',
+        'keys'  => array_keys(bkDefaults()['texts']),
+        'popup' => ['ask_expired', 'not_your_card'],
         'btns'  => bkBtnKeys(),
         'label' => 'bkLabel',
         'value' => function ($k) { return (string)bkVal('texts.' . $k, ''); },
@@ -1254,7 +852,7 @@ function bkAdminColorPick($chatId, $msgId, $k) {
 function bkAdminWords($chatId, $msgId) {
     $c = bkCfg();
     $t = "🗣 <b>کلمه‌های بانک</b>\n\nهر کلمه را با ویرگول جدا کنید.\n\n";
-    $map = ['word_bank' => 'باز کردنِ بانک', 'word_hack' => 'شروعِ هک'];
+    $map = ['word_bank' => 'باز کردنِ بانک'];
     $rows = [];
     foreach ($map as $k => $lbl) {
         $t .= '• <b>' . h($lbl) . '</b>: <code>' . h((string)$c[$k]) . "</code>\n";
@@ -1346,22 +944,10 @@ function bkAdminCallback($data, $chatId, $msgId, $cbId) {
         answerCb(BOT_TOKEN, $cbId, '✅'); bkAdminColorPick($chatId, $msgId, $m[1]); return true;
     }
 
-    $asks = [
-        'bkaprot'   => ['bk_prot',   "🛡 مدتِ حفاظتِ دستی چند دقیقه باشد؟"],
-        'bkashield' => ['bk_shield', "🛡 مدتِ شیلدِ خودکار (بعدِ هر هک) چند ثانیه باشد؟"],
-        'bkacool'   => ['bk_cool',   "⏳ فاصله‌ی دو هکِ همان مهاجم چند دقیقه باشد؟"],
-    ];
-    if (isset($asks[$data])) {
-        [$act, $ask] = $asks[$data];
-        answerCb(BOT_TOKEN, $cbId);
-        setState(admStateUid($chatId), $act, []);
-        sendMsg(BOT_TOKEN, $chatId, $ask, inlineKb([[btnCb('انصراف', 'bk_home', 'cancel')]]));
-        return true;
-    }
-
     foreach (['bkats_' => ['bk_text', 'texts.'], 'bkaws_' => ['bk_word', '']] as $pre => [$act, $path]) {
         if (!str_starts_with($data, $pre)) continue;
         $k = substr($data, strlen($pre));
+        if ($act === 'bk_word' && $k !== 'word_bank') { answerCb(BOT_TOKEN, $cbId); bkAdminWords($chatId, $msgId); return true; }
         answerCb(BOT_TOKEN, $cbId);
         setState(admStateUid($chatId), $act, ['k' => $k]);
         $cur = (string)bkVal($path . $k, '');
@@ -1441,24 +1027,6 @@ function bkStateHandle($action, $msg, $uid, $chatId) {
         return true;
     }
 
-    if ($action === 'bk_prot') {
-        $v = (int)norm_fa_digits($text);
-        if ($v < 1 || $v > 1440) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۱ تا ۱۴۴۰ دقیقه."); return true; }
-        bkSet(function (&$c) use ($v) { $c['manual_protect'] = $v * 60; });
-        return $done('✅ حفاظتِ دستی: ' . $v . ' دقیقه');
-    }
-    if ($action === 'bk_shield') {
-        $v = (int)norm_fa_digits($text);
-        if ($v < 0 || $v > 3600) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۰ تا ۳۶۰۰ ثانیه."); return true; }
-        bkSet(function (&$c) use ($v) { $c['shield_after'] = $v; });
-        return $done('✅ شیلدِ خودکار: ' . $v . ' ثانیه');
-    }
-    if ($action === 'bk_cool') {
-        $v = (int)norm_fa_digits($text);
-        if ($v < 1 || $v > 1440) { sendMsg(BOT_TOKEN, $chatId, "⚠️ بین ۱ تا ۱۴۴۰ دقیقه."); return true; }
-        bkSet(function (&$c) use ($v) { $c['hack_cooldown'] = $v * 60; });
-        return $done('✅ کول‌داونِ هک: ' . $v . ' دقیقه');
-    }
     if ($action === 'bk_word') {
         $k = (string)($sd['k'] ?? '');
         if ($k === '' || $text === '') { sendMsg(BOT_TOKEN, $chatId, "⚠️ خالی نمی‌شود."); return true; }
