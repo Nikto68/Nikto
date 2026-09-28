@@ -916,7 +916,6 @@ function svBoot($app) {
         'cats'    => $pub['cats'],
         'items'   => $pub['items'],
         'topup'   => maTopupInfo(),
-        'sup'     => maSupportLink(),
         'bot'     => (string)botUsername(),
         'links'   => $links,
     ];

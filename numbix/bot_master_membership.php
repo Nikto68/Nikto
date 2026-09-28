@@ -407,9 +407,47 @@ function fmtNum($n) { return rtrim(rtrim(number_format((float)$n, 2, '.', ','), 
 
 if (!defined('TG_API_BASE')) define('TG_API_BASE', 'https://api.telegram.org');
 
+function tgHtmlFix($html) {
+    static $allow = ['b', 'strong', 'i', 'em', 'u', 'ins', 's', 'strike', 'del', 'span', 'tg-spoiler', 'a', 'code', 'pre', 'blockquote', 'tg-emoji'];
+    $out = ''; $stack = [];
+    foreach (preg_split('~(<[^<>]*>)~u', (string)$html, -1, PREG_SPLIT_DELIM_CAPTURE) as $i => $p) {
+        if ($i % 2 === 0) {
+            $p = preg_replace('~&(?!(?:lt|gt|amp|quot|#\d+|#x[0-9a-fA-F]+);)~', '&amp;', $p);
+            $out .= str_replace(['<', '>'], ['&lt;', '&gt;'], $p);
+            continue;
+        }
+        if (!preg_match('~^<(/?)([a-zA-Z][a-zA-Z0-9-]*)(?:\s[^>]*)?/?>$~', $p, $m)) { $out .= htmlspecialchars($p, ENT_NOQUOTES); continue; }
+        $tag = strtolower($m[2]);
+        if ($tag === 'br') { $out .= "\n"; continue; }
+        if (!in_array($tag, $allow, true)) { $out .= htmlspecialchars($p, ENT_NOQUOTES); continue; }
+        if ($m[1] === '') { $stack[] = $tag; $out .= $p; continue; }
+        $at = array_search($tag, array_reverse($stack, true), true);
+        if ($at === false) continue;
+        while (count($stack) > $at) $out .= '</' . array_pop($stack) . '>';
+    }
+    while ($stack) $out .= '</' . array_pop($stack) . '>';
+    return preg_replace('~<blockquote(?:\s[^>]*)?>\s*</blockquote>~u', '', $out);
+}
+
 function tg($token, $method, $data = [], $timeout = 20) {
     if (function_exists('__tgHook')) return __tgHook($token, $method, $data);
+    $res = tgRaw($token, $method, $data, $timeout);
+    $key = isset($data['text']) ? 'text' : (isset($data['caption']) ? 'caption' : '');
+    if (!empty($res['ok']) || $key === '' || !is_string($data[$key]) || ($data['parse_mode'] ?? '') !== 'HTML'
+        || stripos((string)($res['description'] ?? ''), "can't parse entities") === false) return $res;
+    error_log('[shop-bot] HTML نامعتبر در ' . $method . ': ' . ($res['description'] ?? '') . ' — ترمیم و ارسال دوباره');
+    $fixed = tgHtmlFix($data[$key]);
+    if ($fixed !== $data[$key]) {
+        $res = tgRaw($token, $method, [$key => $fixed] + $data, $timeout);
+        if (!empty($res['ok']) || stripos((string)($res['description'] ?? ''), "can't parse entities") === false) return $res;
+    }
+    $plain = $data;
+    unset($plain['parse_mode']);
+    $plain[$key] = html_entity_decode(strip_tags($data[$key]), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    return tgRaw($token, $method, $plain, $timeout);
+}
 
+function tgRaw($token, $method, $data = [], $timeout = 20) {
     $hasFile = false;
     foreach ($data as $v) if ($v instanceof CURLFile) { $hasFile = true; break; }
 
@@ -4112,6 +4150,10 @@ function masterHandle($update) {
         clearState($uid);
         slotClear($uid);
         if ($miss = masterJoinMissing($uid)) { masterJoinGate($uid, $chatId, $miss); return; }
+        if ($arg === 'bank' && function_exists('bkOn') && bkOn() && function_exists('bkShow')) {
+            bkShow($uid, $chatId, $fname);
+            return;
+        }
         showHome($uid, $chatId, $fname);
         return;
     }

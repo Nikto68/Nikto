@@ -48,19 +48,15 @@ svg{display:block}
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
 
 .mesh{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;overflow:clip;contain:strict;
-  background:var(--dots) 0 0/300px 300px repeat,radial-gradient(120vw 70vh at 50% -18%,#2B0D30 0%,transparent 70%),linear-gradient(180deg,#0A0510 0%,#130619 55%,#0A0510 100%)}
+  background:var(--dots) 0 0/300px 300px repeat,
+    radial-gradient(circle 47vw at 12vw 17vw,rgba(245,133,41,.34),transparent),
+    radial-gradient(circle 52vw at 92vw calc(8vh + 52vw),rgba(221,42,123,.34),transparent),
+    radial-gradient(circle 50vw at 15vw calc(52vh + 50vw),rgba(129,52,175,.34),transparent),
+    radial-gradient(circle 42vw at 100vw 100vh,rgba(81,91,212,.26),transparent),
+    radial-gradient(110vw 16vh at 50% 38vh,rgba(255,95,162,.1),transparent 72%),
+    radial-gradient(120vw 70vh at 50% -18%,#2B0D30 0%,transparent 70%),
+    linear-gradient(180deg,#0A0510 0%,#130619 55%,#0A0510 100%)}
 .mesh>*{position:absolute;display:block}
-.mesh .m{border-radius:50%;will-change:transform}
-.mesh .m1{width:95vw;height:95vw;left:-35vw;top:-30vw;background:radial-gradient(closest-side,rgba(245,133,41,.34),transparent);animation:m1 19s ease-in-out infinite alternate}
-.mesh .m2{width:105vw;height:105vw;right:-45vw;top:8vh;background:radial-gradient(closest-side,rgba(221,42,123,.34),transparent);animation:m2 23s ease-in-out infinite alternate}
-.mesh .m3{width:100vw;height:100vw;left:-35vw;top:52vh;background:radial-gradient(closest-side,rgba(129,52,175,.34),transparent);animation:m3 26s ease-in-out infinite alternate}
-@keyframes m1{to{transform:translate3d(30vw,22vh,0) scale(1.2)}}
-@keyframes m2{to{transform:translate3d(-28vw,26vh,0) scale(.85)}}
-@keyframes m3{to{transform:translate3d(32vw,-20vh,0) scale(1.15)}}
-.mesh .bm{left:-60%;width:220%;top:30vh;height:16vh;opacity:.7;will-change:transform;
-  background:radial-gradient(50% 50% at 50% 50%,rgba(255,95,162,.16),rgba(129,52,175,.08) 45%,transparent 72%);
-  animation:bm 13s ease-in-out infinite alternate}
-@keyframes bm{from{transform:rotate(22deg) translate3d(-8%,0,0)}to{transform:rotate(16deg) translate3d(8%,-6vh,0)}}
 .mesh .ht{bottom:-40px;width:18px;height:18px;color:rgba(255,95,162,.6);opacity:0;will-change:transform,opacity;animation:hup 15s linear infinite}
 .mesh .ht svg{width:100%;height:100%;filter:drop-shadow(0 0 6px rgba(255,95,162,.7))}
 .mesh .ht:nth-of-type(1){left:8%}
@@ -190,7 +186,7 @@ svg{display:block}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .tile{position:relative;overflow:hidden;overflow:clip;isolation:isolate;display:flex;flex-direction:column;text-align:right;padding:12px;border-radius:22px;min-height:182px;width:100%;
   background:linear-gradient(165deg,rgba(255,255,255,.08),rgba(255,255,255,.015) 55%),var(--glass);border:1px solid var(--line);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 18px 30px -24px #000;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
   animation:up .5s cubic-bezier(.2,.85,.25,1) backwards;animation-delay:calc(var(--i,0) * 55ms);transition:transform .15s}
 .tile:before{content:"";position:absolute;z-index:-1;width:130px;height:130px;border-radius:50%;right:-40px;top:-50px;
   background:radial-gradient(closest-side,rgba(221,42,123,.36),transparent)}
@@ -368,6 +364,52 @@ svg{display:block}
 .gate{position:fixed;inset:0;z-index:90;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
 .gate>svg{width:64px;height:64px;color:var(--pk);margin-bottom:12px}
 .gate b{font-size:15px}.gate p{color:var(--dim);font-size:12px;margin:6px 0 16px}
+.spl{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;
+  background:radial-gradient(85vw 55vh at 50% 40%,rgba(221,42,123,.26),transparent 70%),radial-gradient(70vw 45vh at 12% 8%,rgba(245,133,41,.2),transparent 70%),
+    radial-gradient(70vw 45vh at 90% 96%,rgba(81,91,212,.24),transparent 70%),var(--dots) 0 0/300px 300px repeat,#0A0510;
+  transition:opacity .5s ease .1s,visibility .5s ease .1s}
+.spl.out{opacity:0;visibility:hidden}
+.sbar{position:absolute;top:calc(var(--top) + 14px);left:16px;right:16px;display:flex;gap:4px}
+.sbar i{position:relative;flex:1;height:3px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden;overflow:clip}
+.sbar i:after{content:"";position:absolute;inset:0;border-radius:3px;background:#fff;transform-origin:right center;transform:scaleX(0);animation:sbf .85s linear forwards}
+.sbar i:nth-child(2):after{animation-delay:.85s}
+.sbar i:nth-child(3):after{animation-delay:1.7s}
+@keyframes sbf{to{transform:scaleX(1)}}
+.spl .spc{display:flex;flex-direction:column;align-items:center;animation:spIn .8s cubic-bezier(.2,.85,.25,1) both;
+  transition:transform .5s cubic-bezier(.5,0,.75,0),opacity .3s ease}
+.spl.out .spc{transform:scale(1.18);opacity:0}
+@keyframes spIn{from{opacity:0;transform:translate3d(0,26px,0) scale(.88)}to{opacity:1;transform:none}}
+.lgw{position:relative;width:164px;height:164px;display:grid;place-items:center}
+.lgw .rw{position:absolute;inset:0;animation:spin 3.2s linear 1.3s infinite}
+.lgw .rw svg{width:100%;height:100%;transform:rotate(-90deg)}
+.lgw .rw circle{fill:none;stroke-width:4.5;stroke-linecap:round;stroke-dasharray:100 100;stroke-dashoffset:100;animation:rdr 1.3s cubic-bezier(.4,0,.2,1) forwards}
+@keyframes rdr{to{stroke-dashoffset:0}}
+.lgw .gl{position:absolute;inset:14px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,95,162,.45),transparent);animation:gpl 2s ease-in-out infinite}
+@keyframes gpl{0%,100%{transform:scale(.9);opacity:.7}50%{transform:scale(1.1);opacity:1}}
+.lgw .lg{position:relative;width:96px;height:96px;border-radius:30px;display:grid;place-items:center;color:#fff;overflow:hidden;overflow:clip;
+  background:linear-gradient(45deg,#FEDA75 0%,#FA7E1E 25%,#D62976 55%,#962FBF 80%,#4F5BD5 100%);
+  box-shadow:0 22px 46px -12px rgba(221,42,123,.9),inset 0 2px 0 rgba(255,255,255,.45),inset 0 -8px 16px rgba(0,0,0,.2);animation:lpu 1.6s ease-in-out infinite}
+.lgw .lg:before{content:"";position:absolute;top:0;bottom:0;left:0;width:45%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);animation:shine 2.4s ease-in-out infinite}
+.lgw .lg svg{position:relative;width:50px;height:50px}
+@keyframes lpu{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.lgw .hb{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;color:#FF3B6B;opacity:0;animation:hbx 2.4s ease-out infinite}
+.lgw .hb svg{width:100%;height:100%;filter:drop-shadow(0 0 8px rgba(255,59,107,.7))}
+.lgw .h1{--x:-78px;--y:-82px}
+.lgw .h2{--x:70px;--y:-96px;animation-delay:.6s;color:#FEDA75}
+.lgw .h3{--x:-40px;--y:-118px;animation-delay:1.2s;width:16px;height:16px;margin:-8px 0 0 -8px}
+.lgw .h4{--x:92px;--y:-40px;animation-delay:1.8s;color:#C084FC}
+@keyframes hbx{0%{opacity:0;transform:translate3d(0,0,0) scale(.3)}18%{opacity:1}100%{opacity:0;transform:translate3d(var(--x),var(--y),0) scale(1.15)}}
+.spl h1{margin-top:22px;font-size:23px;font-weight:900;letter-spacing:-.3px;background:linear-gradient(90deg,#FEDA75,#FA7E1E 25%,#FF5FA2 55%,#C084FC 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.spl p{margin-top:4px;color:var(--dim);font-size:12px;max-width:280px;text-align:center}
+.spl .ld{position:absolute;left:0;right:0;bottom:calc(56px + var(--safe));text-align:center;transition:opacity .3s,transform .4s}
+.spl.out .ld{opacity:0;transform:translate3d(0,12px,0)}
+.dts{display:flex;justify-content:center;gap:7px}
+.dts i{width:9px;height:9px;border-radius:50%;background:#FF5FA2;box-shadow:0 0 10px rgba(255,95,162,.8);animation:dj 1s ease-in-out infinite}
+.dts i:nth-child(2){animation-delay:.15s;background:#C084FC;box-shadow:0 0 10px rgba(192,132,252,.8)}
+.dts i:nth-child(3){animation-delay:.3s;background:#FEDA75;box-shadow:0 0 10px rgba(254,218,117,.8)}
+@keyframes dj{0%,100%{transform:translate3d(0,0,0);opacity:.5}50%{transform:translate3d(0,-8px,0);opacity:1}}
+.spl .ld small{display:block;margin-top:12px;color:var(--dim);font-size:10.5px;font-weight:700}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -403,7 +445,22 @@ svg{display:block}
     <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="8" y="8" width="12.5" height="12.5" rx="2.5"/><path d="M16 8V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7.5A2.5 2.5 0 0 0 6 16h2"/></symbol>
   </defs>
 </svg>
-<div class="mesh" aria-hidden="true"><i class="m m1"></i><i class="m m2"></i><i class="m m3"></i><i class="bm"></i><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><s class="sp"></s><s class="sp"></s><s class="sp"></s><s class="sp"></s><s class="sp"></s></div>
+<div class="mesh" aria-hidden="true"><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><s class="sp"></s><s class="sp"></s><s class="sp"></s><s class="sp"></s><s class="sp"></s></div>
+
+<div class="spl" id="spl">
+  <div class="sbar"><i></i><i></i><i></i></div>
+  <div class="spc">
+    <div class="lgw"><i class="gl"></i>
+      <div class="rw"><svg viewBox="0 0 120 120"><defs><linearGradient id="spg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".3" stop-color="#FA7E1E"/><stop offset=".6" stop-color="#D62976"/><stop offset=".85" stop-color="#962FBF"/><stop offset="1" stop-color="#4F5BD5"/></linearGradient></defs>
+        <circle cx="60" cy="60" r="56" pathLength="100" stroke="url(#spg)"/></svg></div>
+      <div class="lg"><svg><use href="#i-camera"/></svg></div>
+      <i class="hb h1"><svg><use href="#i-heartf"/></svg></i><i class="hb h2"><svg><use href="#i-heartf"/></svg></i><i class="hb h3"><svg><use href="#i-heartf"/></svg></i><i class="hb h4"><svg><use href="#i-heartf"/></svg></i>
+    </div>
+    <h1>__TITLE__</h1>
+    <p>__TAG__</p>
+  </div>
+  <div class="ld"><div class="dts"><i></i><i></i><i></i></div><small id="spMsg">در حال اتصالِ امن…</small></div>
+</div>
 
 <div class="app">
   <div class="hd0">
@@ -411,7 +468,6 @@ svg{display:block}
       <div class="ava"><span id="ava"></span></div>
       <div class="who"><b id="uName">—</b><small><i class="dot"></i><span>آنلاین · سفارشِ آنی</span></small></div>
       <button class="bal" id="balBtn"><span id="bal">…</span><em>تومان</em><i><svg><use href="#i-plus"/></svg></i></button>
-      <button class="ib" id="supBtn" aria-label="پشتیبانی"><svg><use href="#i-headset"/></svg></button>
     </header>
   </div>
 
@@ -455,7 +511,6 @@ svg{display:block}
     <div id="payInfo"></div>
     <button class="cta" id="tGo"><svg><use href="#i-wallet"/></svg>درخواستِ شارژ</button>
     <div class="note" id="tNote">فاکتور و مقصدِ پرداخت داخلِ ربات برایتان فرستاده می‌شود؛ بعد از واریز، «ارسال رسید» را بزنید.</div>
-    <div class="links"><button class="xl sup" id="supBtn2"><span class="ic"><svg><use href="#i-headset"/></svg></span><span>پشتیبانی<small>سوال یا مشکل دارید؟ همین‌جا بپرسید</small></span><svg class="ch"><use href="#i-chev"/></svg></button></div>
   </section>
 </div>
 
@@ -535,6 +590,18 @@ function openApp(url){
   location.href = url + h;
 }
 
+var SPL = { t0: Date.now(), gone: false, min: 1300 };
+try { var LO = Number(localStorage.getItem('sv_open_' + B.app)) || 0; if (SPL.t0 - LO >= 0 && SPL.t0 - LO < 1800000) SPL.min = 600;
+      localStorage.setItem('sv_open_' + B.app, String(SPL.t0)); } catch(e){}
+function hideSplash(now){
+  if (SPL.gone) return; SPL.gone = true;
+  var wait = now ? 0 : Math.max(0, SPL.min - (Date.now() - SPL.t0));
+  setTimeout(function(){ var sp = $('spl'); if (!sp) return; sp.classList.add('out');
+    setTimeout(function(){ if (sp.parentNode) sp.parentNode.removeChild(sp); }, 700); }, wait);
+}
+setTimeout(function(){ hideSplash(false); }, 3000);
+[[900, 'دریافتِ سرویس‌ها…'], [1800, 'آماده‌ست ✨']].forEach(function(m){
+  setTimeout(function(){ var e = $('spMsg'); if (e && !SPL.gone) e.textContent = m[1]; }, m[0]); });
 var API = (function(){ try { if (/^https?:$/.test(location.protocol)) return location.origin + location.pathname + '?mapi=1'; } catch(e){} return ''; })();
 var READS = { me: 1, sv_orders: 1, sv_order: 1 };
 var GATED = false;
@@ -558,6 +625,7 @@ function api(action, extra, ok, bad, tried){
 }
 function gate(msg){
   if (GATED) return; GATED = true;
+  hideSplash(true);
   var g = D.createElement('div'); g.className = 'gate';
   g.innerHTML = ico('camera') + '<b>از داخل ربات باز کنید</b><p>' + esc(msg || 'این صفحه فقط از داخل ربات تلگرام باز می‌شود.') + '</p>' +
     (B.bot ? '<button class="cta" style="max-width:260px">رفتن به ربات</button>' : '');
@@ -777,7 +845,7 @@ function drawWallet(){
     (t.name ? '<div class="r"><span>به نامِ</span><b>' + esc(t.name) + '</b></div>' : '');
   if (t.gw) h += '<div class="r"><span>پرداختِ آنلاین (' + esc(t.gwcoin || 'USDT') + ')</span><b class="g">فعال' + (t.gwmin > 0 ? ' — از ' + fa(t.gwmin) + ' تومان' : '') + '</b></div>';
   $('payInfo').innerHTML = h ? '<div class="pay">' + h + '</div>'
-    : '<div class="warn">' + ico('alert') + '<span>روشِ پرداخت هنوز تنظیم نشده — برای شارژ با پشتیبانی در تماس باشید.</span></div>';
+    : '<div class="warn">' + ico('alert') + '<span>روشِ پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>';
   var cc = $('cardCp'); if (cc) cc.onclick = function(){ tap(); copy(digits(t.card), 'شماره کارت'); };
   $('tGo').disabled = !payOk();
   $('tNote').classList.toggle('hid', !payOk());
@@ -804,8 +872,6 @@ $('tGo').onclick = function(){
   }, function(j){ WAL.busy = false; b.disabled = false; toast((j && j.message) || 'ثبت نشد.'); });
 };
 $('balBtn').onclick = function(){ tap(); go('wallet'); };
-function support(){ tap(); if (B.sup) openLink(B.sup); else if (B.bot) openLink('https://t.me/' + B.bot); }
-$('supBtn').onclick = support; $('supBtn2').onclick = support;
 
 (function(){
   var sh = $('sh'), y0 = null, dy = 0;
@@ -840,7 +906,7 @@ drawSelf('');
 drawHome();
 var WANT = (function(){ try { return String(new URLSearchParams(location.search).get('p') || ''); } catch(e){ return ''; } })();
 go(WANT === 'orders' || WANT === 'wallet' || WANT === 'list' ? WANT : 'home');
-api('me', {}, function(j){ setBal(j.balance); drawSelf(j.avatar); }, function(){});
+api('me', {}, function(j){ setBal(j.balance); drawSelf(j.avatar); hideSplash(false); }, function(){ hideSplash(false); });
 })();
 </script>
 </body>

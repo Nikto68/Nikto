@@ -159,7 +159,7 @@ html.in .pg.on>:nth-child(n+7){transition-delay:.3s}
   box-shadow:0 0 18px rgba(59,130,246,.25);transform:rotateX(74deg);animation:orb 10s linear infinite;will-change:transform}
 .hero .orb b{position:absolute;top:-4px;left:calc(50% - 4px);width:8px;height:8px;border-radius:50%;background:#86EFAC;box-shadow:0 0 10px 2px rgba(74,222,128,.8)}
 @keyframes orb{to{transform:rotateX(74deg) rotateZ(360deg)}}
-.qk{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.qk{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
 .qk button{display:flex;flex-direction:column;align-items:center;gap:7px;padding:11px 4px 10px;border-radius:17px;border:1px solid transparent;
   background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,0) 50%) padding-box,linear-gradient(var(--gl),var(--gl)) padding-box,
     linear-gradient(155deg,rgba(255,255,255,.24),rgba(255,255,255,.05) 40%,rgba(96,165,250,.3)) border-box;
@@ -380,7 +380,7 @@ textarea.inp{resize:none;min-height:96px;line-height:1.8;font-size:13px}
 .fab.has .bd{display:grid}
 .fab.has:after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(74,222,128,.7);animation:rp 1.6s infinite}
 @keyframes rp{from{transform:scale(.9);opacity:1}to{transform:scale(1.35);opacity:0}}
-html.nofab .fab{display:none}
+html.nofab .fab,.fab{display:none!important}
 
 .ov{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.66);opacity:0;pointer-events:none;transition:opacity .22s}
 .ov.on{opacity:1;pointer-events:auto}
@@ -470,6 +470,19 @@ html.nofab .fab{display:none}
 .lvl .h b{color:var(--ink)}
 .bar{height:9px;border-radius:9px;background:rgba(255,255,255,.07);overflow:hidden}
 .bar i{display:block;height:100%;border-radius:9px;background:var(--grad);transition:width .6s}
+.bkc{margin-top:10px;border-radius:20px;border:1px solid rgba(96,165,250,.28);padding:12px;
+  background:linear-gradient(135deg,rgba(59,130,246,.14),rgba(34,197,94,.06)),var(--card)}
+.bkc .bh{display:flex;align-items:center;gap:10px}
+.bkc .bh div{flex:1;min-width:0}
+.bkc .bh b{display:block;font-size:13px;font-weight:900}
+.bkc .bh small{font-size:10px;color:var(--dim)}
+.bkc .bh button{display:inline-flex;align-items:center;gap:4px;padding:8px 11px;border-radius:12px;font-size:11px;font-weight:900;background:var(--grad);color:#fff;flex:0 0 auto}
+.bkc .bh button svg{width:14px;height:14px}
+.bkc .bv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.bkc .bv div{border-radius:14px;background:rgba(255,255,255,.035);border:1px solid var(--line);padding:9px 10px}
+.bkc .bv small{display:block;font-size:10px;color:var(--dim);font-weight:700}
+.bkc .bv b{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:900;direction:ltr;justify-content:flex-end}
+.bkc .bv b .gmi{width:16px;height:16px}
 .axg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
 .axg button{border-radius:16px;border:1px solid var(--line);background:var(--card);padding:11px 6px;font-size:11px;font-weight:800;display:flex;flex-direction:column;align-items:center;gap:5px}
 .axg button small{font-size:9.5px;color:var(--dim);font-weight:700}
@@ -761,6 +774,7 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
 <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 13.9 9l5.7 1.9-5.7 1.9L12 18.6l-1.9-5.8-5.7-1.9L10.1 9z"/><path d="M18.6 3.6v3.2M17 5.2h3.2"/></symbol>
 <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.6v5M12 16.2v.2"/></symbol>
 <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.8c2.4 3.4 1 5.2 2.6 6.6.9-.6 1.3-1.6 1.3-2.8 2.4 2.2 3.2 5.2 3.2 6.9a7.7 7.7 0 0 1-15.4 0c0-3.2 2.4-6.4 5-8-.4 1.8.2 3.2 1 3.8.6-2.3 1-4.3 2.3-6.5z"/></symbol>
+<symbol id="i-bank" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 4l9 5.5M5 10v7M9.7 10v7M14.3 10v7M19 10v7M3.5 20.5h17"/></symbol>
 <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4.6" y="10.4" width="14.8" height="10" rx="2.4"/><path d="M8 10.4V7.6a4 4 0 0 1 8 0v2.8"/></symbol>
 <symbol id="i-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="5.2" width="18.4" height="13.6" rx="2.4"/><path d="M2.8 9.6h18.4M6.4 15h3.4"/></symbol>
 <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
@@ -833,7 +847,6 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
       <button data-go="wallet"><i class="t3 s g"><svg><use href="#i-wallet"/></svg></i><b>شارژ کیف پول</b></button>
       <button data-go="orders"><i class="t3 s"><svg><use href="#i-list"/></svg></i><b>شماره‌های من</b></button>
       <button data-go="me"><i class="t3 s c"><svg><use href="#i-gift"/></svg></i><b>دعوت دوستان</b></button>
-      <button data-go="sup"><i class="t3 s m"><svg><use href="#i-headset"/></svg></i><b>پشتیبانی</b></button>
     </div>
 
     <div id="homeLive"></div>
@@ -904,7 +917,6 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
       <button class="mi" data-go="orders"><i class="t3 s"><svg><use href="#i-list"/></svg></i><span>شماره‌های من</span><svg class="chev"><use href="#i-chev"/></svg></button>
       <button class="mi" data-go="wallet"><i class="t3 s g"><svg><use href="#i-wallet"/></svg></i><span>کیف پول و شارژ</span><svg class="chev"><use href="#i-chev"/></svg></button>
       <button class="mi" data-go="notes"><i class="t3 s c"><svg><use href="#i-bell"/></svg></i><span>اعلان‌ها</span><b class="bdn hid" id="mNotes"></b><svg class="chev"><use href="#i-chev"/></svg></button>
-      <button class="mi" data-go="sup"><i class="t3 s m"><svg><use href="#i-headset"/></svg></i><span>پشتیبانی</span><svg class="chev"><use href="#i-chev"/></svg></button>
       <button class="mi" data-go="air"><i class="t3 s k"><svg class="gmi"><use href="#g-gem"/></svg></i><span>ایردراپ کریستال</span><svg class="chev"><use href="#i-chev"/></svg></button>
     </div>
   </section>
@@ -1180,7 +1192,7 @@ var PAGES = ['home', 'shop', 'orders', 'air', 'me', 'wallet', 'notes', 'sup'];
 var DOCKMAP = { wallet: 'me', notes: 'me' };
 
 function go(p, back){
-  if (PAGES.indexOf(p) < 0) p = 'home';
+  if (PAGES.indexOf(p) < 0 || p === 'sup') p = 'home';
   if (p === S.page) { window.scrollTo(0, 0); return; }
   if (!back && S.page) { S.stack.push(S.page); if (S.stack.length > 12) S.stack.shift(); }
   var prev = S.page;
@@ -1341,7 +1353,7 @@ function marq(items, secs){
 }
 function drawTrust(t, rv){
   var l = [['shield', 'پرداخت امن از کیف پول'], ['bolt', 'تحویل خودکار و آنی'],
-           ['wallet', 'برگشت خودکار پول اگر کد نیاید'], ['headset', 'پشتیبانی آنلاین همین‌جا']];
+           ['wallet', 'برگشت خودکار پول اگر کد نیاید']];
   if (t.done > 0) l.push(['check', fa(t.done) + '+ شماره‌ی تحویل‌شده']);
   if (rv.n > 0) l.push(['star', 'امتیاز ' + fa(rv.avg) + ' از ۵ — ' + fa(rv.n) + ' نظر']);
   if (CATS.length) l.push(['globe', fa(CATS.length) + ' کشور']);
@@ -1618,7 +1630,7 @@ function drawLive(){
         '<button class="btn mt2" data-act="rate"' + (S.rate ? '' : ' disabled') + '>' + ico('send') + 'ثبت نظر</button></div>';
   } else {
     h += '<div class="empty" style="padding:16px 8px">' + ico(r.ref ? 'wallet' : 'clock') + '<b>' + (r.ref ? 'مبلغ به کیف پول شما برگشت' : 'این شماره بسته شد') + '</b><span>' +
-      (r.nst === 'expired' ? 'کدی تا پایان مهلت نرسید.' : r.nst === 'cancel' ? 'شماره لغو شد.' : 'اگر سوالی دارید با پشتیبانی در تماس باشید.') + '</span></div>';
+      (r.nst === 'expired' ? 'کدی تا پایان مهلت نرسید.' : r.nst === 'cancel' ? 'شماره لغو شد.' : 'اگر سوالی دارید، داخلِ ربات بپرسید.') + '</span></div>';
     h += '<button class="btn mt2" data-go="shop">' + ico('sim') + 'خرید شماره‌ی دیگر</button>';
   }
   h += '<div class="kvr mt"><span>مبلغ</span><b>' + fa(r.total) + ' تومان</b></div><div class="kvr"><span>کد سفارش</span><b class="ltr" style="font-size:11px">' + esc(r.id) + '</b></div>';
@@ -1782,7 +1794,7 @@ function drawWallet(){
   if (t.on) h += '<div class="kvr"><span>' + ico('card', 'chev') + ' کارت به کارت</span><button class="cpy" id="cardCp">' + ico('copy') + '<span class="ltr">' + esc(t.card) + '</span></button></div>' +
     (t.name ? '<div class="kvr"><span>به نام</span><b>' + esc(t.name) + '</b></div>' : '');
   if (t.gw) h += '<div class="kvr"><span>پرداخت آنلاین (' + esc(t.gwcoin || 'USDT') + ')</span><b class="g">فعال' + (t.gwmin > 0 ? ' — از ' + fa(t.gwmin) + ' تومان' : '') + '</b></div>';
-  if (!t.on && !t.gw) h = '<div class="note bl">' + ico('alert') + '<span>روش پرداخت هنوز تنظیم نشده — با پشتیبانی در تماس باشید.</span></div>';
+  if (!t.on && !t.gw) h = '<div class="note bl">' + ico('alert') + '<span>روش پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>';
   $('payInfo').innerHTML = h;
   $('payInfo').classList.toggle('card', !!(t.on || t.gw));
   var cc = $('cardCp');
@@ -1997,19 +2009,7 @@ function supPoll(){
     supNext();
   }, function(){ supNext(); });
 }
-function supWatch(wait){
-  clearTimeout(SUP.watch);
-  if (!SUP.has || D.hidden) return;
-  SUP.watch = setTimeout(function(){
-    if (SUP.open || D.hidden) { supWatch(); return; }
-    api('sup_state', {}, function(j){
-      var n = j.unread | 0;
-      if (n > SUP.unread && !SUP.open) toast('پشتیبانی جواب داد — دکمه‌ی پشتیبانی را بزنید.', true);
-      if (!SUP.open) supBadge(n);
-      supWatch();
-    }, function(){ supWatch(); });
-  }, wait || 20000);
-}
+function supWatch(){ clearTimeout(SUP.watch); }
 function supEnter(){
   var on = !!B.supform;
   $('supLink').classList.toggle('hid', !B.sup);
@@ -2135,6 +2135,10 @@ function drawAir(){
     '<div class="stats"><div class="stat"><b>' + fa(s.streak) + '</b><small>روز پشت‌سرهم</small></div>' +
     '<div class="stat"><b>' + fa(s.boost_n) + '/' + fa(s.boost_max) + '</b><small>تقویت سرعت</small></div>' +
     '<div class="stat"><b>' + fa(days) + '</b><small>روز تا پایان فصل</small></div></div></div>';
+  if (s.bank) h += '<div class="bkc"><div class="bh">' + tile('bank', 'c') + '<div><b>بانک الماس</b><small>سطح ' + fa(s.bank.level) + ' · سودِ روزانه ' +
+    fa(Math.round(Number(s.bank.rate) * 100) / 100) + '٪</small></div>' + (B.bot ? '<button id="bkGo">' + ico('bank') + 'باز کردن بانک</button>' : '') + '</div>' +
+    '<div class="bv"><div><small>کیف‌پولِ الماس</small><b>' + fa(Math.floor(s.bank.wallet)) + gem() + '</b></div>' +
+    '<div><small>موجودیِ صندوقِ بانک</small><b>' + fa(Math.floor(s.bank.vault)) + gem() + '</b></div></div></div>';
   h += '<div class="axg">' +
     '<button data-ax="boost"' + (full ? ' disabled style="opacity:.5"' : '') + '>' + tile('bolt') + 'تقویت سرعت<small>' + (full ? 'به سقف رسیدید' : fa(s.boost_price) + ' تومان — ' + fa(Math.round(s.boost_step * 100)) + '٪ سریع‌تر') + '</small></button>' +
     '<button data-ax="redeem">' + tile('wallet', 'g') + 'تبدیل به موجودی<small>هر کریستال ' + fa(s.redeem_rate) + ' تومان</small></button>' +
@@ -2152,6 +2156,7 @@ function drawAir(){
     '<button data-t="hs"' + (AX.tab === 'hs' ? ' class="on"' : '') + '>تاریخچه</button></div><div id="axTab"></div>';
   h += '<div class="note bl mt">' + ico('spark') + '<span>روی الماس بزنید تا ماین کنید؛ انرژی خودش پر می‌شود. کریستال‌ها خودکار هم جمع می‌شوند — حتی وقتی مینی‌اپ بسته است (تا ۲۴ ساعت).</span></div>';
   $('airBox').innerHTML = h;
+  var bkg = $('bkGo'); if (bkg) bkg.onclick = function(){ tap(); openLink('https://t.me/' + B.bot + '?start=bank'); };
   axTab();
   axStop();
   axPaint();

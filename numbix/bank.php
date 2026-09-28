@@ -46,6 +46,7 @@ function bkDefaults() {
                       "👤 User: {name}\n\n" .
                       "💎 موجودیِ کیف‌پول: <b>{wallet}</b>\n" .
                       "🏦 موجودیِ بانک: <b>{vault}</b>\n" .
+                      "💠 کریستالِ ایردراپ: <b>{crystals}</b>\n" .
                       "📈 سودِ روزانه: <b>{rate}٪</b>\n\n" .
                       "📊 Bank Level: {level}\n\n" .
                       "━━━━━━━━━━━━━━",
@@ -120,7 +121,15 @@ function bkIsButtonKey($slug) {
 
 function bkT($slug, $vars = []) {
     $t = (string)bkVal('texts.' . $slug, bkDefaults()['texts'][$slug] ?? $slug);
+    if (isset($vars['vault']) && !isset($vars['bank'])) $vars['bank'] = $vars['vault'];
+    if (isset($vars['bank']) && !isset($vars['vault'])) $vars['vault'] = $vars['bank'];
     foreach ($vars as $k => $v) $t = str_replace('{' . $k . '}', (string)$v, $t);
+    $dead = '\{(?:wins|stolen|sec_status|protect_left)\}';
+    if (preg_match('/' . $dead . '/u', $t)) {
+        $t = preg_replace('/\s*\([^()\n]*' . $dead . '[^()\n]*\)/u', '', $t);
+        $t = preg_replace('/^[^\n]*' . $dead . '[^\n]*\n?/mu', '', $t);
+        if (function_exists('tgHtmlFix')) $t = tgHtmlFix($t);
+    }
     return $t;
 }
 
@@ -339,15 +348,21 @@ function bkCardText($uid, $name, $vault = null) {
     $vault  = $vault ?? bkVaultOf($uid);
     $tpl = preg_replace('/^[^\n]*\{(sec_status|protect_left|wins|stolen)\}[^\n]*\n?/mu', '', bkT('card'));
     $tpl = str_replace([' (قابلِ سرقت)', ' (امن)'], '', $tpl);
+    $cr = function_exists('adCrystalsNow') ? adCrystalsNow($uid) : null;
+    if ($cr !== null && !str_contains($tpl, '{crystals}'))
+        $tpl = rtrim($tpl) . "\n💠 کریستالِ ایردراپ: <b>{crystals}</b>";
     $tpl = preg_replace('/\n{3,}/u', "\n\n", $tpl);
-    return strtr($tpl, [
-        '{name}'   => h($name),
-        '{wallet}' => bkNum($wallet),
-        '{vault}'  => bkNum($vault),
-        '{rate}'   => rtrim(rtrim(number_format(bkRate($vault), 2, '.', ''), '0'), '.'),
-        '{bank}'   => bkNum($vault),
-        '{level}'  => bkLevel($vault),
+    $out = strtr($tpl, [
+        '{name}'     => h($name),
+        '{wallet}'   => bkNum($wallet),
+        '{vault}'    => bkNum($vault),
+        '{rate}'     => rtrim(rtrim(number_format(bkRate($vault), 2, '.', ''), '0'), '.'),
+        '{bank}'     => bkNum($vault),
+        '{level}'    => bkLevel($vault),
+        '{crystals}' => bkNum(floor((float)$cr)),
     ]);
+    $out = function_exists('tgHtmlFix') ? tgHtmlFix($out) : $out;
+    return trim(preg_replace('/\n{3,}/u', "\n\n", $out));
 }
 
 function bkKb($uid) {

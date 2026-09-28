@@ -211,6 +211,13 @@ function adTick($uid, $name = '', $username = '') {
     });
 }
 
+function adCrystalsNow($uid) {
+    $u = adUser($uid);
+    if (!$u || (int)$u['season'] !== (int)adSeasonMeta()['season']) return 0.0;
+    $el = min(max(0, time() - (int)$u['last_tick']), AD_MAX_BUFFER_HOURS * 3600);
+    return (float)$u['crystals'] + adRate($u['level'], adBoostN($u)) * ($el / 3600.0);
+}
+
 function adTouchStreak(&$u) {
     $today = gmdate('Y-m-d');
     $last = (string)($u['data']['streak_date'] ?? '');
@@ -257,6 +264,18 @@ function adState($uid, $name = '', $username = '') {
         'tap_value'      => adTapValue($u),
         'tap_left'       => adTapsLeft($u),
         'tap_day'        => AD_TAP_DAY,
+        'bank'           => adBankInfo($uid),
+    ];
+}
+
+function adBankInfo($uid) {
+    if (!function_exists('bkOn') || !bkOn() || !function_exists('gmPoints')) return null;
+    $vault = (float)bkVaultOf($uid);
+    return [
+        'wallet' => (float)gmPoints($uid),
+        'vault'  => $vault,
+        'rate'   => (float)bkRate($vault),
+        'level'  => (int)bkLevel($vault),
     ];
 }
 

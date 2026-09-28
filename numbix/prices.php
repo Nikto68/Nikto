@@ -1160,27 +1160,6 @@ function pxLatinUnit($unit) {
     return ['دلار' => 'USD', 'ریال' => 'IRR'][$unit] ?? $unit;
 }
 
-function pxConvBody($val, $unit, $usdVal = null, $chg = null, $isCoin = null) {
-    $isT = ($unit === 'تومان');
-    $t = '';
-
-    if ($usdVal !== null && $usdVal > 0)
-        $t .= '<blockquote>' . pxEm('usd', '💵') . ' ' . pxNum($usdVal) . ' USD</blockquote>' . "\n";
-
-    if ($isCoin === null) $isCoin = (bool)preg_match('/^[A-Z0-9]{1,10}$/', (string)$unit);
-    $em = $isT ? pxEm('toman', '💰') : ($isCoin ? pxEm('coin', '🪙') : pxEm('usd', '💵'));
-    $t .= '<blockquote>' . $em . ' ' .
-          ($isT ? pxToman($val) : pxNum($val)) .
-          ($isT ? '' : ' ' . h(pxLatinUnit($unit))) . '</blockquote>' . "\n";
-
-    if ($chg !== null)
-        $t .= '<blockquote>' . pxEm('chg', '📈') . ' ' . ($chg >= 0 ? '+' : '−') .
-              number_format(abs($chg), 2) . '%</blockquote>' . "\n";
-
-    $t .= '<blockquote>' . pxEm('date', '🕓') . ' ' . h(pxJalali()) . '</blockquote>';
-    return $t;
-}
-
 function pxWaitReact($chatId, $msgId, $on = true) {
     if (!$msgId) return;
     if (!$on) { tg(BOT_TOKEN, 'setMessageReaction', ['chat_id' => $chatId, 'message_id' => $msgId, 'reaction' => json_encode([])], 4); return; }
@@ -1244,9 +1223,6 @@ function pxHandleText($text, $chatId, $replyTo = null) {
 
     $ak = pxAssetOf($raw);
     if ($ak !== null) return pxSendAsset($ak, $chatId, $replyTo, $kb);
-
-    $cv = pxConvert($raw);
-    if ($cv !== null && pxSendConv($cv, $chatId, $replyTo, $kb)) return true;
 
     $sym = pxCoinSym($raw);
     return $sym !== null && pxSendCoin($sym, $chatId, $replyTo, $kb);
@@ -1367,7 +1343,7 @@ function pxLabels() {
             'usd'   => '💵 ایموجی دلار',
             'toman' => '💰 ایموجی تومان',
             'chg'   => '📈 ایموجی درصد تغییرات',
-            'conv'  => '💱 ایموجی سرِ قالب تبدیل',
+            'conv'  => '💱 ایموجی سرِ قالبِ ارز و کوین',
             'frag'  => '🔻 ایموجی فرگمنت (پایین قالب)',
             'card'  => 'ایموجی سرتیتر',
             'prem'  => 'ایموجی پریمیوم',
@@ -2961,81 +2937,10 @@ function pxCoinUsd($sym) {
     return (float)(pxFetch()[$sym . '/USDT'] ?? 0);
 }
 
-function pxUnitOf($word) {
-    $w = trim(preg_replace('/\s+/u', ' ', mb_strtolower(norm_fa_digits((string)$word))));
-    if ($w === '') return null;
-    if (in_array($w, ['تومان', 'تومن', 'تومنی', 'toman', 'irt', 'tmn'], true)) return ['t' => 'irt', 'k' => 'IRT'];
-    if (in_array($w, ['ریال', 'rial', 'irr'], true))                            return ['t' => 'irr', 'k' => 'IRR'];
-    if (($ak = pxAssetOf($w)) !== null)                                          return ['t' => 'asset', 'k' => $ak];
-    if (($sym = pxCoinSym($w)) !== null)                                         return ['t' => 'coin', 'k' => $sym];
-    return null;
-}
-
-function pxIsToman(array $u) {
-    return $u['t'] === 'irt' || $u['t'] === 'irr';
-}
-
-function pxUnitDefault(array $u) {
-    if (pxIsToman($u)) return ['t' => 'asset', 'k' => 'usd'];
-    if ($u['t'] === 'asset' && (pxAssets()[$u['k']]['unit'] ?? '') === 'دلار') return ['t' => 'asset', 'k' => 'usd'];
-    return ['t' => 'irt', 'k' => 'IRT'];
-}
-
-function pxUnitToman(array $u) {
-    if ($u['t'] === 'irt') return 1.0;
-    if ($u['t'] === 'irr') return 0.1;
-    $irt = pxUsdtIrt();
-    if ($u['t'] === 'asset') {
-        $a = pxAssets()[$u['k']] ?? null;
-        $p = $a ? pxAssetPrice($u['k']) : 0.0;
-        if ($p <= 0) return 0.0;
-        if (($a['unit'] ?? 'تومان') !== 'دلار') return $p;
-        return $irt > 0 ? $p * $irt : 0.0;
-    }
-    $usd = pxCoinUsd($u['k']);
-    return ($usd > 0 && $irt > 0) ? $usd * $irt : 0.0;
-}
-
-function pxUnitName(array $u) {
-    if ($u['t'] === 'irt') return 'تومان';
-    if ($u['t'] === 'irr') return 'ریال';
-    if ($u['t'] === 'asset') return $u['k'] === 'usd' ? 'دلار' : (string)(pxAssets()[$u['k']]['name'] ?? $u['k']);
-    return (string)$u['k'];
-}
-
-function pxUnitTitle(array $u) {
-    if ($u['t'] === 'asset') return (string)(pxAssets()[$u['k']]['name'] ?? $u['k']);
-    if ($u['t'] === 'coin')  return pxCoinName($u['k']);
-    return pxUnitName($u);
-}
-
-function pxUnitCode(array $u) {
-    if ($u['t'] !== 'asset') return (string)$u['k'];
-    $k = (string)$u['k'];
-    $g = ['gold' => '18K GOLD', 'gold24' => '24K GOLD', 'ounce' => 'XAU', 'coin' => 'COIN', 'nim' => '1/2 COIN', 'rob' => '1/4 COIN'];
-    if (isset($g[$k])) return $g[$k];
-    $code = strtoupper(trim((string)(pxAssets()[$k]['code'] ?? '')));
-    return $code !== '' ? $code : strtoupper($k);
-}
-
 function pxUnitChange(array $u) {
     if ($u['t'] === 'asset') return pxAssetChange($u['k']);
     if ($u['t'] === 'coin')  return pxStable($u['k']) ? pxChangeOf('USDT/IRT') : pxChangeOf($u['k'] . '/USDT');
     return 0.0;
-}
-
-function pxConvert($text) {
-    $t = trim(mb_strtolower(norm_fa_digits((string)$text)));
-    $t = str_replace(['،', ',', '٬'], '', $t);
-    if (!preg_match('/^(\d+(?:\.\d+)?)\s*([^\d]+?)(?:\s+(?:به|to|in)\s+([^\d]+))?$/u', $t, $m)) return null;
-    $n = (float)$m[1];
-    if ($n <= 0 || $n > 1e15) return null;
-    $from = pxUnitOf($m[2]);
-    if ($from === null) return null;
-    $dst = trim((string)($m[3] ?? ''));
-    $to  = $dst !== '' ? pxUnitOf($dst) : pxUnitDefault($from);
-    if ($to === null || ($from['t'] === $to['t'] && $from['k'] === $to['k'])) return null;
-    return ['n' => $n, 'from' => $from, 'to' => $to];
 }
 
 function pxOpts($replyTo) {
@@ -3088,50 +2993,6 @@ function pxSendCoin($sym, $chatId, $replyTo, $kb) {
          : null;
     pxDeliver($chatId, $png, $cap, $kb, $replyTo, $ck);
     if ($needsRender) pxWaitReact($chatId, $replyTo, false);
-    return true;
-}
-
-function pxSendConv(array $cv, $chatId, $replyTo, $kb) {
-    $n = (float)$cv['n']; $from = $cv['from']; $to = $cv['to'];
-    $a = pxUnitToman($from);
-    $b = pxUnitToman($to);
-    if ($a <= 0 || $b <= 0) return false;
-    $val  = $n * $a / $b;
-    $base = !pxIsToman($from);
-    $subj = $base ? $from : $to;
-    $chg  = pxUnitChange($subj);
-    if (!$base) $chg = (1 / (1 + $chg / 100) - 1) * 100;
-
-    $unit  = pxUnitName($to);
-    $label = (pxIsToman($from) ? pxToman($n) : pxNum($n)) . ' ' . pxUnitCode($from);
-    $usd   = pxUnitToman(['t' => 'asset', 'k' => 'usd']);
-    $usdEq = null;
-    $isUsd = fn($u) => ($u['t'] === 'asset' && $u['k'] === 'usd') || ($u['t'] === 'coin' && pxStable($u['k']));
-    if ($usd > 0 && !$isUsd($from) && !$isUsd($to)) $usdEq = $n * $a / $usd;
-
-    if ($subj['t'] === 'coin') {
-        $sym  = (string)$subj['k'];
-        $toUsd = $to['t'] === 'asset' && $to['k'] === 'usd';
-        $make = fn() => pxCryptoCard([
-            'sym' => $sym, 'title' => $sym, 'pill' => $label,
-            'value' => $val, 'prefix' => $toUsd ? '$' : '', 'unit' => $toUsd ? '' : $unit,
-            'chg' => $chg,
-        ]);
-    } else {
-        $key  = $subj['t'] === 'asset' ? (string)$subj['k'] : 'irt';
-        $name = $key === 'irt' ? pxUnitName($subj) : (string)(pxAssets()[$key]['name'] ?? $key);
-        $make = fn() => pxAssetCardOf($key, $name, $val, $unit, $label, $chg);
-    }
-
-    $ck = 'cv|' . $from['k'] . '|' . $to['k'] . '|' . pxKeyRound($n, '') . '|' . sprintf('%.6g', $val) . '|' .
-          round($chg, 2) . '|' . botUsername();
-    pxWaitReact($chatId, $replyTo, true);
-    $png = pxCardCached($ck, $make);
-    $title = (pxIsToman($from) ? pxToman($n) : pxNum($n)) . ' ' . pxUnitTitle($from);
-    $cap   = pxEm('conv', '💱') . ' <b>' . h($title) . "</b>\n\n" .
-             pxConvBody($val, $to['t'] === 'irt' ? 'تومان' : pxUnitCode($to), $usdEq, $chg, $to['t'] === 'coin');
-    pxDeliver($chatId, $png, $cap, $kb, $replyTo);
-    pxWaitReact($chatId, $replyTo, false);
     return true;
 }
 

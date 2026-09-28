@@ -434,6 +434,8 @@ function chAdminCallback($data, $chatId, $msgId, $cbId) {
                 ? "✅ گزارش آزمایشی رفت. اگر در گروه ندیدید، ربات آنجا ادمین نیست."
                 : "🔴 نرفت. ربات را در آن گروه ادمین کنید و دوباره امتحان کنید.");
             return true;
+        } else {
+            answerCb(BOT_TOKEN, $cbId);
         }
         chAdminStream($chatId, $msgId, $k);
         return true;
