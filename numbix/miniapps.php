@@ -364,7 +364,8 @@ function maViewVer() {
     static $v = null;
     if ($v !== null) return $v;
     $t = 0;
-    foreach (['miniapp_view.php', 'miniapps.php', 'numbers.php', 'airdrop.php', 'coupons.php'] as $f) {
+    foreach (['miniapp_view.php', 'miniapps.php', 'numbers.php', 'airdrop.php', 'coupons.php',
+              'services.php', 'miniapp_view_tgs.php', 'miniapp_view_igs.php'] as $f) {
         $m = @filemtime(__DIR__ . '/' . $f);
         if ($m && $m > $t) $t = $m;
     }
@@ -571,6 +572,7 @@ class MaOrder
 }
 
 function maServe($key) {
+    if (function_exists('svServe') && function_exists('svAppOfKey') && svAppOfKey($key) !== '') svServe($key);
     if (!in_array($key, ['num', 'unified', 'tg', 'react', 'shop'], true)) { http_response_code(404); echo 'not found'; exit; }
     if (!maReady()) { http_response_code(200); header('Content-Type: text/html; charset=utf-8'); echo maClosedPage(); exit; }
     $html = maView(maBoot());
@@ -1886,6 +1888,9 @@ function maApi() {
         maApiOut(['ok' => true, 'list' => adCouponLog($uid, 20)]);
     }
 
+    if (str_starts_with($action, 'sv_') && function_exists('svApiAction'))
+        svApiAction($action, $body, $uid, $uname, $initData);
+
     maApiOut(['ok' => false, 'error' => 'unknown_action'], 400);
 }
 
@@ -2222,6 +2227,7 @@ function maAdmHome($chatId, $msgId = null) {
         [btnCb('📌 دکمه‌ی Open کنار اسم ربات', 'maadm_main', 'info')],
         [btnCb('🖼 لوگو', 'maadm_logo', 'admin'), btnCb('🔗 آدرس عمومی', 'maadm_base', 'admin')],
         [btnCb('☎️ تیکتِ پشتیبانی', 'maadm_sup', 'admin')],
+        [btnCb('🧩 مینی‌اپ‌های خدمات تلگرام و اینستاگرام', 'svadm', 'confirm')],
         [btnCb('🧾 آخرین سفارش‌ها', 'maadm_orders', 'admin'), btnCb('⭐ نظرات خریداران', 'maadm_rev', 'admin')],
         [btnCb('☎️ فروشنده، قیمت و کشورها', 'num_home', 'confirm')],
     ];

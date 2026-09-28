@@ -16,10 +16,12 @@ function gmDefaults() {
             'send_bal2'       => ['color' => 'primary'],
         ],
         'on'        => false,
-        'duel_board' => true,
+        'duel_on'   => true,
+        'ttt_on'    => true,
         'open_max'  => 2,
         'expire'    => 180,
-        'word_duel' => 'چالش,دوز',
+        'word_duel' => 'چالش',
+        'word_ttt'  => 'دوز',
         'word_bal'  => 'موجودی',
         'word_send' => 'انتقال,انتقال الماس',
 
@@ -35,9 +37,14 @@ function gmDefaults() {
                             "<blockquote>👤 سازنده: {host}\n" .
                             "🏆 جایزه‌ی برنده:\n{prize_big}\n" .
                             "🧾 مالیات:\n{tax_big}</blockquote>\n\n" .
-                            "برای شروع بازی، نفر دوم روی پیوستن بزند.",
-            'duel_turn'  => "{emoji} <b>چالش {stake} الماسی</b>\n\n" .
-                            "<blockquote>🟢 {p1}\n🔴 {p2}\n" .
+                            "نفر دوم که روی پیوستن بزند، برنده همان لحظه مشخص می‌شود.",
+            'ttt_open'   => "⭕ <b>دوز</b>  {stake_big}\n\n" .
+                            "<blockquote>👤 سازنده: {host}\n" .
+                            "🏆 جایزه‌ی برنده:\n{prize_big}\n" .
+                            "🧾 مالیات:\n{tax_big}</blockquote>\n\n" .
+                            "نفر دوم که روی پیوستن بزند، صفحه‌ی دوز باز می‌شود.",
+            'ttt_turn'   => "⭕ <b>دوز {stake} الماسی</b>\n\n" .
+                            "<blockquote>{p1}\n{p2}\n" .
                             "🏆 جایزه: <b>{prize}</b> الماس</blockquote>\n\n" .
                             "نوبت: {turn}",
             'duel_win'   => "🎉 <b>نتیجه بازی مشخص شد</b>\n\n" .
@@ -74,6 +81,8 @@ function gmDefaults() {
             'cancelled'  => "❌ <b>بازی لغو شد</b>\n\nشرط برگشت.",
             'group_only' => "🎮 بازی فقط داخل گروه کار می‌کند.",
             'duel_how'   => "🎮 برای ساختن چالش، شرط را هم بنویسید.\n\n" .
+                            "مثال: <code>{word} ۱۰۰</code>\n\nکمترین {min} و بیشترین {max} الماس.",
+            'ttt_how'    => "⭕ برای ساختن دوز، شرط را هم بنویسید.\n\n" .
                             "مثال: <code>{word} ۱۰۰</code>\n\nکمترین {min} و بیشترین {max} الماس.",
             'already'    => "تو که خودت داخل این بازی هستی — منتظر حریف بمان.",
             'open_max'   => "⛔️ شما <b>{n}</b> بازی باز دارید.\n\nاول همان‌ها تمام یا لغو شوند، بعد بازی تازه بسازید.",
@@ -439,10 +448,20 @@ function gmGcMaybe($db) {
 }
 
 
+function gmKindWords() {
+    $ttt  = gmWords(gmVal('word_ttt', 'دوز'));
+    $low  = array_map('mb_strtolower', $ttt);
+    $duel = array_values(array_filter(gmWords(gmVal('word_duel', 'چالش')),
+                                      fn($w) => !in_array(mb_strtolower($w), $low, true)));
+    $out = [];
+    if (!empty(gmVal('ttt_on', true)))  $out['ttt']  = $ttt;
+    if (!empty(gmVal('duel_on', true))) $out['duel'] = $duel;
+    return $out;
+}
+
 function gmParse($raw) {
     $t = trim(norm_fa_digits((string)$raw));
-    $words = ['duel' => gmWords(gmVal('word_duel', 'چالش,دوز'))];
-    foreach ($words as $kind => $list) {
+    foreach (gmKindWords() as $kind => $list) {
         foreach ($list as $w) {
             if ($w === '') continue;
             $w = preg_quote($w, '/');
@@ -458,8 +477,7 @@ function gmParse($raw) {
 
 function gmBareWord($raw) {
     $t = mb_strtolower(trim(norm_fa_digits((string)$raw)));
-    $words = ['duel' => gmWords(gmVal('word_duel', 'چالش,دوز'))];
-    foreach ($words as $kind => $list)
+    foreach (gmKindWords() as $kind => $list)
         foreach ($list as $w)
             if ($w !== '' && $t === mb_strtolower($w)) return $kind;
     return null;
@@ -523,10 +541,11 @@ function gmText($g) {
     ];
 
     if ($g['status'] === 'open')
-        return gmT('duel_open', $big + ['emoji' => gmEmoji(), 'stake' => gmNum($g['stake']),
-                                 'host' => gmName($ps[0]), 'prize' => gmNum($prize),
-                                 'tax' => gmNum($tax)]);
-    return gmT('duel_turn', $big + ['emoji' => gmEmoji(), 'stake' => gmNum($g['stake']),
+        return gmT(($g['kind'] ?? 'duel') === 'ttt' ? 'ttt_open' : 'duel_open',
+                   $big + ['emoji' => gmEmoji(), 'stake' => gmNum($g['stake']),
+                           'host' => gmName($ps[0]), 'prize' => gmNum($prize),
+                           'tax' => gmNum($tax)]);
+    return gmT('ttt_turn', $big + ['emoji' => gmEmoji(), 'stake' => gmNum($g['stake']),
                              'p1' => gmName($ps[0]), 'p2' => gmName($ps[1] ?? []),
                              'prize' => gmNum($prize),
                              'turn' => gmName($g['players'][(string)$g['turn']] ?? [])]);
@@ -706,8 +725,8 @@ function gmHandleText($text, $uid, $chatId, $name, $uname = '', $replyTo = null,
         $bare = gmBareWord($raw);
         if ($bare === null) return false;
         if ($isPrivate) { sendMsg(BOT_TOKEN, $chatId, gmT('group_only'), null, $extra); return true; }
-        $tip = gmT('duel_how', [
-            'word' => (string)(gmWords(gmVal('word_duel', 'چالش,دوز'))[0] ?? 'چالش'),
+        $tip = gmT($bare === 'ttt' ? 'ttt_how' : 'duel_how', [
+            'word' => (string)(gmKindWords()[$bare][0] ?? ($bare === 'ttt' ? 'دوز' : 'چالش')),
             'min'  => gmNum($min), 'max' => gmNum($max),
         ]);
         if (trim($tip) === '') return false;
@@ -888,13 +907,12 @@ function gmCallback($data, $uid, $chatId, $msgId, $cbId, $from = []) {
         answerCb(BOT_TOKEN, $cbId, '✅');
         $g = gmGet($gid);
 
-        if ($g && count($g['players']) >= 2 && empty(gmVal('duel_board'))) {
+        if ($g && count($g['players']) >= 2 && ($g['kind'] ?? 'duel') !== 'ttt') {
             $ids = array_values(array_map(fn($p) => (int)$p['id'], $g['players']));
             $win = $ids[random_int(0, count($ids) - 1)];
             $lose = 0;
             foreach ($ids as $i) if ($i !== $win) { $lose = $i; break; }
-            gmSetGame($gid, function (&$x) { $x['status'] = 'open'; return true; });
-            gmFinish(gmGet($gid) ?: $g, $win, $lose);
+            gmFinish($g, $win, $lose);
             return true;
         }
 
@@ -951,7 +969,10 @@ function gmAdminHome($chatId, $msgId = null) {
     $t .= 'وضعیت: ' . (gmOn() ? '✅ روشن' : '❌ خاموش') . "\n";
     $t .= "🎯 بازی باز: <b>{$open}</b>\n\n";
     $t .= "کلمه‌ها:\n";
-    $t .= '• چالش دو نفره: <code>' . h($c['word_duel']) . " ۱۰۰</code>\n";
+    $t .= '• ⚡ چالش (نتیجه‌ی فوری): <code>' . h($c['word_duel']) . " ۱۰۰</code>" .
+          (empty($c['duel_on']) ? ' — خاموش' : '') . "\n";
+    $t .= '• ⭕ دوز (صفحه‌ی بازی): <code>' . h($c['word_ttt']) . " ۱۰۰</code>" .
+          (empty($c['ttt_on']) ? ' — خاموش' : '') . "\n";
     $t .= '• موجودی: <code>' . h($c['word_bal']) . "</code>\n";
     $t .= '• انتقال (ریپلای): <code>' . h($c['word_send']) . " ۱۰۰</code>\n\n";
     $t .= '🧾 مالیات جایزه: <b>' . $c['tax'] . "٪</b>\n";
@@ -963,8 +984,9 @@ function gmAdminHome($chatId, $msgId = null) {
         [btnCb('🧾 مالیات جایزه', 'gmatax', 'admin'), btnCb('📤 مالیات انتقال', 'gmastax', 'admin')],
         [btnCb('💎 کف و سقف شرط', 'gmarange', 'admin')],
         [btnCb('🗣 کلمه‌ها', 'gmaw_home', 'admin'), btnCb('✏️ متن‌ها', 'gmat_home', 'admin')],
-        [btnCb('🔢 ایموجی عددها', 'gmadig', 'admin'),
-         btnCb(!empty(gmVal('duel_board')) ? '⭕ چالش: صفحه دوز' : '⚡ چالش: نتیجه‌ی فوری', 'gmaduel', 'info')],
+        [btnCb(!empty($c['duel_on']) ? '⚡ چالش: روشن' : '⚡ چالش: خاموش', 'gmaduel', 'info'),
+         btnCb(!empty($c['ttt_on']) ? '⭕ دوز: روشن' : '⭕ دوز: خاموش', 'gmattt', 'info')],
+        [btnCb('🔢 ایموجی عددها', 'gmadig', 'admin')],
         [btnCb('🎨 ایموجیِ رنگ‌های دوز', 'gmacolors', 'admin'),
          btnCb('🖌 رنگِ دکمه‌ها', 'gmabcol', 'admin')],
         [btnCb('🔢 سقف بازی باز: ' . gmNum((int)gmVal('open_max', 2)), 'gmaopen', 'admin'),
@@ -1018,8 +1040,10 @@ function gmAdminColors($chatId, $msgId) {
 function gmLabels() {
     return [
         'duel_how'  => 'چالش — راهنمای بدون عدد',
-        'duel_open' => 'چالش — پیام باز', 'duel_turn' => 'چالش — حین بازی',
-        'duel_win'  => 'چالش — نتیجه',    'duel_draw' => 'چالش — مساوی',
+        'duel_open' => 'چالش — پیام باز',
+        'ttt_how'   => 'دوز — راهنمای بدون عدد',
+        'ttt_open'  => 'دوز — پیام باز',  'ttt_turn' => 'دوز — حین بازی',
+        'duel_win'  => 'نتیجه (چالش و دوز)', 'duel_draw' => 'دوز — مساوی',
         'duel_join' => 'دکمه پیوستن',     'duel_cancel' => 'دکمه لغو',
         'bal_pop'   => 'پنجره‌ی موجودی (نتیجه)', 'lbl_wbal' => 'برچسب موجودی برنده',
         'lbl_lbal'  => 'برچسب موجودی بازنده',
@@ -1066,9 +1090,7 @@ function gmAdminBtnColorPick($chatId, $msgId, $k) {
 function gmTextsCfg() {
     return [
         'title' => 'متن‌های چالش و دوز',
-        'keys'  => array_values(array_filter(
-                       array_keys((array)gmVal('texts', [])),
-                       fn($k) => !str_starts_with($k, 'rand_') && $k !== 'lbl_cancel_rand')),
+        'keys'  => array_keys(gmDefaults()['texts']),
         'popup' => ['already', 'bal_pop', 'gone', 'not_turn', 'not_yours', 'taken'],
         'btns'  => gmBtnKeys(),
         'label' => 'gmLabel',
@@ -1082,8 +1104,7 @@ function gmTextsCfg() {
 function gmAdminWords($chatId, $msgId) {
     $c = gmCfg();
     $t  = "🗣 <b>کلمه‌های بازی</b>\n\nهر کلمه را با ویرگول جدا کنید.\n\n";
-    $map = ['word_duel' => 'چالش دو نفره',
-            'word_bal' => 'موجودی', 'word_send' => 'انتقال'];
+    $map = gmWordLabels();
     $rows = [];
     foreach ($map as $k => $lbl) {
         $t .= '• <b>' . h($lbl) . '</b>: <code>' . h((string)$c[$k]) . "</code>\n";
@@ -1091,6 +1112,11 @@ function gmAdminWords($chatId, $msgId) {
     }
     $rows[] = [btnCb(UT('back'), 'gm_home', 'nav')];
     editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
+}
+
+function gmWordLabels() {
+    return ['word_duel' => '⚡ چالش (نتیجه‌ی فوری)', 'word_ttt' => '⭕ دوز (صفحه‌ی بازی)',
+            'word_bal' => 'موجودی', 'word_send' => 'انتقال'];
 }
 
 function gmAdminCallback($data, $chatId, $msgId, $cbId) {
@@ -1128,8 +1154,10 @@ function gmAdminCallback($data, $chatId, $msgId, $cbId) {
         return true;
     }
     if ($data === 'gmadig') { answerCb(BOT_TOKEN, $cbId); gmAdminDigits($chatId, $msgId); return true; }
-    if ($data === 'gmaduel') {
-        gmSet(function (&$c) { $c['duel_board'] = empty($c['duel_board']); });
+    if ($data === 'gmaduel' || $data === 'gmattt') {
+        $k = $data === 'gmaduel' ? 'duel_on' : 'ttt_on';
+        $on = !empty(gmVal($k, true));
+        gmSet(function (&$c) use ($k, $on) { $c[$k] = !$on; });
         answerCb(BOT_TOKEN, $cbId, '✅'); gmAdminHome($chatId, $msgId); return true;
     }
     if (str_starts_with($data, 'gmad_')) {
@@ -1187,11 +1215,12 @@ function gmAdminCallback($data, $chatId, $msgId, $cbId) {
     foreach (['gmats_' => ['gm_text', 'texts.'], 'gmaws_' => ['gm_word', '']] as $pre => [$act, $path]) {
         if (!str_starts_with($data, $pre)) continue;
         $k = substr($data, strlen($pre));
+        if ($act === 'gm_word' && !isset(gmWordLabels()[$k])) { answerCb(BOT_TOKEN, $cbId); gmAdminWords($chatId, $msgId); return true; }
         answerCb(BOT_TOKEN, $cbId);
         setState(admStateUid($chatId), $act, ['k' => $k]);
         $cur = (string)gmVal($path . $k, '');
         sendMsg(BOT_TOKEN, $chatId,
-            "✏️ <b>" . h(gmLabel($k)) . "</b> را بفرستید.\n\n" .
+            "✏️ <b>" . h($act === 'gm_word' ? gmWordLabels()[$k] : gmLabel($k)) . "</b> را بفرستید.\n\n" .
             ($act !== 'gm_text'
                 ? "چند کلمه را با ویرگول جدا کنید.\n\n"
                 : (gmIsBtn($k)
@@ -1208,15 +1237,16 @@ function gmAdminCallback($data, $chatId, $msgId, $cbId) {
 function gmVars($k) {
     if (str_starts_with($k, 'duel_win'))
         return ['winner', 'loser', 'wname', 'lname', 'prize', 'tax', 'stake'];
-    if (str_starts_with($k, 'duel_turn')) return ['emoji', 'stake', 'p1', 'p2', 'prize', 'turn'];
-    if (str_starts_with($k, 'duel_open')) return ['emoji', 'stake', 'host', 'prize', 'tax'];
+    if ($k === 'ttt_turn')                return ['emoji', 'stake', 'p1', 'p2', 'prize', 'turn'];
+    if ($k === 'duel_open' || $k === 'ttt_open')
+        return ['emoji', 'stake', 'stake_big', 'host', 'prize', 'prize_big', 'tax', 'tax_big'];
     if (str_starts_with($k, 'bal_'))      return ['emoji', 'points'];
     if (str_starts_with($k, 'send_ok'))   return ['from', 'to', 'amount', 'tax', 'total', 'fbal', 'tbal'];
     if ($k === 'low')                     return ['points', 'need'];
     if ($k === 'bad_stake')               return ['min', 'max'];
     if ($k === 'bal_pop')                 return ['name', 'points'];
     if ($k === 'send_how')                return ['word'];
-    if ($k === 'duel_how') return ['word', 'min', 'max'];
+    if ($k === 'duel_how' || $k === 'ttt_how') return ['word', 'min', 'max'];
     return [];
 }
 

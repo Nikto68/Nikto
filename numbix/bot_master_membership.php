@@ -262,6 +262,7 @@ migrateOnce('numbers_only', function () {
 
 require_once __DIR__ . '/quiz.php';
 require_once __DIR__ . '/translate.php';
+require_once __DIR__ . '/services.php';
 require_once __DIR__ . '/bankcard.php';
 
 migrateOnce('rand_refund', function () {
@@ -923,12 +924,15 @@ function defaultConfig() {
             'receipt'   => '🟢 ارسال رسید',
             'topup'     => '➕ افزایش موجودی',
             'my_orders' => '📊 شماره‌های من',
-            'open_app'  => '📱 باز کردن فروشگاه',
+            'open_app'  => '☎️ شماره مجازی تلگرام',
             'open'      => '🔗 باز کردن',
+            'shop_orders' => '📦 مشاهده‌ی سفارش‌های ثبت‌شده',
+            'open_tgs'  => '✈️ خدمات تلگرام',
+            'open_igs'  => '📸 خدمات اینستاگرام',
         ],
 
         'ui_icons' => [],
-        'ui_colors' => [],
+        'ui_colors' => ['shop_orders' => 'primary', 'open_tgs' => 'primary', 'open_igs' => 'danger'],
 
         'glass_colors' => [
             'buy'     => 'success',
@@ -958,8 +962,8 @@ function defaultConfig() {
             'referral_hist_none' => "هنوز پورسانتی ثبت نشده است.",
             'topup'        => "➕ <b>افزایش موجودی</b>\n\nمبلغ مورد نظر را به تومان وارد کنید (فقط عدد):",
             'topup_ok'     => "✅ <b>حساب شما شارژ شد</b>\n\n<blockquote>➕ مبلغ: <b>{amount}</b> تومان\n💰 موجودی: <b>{balance}</b> تومان</blockquote>",
-            'shop'         => "☎️ <b>شماره مجازی تلگرام</b>\n\nکشور و اپراتور را در فروشگاه انتخاب کنید؛ شماره آنی تحویل می‌شود و کد همین‌جا و داخل فروشگاه می‌رسد.\n\n💰 موجودی شما: <b>{balance}</b> تومان",
-            'shop_closed'  => "🔒 فروش شماره موقتا بسته است — کمی بعد دوباره سر بزنید.",
+            'shop'         => "🛍 <b>ثبت سفارش</b>\n\nبخشِ موردنظرتان را از دکمه‌های زیر باز کنید؛ سفارش‌های قبلی را هم با دکمه‌ی بالا ببینید.\n\n💰 موجودی شما: <b>{balance}</b> تومان",
+            'shop_closed'  => "🔒 فروش موقتا بسته است — کمی بعد دوباره سر بزنید.",
             'receipt_ask'  => "🧾 لطفا رسید پرداخت را بفرستید.\n\nمی‌توانید <b>عکس رسید</b> یا <b>کد تراکنش</b> ارسال کنید.",
             'receipt_ok'   => "✅ رسید شما ثبت شد.\n\n⏳ پس از تایید ادمین اطلاع داده می‌شود.",
             'rejected'     => "❌ درخواست شارژ شما تایید نشد.\nدر صورت نیاز با پشتیبانی تماس بگیرید.",
@@ -2896,8 +2900,11 @@ function uiTextLabels() {
         'back' => 'بازگشت', 'home' => 'منوی اصلی', 'cancel' => 'انصراف',
         'confirm' => 'تایید', 'reject' => 'رد', 'panel' => 'پنل',
         'receipt' => 'ارسال رسید', 'topup' => 'افزایش موجودی',
-        'my_orders' => 'شماره‌های من', 'open_app' => 'باز کردن فروشگاه',
+        'my_orders' => 'شماره‌های من', 'open_app' => 'شماره مجازی (پایینِ ثبت سفارش)',
         'open' => 'باز کردن',
+        'shop_orders' => 'مشاهده‌ی سفارش‌ها (بالای ثبت سفارش)',
+        'open_tgs' => 'خدمات تلگرام (وسطِ ثبت سفارش)',
+        'open_igs' => 'خدمات اینستاگرام (وسطِ ثبت سفارش)',
     ];
 }
 
@@ -3195,21 +3202,29 @@ function edUiTexts($chatId, $msgId, $page = 0) {
         inlineKb($rows));
 }
 
+function shopBtnKeys() {
+    return ['shop_orders' => 'بالا', 'open_tgs' => 'وسط (تلگرام)', 'open_igs' => 'وسط (اینستاگرام)', 'open_app' => 'پایین'];
+}
+
 function edShop($chatId, $msgId) {
-    $st  = UC('open_app');
-    $col = $st ? (string)(styleMap()[$st] ?? $st) : 'هم‌رنگ دکمه‌های لینک';
-    $text = "🛍 <b>پیام و دکمه‌ی فروشگاه</b>\n\n" .
-        "همان پیامی که کاربر با زدن دکمه‌ی خرید می‌بیند، با دکمه‌ی شیشه‌ای زیرش.\n\n" .
-        "<b>پیش‌نمایش پیام:</b>\n" . T('shop', ['balance' => fmtNum(0)]) . "\n\n" .
-        "<b>دکمه:</b> " . h(UT('open_app')) . "\n" .
-        "<b>ایموجی پریمیوم دکمه:</b> " . (UI('open_app') !== '' ? 'دارد ✨' : 'ندارد') . "\n" .
-        "<b>رنگ دکمه:</b> " . h($col) .
-        (maReady() ? "\n\n👇 ردیف اول، خودِ دکمه است همان‌طور که کاربر می‌بیند." : '');
+    $text = "🛍 <b>پیام و دکمه‌های «ثبت سفارش»</b>\n\n" .
+        "چیدمان: یک دکمه بالا (سفارش‌های ثبت‌شده)، دو دکمه وسط (خدمات تلگرام و اینستاگرام) و یک دکمه پایین (شماره مجازی).\n" .
+        "دکمه‌ی هر مینی‌اپی که بسته یا بی‌سرویس باشد، خودکار پنهان می‌شود.\n\n" .
+        "<b>پیش‌نمایش پیام:</b>\n" . T('shop', ['balance' => fmtNum(0)]) . "\n\n";
+    foreach (shopBtnKeys() as $k => $pos) {
+        $st = UC($k);
+        $text .= '• <b>' . h($pos) . ':</b> ' . h(UT($k)) . ' — ' . h($st ? (string)(styleMap()[$st] ?? $st) : 'هم‌رنگ لینک‌ها') .
+                 (UI($k) !== '' ? ' ✨' : '') . "\n";
+    }
     $rows = [];
-    if (maReady() && ($prev = maOpenKb())) $rows[] = $prev['inline_keyboard'][0];
+    $prev = function_exists('svShopKb') ? svShopKb(ADMIN_ID) : null;
+    if ($prev) {
+        $text .= "\n👇 چند ردیفِ اول، خودِ دکمه‌ها هستند همان‌طور که کاربر می‌بیند.";
+        foreach ($prev['inline_keyboard'] as $r) $rows[] = $r;
+    }
     $rows[] = [btnCb('✏️ متن پیام', 'et_shop', 'confirm')];
-    $rows[] = [btnCb('🔤 متن و ایموجی پریمیوم دکمه', 'eshop_b', 'confirm')];
-    $rows[] = [btnCb('🎨 رنگ دکمه: ' . $col, 'eshop_c', 'admin')];
+    foreach (shopBtnKeys() as $k => $pos)
+        $rows[] = [btnCb('🔤 ' . $pos . ': متن', 'eshopb_' . $k, 'confirm'), btnCb('🎨 ' . $pos . ': رنگ', 'eshopc_' . $k, 'admin')];
     $rows[] = [btnUI('back', 'ag_look', 'nav')];
     editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
 }
@@ -3399,6 +3414,7 @@ function masterHandle($update) {
 
         if (maCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin)) return;
         if (numCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin)) return;
+        if (function_exists('svCallback') && svCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin)) return;
 
         if (str_starts_with($data, 'menu_')) {
             $act = substr($data, 5);
@@ -3561,19 +3577,22 @@ function masterHandle($update) {
         if ($data === 'eglass')   { answerCb(BOT_TOKEN, $cbId); edGlass($chatId, $msgId); return; }
         if ($data === 'euis')     { answerCb(BOT_TOKEN, $cbId); clearState(admStateUid($chatId)); edUiTexts($chatId, $msgId); return; }
         if ($data === 'eshop')    { answerCb(BOT_TOKEN, $cbId); clearState(admStateUid($chatId)); edShop($chatId, $msgId); return; }
-        if ($data === 'eshop_c') {
-            cfgSet(function (&$c) { $c['ui_colors']['open_app'] = nextStyle($c['ui_colors']['open_app'] ?? 'none'); });
+        if ($data === 'eshop_c' || preg_match('/^eshopc_(\w+)$/', $data, $em)) {
+            $k = $data === 'eshop_c' ? 'open_app' : $em[1];
+            if (!isset(shopBtnKeys()[$k])) { answerCb(BOT_TOKEN, $cbId); return; }
+            $cur = (string)(cfg()['ui_colors'][$k] ?? 'none');
+            cfgSet(function (&$c) use ($k, $cur) { $c['ui_colors'][$k] = nextStyle($cur); });
             answerCb(BOT_TOKEN, $cbId, '🎨');
             edShop($chatId, $msgId);
             return;
         }
-        if ($data === 'eshop_b') {
+        if ($data === 'eshop_b' || preg_match('/^eshopb_(\w+)$/', $data, $em)) {
+            $k = $data === 'eshop_b' ? 'open_app' : $em[1];
+            if (!isset(shopBtnKeys()[$k])) { answerCb(BOT_TOKEN, $cbId); return; }
             answerCb(BOT_TOKEN, $cbId);
-            setState(admStateUid($chatId), 'ed_uitext', ['key' => 'open_app', 'back' => 'eshop']);
+            setState(admStateUid($chatId), 'ed_uitext', ['key' => $k, 'back' => 'eshop']);
             sendMsg(BOT_TOKEN, $chatId,
-                "🔤 متن تازه‌ی دکمه‌ی «" . h(UT('open_app')) . "» را بفرستید.
-
-" .
+                "🔤 متن تازه‌ی دکمه‌ی «" . h(UT($k)) . "» را بفرستید.\n\n" .
                 "✨ برای ایموجی پریمیوم، همان ایموجی را اول متن بگذارید؛ روی دکمه می‌نشیند و جدا از متن نمایش داده می‌شود.",
                 inlineKb([[btnCb(UT('cancel'), 'eshop', 'cancel')]]));
             return;
@@ -4154,6 +4173,7 @@ function masterHandle($update) {
         if (pxAnswerThenWarm($text, $chatId, $rt)) return;
         if (gmHandleText($text, $uid, $chatId, $fname, $uname, $rt, true, $msg)) return;
         if (dmHandleText($text, $uid, $chatId, $fname, $uname, $rt, true)) return;
+        if (function_exists('bkHandleText') && bkHandleText($text, $uid, $chatId, $fname, $uname, $rt, true, $msg)) return;
         return;
     }
     $action = $st['action'];
@@ -4782,7 +4802,7 @@ function runMenuAction($act, $uid, $chatId, $uname, $fname, $replyTo = null) {
 }
 
 function showShop($uid, $chatId, $replyTo = null) {
-    $kb = maReady() ? maOpenKb() : null;
+    $kb = function_exists('svShopKb') ? svShopKb($uid) : (maReady() ? maOpenKb() : null);
     if (!$kb) {
         $t = T('shop_closed');
         if (isAdmin($uid))
@@ -4873,6 +4893,7 @@ if (isset($_GET['cron'])) {
     echo 'gw: ' . gwPoll(50) .
          ' · games: ' . gmTick(50) .
          ' · numbers: ' . numTick(50) .
+         ' · services: ' . (function_exists('svSync') ? svSync(100) : 0) .
          ' · archive: ' . (ordersArchive() + maOrdersArchive()) .
          ' · mine: ' . (function_exists('mnTick') ? mnTick(50) : 0) .
          ' · bank: ' . (function_exists('bkPendSweep') ? bkPendSweep(200) : 0) .
@@ -5231,6 +5252,12 @@ function runBackgroundQueues() {
         numTick(10);
     }
 
+    $sMark = DATA_DIR . '/.svc_at';
+    if (function_exists('svTick') && time() - (@filemtime($sMark) ?: 0) >= 60) {
+        @touch($sMark);
+        svTick();
+    }
+
     $cMark = DATA_DIR . '/.ma_cache_prune_at';
     if (time() - (@filemtime($cMark) ?: 0) >= 21600) {
         @touch($cMark);
@@ -5297,8 +5324,22 @@ function runBackgroundQueues() {
     migrateOnce('v7_cooldown', function () {
         if (function_exists('dmSet')) dmSet(function (&$c) { $c['cooldown'] = 300; });
     });
-    migrateOnce('v7_board', function () {
-        if (function_exists('gmSet')) gmSet(function (&$c) { $c['duel_board'] = true; });
+    migrateOnce('v17_ttt_split', function () {
+        if (!function_exists('gmSet')) return;
+        gmSet(function (&$c) {
+            unset($c['duel_board']);
+            if (isset($c['word_duel'])) {
+                $ttt  = array_map('mb_strtolower', gmWords((string)($c['word_ttt'] ?? 'دوز')));
+                $keep = array_filter(gmWords((string)$c['word_duel']), fn($w) => !in_array(mb_strtolower($w), $ttt, true));
+                $c['word_duel'] = $keep ? implode(',', $keep) : 'چالش';
+            }
+            $old = (string)($c['texts']['duel_turn'] ?? '');
+            if ($old !== '' && !isset($c['texts']['ttt_turn'])) $c['texts']['ttt_turn'] = str_replace('چالش', 'دوز', $old);
+            unset($c['texts']['duel_turn']);
+        });
+    });
+    migrateOnce('v17_bank_on', function () {
+        if (function_exists('bkSet')) bkSet(function (&$c) { $c['on'] = 1; $c['group_only'] = 0; });
     });
     migrateOnce('v7_ttl', function () {
         if (function_exists('pxSet'))

@@ -1155,17 +1155,23 @@ function pxStarsCount($text) {
     return 1;
 }
 
-function pxConvBody($val, $unit, $usdVal = null, $chg = null) {
+function pxLatinUnit($unit) {
+    $unit = (string)$unit;
+    return ['دلار' => 'USD', 'ریال' => 'IRR'][$unit] ?? $unit;
+}
+
+function pxConvBody($val, $unit, $usdVal = null, $chg = null, $isCoin = null) {
     $isT = ($unit === 'تومان');
     $t = '';
 
     if ($usdVal !== null && $usdVal > 0)
-        $t .= '<blockquote>' . pxEm('usd', '💵') . ' ' . pxNum($usdVal) . '</blockquote>' . "\n";
+        $t .= '<blockquote>' . pxEm('usd', '💵') . ' ' . pxNum($usdVal) . ' USD</blockquote>' . "\n";
 
-    $em = $isT ? pxEm('toman', '💰') : (preg_match('/^[A-Z0-9]{1,10}$/', (string)$unit) ? pxEm('coin', '🪙') : pxEm('usd', '💵'));
+    if ($isCoin === null) $isCoin = (bool)preg_match('/^[A-Z0-9]{1,10}$/', (string)$unit);
+    $em = $isT ? pxEm('toman', '💰') : ($isCoin ? pxEm('coin', '🪙') : pxEm('usd', '💵'));
     $t .= '<blockquote>' . $em . ' ' .
           ($isT ? pxToman($val) : pxNum($val)) .
-          ($isT ? '' : ' ' . h($unit)) . '</blockquote>' . "\n";
+          ($isT ? '' : ' ' . h(pxLatinUnit($unit))) . '</blockquote>' . "\n";
 
     if ($chg !== null)
         $t .= '<blockquote>' . pxEm('chg', '📈') . ' ' . ($chg >= 0 ? '+' : '−') .
@@ -1271,7 +1277,7 @@ function pxAssetCaption($name, $price, $unit, $chg, $emoji = '', $key = '') {
     $t  = $head . ' <b>' . h($name) . "</b>\n\n";
     $t .= '<blockquote>';
     $t .= ($isT ? pxEm('toman', '💰') : pxEm('usd', '💵')) . ' ' .
-          pxToman($price) . ($isT ? '' : ' ' . h($unit)) . "\n";
+          pxToman($price) . ($isT ? '' : ' ' . h(pxLatinUnit($unit))) . "\n";
     $t .= pxEm('chg', '📈') . ' ' . ($chg >= 0 ? '+' : '−') .
           number_format(abs($chg), 2) . '%';
     $t .= '</blockquote>' . "\n";
@@ -3123,7 +3129,7 @@ function pxSendConv(array $cv, $chatId, $replyTo, $kb) {
     $png = pxCardCached($ck, $make);
     $title = (pxIsToman($from) ? pxToman($n) : pxNum($n)) . ' ' . pxUnitTitle($from);
     $cap   = pxEm('conv', '💱') . ' <b>' . h($title) . "</b>\n\n" .
-             pxConvBody($val, $unit, $usdEq, $chg);
+             pxConvBody($val, $to['t'] === 'irt' ? 'تومان' : pxUnitCode($to), $usdEq, $chg, $to['t'] === 'coin');
     pxDeliver($chatId, $png, $cap, $kb, $replyTo);
     pxWaitReact($chatId, $replyTo, false);
     return true;

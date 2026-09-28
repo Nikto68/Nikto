@@ -3,8 +3,8 @@
 
 function bkDefaults() {
     return [
-        'on'         => false,
-        'group_only' => 1,
+        'on'         => true,
+        'group_only' => 0,
         'word_bank'  => 'بانک,حساب بانکی',
 
         'level_step'     => 500000,
@@ -625,7 +625,7 @@ function bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend, $replyToId =
 
 function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate, $msg = null) {
     if (!bkOn()) return false;
-    if (!empty(bkVal('group_only', 1)) && $isPrivate) return false;
+    if (!empty(bkVal('group_only', 0)) && $isPrivate) return false;
 
     $raw = trim((string)$text);
     if ($raw === '') return false;
@@ -645,16 +645,27 @@ function bkHandleText($text, $uid, $chatId, $name, $uname, $replyTo, $isPrivate,
         if ($looksLikeAnswer) return bkHandlePending($raw, $uid, $chatId, $name, $uname, $pend, $replyToId);
     }
 
-    if (mb_strtolower($raw) === mb_strtolower('برترین‌های بانک')) { sendMsg(BOT_TOKEN, $chatId, bkTopText()); return true; }
+    $said = bkNorm($raw);
+    if ($said === bkNorm('برترین‌های بانک') || preg_match('~^/banktop(@\w+)?$~i', $raw)) {
+        sendMsg(BOT_TOKEN, $chatId, bkTopText()); return true;
+    }
 
-    $isBank = false;
-    foreach (explode(',', (string)bkVal('word_bank', 'بانک')) as $w) {
-        $w = trim($w);
-        if ($w !== '' && mb_strtolower($raw) === mb_strtolower($w)) { $isBank = true; break; }
+    $isBank = (bool)preg_match('~^/bank(@\w+)?$~i', $raw);
+    if (!$isBank) foreach (explode(',', (string)bkVal('word_bank', 'بانک')) as $w) {
+        $w = bkNorm($w);
+        if ($w !== '' && $said === $w) { $isBank = true; break; }
     }
     if ($isBank) { bkShow($uid, $chatId, $name, null, $msg['message_id'] ?? null); return true; }
 
     return false;
+}
+
+function bkNorm($s) {
+    $s = mb_strtolower(trim((string)$s));
+    $s = str_replace(['ي', 'ى', 'ك', 'ة', 'أ', 'إ'], ['ی', 'ی', 'ک', 'ه', 'ا', 'ا'], $s);
+    $s = preg_replace('/[\x{064B}-\x{065F}\x{0670}\x{0640}\x{200E}\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}]/u', '', $s);
+    $s = preg_replace('/[\s\x{200C}\x{200D}\x{00A0}]+/u', '', (string)$s);
+    return (string)preg_replace('/[!.؟?،,]+$/u', '', (string)$s);
 }
 
 
@@ -748,7 +759,8 @@ function bkAdminHome($chatId, $msgId = null) {
     $c = bkCfg();
     $t  = "🏦 <b>بانک</b>\n\n";
     $t .= 'وضعیت: ' . (bkOn() ? '✅ روشن' : '❌ خاموش') . "\n\n";
-    $t .= 'کلمه‌ی باز کردنِ بانک: <code>' . h($c['word_bank']) . "</code>\n";
+    $t .= 'کلمه‌ی باز کردنِ بانک: <code>' . h($c['word_bank']) . "</code> یا <code>/bank</code>\n";
+    $t .= 'کجا کار کند: <b>' . (empty($c['group_only']) ? 'گروه و پیوی ربات' : 'فقط گروه') . "</b>\n";
     if (!empty($c['interest']['on'])) {
         $rs = [];
         foreach ((array)($c['interest']['tiers'] ?? []) as $tt)
@@ -758,6 +770,7 @@ function bkAdminHome($chatId, $msgId = null) {
 
     $rows = [
         [btnCb(bkOn() ? '✅ روشن' : '❌ خاموش', 'bkax', 'info')],
+        [btnCb(empty($c['group_only']) ? '📍 گروه و پیوی' : '📍 فقط گروه', 'bkagrp', 'info')],
         [btnCb('🗣 کلمه‌ها', 'bkaw_home', 'admin'), btnCb('✏️ متن‌ها و دکمه‌ها', 'bkat_home', 'admin')],
         [btnCb((empty($c['card_image']) ? '🖼 کارتِ گرافیکی: خاموش' : '🖼 کارتِ گرافیکی: روشن')
                . (function_exists('bcReady') && !bcReady() ? ' ⚠️' : ''), 'bkacard', 'info')],
@@ -872,8 +885,10 @@ function bkAdminCallback($data, $chatId, $msgId, $cbId) {
             ? '⚠️ روی این هاست GD یا فونتِ فارسی نیست — کارت متنی می‌ماند.' : '✅';
         answerCb(BOT_TOKEN, $cbId, $warn, true); bkAdminHome($chatId, $msgId); return true;
     }
-    if ($data === 'bkax') {
-        bkSet(function (&$c) { $c['on'] = empty($c['on']); });
+    if ($data === 'bkax' || $data === 'bkagrp') {
+        $k  = $data === 'bkax' ? 'on' : 'group_only';
+        $on = !empty(bkVal($k));
+        bkSet(function (&$c) use ($k, $on) { $c[$k] = $on ? 0 : 1; });
         answerCb(BOT_TOKEN, $cbId, '✅'); bkAdminHome($chatId, $msgId); return true;
     }
 
