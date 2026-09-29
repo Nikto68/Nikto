@@ -1542,7 +1542,6 @@ function svBoot($app) {
         'tagline' => (string)($c['tagline'] ?? ''),
         'cats'    => $pub['cats'],
         'items'   => $pub['items'],
-        'topup'   => maTopupInfo(),
         'bot'     => (string)botUsername(),
         'links'   => $links,
         'spl'     => function_exists('maSplashSec') ? maSplashSec() : 8,

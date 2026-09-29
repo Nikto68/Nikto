@@ -99,11 +99,9 @@ svg{display:block}
 .who small span{overflow:hidden;text-overflow:ellipsis}
 .dot{position:relative;display:inline-block;flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--ok)}
 .dot:after{content:"";position:absolute;inset:0;border-radius:50%;background:inherit;animation:ping 2s ease-out infinite}
-.bal{display:flex;align-items:center;gap:6px;height:36px;padding:0 5px 0 11px;border-radius:18px;font-weight:900;font-size:12px;
+.bal{display:flex;align-items:center;gap:6px;height:36px;padding:0 13px;border-radius:18px;font-weight:900;font-size:12px;
   background:linear-gradient(135deg,rgba(221,42,123,.22),rgba(129,52,175,.16));border:1px solid var(--line2)}
 .bal em{font-style:normal;font-size:9.5px;color:var(--dim);font-weight:600}
-.bal i{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--grad);color:#fff;box-shadow:0 4px 12px -3px rgba(221,42,123,.9)}
-.bal i svg{width:14px;height:14px}
 .ib{width:36px;height:36px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);background:rgba(255,255,255,.05)}
 .ib svg{width:18px;height:18px;color:var(--pk)}
 
@@ -174,20 +172,6 @@ svg{display:block}
 .cta[disabled]:after{display:none}
 .cta.gh{background:var(--glass);color:var(--ink);border:1px solid var(--line2);box-shadow:none}
 .cta.gh:after{display:none}
-/* روش‌های شارژ: ارز دیجیتال و درگاه ایرانی */
-.pms{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.pms:empty{display:none}
-.pm{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;padding:14px 13px 12px;border-radius:21px;text-align:right;
-  border:1px solid var(--line2);background:linear-gradient(160deg,rgba(255,255,255,.11),rgba(255,255,255,.02) 55%),var(--glass);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 18px 30px -22px #000;transition:transform .15s}
-.pm:active{transform:scale(.97)}
-.pm .gi{margin-bottom:6px}
-.gi{display:inline-grid;width:42px;height:42px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}.gi svg{width:100%;height:100%}
-.pm b{font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.pm small{font-size:10px;font-weight:700;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.pm .pg2{align-self:stretch;display:flex;align-items:center;justify-content:center;height:36px;margin-top:9px;border-radius:12px;font-size:12px;font-weight:900;color:#fff;background:var(--grad);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 10px 20px -12px rgba(0,0,0,.9)}
-.pms .pm:only-child{grid-column:1/-1}
 
 
 .stat3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
@@ -364,24 +348,6 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .rfb svg{width:15px;height:15px}
 .rfb:disabled{opacity:.55}
 
-.wal{position:relative;overflow:hidden;overflow:clip;isolation:isolate;margin-top:2px;border-radius:24px;padding:16px 18px 18px;color:#fff;
-  box-shadow:0 24px 44px -24px rgba(221,42,123,.9),inset 0 1px 0 rgba(255,255,255,.25)}
-.wal .sw{position:absolute;z-index:-2;inset:0;background:linear-gradient(125deg,#F58529 0%,#DD2A7B 38%,#8134AF 72%,#515BD4 100%)}
-.wal:before{content:"";position:absolute;z-index:-1;inset:0;background:radial-gradient(70% 90% at 20% 10%,rgba(255,255,255,.22),transparent 60%),linear-gradient(180deg,rgba(10,5,16,.05),rgba(10,5,16,.35))}
-.wal:after{content:"";position:absolute;z-index:-1;top:-50%;bottom:-50%;left:-30%;width:40%;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);animation:wsh 5.5s ease-in-out infinite}
-@keyframes wsh{0%,45%{transform:translate3d(0,0,0) skewX(-20deg)}100%{transform:translate3d(420%,0,0) skewX(-20deg)}}
-.wal .wm{position:absolute;z-index:-1;left:-16px;bottom:-22px;width:120px;height:120px;color:rgba(255,255,255,.12);transform:rotate(-12deg)}
-.wal .tp{display:flex;align-items:center;justify-content:space-between}
-.wal .tp span{font-size:11px;font-weight:800;opacity:.9}
-.wal .chip{width:36px;height:27px;border-radius:7px;background:linear-gradient(135deg,#FFF1C1,#FEDA75 50%,#F59E0B);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
-.wal small{display:block;margin-top:16px;opacity:.85;font-size:11px}
-.wal b{display:block;font-size:30px;font-weight:900;line-height:1.3;text-shadow:0 4px 18px rgba(0,0,0,.25)}
-.wal b em{font-style:normal;font-size:12px;opacity:.85;font-weight:700;margin-right:4px}
-.wal .ft{margin-top:6px;font-size:10px;opacity:.75}
-.qa{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
-.qa button{height:42px;border-radius:21px;background:var(--glass);border:1px solid var(--line);font-weight:800;font-size:12px;transition:all .2s}
-.qa button.on{border-color:var(--pk);color:#fff;background:linear-gradient(135deg,rgba(221,42,123,.35),rgba(129,52,175,.3));box-shadow:0 0 0 3px rgba(255,95,162,.14)}
 .fld{margin-top:12px}
 .fld label{display:block;font-size:11px;font-weight:800;color:var(--dim);margin-bottom:6px}
 .fld input{width:100%;height:50px;padding:0 16px;border-radius:16px;background:rgba(10,5,16,.55);border:1px solid var(--line2);color:var(--ink);font-size:14px;font-weight:700;outline:0}
@@ -389,16 +355,8 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .fld input:focus{border-color:var(--pk);box-shadow:0 0 0 3px rgba(255,95,162,.16)}
 .fld small{display:block;margin-top:5px;font-size:10.5px;color:var(--dim)}
 .fld small.er{color:var(--red)}
-.pay{margin-top:12px;border-radius:16px;padding:2px 12px;background:var(--glass);border:1px solid var(--line)}
-.pay .r{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;font-size:11.5px;color:var(--dim)}
-.pay .r+.r{border-top:1px dashed var(--line)}
-.pay .r b{color:var(--ink);font-weight:800}
-.pay .r b.g{color:var(--ok)}
 .cpy{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:16px;background:rgba(221,42,123,.14);border:1px solid var(--line2);font-weight:800;font-size:12px}
 .cpy svg{width:14px;height:14px;color:var(--pk)}
-.warn{display:flex;align-items:flex-start;gap:8px;margin-top:12px;padding:11px 12px;border-radius:14px;background:rgba(251,191,36,.08);
-  border:1px solid rgba(251,191,36,.25);color:#FDE68A;font-size:11px;line-height:1.9}
-.warn svg{width:17px;height:17px;flex:0 0 auto;margin-top:2px}
 .note{margin-top:12px;padding:11px 12px;border-radius:14px;background:rgba(255,95,162,.07);border:1px solid var(--line);font-size:11px;color:var(--dim);line-height:1.9}
 
 .links{display:grid;gap:9px;margin-top:14px}
@@ -417,8 +375,8 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .nav{position:fixed;left:12px;right:12px;bottom:calc(10px + var(--safe));z-index:30;max-width:456px;margin:0 auto;border-radius:26px;
   background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02)),#16081C;
   box-shadow:0 22px 44px -18px #000,inset 0 1px 0 rgba(255,255,255,.09)}
-.nav>div{position:relative;display:grid;grid-template-columns:repeat(4,1fr);height:64px}
-.nav .ind{position:absolute;top:8px;bottom:8px;right:0;width:25%;display:flex;justify-content:center;pointer-events:none;transition:transform .42s cubic-bezier(.3,.9,.3,1)}
+.nav>div{position:relative;display:grid;grid-template-columns:repeat(3,1fr);height:64px}
+.nav .ind{position:absolute;top:8px;bottom:8px;right:0;width:33.3333%;display:flex;justify-content:center;pointer-events:none;transition:transform .42s cubic-bezier(.3,.9,.3,1)}
 .nav .ind:before{content:"";width:62px;border-radius:18px;background:var(--grad);box-shadow:0 10px 22px -8px rgba(221,42,123,.95)}
 .nav button{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:10px;font-weight:800;color:var(--dim2);transition:color .25s}
 .nav button svg{width:22px;height:22px;transition:transform .25s}
@@ -573,7 +531,6 @@ html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-
     <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
     <symbol id="i-explore" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></symbol>
     <symbol id="i-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5h14v19l-2.3-1.6-2.4 1.6-2.3-1.6-2.3 1.6-2.4-1.6L5 21.5z"/><path d="M9 8h6M9 12h6M9 16h3"/></symbol>
-    <symbol id="i-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="14" rx="3"/><path d="M2.5 10h19M16 15h2.5M6 6V5a2 2 0 0 1 2-2h9"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="m7.5 12.3 3 3 6-6.3"/></symbol>
@@ -619,7 +576,7 @@ html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-
     <header class="hdr gb">
       <div class="ava"><span id="ava"></span></div>
       <div class="who"><b id="uName">—</b><small><i class="dot"></i><span>آنلاین · سفارشِ آنی</span></small></div>
-      <button class="bal" id="balBtn"><span id="bal">…</span><em>تومان</em><i><svg><use href="#i-plus"/></svg></i></button>
+      <div class="bal" id="balBtn"><span id="bal">…</span><em>تومان</em></div>
     </header>
   </div>
 
@@ -652,19 +609,6 @@ html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-
     <div id="olist"></div>
   </section>
 
-  <section class="pg" id="pg-wallet">
-    <div class="wal"><i class="sw"></i><svg class="wm"><use href="#i-camera"/></svg>
-      <div class="tp"><span>کیف پولِ شما</span><i class="chip"></i></div>
-      <small>موجودی</small><b><span id="wBal">…</span><em>تومان</em></b>
-      <div class="ft">یک کیف پول برای همه‌ی بخش‌های ربات</div>
-    </div>
-    <div class="fld"><label>مبلغِ شارژ (تومان)</label><input id="tAmt" inputmode="numeric" placeholder="مثلا ۱۰۰٬۰۰۰"></div>
-    <div class="qa" id="qa"></div>
-    <div class="pms" id="pms"></div>
-    <div id="payInfo"></div>
-    <button class="cta gh" id="tGo"><svg><use href="#i-wallet"/></svg>کارت به کارت — درخواستِ شارژ</button>
-    <div class="note" id="tNote">فاکتورِ کارت‌به‌کارت داخلِ ربات برایتان فرستاده می‌شود؛ بعد از واریز، «ارسال رسید» را بزنید.</div>
-  </section>
 </div>
 
 <nav class="nav gb" id="nav"><div>
@@ -672,7 +616,6 @@ html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-
   <button data-go="home" class="on"><svg><use href="#i-home"/></svg>خانه</button>
   <button data-go="list"><svg><use href="#i-explore"/></svg>سرویس‌ها</button>
   <button data-go="orders"><svg><use href="#i-receipt"/></svg>سفارش‌ها<span class="bd" id="ordN"></span></button>
-  <button data-go="wallet"><svg><use href="#i-wallet"/></svg>کیف پول</button>
 </div></nav>
 
 <div class="ov" id="ov"></div>
@@ -728,6 +671,15 @@ function countUp(el, to){
   function st(ts){ if (!t0) t0 = ts; var k = Math.min(1, (ts - t0) / 900); k = 1 - Math.pow(1 - k, 3);
     el.textContent = fa(Math.round(to * k)); if (k < 1) requestAnimationFrame(st); }
   requestAnimationFrame(st);
+}
+// شارژ داخلِ مینی‌اپ نیست: منوی «افزایش موجودی» در چتِ ربات فرستاده می‌شود و مینی‌اپ بسته می‌شود
+function topupBot(need){
+  if (S.tub) return; S.tub = 1; tap('medium');
+  var toChat = function(){ S.tub = 0; if (B.bot) openLink('https://t.me/' + B.bot + '?start=topup'); else toast('از داخلِ ربات «افزایش موجودی» را بزنید.'); };
+  api('topup_bot', { need: Math.ceil(Number(need) || 0) }, function(){
+    buzz('success'); toast('منوی شارژ در ربات برایتان فرستاده شد.', true);
+    setTimeout(function(){ S.tub = 0; try { if (TG && TG.close) { TG.close(); return; } } catch(e){} toChat(); }, 1100);
+  }, toChat);
 }
 function openLink(url){
   if (!url) return;
@@ -823,7 +775,7 @@ var HINT = { followers: ['آیدی یا لینکِ پیج', '@mypage'], likes: [
 var S = { lim: 60, page: '', stack: [], bal: 0, cat: '', q: '', orders: null, cur: null, sheet: false, poll: null, ava: '' };
 var U = tgUser() || {};
 
-function setBal(v){ if (v == null || isNaN(Number(v))) return; S.bal = Number(v); $('bal').textContent = fa(S.bal); $('wBal').textContent = fa(S.bal); }
+function setBal(v){ if (v == null || isNaN(Number(v))) return; S.bal = Number(v); $('bal').textContent = fa(S.bal); }
 function drawSelf(avatar){
   var n = ((U.first_name || '') + ' ' + (U.last_name || '')).trim() || (U.username ? '@' + U.username : 'کاربر');
   $('uName').textContent = n;
@@ -837,7 +789,7 @@ function drawSelf(avatar){
   im.src = avatar;
 }
 
-var PAGES = ['home', 'list', 'orders', 'wallet'];
+var PAGES = ['home', 'list', 'orders'];
 function go(p, back){
   if (PAGES.indexOf(p) < 0) p = 'home';
   if (p === S.page) { window.scrollTo(0, 0); return; }
@@ -850,7 +802,6 @@ function go(p, back){
   clearTimeout(S.poll);
   if (p === 'list') drawList();
   if (p === 'orders') loadOrders();
-  if (p === 'wallet') drawWallet();
   backBtn();
 }
 function goBack(){ if (S.sheet) { closeSheet(); return; } var p = S.stack.pop(); go(p || 'home', true); }
@@ -1008,7 +959,7 @@ function openOrder(id){
     [].forEach.call($('qC').children, function(b){ b.classList.toggle('on', +b.getAttribute('data-q') === n); });
     var low = ok && t > S.bal;
     $('oBal').parentNode.classList.toggle('lo', low);
-    $('oGoT').textContent = low ? 'شارژِ کیف پول (' + fa(t - S.bal) + ' تومان کم است)' : 'پرداخت و ثبتِ سفارش';
+    $('oGoT').textContent = low ? 'شارژ در ربات (' + fa(t - S.bal) + ' تومان کم است)' : 'پرداخت و ثبتِ سفارش';
     return t;
   }
   function setQ(n){ n = Math.max(i.mn, Math.min(i.mx, n)); qi.value = fa(n); upd(); }
@@ -1046,7 +997,7 @@ function openOrder(id){
   $('oGo').onclick = function(){
     var n = q(), t = upd(), link = $('oLink').value.trim();
     if (n < i.mn || n > i.mx) { toast((i.y === 'cc' ? 'تعدادِ کامنت‌ها' : 'تعداد') + ' باید بین ' + fa(i.mn) + ' و ' + fa(i.mx) + ' باشد.'); return; }
-    if (t > S.bal) { closeSheet(); WAL.pre = t - S.bal; go('wallet'); return; }
+    if (t > S.bal) { topupBot(t - S.bal); return; }
     if (!linkOk(link)) { toast('لینک یا آیدیِ درست وارد کنید.'); $('oLink').focus(); return; }
     if (i.y === 'poll' && !ans) { toast('گزینه‌ای را که رای بگیرد انتخاب کنید.'); return; }
     if (i.y === 'emoji' && !emo) { toast('ایموجیِ ری‌اکشن را بزنید.'); if ($('oEmo')) $('oEmo').focus(); return; }
@@ -1059,7 +1010,7 @@ function openOrder(id){
       b.disabled = false; upd();
       if (j && j.balance != null) setBal(j.balance);
       if (j && j.error === 'price_changed' && j.p) { i.p = j.p; upd(); }
-      if (j && j.error === 'no_balance') { closeSheet(); WAL.pre = j.need || 0; go('wallet'); }
+      if (j && j.error === 'no_balance') { toast((j && j.message) || 'موجودی کافی نیست.'); return; }
       toast((j && j.message) || 'ثبت نشد — دوباره امتحان کنید.');
     });
   };
@@ -1113,76 +1064,6 @@ $('olist').addEventListener('click', function(ev){
 });
 $('oRef').onclick = function(){ tap(); loadOrders(); };
 
-var WAL = { pre: 0, busy: false };
-function tMin(){ return Math.max(1000, Number((B.topup || {}).min) || 0); }
-function payOk(){ var t = B.topup || {}; return !!(t.card_on != null ? t.card_on : t.on); }
-function stripEm(s){ return String(s || '').replace(/^[^؀-ۿA-Za-z0-9]+/, '').trim(); }
-var GI = {
-  crypto: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34D399"/><stop offset=".55" stop-color="#10B981"/><stop offset="1" stop-color="#047857"/></linearGradient></defs>' +
-    '<circle cx="24" cy="24" r="22" fill="url(#giC)"/><circle cx="24" cy="24" r="18.5" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>' +
-    '<path d="M13.5 14.5h21v4.6h-8.2v17.4h-4.6V19.1h-8.2z" fill="#fff"/><ellipse cx="24" cy="23.4" rx="10.6" ry="3.3" fill="none" stroke="#fff" stroke-width="2.2"/>' +
-    '<path d="M9 16a17 17 0 0 1 8-8" stroke="rgba(255,255,255,.55)" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>',
-  iran: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giI" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818CF8"/><stop offset=".55" stop-color="#6366F1"/><stop offset="1" stop-color="#1D4ED8"/></linearGradient></defs>' +
-    '<rect x="2" y="2" width="44" height="44" rx="14" fill="url(#giI)"/><rect x="9" y="14" width="30" height="20" rx="3.6" fill="none" stroke="#fff" stroke-width="2.4"/>' +
-    '<path d="M9 20.5h30" stroke="#fff" stroke-width="3"/><rect x="13" y="25.5" width="7" height="4.4" rx="1.2" fill="#FCD34D"/><path d="M24 28h10" stroke="rgba(255,255,255,.8)" stroke-width="2.2" stroke-linecap="round"/>' +
-    '<path d="M8 10a14 14 0 0 1 7-4" stroke="rgba(255,255,255,.5)" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>'
-};
-function drawPms(){
-  var t = B.topup || {}, l = t.lbl || {}, ms = [];
-  if (t.gw) ms.push(['crypto', GI.crypto, stripEm(l.crypto) || 'ارز دیجیتال', (t.gwcoin || 'USDT') + ' · شارژِ خودکار']);
-  if (t.ir) ms.push(['iran', GI.iran, stripEm(l.iran) || 'درگاه ایرانی', 'کارت‌های بانکی · آنی']);
-  $('pms').innerHTML = ms.map(function(m){ return '<button class="pm" data-pm="' + m[0] + '"><span class="gi">' + m[1] + '</span><b>' + esc(m[2]) + '</b><small>' + esc(m[3]) + '</small><span class="pg2">پرداخت</span></button>'; }).join('');
-  return ms.length;
-}
-function openPay(m){
-  var t = B.topup || {};
-  if (!t.pay) { toast('درگاه هنوز آماده نیست.'); return; }
-  var a = parseInt(digits($('tAmt').value), 10) || 0, d = initData(), h = '';
-  if (d) h = '#tgWebAppData=' + encodeURIComponent(d) + '&tgWebAppVersion=' + encodeURIComponent((TG && TG.version) || '7.0') + '&tgWebAppPlatform=' + encodeURIComponent((TG && TG.platform) || 'unknown');
-  tap('medium');
-  location.href = t.pay + '&m=' + m + '&th=igs&back=igs' + (a ? '&a=' + a : '') + h;
-}
-$('pms').addEventListener('click', function(ev){ var b = ev.target.closest('[data-pm]'); if (b) openPay(b.getAttribute('data-pm')); });
-
-function drawWallet(){
-  setBal(S.bal);
-  var t = B.topup || {}, min = tMin();
-  var qs = [min, 50000, 100000, 200000, 500000, 1000000].filter(function(v, i, a){ return v >= min && a.indexOf(v) === i; }).sort(function(a, b){ return a - b; }).slice(0, 6);
-  $('qa').innerHTML = qs.map(function(v){ return '<button data-v="' + v + '">' + fa(v) + '</button>'; }).join('');
-  if (WAL.pre) { $('tAmt').value = fa(Math.max(min, Math.ceil(WAL.pre / 1000) * 1000)); WAL.pre = 0; }
-  markQa();
-  var h = '';
-  var nm = drawPms();
-  if (payOk()) h += '<div class="r"><span>کارت به کارت</span><button class="cpy" id="cardCp">' + ico('copy') + '<span class="ltr">' + esc(t.card) + '</span></button></div>' +
-    (t.name ? '<div class="r"><span>به نامِ</span><b>' + esc(t.name) + '</b></div>' : '');
-  $('payInfo').innerHTML = h ? '<div class="pay">' + h + '</div>'
-    : (nm ? '' : '<div class="warn">' + ico('alert') + '<span>روشِ پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>');
-  var cc = $('cardCp'); if (cc) cc.onclick = function(){ tap(); copy(digits(t.card), 'شماره کارت'); };
-  $('tGo').classList.toggle('hid', !payOk());
-  $('tNote').classList.toggle('hid', !payOk());
-}
-function markQa(){ var v = parseInt(digits($('tAmt').value), 10) || 0; [].forEach.call($('qa').children, function(b){ b.classList.toggle('on', +b.getAttribute('data-v') === v); }); }
-$('qa').onclick = function(ev){ var b = ev.target.closest('[data-v]'); if (!b) return; tap(); $('tAmt').value = fa(+b.getAttribute('data-v')); markQa(); };
-$('tAmt').oninput = function(){ var n = parseInt(digits(this.value).slice(0, 10), 10) || 0; this.value = n ? fa(n) : ''; markQa(); };
-$('tGo').onclick = function(){
-  if (WAL.busy || !payOk()) return;
-  var n = parseInt(digits($('tAmt').value), 10) || 0;
-  if (n < tMin()) { toast('کمترین مبلغِ شارژ ' + fa(tMin()) + ' تومان است.'); $('tAmt').focus(); return; }
-  WAL.busy = true; tap('medium');
-  var b = this; b.disabled = true;
-  api('topup', { amount: n }, function(j){
-    WAL.busy = false; b.disabled = false; $('tAmt').value = ''; markQa();
-    $('shB').innerHTML = '<div class="res"><span class="rc">' + ico('check') + '</span><b>درخواستِ شارژ ثبت شد</b><small>' + fa(j.amount || n) + ' تومان</small></div>' +
-      '<div class="note">' + esc(j.message || 'فاکتور و مقصدِ پرداخت داخلِ ربات برایتان رفت.') + '</div>' +
-      (j.order ? '<div class="pay"><div class="r"><span>کدِ پیگیری</span><b class="ltr">' + esc(j.order) + '</b></div></div>' : '') +
-      (B.bot ? '<button class="cta" id="toBot">' + ico('send') + 'رفتن به ربات و پرداخت</button>' : '') +
-      '<button class="cta gh" id="resX">بستن</button>';
-    var tb = $('toBot'); if (tb) tb.onclick = function(){ tap(); openLink('https://t.me/' + B.bot); };
-    $('resX').onclick = function(){ tap(); closeSheet(); };
-    buzz('success'); openSheet();
-  }, function(j){ WAL.busy = false; b.disabled = false; toast((j && j.message) || 'ثبت نشد.'); });
-};
-$('balBtn').onclick = function(){ tap(); go('wallet'); };
 
 (function(){
   var sh = $('sh'), y0 = null, dy = 0;
@@ -1216,7 +1097,7 @@ window.addEventListener('scroll', function(){ if (!SCT) H.classList.add('scr'); 
 drawSelf('');
 drawHome();
 var WANT = (function(){ try { return String(new URLSearchParams(location.search).get('p') || ''); } catch(e){ return ''; } })();
-go(WANT === 'orders' || WANT === 'wallet' || WANT === 'list' ? WANT : 'home');
+go(WANT === 'orders' || WANT === 'list' ? WANT : 'home');
 api('me', {}, function(j){ setBal(j.balance); drawSelf(j.avatar); hideSplash(false); }, function(){ hideSplash(false); });
 })();
 </script>

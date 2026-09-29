@@ -132,10 +132,9 @@ html.in .pg.on>:nth-child(n+7){transition-delay:.3s}
 .dot{position:relative;display:inline-block;flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--green)}
 .dot:after{content:"";position:absolute;inset:0;border-radius:50%;background:inherit;opacity:0;animation:ping 2s ease-out infinite}
 @keyframes ping{0%{transform:scale(1);opacity:.6}75%,100%{transform:scale(2.9);opacity:0}}
-.bal{display:flex;align-items:center;gap:6px;padding:6px 7px 6px 10px;border-radius:13px;border:1px solid rgba(96,165,250,.28);
+.bal{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:13px;border:1px solid rgba(96,165,250,.28);
   background:linear-gradient(135deg,rgba(59,130,246,.16),rgba(34,197,94,.10));font-weight:900;font-size:12px}
 .bal em{font-style:normal;font-size:9.5px;color:var(--dim);font-weight:600}
-.bal i{width:19px;height:19px;border-radius:7px;display:grid;place-items:center;background:var(--grad);color:#fff;font-style:normal;font-size:14px;line-height:1}
 .ib{position:relative;width:36px;height:36px;border-radius:12px;display:grid;place-items:center;border:1px solid var(--line);background:rgba(255,255,255,.04)}
 .ib svg{width:18px;height:18px}
 .ib .bd{position:absolute;top:-4px;inset-inline-end:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--green);
@@ -163,7 +162,7 @@ html.in .pg.on>:nth-child(n+7){transition-delay:.3s}
   box-shadow:0 0 18px rgba(59,130,246,.25);transform:rotateX(74deg);animation:orb 10s linear infinite;will-change:transform}
 .hero .orb b{position:absolute;top:-4px;left:calc(50% - 4px);width:8px;height:8px;border-radius:50%;background:#86EFAC;box-shadow:0 0 10px 2px rgba(74,222,128,.8)}
 @keyframes orb{to{transform:rotateX(74deg) rotateZ(360deg)}}
-.qk{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.qk{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
 .qk button{display:flex;flex-direction:column;align-items:center;gap:7px;padding:11px 4px 10px;border-radius:17px;border:1px solid transparent;
   background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,0) 50%) padding-box,linear-gradient(var(--gl),var(--gl)) padding-box,
     linear-gradient(155deg,rgba(255,255,255,.24),rgba(255,255,255,.05) 40%,rgba(96,165,250,.3)) border-box;
@@ -194,20 +193,6 @@ html.in .pg.on>:nth-child(n+7){transition-delay:.3s}
 .btn svg{width:18px;height:18px}
 .btn[disabled]{opacity:.55;pointer-events:none}
 .btn.gh{background:rgba(255,255,255,.055);border:1px solid var(--line2);box-shadow:none;color:var(--ink)}
-/* روش‌های شارژ: ارز دیجیتال و درگاه ایرانی */
-.pms{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.pms:empty{display:none}
-.pm{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;padding:14px 13px 12px;border-radius:21px;text-align:right;
-  border:1px solid rgba(147,197,253,.24);background:linear-gradient(160deg,rgba(255,255,255,.11),rgba(255,255,255,.02) 55%),var(--gl);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 18px 30px -22px #000;transition:transform .15s}
-.pm:active{transform:scale(.97)}
-.pm .gi{margin-bottom:6px}
-.gi{display:inline-grid;width:42px;height:42px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}.gi svg{width:100%;height:100%}
-.pm b{font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.pm small{font-size:10px;font-weight:700;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.pm .pg2{align-self:stretch;display:flex;align-items:center;justify-content:center;height:36px;margin-top:9px;border-radius:12px;font-size:12px;font-weight:900;color:#fff;background:var(--grad);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 10px 20px -12px rgba(0,0,0,.9)}
-.pms .pm:only-child{grid-column:1/-1}
 
 .btn.bl{background:linear-gradient(135deg,#2563EB,#3B82F6)}
 .btn.rd{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:#FCA5A5;box-shadow:none}
@@ -360,16 +345,6 @@ html.in .pg.on>:nth-child(n+7){transition-delay:.3s}
 .or .kv b{font-size:12.5px;font-weight:900;direction:ltr;display:block;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .or .kv .kc b{color:var(--green2);letter-spacing:1.5px}
 
-.wal{border-radius:22px;padding:18px 16px;position:relative;overflow:hidden;background:
-  radial-gradient(90% 120% at 100% 0,rgba(59,130,246,.35),transparent 60%),radial-gradient(80% 120% at 0 100%,rgba(34,197,94,.28),transparent 60%),#070a10;
-  border:1px solid rgba(96,165,250,.3)}
-.wal small{color:var(--dim);font-size:11px}
-.wal .amt{font-size:28px;font-weight:900;margin-top:2px;letter-spacing:-.5px}
-.wal .amt em{font-style:normal;font-size:12px;color:var(--dim);font-weight:700;margin-inline-start:4px}
-.wal .sim{position:absolute;top:16px;inset-inline-end:16px;width:40px;height:30px;border-radius:7px;background:linear-gradient(135deg,#a7b4c9,#5b6679);opacity:.35}
-.qa{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
-.qa button{padding:10px 4px;border-radius:13px;border:1px solid var(--line);background:var(--card);font-weight:800;font-size:12px}
-.qa button.on{border-color:rgba(34,197,94,.55);background:rgba(34,197,94,.1);color:var(--green3)}
 .fld{margin-top:10px}
 .fld label{display:block;font-size:11px;color:var(--dim);margin:0 3px 5px;font-weight:700}
 .inp{width:100%;border-radius:14px;border:1px solid var(--line2);background:var(--card);color:var(--ink);padding:12px 13px;font-size:14px;outline:0;transition:border-color .15s}
@@ -704,7 +679,6 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
 .stat b{background:linear-gradient(180deg,#fff 35%,#BFDBFE);-webkit-background-clip:text;background-clip:text;color:transparent}
 .crow,.ntf,.or{box-shadow:none}
 .cc{box-shadow:0 14px 24px -16px rgba(0,0,0,.95)}
-.qa button.on{background:linear-gradient(180deg,rgba(74,222,128,.18),rgba(34,197,94,.06)) padding-box,linear-gradient(135deg,#4ADE80,#16A34A) border-box;color:var(--green3)}
 .ntf.new{background:linear-gradient(180deg,rgba(74,222,128,.08),rgba(255,255,255,0) 50%) padding-box,linear-gradient(var(--card),var(--card)) padding-box,
     linear-gradient(155deg,rgba(74,222,128,.55),rgba(74,222,128,.12) 45%,rgba(96,165,250,.3)) border-box}
 .lv{border-color:transparent;background:linear-gradient(135deg,rgba(59,130,246,.14),rgba(34,197,94,.07)) padding-box,linear-gradient(var(--gl),var(--gl)) padding-box,
@@ -739,7 +713,6 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
     linear-gradient(#06080d,#06080d) padding-box,linear-gradient(160deg,rgba(147,197,253,.7),rgba(255,255,255,.06) 40%,rgba(74,222,128,.55)) border-box;
   box-shadow:0 22px 40px -22px rgba(37,99,235,.8)}
 .axg button .t3{margin-bottom:2px}
-.wal{box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 20px 36px -22px rgba(37,99,235,.9)}
 
 /* برگه‌ی تکمیلِ خرید — شیشه‌ای */
 .ov{background:radial-gradient(120% 60% at 50% 100%,rgba(37,99,235,.26),transparent 70%),rgba(0,0,0,.5)}
@@ -903,7 +876,7 @@ html.shon .sky *,html.shon .app *:before,html.shon .app *:after{animation-play-s
   <header class="hdr">
     <div class="ava" id="ava"></div>
     <div class="who"><b id="uName">—</b><small><i class="dot"></i><span>آنلاین · تحویل آنی</span></small></div>
-    <button class="bal" id="balBtn"><span id="bal">…</span><em>تومان</em><i>+</i></button>
+    <div class="bal" id="balBtn"><span id="bal">…</span><em>تومان</em></div>
     <button class="ib" id="bellBtn" aria-label="اعلان‌ها"><svg><use href="#i-bell"/></svg><span class="bd" id="bellN"></span></button>
   </header>
 
@@ -946,7 +919,6 @@ html.shon .sky *,html.shon .app *:before,html.shon .app *:after{animation-play-s
     <div class="trust" id="trust"></div>
 
     <div class="qk">
-      <button data-go="wallet"><i class="t3 s g"><svg><use href="#i-wallet"/></svg></i><b>شارژ کیف پول</b></button>
       <button data-go="orders"><i class="t3 s"><svg><use href="#i-list"/></svg></i><b>شماره‌های من</b></button>
       <button data-go="me"><i class="t3 s c"><svg><use href="#i-gift"/></svg></i><b>دعوت دوستان</b></button>
     </div>
@@ -1018,23 +990,11 @@ html.shon .sky *,html.shon .app *:before,html.shon .app *:after{animation-play-s
     </div>
     <div class="menu mt">
       <button class="mi" data-go="orders"><i class="t3 s"><svg><use href="#i-list"/></svg></i><span>شماره‌های من</span><svg class="chev"><use href="#i-chev"/></svg></button>
-      <button class="mi" data-go="wallet"><i class="t3 s g"><svg><use href="#i-wallet"/></svg></i><span>کیف پول و شارژ</span><svg class="chev"><use href="#i-chev"/></svg></button>
       <button class="mi" data-go="notes"><i class="t3 s c"><svg><use href="#i-bell"/></svg></i><span>اعلان‌ها</span><b class="bdn hid" id="mNotes"></b><svg class="chev"><use href="#i-chev"/></svg></button>
       <button class="mi" data-go="air"><i class="t3 s k"><svg class="gmi"><use href="#g-gem"/></svg></i><span>ایردراپ کریستال</span><svg class="chev"><use href="#i-chev"/></svg></button>
     </div>
   </section>
 
-  <section class="pg" id="pg-wallet">
-    <div class="wal"><div class="sim"></div><small>موجودی کیف پول</small><div class="amt"><span id="wBal">—</span><em>تومان</em></div>
-      <small style="display:block;margin-top:6px">با موجودی، هر شماره را در یک لحظه بخرید.</small></div>
-    <div class="sec"><h3><svg><use href="#i-plus"/></svg>افزایش موجودی</h3></div>
-    <div class="qa" id="qa"></div>
-    <div class="fld"><label>مبلغ دلخواه</label><div class="inw"><input class="inp" id="tAmt" inputmode="numeric" placeholder="مثلا ۱۰۰٬۰۰۰"><span class="sf">تومان</span></div></div>
-    <div class="pms" id="pms"></div>
-    <div class="card mt" id="payInfo"></div>
-    <button class="btn gh mt" id="topBtn"><svg><use href="#i-wallet"/></svg>کارت به کارت — ثبت درخواست شارژ</button>
-    <div class="note bl mt" id="topNote"><svg><use href="#i-alert"/></svg><span>بعد از ثبت، فاکتورِ کارت‌به‌کارت داخل ربات برایتان می‌آید؛ واریز کنید و «ارسال رسید» را بزنید. بعد از تایید، موجودی خودکار شارژ می‌شود.</span></div>
-  </section>
 
   <section class="pg" id="pg-notes"><div id="nlist"></div></section>
 
@@ -1197,6 +1157,15 @@ function copy(text, what){
   }
 }
 
+// شارژ داخلِ مینی‌اپ نیست: منوی «افزایش موجودی» در چتِ ربات فرستاده می‌شود و مینی‌اپ بسته می‌شود
+function topupBot(need){
+  if (S.tub) return; S.tub = 1; tap('medium');
+  var toChat = function(){ S.tub = 0; if (B.bot) openLink('https://t.me/' + B.bot + '?start=topup'); else toast('از داخلِ ربات «افزایش موجودی» را بزنید.'); };
+  api('topup_bot', { need: Math.ceil(Number(need) || 0) }, function(){
+    buzz('success'); toast('منوی شارژ در ربات برایتان فرستاده شد.', true);
+    setTimeout(function(){ S.tub = 0; try { if (TG && TG.close) { TG.close(); return; } } catch(e){} toChat(); }, 1100);
+  }, toChat);
+}
 function openLink(url){
   if (!url) return;
   try {
@@ -1259,7 +1228,7 @@ function gate(msg){
 var SPL = { t0: (function(){ try { var o = performance.timeOrigin || performance.timing.navigationStart; if (o > 0 && Date.now() - o < 15000) return o; } catch(e){} return Date.now(); })(),
             ready: false, gone: false, min: Math.max(0, Math.min(20, Number(B.spl) || 0)) * 1000 };
 var SPM = ['در حال اتصالِ امن…', 'بررسیِ حسابِ شما…', 'دریافتِ کشورها و قیمت‌ها…', 'بررسیِ موجودیِ شماره‌ها…', 'آماده‌سازیِ فروشگاه…', 'آماده است!'];
-var SPT = ['⚡ تحویلِ شماره آنی و خودکار است', '💬 کدِ تایید همین‌جا داخلِ مینی‌اپ می‌آید', '💰 کیف پول را از «کیف پول» شارژ کنید', '📦 همه‌ی شماره‌ها در «سفارش‌ها» می‌ماند'];
+var SPT = ['⚡ تحویلِ شماره آنی و خودکار است', '💬 کدِ تایید همین‌جا داخلِ مینی‌اپ می‌آید', '💰 کیف پول از داخلِ ربات با «➕ افزایش موجودی» شارژ می‌شود', '📦 همه‌ی شماره‌ها در «سفارش‌ها» می‌ماند'];
 function splStep(){
   if (SPL.gone) return false;
   var el = Date.now() - SPL.t0, p = SPL.min ? Math.min(1, el / SPL.min) : 1;
@@ -1320,8 +1289,8 @@ S.prod = PLIST[0] || 'telegram';
 var U = tgUser() || {};
 S.uid = U.id || 0;
 
-var PAGES = ['home', 'shop', 'orders', 'air', 'me', 'wallet', 'notes', 'sup'];
-var DOCKMAP = { wallet: 'me', notes: 'me' };
+var PAGES = ['home', 'shop', 'orders', 'air', 'me', 'notes', 'sup'];
+var DOCKMAP = { notes: 'me' };
 
 function go(p, back){
   if (PAGES.indexOf(p) < 0 || p === 'sup') p = 'home';
@@ -1340,7 +1309,6 @@ function go(p, back){
   if (p === 'orders') loadOrders();
   if (p === 'air') loadAir();
   if (p === 'me') { drawMe(); refresh(); }
-  if (p === 'wallet') drawWallet();
   if (p === 'notes') loadNotes();
   if (p === 'sup') supEnter();
   if (p === 'home') { drawHome(); loadFeed(); }
@@ -1370,10 +1338,8 @@ function setBal(v){
   if (v == null || isNaN(Number(v))) return;
   S.bal = Number(v);
   $('bal').textContent = fa(S.bal);
-  var w = $('wBal'); if (w) w.textContent = fa(S.bal);
   var m = $('mBal'); if (m) m.textContent = fa(S.bal);
 }
-$('balBtn').onclick = function(){ tap(); go('wallet'); };
 $('bellBtn').onclick = function(){ tap(); go('notes'); };
 $('fab').onclick = function(){ tap('medium'); go('sup'); };
 
@@ -1692,9 +1658,9 @@ function drawBuy(){
   var need = tot - S.bal;
   var a = $('bAct');
   if (need > 0) {
-    a.innerHTML = '<div class="note bl">' + ico('wallet') + '<span>موجودی‌تان ' + fa(need) + ' تومان کم است. اول کیف پول را شارژ کنید.</span></div>' +
-      '<button class="btn mt2" id="bGo">' + ico('plus') + 'شارژ ' + fa(Math.ceil(need / 1000) * 1000) + ' تومان</button>';
-    $('bGo').onclick = function(){ tap(); WAL.pre = Math.ceil(need / 1000) * 1000; closeSheet(); go('wallet'); };
+    a.innerHTML = '<div class="note bl">' + ico('wallet') + '<span>موجودی‌تان ' + fa(need) + ' تومان کم است؛ کیف پول از داخلِ ربات شارژ می‌شود.</span></div>' +
+      '<button class="btn mt2" id="bGo">' + ico('send') + 'شارژ در ربات</button>';
+    $('bGo').onclick = function(){ topupBot(need); };
   } else {
     a.innerHTML = '<button class="btn" id="bPay">' + ico('sim') + 'پرداخت و دریافت شماره</button>';
     $('bPay').onclick = doBuy;
@@ -1945,95 +1911,6 @@ $('ordSeg').addEventListener('click', function(ev){
   drawOrders();
 });
 
-var WAL = { pre: 0, busy: false };
-function tMin(){ return Math.max(1000, Number((B.topup || {}).min) || 0); }
-function payOk(){ var t = B.topup || {}; return !!(t.card_on != null ? t.card_on : t.on); }
-function stripEm(s){ return String(s || '').replace(/^[^؀-ۿA-Za-z0-9]+/, '').trim(); }
-var GI = {
-  crypto: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34D399"/><stop offset=".55" stop-color="#10B981"/><stop offset="1" stop-color="#047857"/></linearGradient></defs>' +
-    '<circle cx="24" cy="24" r="22" fill="url(#giC)"/><circle cx="24" cy="24" r="18.5" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>' +
-    '<path d="M13.5 14.5h21v4.6h-8.2v17.4h-4.6V19.1h-8.2z" fill="#fff"/><ellipse cx="24" cy="23.4" rx="10.6" ry="3.3" fill="none" stroke="#fff" stroke-width="2.2"/>' +
-    '<path d="M9 16a17 17 0 0 1 8-8" stroke="rgba(255,255,255,.55)" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>',
-  iran: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giI" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818CF8"/><stop offset=".55" stop-color="#6366F1"/><stop offset="1" stop-color="#1D4ED8"/></linearGradient></defs>' +
-    '<rect x="2" y="2" width="44" height="44" rx="14" fill="url(#giI)"/><rect x="9" y="14" width="30" height="20" rx="3.6" fill="none" stroke="#fff" stroke-width="2.4"/>' +
-    '<path d="M9 20.5h30" stroke="#fff" stroke-width="3"/><rect x="13" y="25.5" width="7" height="4.4" rx="1.2" fill="#FCD34D"/><path d="M24 28h10" stroke="rgba(255,255,255,.8)" stroke-width="2.2" stroke-linecap="round"/>' +
-    '<path d="M8 10a14 14 0 0 1 7-4" stroke="rgba(255,255,255,.5)" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>'
-};
-function drawPms(){
-  var t = B.topup || {}, l = t.lbl || {}, ms = [];
-  if (t.gw) ms.push(['crypto', GI.crypto, stripEm(l.crypto) || 'ارز دیجیتال', (t.gwcoin || 'USDT') + ' · شارژِ خودکار']);
-  if (t.ir) ms.push(['iran', GI.iran, stripEm(l.iran) || 'درگاه ایرانی', 'کارت‌های بانکی · آنی']);
-  $('pms').innerHTML = ms.map(function(m){ return '<button class="pm" data-pm="' + m[0] + '"><span class="gi">' + m[1] + '</span><b>' + esc(m[2]) + '</b><small>' + esc(m[3]) + '</small><span class="pg2">پرداخت</span></button>'; }).join('');
-  return ms.length;
-}
-function openPay(m){
-  var t = B.topup || {};
-  if (!t.pay) { toast('درگاه هنوز آماده نیست.'); return; }
-  var a = parseInt(digits($('tAmt').value), 10) || 0, d = initData(), h = '';
-  if (d) h = '#tgWebAppData=' + encodeURIComponent(d) + '&tgWebAppVersion=' + encodeURIComponent((TG && TG.version) || '7.0') + '&tgWebAppPlatform=' + encodeURIComponent((TG && TG.platform) || 'unknown');
-  tap('medium');
-  location.href = t.pay + '&m=' + m + '&th=num&back=num' + (a ? '&a=' + a : '') + h;
-}
-$('pms').addEventListener('click', function(ev){ var b = ev.target.closest('[data-pm]'); if (b) openPay(b.getAttribute('data-pm')); });
-
-function drawWallet(){
-  setBal(S.bal);
-  var t = B.topup || {}, min = tMin();
-  var qs = [min, 50000, 100000, 200000, 500000, 1000000].filter(function(v, i, a){ return v >= min && a.indexOf(v) === i; })
-    .sort(function(a, b){ return a - b; }).slice(0, 6);
-  $('qa').innerHTML = qs.map(function(v){ return '<button data-v="' + v + '">' + fa(v) + '</button>'; }).join('');
-  if (WAL.pre) { $('tAmt').value = fa(Math.max(min, WAL.pre)); WAL.pre = 0; }
-  markQa();
-  var h = '', nm = drawPms(), co = payOk();
-  if (co) h += '<div class="kvr"><span>' + ico('card', 'chev') + ' کارت به کارت</span><button class="cpy" id="cardCp">' + ico('copy') + '<span class="ltr">' + esc(t.card) + '</span></button></div>' +
-    (t.name ? '<div class="kvr"><span>به نام</span><b>' + esc(t.name) + '</b></div>' : '');
-  if (!co && !nm) h = '<div class="note bl">' + ico('alert') + '<span>روش پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>';
-  $('payInfo').innerHTML = h;
-  $('payInfo').classList.toggle('card', co);
-  $('payInfo').classList.toggle('hid', !h);
-  $('topNote').classList.toggle('hid', !co);
-  var cc = $('cardCp');
-  if (cc) cc.onclick = function(){ tap(); copy(digits(t.card), 'شماره کارت'); };
-  $('topBtn').classList.toggle('hid', !co);
-}
-function markQa(){
-  var v = Number(digits($('tAmt').value)) || 0;
-  [].forEach.call($('qa').children, function(b){ b.classList.toggle('on', Number(b.getAttribute('data-v')) === v); });
-}
-$('qa').addEventListener('click', function(ev){
-  var b = ev.target.closest('[data-v]');
-  if (!b) return;
-  tap();
-  $('tAmt').value = fa(Number(b.getAttribute('data-v')));
-  markQa();
-});
-$('tAmt').addEventListener('input', function(){
-  var v = digits(this.value).replace(/^0+/, '').slice(0, 10);
-  this.value = v ? fa(Number(v)) : '';
-  markQa();
-});
-$('topBtn').onclick = function(){
-  if (WAL.busy) return;
-  var amt = Number(digits($('tAmt').value)) || 0, min = tMin();
-  if (amt < min) { toast('حداقل مبلغ شارژ ' + fa(min) + ' تومان است.'); $('tAmt').focus(); return; }
-  WAL.busy = true;
-  tap('medium');
-  var b = this;
-  b.disabled = true;
-  api('topup', { amount: amt }, function(j){
-    WAL.busy = false; b.disabled = false;
-    $('tAmt').value = ''; markQa();
-    openSheet('ok', '<span class="fl ok">' + ico('check') + '</span><b>درخواست شارژ ثبت شد<small>' + fa(j.amount) + ' تومان</small></b>',
-      '<div class="note">' + ico('check') + '<span>' + esc(j.message || '') + '</span></div>' +
-      '<div class="kvr mt"><span>کد پیگیری</span><b class="ltr">' + esc(j.order) + '</b></div>' +
-      (B.bot ? '<button class="btn mt" id="toBot">' + ico('send') + 'رفتن به ربات و پرداخت</button>' : ''));
-    var tb = $('toBot');
-    if (tb) tb.onclick = function(){ openLink('https://t.me/' + B.bot); };
-  }, function(j){
-    WAL.busy = false; b.disabled = false;
-    toast((j && j.message) || 'ثبت نشد.');
-  });
-};
 
 function refLink(){ return (B.bot && S.uid) ? 'https://t.me/' + B.bot + '?start=ref' + S.uid : ''; }
 function drawMe(){
@@ -2504,7 +2381,6 @@ function axBoost(){
       toast('سرعت بیشتر شد! تقویت ' + fa(j.boost_n) + ' از ' + fa(AX.st.boost_max), true);
     }, function(j){
       toast((j && j.message) || 'انجام نشد.');
-      if (j && /موجودی/.test(j.message || '')) { WAL.pre = s.boost_price; }
     });
   });
 }

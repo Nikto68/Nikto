@@ -875,9 +875,10 @@ function payStateHandle($action, $msg, $uid, $chatId) {
 // ───────── صفحه‌ی درگاه (مینی‌اپِ پرداخت) ─────────
 
 function payBackUrl($k) {
-    if ($k === 'tgs' && function_exists('svUrl')) return svUrl('tg', 'wallet');
-    if ($k === 'igs' && function_exists('svUrl')) return svUrl('ig', 'wallet');
-    if ($k === 'num' && function_exists('maUrl')) return maUrl('wallet');
+    // کیف پول از مینی‌اپ‌ها برداشته شد؛ برگشت به خانه‌ی همان مینی‌اپ
+    if ($k === 'tgs' && function_exists('svUrl')) return svUrl('tg');
+    if ($k === 'igs' && function_exists('svUrl')) return svUrl('ig');
+    if ($k === 'num' && function_exists('maUrl')) return maUrl();
     return '';
 }
 

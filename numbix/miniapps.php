@@ -1022,26 +1022,6 @@ function maApiUrl() {
     return $b . (str_contains($b, '?') ? '&' : '?') . 'mapi=1';
 }
 
-function maTopupInfo() {
-    $w = cfg()['wallets'] ?? [];
-    $g = cfg()['gateway'] ?? [];
-    $card = trim((string)($w['card'] ?? ''));
-    return [
-        'on'   => $card !== '' ? 1 : 0,
-        'card' => $card,
-        'name' => trim((string)($w['card_name'] ?? '')),
-        'min'  => (float)(cfg()['topup_min'] ?? 10000),
-        'gw'   => (function_exists('gwOn') && gwOn()) ? 1 : 0,
-        'gwmin'=> (float)($g['min'] ?? 0),
-        'gwcoin' => strtoupper(trim((string)($g['coin'] ?? 'USDT'))),
-        'ir'   => (function_exists('irOn') && irOn()) ? 1 : 0,
-        'card_on' => (function_exists('cardOn') ? (cardOn() ? 1 : 0) : ($card !== '' ? 1 : 0)),
-        'pay'  => function_exists('payPageUrl') ? payPageUrl() : '',
-        'mins' => function_exists('tuMin') ? ['crypto' => tuMin('crypto'), 'iran' => tuMin('iran')] : [],
-        'lbl'  => function_exists('tuBtnText') ? ['crypto' => tuBtnText('crypto'), 'iran' => tuBtnText('iran'), 'card' => tuBtnText('card')] : [],
-    ];
-}
-
 function maSupportLink() {
     foreach ((array)(cfg()['support_methods'] ?? []) as $m) {
         if (empty($m['on']) || ($m['type'] ?? '') !== 'url') continue;
@@ -1543,7 +1523,6 @@ function maBoot() {
         'note'    => (string)$c['note'],
         'cats'    => $cat['cats'],
         'items'   => $cat['items'],
-        'topup'   => maTopupInfo(),
         'api'     => maApiUrl(),
         'sup'     => maSupportLink(),
         'supform' => maSupOn() ? 1 : 0,
@@ -1819,24 +1798,17 @@ function maApi() {
         maApiOut(['ok' => true, 'code' => $ccode, 'discount' => $cdisc]);
     }
 
-    if ($action === 'topup') {
-        if (!maRateOk('top', $uid, 5, 300))
-            maApiOut(['ok' => false, 'error' => 'rate_limited',
-                      'message' => 'درخواست شارژ زیاد شد. چند دقیقه بعد دوباره.'], 429);
-        $t = maTopupInfo();
-        if (empty($t['card_on']))
-            maApiOut(['ok' => false, 'error' => 'no_card',
-                      'message' => 'کارت به کارت فعال نیست؛ از «ارز دیجیتال» یا «درگاه ایرانی» شارژ کنید.'], 503);
-        $amt = round(maNum($body['amount'] ?? 0));
-        $why = topupAmountError($amt);
-        if ($why !== '') maApiOut(['ok' => false, 'error' => 'amount', 'message' => $why], 400);
-        $oid = createOrderAndAsk($uid, $uid, $uname, $amt, 'card');
-        if (!$oid)
-            maApiOut(['ok' => false, 'error' => 'failed',
-                      'message' => 'ثبت درخواست شارژ انجام نشد. با پشتیبانی تماس بگیرید.'], 500);
-        maApiOut(['ok' => true, 'order' => $oid, 'amount' => $amt,
-                  'message' => 'درخواست شارژ ثبت شد — فاکتور و مقصدِ پرداخت داخل ربات برایتان رفت؛ ' .
-                               'بعد از واریز، «ارسال رسید» را بزنید.']);
+    // شارژ داخلِ مینی‌اپ نیست؛ منوی «افزایش موجودی» تازه در چتِ ربات فرستاده می‌شود
+    if ($action === 'topup_bot') {
+        if (!maRateOk('tubot', $uid, 4, 120))
+            maApiOut(['ok' => false, 'error' => 'rate_limited', 'message' => 'چند لحظه بعد دوباره بزنید.'], 429);
+        if (!function_exists('startTopup')) maApiOut(['ok' => false, 'error' => 'off'], 503);
+        maApiOut(['ok' => true], 200, function () use ($uid) {
+            $old = (int)slotGet($uid, 'wallet');
+            if ($old) delMsg(BOT_TOKEN, $uid, $old);
+            slotClear($uid, 'wallet');
+            startTopup($uid, $uid);
+        });
     }
 
     if ($action === 'notes') {
