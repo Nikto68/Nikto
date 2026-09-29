@@ -1,4 +1,7 @@
 <?php
+// خطاهای PHP به کاربر نشان داده نشود (مسیرِ سرور و جزئیات لو نرود) — فقط در لاگِ سرور
+@ini_set('display_errors', '0');
+@ini_set('log_errors', '1');
 
 if (is_file(__DIR__ . '/config.local.php')) {
     require_once __DIR__ . '/config.local.php';

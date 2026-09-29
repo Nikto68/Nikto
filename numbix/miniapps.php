@@ -775,7 +775,9 @@ function maVerifyInitData($initData, &$reason = null, $maxAge = 0) {
     if ($matched === '') { $reason = 'bad_hash'; return null; }
 
     if ($maxAge <= 0) $maxAge = (int)(maCfg()['init_max_age'] ?? 86400);
-    if ($maxAge > 0 && !empty($q['auth_date'])) {
+    // تلگرام همیشه auth_date می‌فرستد؛ بدونِ آن، کهنگیِ داده قابلِ سنجش نیست
+    if (empty($q['auth_date']) || !ctype_digit((string)$q['auth_date'])) { $reason = 'no_date'; return null; }
+    if ($maxAge > 0) {
         $age = time() - (int)$q['auth_date'];
         if ($age > $maxAge)   { $reason = 'expired:' . $age;  return null; }
         if ($age < -86400)    { $reason = 'clock_skew:' . $age; return null; }

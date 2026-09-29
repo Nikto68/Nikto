@@ -1,4 +1,7 @@
 <?php
+// خطاهای PHP به کاربر نشان داده نشود (مسیرِ سرور و جزئیات لو نرود) — فقط در لاگِ سرور
+@ini_set('display_errors', '0');
+@ini_set('log_errors', '1');
 
 if (is_file(__DIR__ . '/config.local.php')) require_once __DIR__ . '/config.local.php';
 
@@ -101,6 +104,13 @@ if (!defined('MEMBERSHIP_LIB_ONLY') && (BOT_TOKEN === '' || ADMIN_ID <= 0)) {
 
 if (!is_dir(DATA_DIR)) @mkdir(DATA_DIR, 0755, true);
 dataDirLockdown();
+// لاگِ خطاهای PHP داخلِ پوشه‌ی بسته‌ی داده (نه فایلِ error_logِ عمومی کنارِ اسکریپت در هاست‌های cPanel)
+if (is_dir(DATA_DIR) && is_writable(DATA_DIR)) {
+    $__el = DATA_DIR . '/php_errors.log';
+    if (is_file($__el) && @filesize($__el) > 5 * 1048576) @rename($__el, $__el . '.1');
+    @ini_set('error_log', $__el);
+    unset($__el);
+}
 
 function dataDirLockdown() {
     $d = rtrim(DATA_DIR, '/');
@@ -2570,17 +2580,21 @@ function handleIpn() {
     $prov = strtolower(trim((string)($g['provider'] ?? 'oxapay')));
     $orderId = ''; $paid = false;
 
+    // امضا با کلیدِ خالی را هر کسی می‌تواند بسازد (= شارژِ مجانی) — بدونِ کلید/راز، IPN پذیرفته نمی‌شود.
+    // حالتِ «دلخواه» طرحِ امضا ندارد، پس تاییدِ خودکار از بیرون ندارد.
+    $secret = $prov === 'nowpayments' ? gwCleanKey($g['ipn_secret'] ?? '') : gwCleanKey($g['api_key'] ?? '');
+    if ($prov === 'custom' || strlen($secret) < 6) { http_response_code(403); echo 'off'; return; }
+
     if ($prov === 'nowpayments') {
         $sig = $_SERVER['HTTP_X_NOWPAYMENTS_SIG'] ?? '';
         $sorted = $d; ksort($sorted);
-        $calc = hash_hmac('sha512', json_encode($sorted, JSON_UNESCAPED_SLASHES),
-                          trim((string)$g['ipn_secret']));
+        $calc = hash_hmac('sha512', json_encode($sorted, JSON_UNESCAPED_SLASHES), $secret);
         if (!$sig || !hash_equals($calc, $sig)) { http_response_code(403); echo 'sig'; return; }
         $orderId = (string)($d['order_id'] ?? '');
         $paid = gwPaidStatus($d['payment_status'] ?? '');
     } else {
         $sig = $_SERVER['HTTP_HMAC'] ?? '';
-        $calc = hash_hmac('sha512', $raw, gwCleanKey($g['api_key'] ?? ''));
+        $calc = hash_hmac('sha512', $raw, $secret);
         if (!$sig || !hash_equals($calc, $sig)) { http_response_code(403); echo 'sig'; return; }
         $orderId = (string)($d['order_id'] ?? $d['orderId'] ?? '');
         $paid = gwPaidStatus($d['status'] ?? '');
@@ -2591,6 +2605,9 @@ function handleIpn() {
     }
 
     if ($orderId === '') { http_response_code(400); echo 'no order'; return; }
+    // فقط سفارشی که واقعا با فاکتورِ همین درگاه ساخته شده (نه کارت‌به‌کارت یا درگاهِ ایرانی)
+    $oi = Order::get($orderId);
+    if (!$oi || empty($oi['gw']['invoice']) || in_array((string)($oi['method'] ?? ''), ['card', 'iran'], true)) { http_response_code(200); echo 'ignored'; return; }
     if ($paid) gwSettle($orderId);
     http_response_code(200);
     echo 'ok';
@@ -2877,7 +2894,23 @@ function admLeakTestText() {
               ($open ? ' — <b>از بیرون باز است!</b>' : ' — بسته') . "\n";
     }
 
+    // لاگ‌ها: فایلِ error_logِ عمومیِ cPanel کنارِ اسکریپت و لاگِ داخلِ پوشه‌ی داده
+    $isLog = fn($b) => is_string($b) && preg_match('/^\[\d{1,2}-\w{3}-\d{4}|PHP (Warning|Notice|Fatal|Parse|Deprecated)|\[shop-bot\]/m', $b);
+    foreach (['error_log' => $root . '/error_log', $dir . '/php_errors.log' => $root . '/' . $dir . '/php_errors.log'] as $lbl => $url) {
+        [$body, ] = maHttpRaw($url, 8);
+        $open = $isLog($body);
+        if ($open) $leaks[] = $lbl;
+        $t .= ($open ? '🔴' : '✅') . ' <code>' . h($lbl) . '</code>' . ($open ? ' — <b>لاگِ خطا از بیرون خوانده می‌شود!</b>' : ' — بسته') . "\n";
+    }
+    // اگر PHP روی هاست درست اجرا نشود، سورسِ config.local.php (توکن و رمزها) دیده می‌شود
+    [$body, ] = maHttpRaw($root . '/config.local.php', 8);
+    $open = is_string($body) && (str_contains($body, 'BOT_TOKEN') || str_contains($body, '<?php'));
+    if ($open) $leaks[] = 'config.local.php';
+    $t .= ($open ? '🔴' : '✅') . ' <code>config.local.php</code>' . ($open ? ' — <b>سورس و توکن دیده می‌شود! PHP اجرا نمی‌شود</b>' : ' — اجرا می‌شود، چیزی دیده نمی‌شود') . "\n";
+
     if ($leaks) {
+        if (in_array('error_log', $leaks, true))
+            $t .= "\n🗑 فایلِ <code>error_log</code> کنارِ اسکریپت‌ها را از هاست پاک کنید؛ از این به بعد لاگ داخلِ پوشه‌ی داده نوشته می‌شود.\n";
         $t .= "\n🚨 <b>همین حالا باید بسته شود.</b>\n";
         $t .= "این فایل‌ها شماره کارت، کلید API، و موجودی همه‌ی کاربران را دارند.\n\n";
         $t .= "<b>اگر سرورتان nginx است</b>، این را به کانفیگ اضافه کنید:\n";
@@ -5039,6 +5072,60 @@ function showOrders($uid, $chatId, $replyTo = null) {
     }
     panelShow($uid, $chatId, 'menu', mb_substr($t, 0, 3900), $kb, $replyTo);
 }
+
+// قفلِ ورود (مشترک بینِ پنلِ وب و setup.php — هر دو یک رمز و یک شمارنده‌ی تلاشِ ناموفق دارند)
+if (!defined('PANEL_MAX_TRIES'))      define('PANEL_MAX_TRIES', 6);
+if (!defined('PANEL_MAX_TRIES_ALL'))  define('PANEL_MAX_TRIES_ALL', 30);
+if (!defined('PANEL_LOCK_SECONDS'))   define('PANEL_LOCK_SECONDS', 900);
+if (!defined('PANEL_IDLE_SECONDS'))   define('PANEL_IDLE_SECONDS', 7200);
+
+function panelIp() {
+    return substr(hash('sha256', (string)($_SERVER['REMOTE_ADDR'] ?? '0')), 0, 24);
+}
+
+function panelLockLeft() {
+    $a = load('panel_lock');
+    $now = time();
+
+    $r = $a[panelIp()] ?? null;
+    if (is_array($r) && (int)($r['n'] ?? 0) >= PANEL_MAX_TRIES) {
+        $left = PANEL_LOCK_SECONDS - ($now - (int)($r['at'] ?? 0));
+        if ($left > 0) return $left;
+    }
+
+    $g = $a['_all'] ?? null;
+    if (is_array($g) && (int)($g['n'] ?? 0) >= PANEL_MAX_TRIES_ALL) {
+        $left = PANEL_LOCK_SECONDS - ($now - (int)($g['at'] ?? 0));
+        if ($left > 0) return $left;
+    }
+    return 0;
+}
+
+function panelNoteFail() {
+    $k = panelIp();
+    mutate('panel_lock', function (&$a) use ($k) {
+        foreach ([$k, '_all'] as $kk) {
+            $r = $a[$kk] ?? ['n' => 0, 'at' => 0];
+            if (time() - (int)$r['at'] > PANEL_LOCK_SECONDS) $r = ['n' => 0, 'at' => 0];
+            $r['n'] = (int)$r['n'] + 1;
+            $r['at'] = time();
+            $a[$kk] = $r;
+        }
+        foreach ($a as $kk => $vv)
+            if ($kk !== '_all' && time() - (int)($vv['at'] ?? 0) > 86400) unset($a[$kk]);
+    });
+}
+
+function panelClearFails() {
+    $k = panelIp();
+    mutate('panel_lock', function (&$a) use ($k) { unset($a[$k], $a['_all']); });
+}
+
+function panelPassIn($s) {
+    $s = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}\x{FEFF}\x{00A0}]/u', '', (string)$s);
+    return trim(norm_fa_digits((string)$s));
+}
+
 
 if (defined('MEMBERSHIP_LIB_ONLY')) return;
 

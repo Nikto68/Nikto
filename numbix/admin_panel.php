@@ -1,4 +1,7 @@
 <?php
+// خطاهای PHP به کاربر نشان داده نشود (مسیرِ سرور و جزئیات لو نرود) — فقط در لاگِ سرور
+@ini_set('display_errors', '0');
+@ini_set('log_errors', '1');
 
 if (is_file(__DIR__ . '/config.local.php')) require_once __DIR__ . '/config.local.php';
 if (!defined('ADMIN_PASSWORD'))
@@ -26,58 +29,11 @@ session_set_cookie_params([
 ]);
 session_name('mybot_panel');
 session_start();
-
-define('PANEL_MAX_TRIES', 6);
-define('PANEL_MAX_TRIES_ALL', 30);
-define('PANEL_LOCK_SECONDS', 900);
-define('PANEL_IDLE_SECONDS', 7200);
-
-function panelIp() {
-    return substr(hash('sha256', (string)($_SERVER['REMOTE_ADDR'] ?? '0')), 0, 24);
-}
-
-function panelLockLeft() {
-    $a = load('panel_lock');
-    $now = time();
-
-    $r = $a[panelIp()] ?? null;
-    if (is_array($r) && (int)($r['n'] ?? 0) >= PANEL_MAX_TRIES) {
-        $left = PANEL_LOCK_SECONDS - ($now - (int)($r['at'] ?? 0));
-        if ($left > 0) return $left;
-    }
-
-    $g = $a['_all'] ?? null;
-    if (is_array($g) && (int)($g['n'] ?? 0) >= PANEL_MAX_TRIES_ALL) {
-        $left = PANEL_LOCK_SECONDS - ($now - (int)($g['at'] ?? 0));
-        if ($left > 0) return $left;
-    }
-    return 0;
-}
-
-function panelNoteFail() {
-    $k = panelIp();
-    mutate('panel_lock', function (&$a) use ($k) {
-        foreach ([$k, '_all'] as $kk) {
-            $r = $a[$kk] ?? ['n' => 0, 'at' => 0];
-            if (time() - (int)$r['at'] > PANEL_LOCK_SECONDS) $r = ['n' => 0, 'at' => 0];
-            $r['n'] = (int)$r['n'] + 1;
-            $r['at'] = time();
-            $a[$kk] = $r;
-        }
-        foreach ($a as $kk => $vv)
-            if ($kk !== '_all' && time() - (int)($vv['at'] ?? 0) > 86400) unset($a[$kk]);
-    });
-}
-
-function panelClearFails() {
-    $k = panelIp();
-    mutate('panel_lock', function (&$a) use ($k) { unset($a[$k], $a['_all']); });
-}
-
-function panelPassIn($s) {
-    $s = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}\x{FEFF}\x{00A0}]/u', '', (string)$s);
-    return trim(norm_fa_digits((string)$s));
-}
+// پنل نباید داخلِ iframeِ سایتِ دیگری باز شود (clickjacking) و آدرسش به سایت‌های بیرونی لو نرود
+header('X-Frame-Options: DENY');
+header("Content-Security-Policy: frame-ancestors 'none'");
+header('Referrer-Policy: no-referrer');
+header('X-Content-Type-Options: nosniff');
 
 function panelFontCss() {
     $dir  = __DIR__ . '/fonts';
@@ -204,8 +160,8 @@ $CSRF = $_SESSION['csrf'];
 
 // عکسِ کارتِ ملیِ احراز هویت — فقط برای مدیرِ واردشده
 if (isset($_GET['kycimg']) && function_exists('kycDir')) {
-    $f = kycDir() . '/' . (int)$_GET['kycimg'] . '.img';
-    if (!is_file($f)) { http_response_code(404); exit; }
+    $f = kycImgPath((int)$_GET['kycimg']);
+    if ($f === '' || !is_file($f)) { http_response_code(404); exit; }
     $bin = (string)file_get_contents($f);
     $mime = str_starts_with($bin, "\x89PNG") ? 'image/png' : (str_starts_with($bin, 'RIFF') ? 'image/webp' : 'image/jpeg');
     header('Content-Type: ' . $mime);
@@ -2822,7 +2778,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
             روش: <?= ($KK['mode'] ?? 'phone') === 'docs' ? 'کدِ ملی + عکس' : 'شماره‌ی موبایل (تاییدِ مدیر)' ?><br>
             <span class="muted"><?= !empty($KK['at']) ? h(date('Y-m-d H:i', (int)$KK['at'])) : '' ?></span>
           </div>
-          <div><?php if (is_file(kycDir() . '/' . (int)$ku . '.img')): ?>
+          <div><?php if (kycImgPath((int)$ku) !== ''): ?>
             <a href="?kycimg=<?= (int)$ku ?>" target="_blank" rel="noopener"><img src="?kycimg=<?= (int)$ku ?>" alt="" style="max-width:100%;max-height:220px;border-radius:12px;border:1px solid var(--border)"></a>
           <?php elseif (($KK['mode'] ?? 'phone') === 'docs'): ?><span class="muted">عکس در ربات برای مدیر فرستاده شده.</span><?php endif; ?></div>
         </div>

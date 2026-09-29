@@ -1,4 +1,7 @@
 <?php
+// خطاهای PHP به کاربر نشان داده نشود (مسیرِ سرور و جزئیات لو نرود) — فقط در لاگِ سرور
+@ini_set('display_errors', '0');
+@ini_set('log_errors', '1');
 
 if (is_file(__DIR__ . '/config.local.php')) require_once __DIR__ . '/config.local.php';
 
@@ -20,15 +23,29 @@ session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'httponly' => true,
     'samesite' => 'Strict', 'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')]);
 session_name('mybot_panel');
 session_start();
+// پنل نباید داخلِ iframeِ سایتِ دیگری باز شود (clickjacking) و آدرسش به سایت‌های بیرونی لو نرود
+header('X-Frame-Options: DENY');
+header("Content-Security-Policy: frame-ancestors 'none'");
+header('Referrer-Policy: no-referrer');
+header('X-Content-Type-Options: nosniff');
 
+$setupErr = '';
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['password'])) {
-    usleep(300000);
-    if (hash_equals(ADMIN_PASSWORD, (string)$_POST['password'])) {
+    // همان قفلِ پنلِ وب: چند تلاشِ ناموفق = بسته شدنِ ورود (این‌جا راهِ دورزدنِ قفل نیست)
+    if (($left = panelLockLeft()) > 0) {
+        $setupErr = 'به‌خاطر تلاش‌های ناموفق، ورود تا ' . ceil($left / 60) . ' دقیقه دیگر بسته است.';
+    } elseif (hash_equals(ADMIN_PASSWORD, panelPassIn($_POST['password']))) {
+        panelClearFails();
         session_regenerate_id(true);
         $_SESSION['logged_in'] = true;
+        $_SESSION['seen'] = time();
         $_SESSION['csrf'] = bin2hex(random_bytes(16));
+        header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?')); exit;
+    } else {
+        panelNoteFail();
+        usleep(400000);
+        $setupErr = panelLockLeft() > 0 ? 'رمز اشتباه بود؛ ورود چند دقیقه بسته شد.' : 'رمز اشتباه است.';
     }
-    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?')); exit;
 }
 if (empty($_SESSION['logged_in'])) {
     ?><!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
@@ -41,6 +58,7 @@ if (empty($_SESSION['logged_in'])) {
     border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:700;font-family:inherit;
     font-size:14px;cursor:pointer}</style></head><body>
     <form method="post"><h1>🚑 راه‌اندازی و عیب‌یابی</h1>
+    <?php if ($setupErr !== ''): ?><p style="color:#fca5a5;font-size:13px"><?= htmlspecialchars($setupErr, ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
     <input type="password" name="password" placeholder="رمز پنل" autofocus>
     <button>ورود</button></form></body></html><?php
     exit;

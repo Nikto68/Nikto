@@ -632,7 +632,22 @@ function kycStart($uid, $chatId, $msgId = null) {
     tuShow($uid, $chatId, T('kyc_code_ask'), inlineKb([[tuBtn('cancel', 'cb', 'tux')]]), null, $msgId);
 }
 
-function kycDir() { return DATA_DIR . '/kyc'; }
+function kycDir() {
+    $d = DATA_DIR . '/kyc';
+    if (is_dir($d)) {
+        // حتی اگر پوشه‌ی داده داخلِ سایت باشد، این پوشه جداگانه بسته است
+        if (!is_file($d . '/.htaccess'))  @file_put_contents($d . '/.htaccess', "Require all denied\n<IfModule !mod_authz_core.c>\nOrder allow,deny\nDeny from all\n</IfModule>\n");
+        if (!is_file($d . '/index.html')) @file_put_contents($d . '/index.html', '');
+    }
+    return $d;
+}
+// نامِ فایلِ عکسِ کارتِ ملی تصادفی است (نه آیدیِ کاربر) تا حدس‌زدنی نباشد؛ فایل‌های قدیمیِ «آیدی.img» هم خوانده می‌شوند
+function kycImgPath($uid) {
+    $n = (string)((getUser((int)$uid) ?: [])['kyc']['img'] ?? '');
+    if ($n !== '' && preg_match('/^[a-f0-9]{32}\.img$/', $n) && is_file(kycDir() . '/' . $n)) return kycDir() . '/' . $n;
+    $old = kycDir() . '/' . (int)$uid . '.img';
+    return is_file($old) ? $old : '';
+}
 
 function kycSavePhoto($uid, $fileId) {
     $f  = tg(BOT_TOKEN, 'getFile', ['file_id' => (string)$fileId], 10);
@@ -643,8 +658,13 @@ function kycSavePhoto($uid, $fileId) {
     $bin = curl_exec($ch);
     curl_close($ch);
     if (!is_string($bin) || strlen($bin) < 64 || strlen($bin) > 8000000) return false;
-    if (!is_dir(kycDir())) @mkdir(kycDir(), 0700, true);
-    return @file_put_contents(kycDir() . '/' . (int)$uid . '.img', $bin) !== false;
+    if (!is_dir(DATA_DIR . '/kyc')) @mkdir(DATA_DIR . '/kyc', 0700, true);
+    $name = bin2hex(random_bytes(16)) . '.img';
+    if (@file_put_contents(kycDir() . '/' . $name, $bin) === false) return false;
+    $prev = kycImgPath($uid);
+    mutateUser($uid, function (&$u) use ($name) { if ($u !== null) $u['kyc']['img'] = $name; });
+    if ($prev !== '' && basename($prev) !== $name) @unlink($prev);
+    return true;
 }
 
 function kycQueue(callable $fn = null) {
@@ -656,7 +676,8 @@ function kycSubmit($uid, $uname, $fname, $code, $fileId, $isDoc) {
     mutateUser($uid, function (&$u) use ($code, $fileId, $isDoc) {
         if ($u === null) return;
         $u['kyc'] = ['st' => 'pending', 'code' => (string)$code, 'photo' => (string)$fileId, 'doc' => $isDoc ? 1 : 0,
-                     'phone' => (string)($u['phone'] ?? ''), 'mode' => $fileId !== '' ? 'docs' : 'phone', 'at' => time()];
+                     'phone' => (string)($u['phone'] ?? ''), 'mode' => $fileId !== '' ? 'docs' : 'phone', 'at' => time(),
+                     'img' => (string)($u['kyc']['img'] ?? '')];
     });
     kycQueue(function (&$q) use ($uid) { $q[(string)$uid] = time(); });
     if ($fileId !== '') kycSavePhoto($uid, $fileId);
