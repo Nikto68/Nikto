@@ -620,7 +620,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $n['prods']    = $pr ?: ['telegram'];
             $n['pick']     = !empty($p['pick']);
             $n['pick_n']   = max(1, min(60, (int)($p['pick_n'] ?? 12)));
-            $n['pick_ops'] = max(1, min(5, (int)($p['pick_ops'] ?? 1)));
+            $n['pick_ops'] = max(1, min(5, (int)($p['pick_ops'] ?? 2)));
+            $n['all']      = !empty($p['all']);
             $n['api']['nl_svc_ig'] = trim((string)($p['nl_svc_ig'] ?? ''));
             $n['api']['nl_svc_wa'] = trim((string)($p['nl_svc_wa'] ?? ''));
             if (numBaseForeign($n['api']['base'], $n['provider'])) $n['api']['base'] = '';
@@ -2158,10 +2159,12 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       </div>
       <div class="grid2">
         <div><label class="chk" style="margin-top:4px"><input type="checkbox" name="pick" value="1" <?= !empty($NUM['pick']) ? 'checked' : '' ?>>
-          🎯 گلچین — فقط بهترین کشورها (موجودی، نرخِ موفقیت و قیمت)</label>
-          <div class="hint">خاموش = همه‌ی کشورها و اپراتورها وارد می‌شوند.</div></div>
+          🎯 گلچین — بهترین کشورها (موجودی، نرخِ موفقیت و قیمت) اول نشان داده شوند</label>
+          <label class="chk" style="margin-top:8px"><input type="checkbox" name="all" value="1" <?= !empty($NUM['all']) ? 'checked' : '' ?>>
+            بقیه‌ی کشورها هم وارد شوند (بعد از محبوب‌ها و با جستجو پیدا می‌شوند)</label>
+          <div class="hint">گلچین خاموش = همه‌ی کشورها و اپراتورها بدونِ ترتیبِ ویژه.</div></div>
         <div class="grid2" style="gap:8px">
-          <div><label>کشور برای هر برنامه</label><input name="pick_n" type="number" min="1" max="60" value="<?= (int)$NUM['pick_n'] ?>"></div>
+          <div><label>کشورِ محبوب برای هر برنامه</label><input name="pick_n" type="number" min="1" max="60" value="<?= (int)$NUM['pick_n'] ?>"></div>
           <div><label>اپراتور در هر کشور</label><input name="pick_ops" type="number" min="1" max="5" value="<?= (int)$NUM['pick_ops'] ?>"></div>
         </div>
       </div>

@@ -108,6 +108,7 @@ function maCatalogPublic() {
             'r' => (int)($i['order'] ?? 999),
             'pr' => (string)($i['pr'] ?? '') ?: (function_exists('numProdOfSid') ? numProdOfSid((string)($i['svc'] ?? '')) : 'telegram'),
         ];
+        if (!empty($i['hot'])) $items[count($items) - 1]['h'] = 1;
     }
 
     $cats = [];
@@ -124,6 +125,7 @@ function maCatalogPublic() {
             'from' => (float)$from[$id],
             'sold' => (int)($sold[$id] ?? 0),
             'r'    => $pos,
+            'en'   => (string)($c['code'] ?? ''),
         ];
     }
 

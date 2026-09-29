@@ -123,7 +123,8 @@ function numDefaults() {
         'prods'  => ['telegram', 'instagram', 'whatsapp'],
         'pick'   => true,
         'pick_n' => 12,
-        'pick_ops' => 1,
+        'pick_ops' => 2,
+        'all'    => true,
         'api'   => [
             'on'      => false,
             'token'   => '',
@@ -146,7 +147,7 @@ function numCfg() {
 
     $out = array_replace($d, array_intersect_key($c,
         ['wait' => 1, 'poll' => 1, 'markup' => 1, 'sync_price' => 1, 'provider' => 1,
-         'prods' => 1, 'pick' => 1, 'pick_n' => 1, 'pick_ops' => 1]));
+         'prods' => 1, 'pick' => 1, 'pick_n' => 1, 'pick_ops' => 1, 'all' => 1]));
     $out['api'] = array_replace($d['api'],
         array_intersect_key(is_array($c['api'] ?? null) ? $c['api'] : [],
                             ['on'=>1,'token'=>1,'nl_key'=>1,'nl_svc'=>1,'nl_svc_ig'=>1,'nl_svc_wa'=>1,
@@ -1414,16 +1415,19 @@ function numPick(array $rows, $n = 12, $perCountry = 1) {
         $top = $pick[0];
         $best[$co] = ['rows' => $pick, 'rate' => $maxRate, 'usd' => (float)$top['usd'], 'rank' => (int)$top['rank'], 'cnt' => (int)$top['count']];
     }
-    // کشورهایی که نرخِ موفقیتشان خیلی پایین است کنار می‌روند (اگر نرخ گزارش شده باشد)
-    $withRate = array_filter($best, fn($b) => $b['rate'] > 0);
-    if (count($withRate) >= $n) $best = array_filter($best, fn($b) => $b['rate'] <= 0 || $b['rate'] >= 40);
     uasort($best, function ($x, $y) {
         $sx = ($x['rank'] < 500 ? 30 : 0) + min(100, $x['rate']) + min(20, $x['cnt'] / 50);
         $sy = ($y['rank'] < 500 ? 30 : 0) + min(100, $y['rate']) + min(20, $y['cnt'] / 50);
         return [$sy, $x['usd']] <=> [$sx, $y['usd']];
     });
     $out = [];
-    foreach (array_slice($best, 0, $n, true) as $b) foreach ($b['rows'] as $r) $out[] = $r;
+    $k = 0;
+    $all = !empty(numVal('all', true));
+    foreach ($best as $b) {
+        $feat = $k++ < $n;
+        if (!$feat && !$all) break;
+        foreach ($b['rows'] as $r) { $r['feat'] = $feat; $out[] = $r; }
+    }
     return $out;
 }
 
@@ -1865,6 +1869,7 @@ function numImport(array $countries, array $rows, $markup = 0, $syncPrice = null
                 if ($catId !== '') $a['items'][$k]['cat'] = $catId;
                 $a['items'][$k]['prov'] = numProv();
                 $a['items'][$k]['pr'] = (string)($r['prod'] ?? 'telegram');
+                $a['items'][$k]['hot'] = !empty($r['feat']);
                 $ne = trim((string)($a['items'][$k]['emoji'] ?? ''));
                 if (($ne === '' || $ne === '🌍' || $ne === '☎️') && (string)($r['flag'] ?? '🌍') !== '🌍')
                     $a['items'][$k]['emoji'] = (string)$r['flag'];
@@ -1876,7 +1881,7 @@ function numImport(array $countries, array $rows, $markup = 0, $syncPrice = null
 
             $a['items'][] = [
                 'id' => 'i' . bin2hex(random_bytes(3)), 'cat' => $catId, 'svc' => $r['sid'],
-                'prov' => numProv(), 'pr' => (string)($r['prod'] ?? 'telegram'),
+                'prov' => numProv(), 'pr' => (string)($r['prod'] ?? 'telegram'), 'hot' => !empty($r['feat']),
                 'emoji' => (string)($r['flag'] ?? '☎️'),
                 'name' => $r['name'],
                 'price' => numRound100($r['price'] * $mul), 'badge' => '',

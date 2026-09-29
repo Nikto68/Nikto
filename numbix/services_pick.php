@@ -349,7 +349,8 @@ function spPublic($app) {
             }
             $it = ['i' => 'k:' . $id, 'c' => $d['dc'], 'n' => $title, 'b' => $d['badge'], 't' => $d['tone'], 'p' => $min,
                    'mn' => min(array_column($em, 'mn')), 'mx' => max(array_column($em, 'mx')), 'r' => 0, 'y' => 'emoji', 'em' => $em,
-                   'f' => [svFaDigits(count($em)) . ' ایموجی', 'ایموجی را از کیبورد بزنید']];
+                   'f' => [implode(' ', array_slice(array_column($em, 'e'), 0, 12)) . (count($em) > 12 ? ' …' : ''),
+                           svFaDigits(count($em)) . ' ایموجی — از کیبورد بزنید']];
         } else {
             $s = $d['svc'];
             $p = (float)($cfg['price'] ?? 0) > 0 ? svRound((float)$cfg['price']) : $s['_p'];
@@ -366,6 +367,8 @@ function spPublic($app) {
         if (!isset($from[$c]) || $it['p'] < $from[$c]) $from[$c] = $it['p'];
         $items[] = $it;
     }
+    // قیمت‌ها از کف شروع می‌شوند و بالا می‌روند
+    usort($items, fn($a, $b) => $a['p'] <=> $b['p']);
     $outC = [];
     foreach ($cats as $id => [$name, $ic]) {
         if (empty($n[$id])) continue;

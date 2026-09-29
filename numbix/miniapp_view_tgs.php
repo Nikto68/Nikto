@@ -19,11 +19,13 @@ __FONT__
   --ink:#EAF6FF;--dim:#8FA9C7;--dim2:#5F7B9B;
   --tg:#2AABEE;--sky:#38BDF8;--cy:#5EEAD4;--vi:#A78BFA;--gold:#FCD34D;--red:#FB7185;--ok:#34D399;
   --grad:linear-gradient(120deg,#2AABEE 0%,#38BDF8 45%,#5EEAD4 100%);
-  --safe:env(safe-area-inset-bottom,0px);--top:0px;color-scheme:dark;
+  --z:.9;--safe:calc(env(safe-area-inset-bottom,0px) / .9);--top:0px;color-scheme:dark;
   --dots:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cg fill='%237DD3FC'%3E%3Ccircle cx='22' cy='38' r='1.2' opacity='.8'/%3E%3Ccircle cx='96' cy='12' r='.8' opacity='.6'/%3E%3Ccircle cx='160' cy='70' r='1.4' opacity='.5'/%3E%3Ccircle cx='250' cy='30' r='.9' opacity='.8'/%3E%3Ccircle cx='280' cy='120' r='1.1' opacity='.55'/%3E%3Ccircle cx='200' cy='160' r='.8' opacity='.7'/%3E%3Ccircle cx='60' cy='140' r='1' opacity='.5'/%3E%3Ccircle cx='120' cy='210' r='1.3' opacity='.65'/%3E%3Ccircle cx='30' cy='250' r='.8' opacity='.7'/%3E%3Ccircle cx='230' cy='240' r='1.2' opacity='.6'/%3E%3Ccircle cx='170' cy='290' r='.9' opacity='.5'/%3E%3Ccircle cx='90' cy='280' r='.7' opacity='.8'/%3E%3C/g%3E%3Cg fill='%235EEAD4'%3E%3Ccircle cx='140' cy='120' r='1' opacity='.6'/%3E%3Ccircle cx='270' cy='200' r='1.1' opacity='.5'/%3E%3Ccircle cx='50' cy='90' r='.9' opacity='.7'/%3E%3C/g%3E%3C/svg%3E")
 }
 html.scr .sky *{animation-play-state:paused!important}
-html.fs{--top:calc(var(--tg-content-safe-area-inset-top,var(--tg-safe-area-inset-top,34px)) + 46px)}
+html.fs{--top:calc((var(--tg-content-safe-area-inset-top,var(--tg-safe-area-inset-top,34px)) + 46px) / .9)}
+/* کلِ مینی‌اپ کمی کوچک‌تر (عقب‌تر) دیده شود */
+html{zoom:.9}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{background:var(--bg);color:var(--ink);min-height:100%}
 body{font-family:Vazirmatn,Vazir,Tahoma,system-ui,sans-serif;font-size:13px;line-height:1.7;overflow-x:hidden;
@@ -78,7 +80,7 @@ svg{display:block}
 .sky .tw:nth-of-type(7){left:26%;top:88%;animation-delay:-2s}
 @keyframes twk{0%,100%{opacity:.15;transform:scale(.6)}50%{opacity:1;transform:scale(1.3)}}
 
-.app{position:relative;z-index:2;max-width:480px;margin:0 auto;padding:calc(var(--top) + 8px) 14px calc(30px + var(--safe));overflow-x:clip}
+.app{position:relative;z-index:2;max-width:480px;margin:0 auto;padding:calc(var(--top) + 8px) 14px calc(100px + var(--safe));overflow-x:clip}
 
 .hd0{position:sticky;top:calc(var(--top) + 6px);z-index:30;margin-bottom:12px}
 .hd0:before{content:"";position:fixed;left:0;right:0;top:0;height:calc(var(--top) + 6px);z-index:-1;pointer-events:none;
@@ -109,16 +111,17 @@ svg{display:block}
 .ib{width:36px;height:36px;flex:0 0 auto;border-radius:12px;display:grid;place-items:center;border:1px solid var(--line);background:rgba(255,255,255,.04)}
 .ib svg{width:18px;height:18px;color:var(--cy)}
 
-.tabs{position:relative;display:grid;grid-template-columns:repeat(4,1fr);margin-top:8px;padding:3px;border-radius:15px;
-  background:rgba(2,10,22,.55);border:1px solid var(--line)}
-.tabs button{position:relative;z-index:1;height:36px;border-radius:12px;font-size:11.5px;font-weight:800;color:var(--dim);
-  display:flex;align-items:center;justify-content:center;gap:5px;transition:color .25s}
-.tabs button svg{width:16px;height:16px}
+.tabs{position:fixed;left:12px;right:12px;bottom:calc(10px + var(--safe));z-index:30;max-width:456px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);
+  height:64px;padding:5px;border-radius:24px;border:1px solid var(--line2);
+  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02)),#061328;
+  box-shadow:0 22px 44px -16px #000,inset 0 1px 0 rgba(255,255,255,.09)}
+.tabs button{position:relative;z-index:1;height:100%;border-radius:19px;font-size:10.5px;font-weight:800;color:var(--dim);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:color .25s}
+.tabs button svg{width:21px;height:21px}
 .tabs button.on{color:#03101F}
-.tabs .ind{position:absolute;z-index:0;top:3px;bottom:3px;right:3px;width:calc((100% - 6px)/4);border-radius:12px;overflow:hidden;overflow:clip;
-  background:var(--grad);box-shadow:0 6px 18px -6px rgba(42,171,238,.9);transition:transform .38s cubic-bezier(.3,.9,.3,1)}
-.tabs .ind:after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:shine 4.5s ease-in-out infinite}
-.tabs .bd{position:absolute;top:2px;left:6px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--gold);
+.tabs .ind{position:absolute;z-index:0;top:5px;bottom:5px;right:5px;width:calc((100% - 10px)/4);border-radius:19px;overflow:hidden;overflow:clip;
+  background:var(--grad);box-shadow:0 8px 20px -6px rgba(42,171,238,.9);transition:transform .38s cubic-bezier(.3,.9,.3,1)}
+.tabs .bd{position:absolute;top:5px;left:calc(50% - 24px);min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--gold);
   color:#1a1300;font-size:9.5px;font-weight:900;display:none;place-items:center}
 .tabs .bd.on{display:grid}
 
@@ -280,7 +283,7 @@ svg{display:block}
 .fc.ok{color:var(--ok);background:rgba(52,211,153,.09);border-color:rgba(52,211,153,.24)}
 .fc.no{color:var(--dim);background:rgba(143,169,199,.07);border-color:rgba(143,169,199,.16)}
 .fc.hot{color:var(--gold);background:rgba(252,211,77,.08);border-color:rgba(252,211,77,.22)}
-.fc.em{font-size:13px;letter-spacing:1px}
+.fc.em{font-size:16px;letter-spacing:2px;height:30px}
 .prd .pb{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:11px;border-top:1px dashed rgba(125,211,252,.2)}
 .prd .pr{min-width:0}
 .prd .pr b{font-size:19px;font-weight:900;line-height:1.2;background:linear-gradient(90deg,#E0F2FE,#5EEAD4);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -421,7 +424,7 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .res b{display:block;font-size:15px;font-weight:900}
 .res small{font-size:12px;color:var(--cy);font-weight:800}
 
-.toast{position:fixed;left:16px;right:16px;bottom:calc(20px + var(--safe));z-index:60;max-width:448px;margin:0 auto;display:flex;align-items:center;gap:9px;
+.toast{position:fixed;left:16px;right:16px;bottom:calc(88px + var(--safe));z-index:60;max-width:448px;margin:0 auto;display:flex;align-items:center;gap:9px;
   padding:12px 14px;border-radius:16px;background:rgba(12,32,60,.96);border:1px solid var(--line2);font-size:12px;font-weight:700;
   transform:translate3d(0,140%,0);visibility:hidden;transition:transform .3s cubic-bezier(.2,.85,.25,1),visibility 0s linear .3s;box-shadow:0 18px 40px -18px #000}
 .toast.on{transform:none;visibility:visible;transition:transform .3s cubic-bezier(.2,.85,.25,1)}
@@ -536,13 +539,6 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
         <div class="who"><b id="uName">—</b><small><i class="dot"></i><span>آنلاین · ثبتِ خودکار</span></small></div>
         <button class="bal" id="balBtn"><span id="bal">…</span><em>تومان</em><i><svg><use href="#i-plus"/></svg></i></button>
       </div>
-      <nav class="tabs" id="tabs">
-        <span class="ind" id="ind"></span>
-        <button data-go="home" class="on"><svg><use href="#i-home"/></svg>خانه</button>
-        <button data-go="list"><svg><use href="#i-grid"/></svg>سرویس‌ها</button>
-        <button data-go="orders"><svg><use href="#i-list"/></svg>سفارش‌ها<span class="bd" id="ordN"></span></button>
-        <button data-go="wallet"><svg><use href="#i-wallet"/></svg>کیف پول</button>
-      </nav>
     </header>
   </div>
 
@@ -562,8 +558,6 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
     <div class="tick"><div class="tr" id="tick"></div></div>
     <div class="hd"><h3>دسته‌بندی‌ها</h3></div>
     <div class="bento" id="bento"></div>
-    <div class="hd" id="popH"><h3>پیشنهادِ امروز</h3><button data-go="list">همه<svg><use href="#i-chev"/></svg></button></div>
-    <div class="list" id="pop"></div>
     <div class="hd"><h3>چطور کار می‌کند؟</h3></div>
     <div class="steps">
       <div><i>۱</i><b>سرویس را بزن</b><small>ممبر، بازدید، …</small></div>
@@ -598,6 +592,13 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
   </section>
 </div>
 
+<nav class="tabs" id="tabs">
+  <span class="ind" id="ind"></span>
+  <button data-go="home" class="on"><svg><use href="#i-home"/></svg>خانه</button>
+  <button data-go="list"><svg><use href="#i-grid"/></svg>سرویس‌ها</button>
+  <button data-go="orders"><svg><use href="#i-list"/></svg>سفارش‌ها<span class="bd" id="ordN"></span></button>
+  <button data-go="wallet"><svg><use href="#i-wallet"/></svg>کیف پول</button>
+</nav>
 <div class="ov" id="ov"></div>
 <div class="sh" id="sh"><div class="grab"></div><div id="shB"></div></div>
 <div class="toast" id="toast"></div>
@@ -824,9 +825,7 @@ function drawHome(){
     return '<button class="bt" style="--i:' + k + '" data-go="list" data-cat="' + esc(c.id) + '"><span class="ic">' + ico(c.ic) + '</span>' +
       '<span><b>' + esc(c.n) + '</b><small>' + fa(c.c) + ' محصول</small><span class="pr">از ' + fa(c.f) + ' تومان</span></span></button>';
   }).join('') : '<div class="emp" style="grid-column:1/-1">' + ico('spark') + '<b>به‌زودی</b>سرویس‌ها به‌زودی اضافه می‌شوند.</div>';
-  var pop = []; CATS.forEach(function(c){ var f = ITEMS.filter(function(i){ return i.c === c.id; })[0]; if (f && pop.length < 4) pop.push(f); });
-  $('pop').innerHTML = pop.map(priceRow).join('');
-  $('popH').classList.toggle('hid', !pop.length);
+
   var xl = '';
   if ((B.links || {}).ig) xl += '<button class="xl ig" data-open="ig"><span class="ic">' + ico('camera') + '</span><span>خدمات اینستاگرام<small>فالوور، لایک، ویو و کامنت</small></span>' + ico('chev', 'ch') + '</button>';
   if ((B.links || {}).num) xl += '<button class="xl num" data-open="num"><span class="ic">' + ico('sim') + '</span><span>شماره مجازی تلگرام<small>تحویلِ آنی، کد همین‌جا</small></span>' + ico('chev', 'ch') + '</button>';
@@ -926,8 +925,9 @@ function openOrder(id){
   var ans = 0, emo = null;
   if ($('oCm')) $('oCm').oninput = function(){ $('oCmH').textContent = fa(ccLines().length) + ' کامنت · حداقل ' + fa(i.mn) + ' · حداکثر ' + fa(i.mx); upd(); };
   function setEmo(v){
-    var k = emN(v), hit = null;
-    (i.em || []).forEach(function(x){ if (!hit && k && (k === x.k || k.indexOf(x.k) === 0)) hit = x; });
+    var k = emN(v), hit = null, best = -1;
+    (i.em || []).forEach(function(x){ if (k && k === x.k) { hit = x; best = 1e9; } });
+    if (!hit && k) (i.em || []).forEach(function(x){ if (k.indexOf(x.k) >= 0 && x.k.length > best) { hit = x; best = x.k.length; } });
     emo = hit;
     [].forEach.call($('eC').children, function(b){ b.classList.toggle('on', !!hit && b.getAttribute('data-e') === hit.k); });
     var hs = $('oEmoH');
@@ -940,7 +940,7 @@ function openOrder(id){
   if ($('oEmo')) {
     $('oEmo').oninput = function(){ setEmo(this.value); };
     $('eC').onclick = function(ev){ var b = ev.target.closest('[data-e]'); if (!b) return; tap();
-      var x = (i.em || []).filter(function(y){ return y.k === b.getAttribute('data-e'); })[0]; $('oEmo').value = x ? x.e : ''; setEmo($('oEmo').value); };
+      var x = (i.em || []).filter(function(y){ return y.k === b.getAttribute('data-e'); })[0]; $('oEmo').value = x ? x.e : ''; $('oEmo').blur(); setEmo($('oEmo').value); };
   }
   if ($('aC')) $('aC').onclick = function(ev){ var b = ev.target.closest('[data-a]'); if (!b) return; tap(); ans = +b.getAttribute('data-a');
     [].forEach.call(this.children, function(x){ x.classList.toggle('on', x === b); }); };
@@ -1064,7 +1064,7 @@ $('balBtn').onclick = function(){ tap(); go('wallet'); };
 
 (function(){
   var sh = $('sh'), y0 = null, dy = 0;
-  sh.addEventListener('touchstart', function(e){ if (sh.scrollTop > 0 && !e.target.closest('.grab')) { y0 = null; return; } y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
+  sh.addEventListener('touchstart', function(e){ if (!e.target.closest('.grab, .st') || (sh.scrollTop > 0 && !e.target.closest('.grab'))) { y0 = null; return; } y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
   sh.addEventListener('touchmove', function(e){ if (y0 == null) return; dy = e.touches[0].clientY - y0; if (dy > 0) { sh.style.transition = 'none'; sh.style.transform = 'translate3d(0,' + dy + 'px,0)'; } }, { passive: true });
   sh.addEventListener('touchend', function(){ if (y0 == null) return; sh.style.transition = ''; sh.style.transform = ''; if (dy > 110) closeSheet(); y0 = null; });
 })();

@@ -589,6 +589,7 @@ function svPublic($app) {
         if (svKind($s['type']) === 'cc')   $it['y'] = 'cc';
         $items[] = $it;
     }
+    usort($items, fn($a, $b) => $a['p'] <=> $b['p']);
     $outC = [];
     foreach ($cats as $id => [$name, $ic]) {
         if (empty($n[$id])) continue;
