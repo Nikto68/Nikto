@@ -3,7 +3,7 @@
 function svTplIg() {
     return <<<'HTML'
 <!doctype html>
-<html lang="fa" dir="rtl" style="--sd:__SPL__s">
+<html lang="fa" dir="rtl" class="spl-on" style="--sd:__SPL__s">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -174,6 +174,21 @@ svg{display:block}
 .cta[disabled]:after{display:none}
 .cta.gh{background:var(--glass);color:var(--ink);border:1px solid var(--line2);box-shadow:none}
 .cta.gh:after{display:none}
+/* روش‌های شارژ: ارز دیجیتال و درگاه ایرانی */
+.pms{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.pms:empty{display:none}
+.pm{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;padding:14px 13px 12px;border-radius:21px;text-align:right;
+  border:1px solid var(--line2);background:linear-gradient(160deg,rgba(255,255,255,.11),rgba(255,255,255,.02) 55%),var(--glass);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 18px 30px -22px #000;transition:transform .15s}
+.pm:active{transform:scale(.97)}
+.pm .gi{margin-bottom:6px}
+.gi{display:inline-grid;width:42px;height:42px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}.gi svg{width:100%;height:100%}
+.pm b{font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pm small{font-size:10px;font-weight:700;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pm .pg2{align-self:stretch;display:flex;align-items:center;justify-content:center;height:36px;margin-top:9px;border-radius:12px;font-size:12px;font-weight:900;color:#fff;background:var(--grad);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 10px 20px -12px rgba(0,0,0,.9)}
+.pms .pm:only-child{grid-column:1/-1}
+
 
 .stat3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
 .stat3 div{padding:10px 8px;border-radius:17px;text-align:center;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.01)),var(--glass);border:1px solid var(--line)}
@@ -183,7 +198,7 @@ svg{display:block}
 .hd{display:flex;align-items:center;margin:20px 2px 10px}
 .hd h3{flex:1;font-size:15px;font-weight:900;display:flex;align-items:center;gap:7px}
 .hd h3 i{width:8px;height:8px;border-radius:50%;background:var(--grad2);box-shadow:0 0 10px rgba(255,95,162,.9)}
-.hd button{font-size:11.5px;font-weight:800;color:var(--pk)}
+.hd button{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:800;color:var(--pk);min-height:34px;padding:0 6px;margin:-10px -6px}
 
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .tile{position:relative;overflow:hidden;overflow:clip;isolation:isolate;display:flex;flex-direction:column;text-align:right;padding:12px;border-radius:22px;min-height:182px;width:100%;
@@ -486,24 +501,23 @@ html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-
     radial-gradient(70vw 45vh at 90% 96%,rgba(81,91,212,.24),transparent 70%),var(--dots) 0 0/300px 300px repeat,#0A0510;
   transition:opacity .5s ease .1s,visibility .5s ease .1s}
 .spl.out{opacity:0;visibility:hidden}
-.sbar{position:absolute;top:calc(var(--top) + 14px);left:16px;right:16px;display:flex;gap:4px}
-.sbar i{position:relative;flex:1;height:3px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden;overflow:clip}
-.sbar i:after{content:"";position:absolute;inset:0;border-radius:3px;background:#fff;transform-origin:right center;transform:scaleX(var(--f,0));transition:transform .16s linear}
-@keyframes sbf{to{transform:scaleX(1)}}
+/* تا لودینگ روی صفحه است، زیرش نقاشی نمی‌شود — همه‌ی انیمیشن‌های لودینگ روی GPU (فقط transform/opacity) */
+.spl-on .app,.spl-on .nav{visibility:hidden}.spl-on .mesh{display:none}
+.spl{will-change:opacity}
 .spl .spc{display:flex;flex-direction:column;align-items:center;animation:spIn .8s cubic-bezier(.2,.85,.25,1) both;
   transition:transform .5s cubic-bezier(.5,0,.75,0),opacity .3s ease}
 .spl.out .spc{transform:scale(1.18);opacity:0}
 @keyframes spIn{from{opacity:0;transform:translate3d(0,26px,0) scale(.88)}to{opacity:1;transform:none}}
 .lgw{position:relative;width:164px;height:164px;display:grid;place-items:center}
-.lgw .rw{position:absolute;inset:0;animation:spin 3.2s linear 1.3s infinite}
+.lgw .rw{position:absolute;inset:0;will-change:transform,opacity;animation:rwIn 1.1s cubic-bezier(.2,.85,.25,1) both,spin 3.2s linear 1.1s infinite}
+@keyframes rwIn{from{opacity:0;transform:rotate(-140deg) scale(.84)}to{opacity:1;transform:none}}
 .lgw .rw svg{width:100%;height:100%;transform:rotate(-90deg)}
-.lgw .rw circle{fill:none;stroke-width:4.5;stroke-linecap:round;stroke-dasharray:100 100;stroke-dashoffset:100;animation:rdr 1.3s cubic-bezier(.4,0,.2,1) forwards}
-@keyframes rdr{to{stroke-dashoffset:0}}
-.lgw .gl{position:absolute;inset:14px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,95,162,.45),transparent);animation:gpl 2s ease-in-out infinite}
+.lgw .rw circle{fill:none;stroke-width:4.5;stroke-linecap:round}
+.lgw .gl{position:absolute;inset:14px;border-radius:50%;will-change:transform,opacity;background:radial-gradient(closest-side,rgba(255,95,162,.45),transparent);animation:gpl 2s ease-in-out infinite}
 @keyframes gpl{0%,100%{transform:scale(.9);opacity:.7}50%{transform:scale(1.1);opacity:1}}
 .lgw .lg{position:relative;width:96px;height:96px;border-radius:30px;display:grid;place-items:center;color:#fff;overflow:hidden;overflow:clip;
   background:linear-gradient(45deg,#FEDA75 0%,#FA7E1E 25%,#D62976 55%,#962FBF 80%,#4F5BD5 100%);
-  box-shadow:0 22px 46px -12px rgba(221,42,123,.9),inset 0 2px 0 rgba(255,255,255,.45),inset 0 -8px 16px rgba(0,0,0,.2);animation:lpu 1.6s ease-in-out infinite}
+  box-shadow:0 22px 46px -12px rgba(221,42,123,.9),inset 0 2px 0 rgba(255,255,255,.45),inset 0 -8px 16px rgba(0,0,0,.2);will-change:transform;animation:lpu 1.6s ease-in-out infinite}
 .lgw .lg:before{content:"";position:absolute;top:0;bottom:0;left:0;width:45%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);animation:shine 2.4s ease-in-out infinite}
 .lgw .lg svg{position:relative;width:50px;height:50px}
 @keyframes lpu{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
@@ -524,7 +538,8 @@ html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-
 .spl .pc b{font-size:24px;font-weight:900;line-height:1;min-width:62px;text-align:left;background:linear-gradient(90deg,#FEDA75,#FF5FA2 55%,#C084FC);-webkit-background-clip:text;background-clip:text;color:transparent}
 .spl .br{position:relative;height:6px;border-radius:6px;overflow:hidden;overflow:clip;background:rgba(255,255,255,.12)}
 .spl .br i{position:absolute;inset:0;border-radius:6px;background:linear-gradient(270deg,#FEDA75,#FA7E1E 25%,#D62976 55%,#962FBF 80%,#4F5BD5);
-  transform-origin:right center;transform:scaleX(0);transition:transform .16s linear;will-change:transform;box-shadow:0 0 14px rgba(255,95,162,.8)}
+  transform-origin:right center;transform:scaleX(0);will-change:transform;box-shadow:0 0 14px rgba(255,95,162,.8)}
+@keyframes spb{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 .dts{display:flex;justify-content:center;gap:7px;margin-top:13px}
 .dts i{width:8px;height:8px;border-radius:50%;background:#FF5FA2;box-shadow:0 0 10px rgba(255,95,162,.8);animation:dj 1s ease-in-out infinite}
 .dts i:nth-child(2){animation-delay:.15s;background:#C084FC;box-shadow:0 0 10px rgba(192,132,252,.8)}
@@ -548,6 +563,7 @@ html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-
   <defs>
     <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M21 20v-1.5a4 4 0 0 0-3-3.8M15.5 4.2a3.5 3.5 0 0 1 0 6.6"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5.2 5.2 0 0 0-7.4 0L12 7l-1.4-1.4a5.2 5.2 0 1 0-7.4 7.4L12 21.8l8.8-8.8a5.2 5.2 0 0 0 0-7.4z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2.8 2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></symbol>
     <symbol id="i-heartf" viewBox="0 0 24 24" fill="currentColor"><path d="M20.8 5.6a5.2 5.2 0 0 0-7.4 0L12 7l-1.4-1.4a5.2 5.2 0 1 0-7.4 7.4L12 21.8l8.8-8.8a5.2 5.2 0 0 0 0-7.4z"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m10 8.5 5.5 3.5-5.5 3.5z"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.8 7L4 20.5l1.5-4.6A8 8 0 1 1 21 12z"/></symbol>
@@ -583,7 +599,6 @@ html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-
 <div class="mesh" aria-hidden="true"><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><b class="ht"><svg><use href="#i-heartf"/></svg></b><s class="sp"></s><s class="sp"></s><s class="sp"></s><s class="sp"></s><s class="sp"></s></div>
 
 <div class="spl" id="spl">
-  <div class="sbar" id="spSb"><i></i><i></i><i></i></div>
   <div class="spc">
     <div class="lgw"><i class="gl"></i>
       <div class="rw"><svg viewBox="0 0 120 120"><defs><linearGradient id="spg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".3" stop-color="#FA7E1E"/><stop offset=".6" stop-color="#D62976"/><stop offset=".85" stop-color="#962FBF"/><stop offset="1" stop-color="#4F5BD5"/></linearGradient></defs>
@@ -645,9 +660,10 @@ html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-
     </div>
     <div class="fld"><label>مبلغِ شارژ (تومان)</label><input id="tAmt" inputmode="numeric" placeholder="مثلا ۱۰۰٬۰۰۰"></div>
     <div class="qa" id="qa"></div>
+    <div class="pms" id="pms"></div>
     <div id="payInfo"></div>
-    <button class="cta" id="tGo"><svg><use href="#i-wallet"/></svg>درخواستِ شارژ</button>
-    <div class="note" id="tNote">فاکتور و مقصدِ پرداخت داخلِ ربات برایتان فرستاده می‌شود؛ بعد از واریز، «ارسال رسید» را بزنید.</div>
+    <button class="cta gh" id="tGo"><svg><use href="#i-wallet"/></svg>کارت به کارت — درخواستِ شارژ</button>
+    <div class="note" id="tNote">فاکتورِ کارت‌به‌کارت داخلِ ربات برایتان فرستاده می‌شود؛ بعد از واریز، «ارسال رسید» را بزنید.</div>
   </section>
 </div>
 
@@ -734,10 +750,10 @@ var SPT = ['🔓 پیج باید عمومی (Public) باشد', '🔐 رمزِ �
 function splStep(){
   if (SPL.gone) return false;
   var el = Date.now() - SPL.t0, p = SPL.min ? Math.min(1, el / SPL.min) : 1;
-  var pc = $('spPct'), bar = $('spBar'), sb = $('spSb'), m = $('spMsg'), g = $('spStg'), t = $('spTip');
+  var pc = $('spPct'), bar = $('spBar'), m = $('spMsg'), g = $('spStg'), t = $('spTip');
   if (pc) pc.textContent = Math.floor(p * 100) + '%';
-  if (bar) bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
-  if (sb) [].forEach.call(sb.children, function(x, k){ var n = sb.children.length; x.style.setProperty('--f', Math.max(0, Math.min(1, p * n - k)).toFixed(4)); });
+  // نوار با انیمیشنِ CSS روی GPU جلو می‌رود (اگر کارِ سنگینی هم در جریان باشد گیر نمی‌کند)؛ این فقط برای حالتِ بی‌انیمیشن است
+  if (bar && (RM || !SPL.anim)) bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
   var mi = Math.min(SPM.length - 1, Math.floor(p * (SPM.length - 1) + (p >= 1 ? 1 : 0)));
   if (m && SPL.mi !== mi) { SPL.mi = mi; m.textContent = SPM[mi]; }
   if (g) [].forEach.call(g.children, function(x, k){ x.classList.toggle('on', p * g.children.length >= k + 1 - 0.001); });
@@ -745,6 +761,11 @@ function splStep(){
   if (t && SPL.ti !== ti) { SPL.ti = ti; t.style.opacity = 0; setTimeout(function(){ t.textContent = SPT[ti]; t.style.opacity = 1; }, 170); }
   return true;
 }
+(function(){
+  var bar = $('spBar'), el = Date.now() - SPL.t0;
+  if (!bar || RM || SPL.min <= el) return;
+  bar.style.animation = 'spb ' + SPL.min + 'ms linear ' + (-el) + 'ms both'; SPL.anim = true;
+})();
 splStep();
 SPL.iv = setInterval(function(){ if (!splStep()) clearInterval(SPL.iv); }, 100);
 function hideSplash(now){
@@ -753,9 +774,13 @@ function hideSplash(now){
   var wait = now ? 0 : Math.max(0, SPL.min - (Date.now() - SPL.t0));
   setTimeout(function(){
     if (SPL.gone) return;
+    SPL.anim = false; var bar = $('spBar'); if (bar) bar.style.animation = 'none';
     splStep(); SPL.gone = true; clearInterval(SPL.iv);
-    var sp = $('spl'); if (!sp) return; sp.classList.add('out');
-    setTimeout(function(){ if (sp.parentNode) sp.parentNode.removeChild(sp); }, 700); }, wait);
+    H.classList.remove('spl-on');
+    var sp = $('spl'); if (!sp) return;
+    // اول صفحه‌ی زیرین (هنوز زیرِ لودینگِ مات) نقاشی شود، بعد محو شدن شروع شود — بی‌پرش
+    setTimeout(function(){ sp.classList.add('out');
+      setTimeout(function(){ if (sp.parentNode) sp.parentNode.removeChild(sp); }, 700); }, 90); }, wait);
 }
 setTimeout(function(){ hideSplash(false); }, Math.max(3000, SPL.min + 2500 - (Date.now() - SPL.t0)));
 var API = (function(){ try { if (/^https?:$/.test(location.protocol)) return location.origin + location.pathname + '?mapi=1'; } catch(e){} return ''; })();
@@ -1090,7 +1115,35 @@ $('oRef').onclick = function(){ tap(); loadOrders(); };
 
 var WAL = { pre: 0, busy: false };
 function tMin(){ return Math.max(1000, Number((B.topup || {}).min) || 0); }
-function payOk(){ var t = B.topup || {}; return !!(t.on || t.gw); }
+function payOk(){ var t = B.topup || {}; return !!(t.card_on != null ? t.card_on : t.on); }
+function stripEm(s){ return String(s || '').replace(/^[^؀-ۿA-Za-z0-9]+/, '').trim(); }
+var GI = {
+  crypto: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34D399"/><stop offset=".55" stop-color="#10B981"/><stop offset="1" stop-color="#047857"/></linearGradient></defs>' +
+    '<circle cx="24" cy="24" r="22" fill="url(#giC)"/><circle cx="24" cy="24" r="18.5" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>' +
+    '<path d="M13.5 14.5h21v4.6h-8.2v17.4h-4.6V19.1h-8.2z" fill="#fff"/><ellipse cx="24" cy="23.4" rx="10.6" ry="3.3" fill="none" stroke="#fff" stroke-width="2.2"/>' +
+    '<path d="M9 16a17 17 0 0 1 8-8" stroke="rgba(255,255,255,.55)" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>',
+  iran: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giI" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818CF8"/><stop offset=".55" stop-color="#6366F1"/><stop offset="1" stop-color="#1D4ED8"/></linearGradient></defs>' +
+    '<rect x="2" y="2" width="44" height="44" rx="14" fill="url(#giI)"/><rect x="9" y="14" width="30" height="20" rx="3.6" fill="none" stroke="#fff" stroke-width="2.4"/>' +
+    '<path d="M9 20.5h30" stroke="#fff" stroke-width="3"/><rect x="13" y="25.5" width="7" height="4.4" rx="1.2" fill="#FCD34D"/><path d="M24 28h10" stroke="rgba(255,255,255,.8)" stroke-width="2.2" stroke-linecap="round"/>' +
+    '<path d="M8 10a14 14 0 0 1 7-4" stroke="rgba(255,255,255,.5)" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>'
+};
+function drawPms(){
+  var t = B.topup || {}, l = t.lbl || {}, ms = [];
+  if (t.gw) ms.push(['crypto', GI.crypto, stripEm(l.crypto) || 'ارز دیجیتال', (t.gwcoin || 'USDT') + ' · شارژِ خودکار']);
+  if (t.ir) ms.push(['iran', GI.iran, stripEm(l.iran) || 'درگاه ایرانی', 'کارت‌های بانکی · آنی']);
+  $('pms').innerHTML = ms.map(function(m){ return '<button class="pm" data-pm="' + m[0] + '"><span class="gi">' + m[1] + '</span><b>' + esc(m[2]) + '</b><small>' + esc(m[3]) + '</small><span class="pg2">پرداخت</span></button>'; }).join('');
+  return ms.length;
+}
+function openPay(m){
+  var t = B.topup || {};
+  if (!t.pay) { toast('درگاه هنوز آماده نیست.'); return; }
+  var a = parseInt(digits($('tAmt').value), 10) || 0, d = initData(), h = '';
+  if (d) h = '#tgWebAppData=' + encodeURIComponent(d) + '&tgWebAppVersion=' + encodeURIComponent((TG && TG.version) || '7.0') + '&tgWebAppPlatform=' + encodeURIComponent((TG && TG.platform) || 'unknown');
+  tap('medium');
+  location.href = t.pay + '&m=' + m + '&th=igs&back=igs' + (a ? '&a=' + a : '') + h;
+}
+$('pms').addEventListener('click', function(ev){ var b = ev.target.closest('[data-pm]'); if (b) openPay(b.getAttribute('data-pm')); });
+
 function drawWallet(){
   setBal(S.bal);
   var t = B.topup || {}, min = tMin();
@@ -1099,13 +1152,13 @@ function drawWallet(){
   if (WAL.pre) { $('tAmt').value = fa(Math.max(min, Math.ceil(WAL.pre / 1000) * 1000)); WAL.pre = 0; }
   markQa();
   var h = '';
-  if (t.on) h += '<div class="r"><span>کارت به کارت</span><button class="cpy" id="cardCp">' + ico('copy') + '<span class="ltr">' + esc(t.card) + '</span></button></div>' +
+  var nm = drawPms();
+  if (payOk()) h += '<div class="r"><span>کارت به کارت</span><button class="cpy" id="cardCp">' + ico('copy') + '<span class="ltr">' + esc(t.card) + '</span></button></div>' +
     (t.name ? '<div class="r"><span>به نامِ</span><b>' + esc(t.name) + '</b></div>' : '');
-  if (t.gw) h += '<div class="r"><span>پرداختِ آنلاین (' + esc(t.gwcoin || 'USDT') + ')</span><b class="g">فعال' + (t.gwmin > 0 ? ' — از ' + fa(t.gwmin) + ' تومان' : '') + '</b></div>';
   $('payInfo').innerHTML = h ? '<div class="pay">' + h + '</div>'
-    : '<div class="warn">' + ico('alert') + '<span>روشِ پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>';
+    : (nm ? '' : '<div class="warn">' + ico('alert') + '<span>روشِ پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>');
   var cc = $('cardCp'); if (cc) cc.onclick = function(){ tap(); copy(digits(t.card), 'شماره کارت'); };
-  $('tGo').disabled = !payOk();
+  $('tGo').classList.toggle('hid', !payOk());
   $('tNote').classList.toggle('hid', !payOk());
 }
 function markQa(){ var v = parseInt(digits($('tAmt').value), 10) || 0; [].forEach.call($('qa').children, function(b){ b.classList.toggle('on', +b.getAttribute('data-v') === v); }); }

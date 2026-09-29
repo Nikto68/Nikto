@@ -320,7 +320,7 @@ migrateOnce('factory_payout', function () {
     if ($n > 0) error_log(sprintf('[shop-bot] کارخانه بسته شد — %s الماسِ انبار به %d کیف‌پول ریخت.', number_format($sum), $n));
 });
 
-foreach (['fonts', 'toplist'] as $__m) {
+foreach (['fonts', 'toplist', 'pay'] as $__m) {
     $__p = __DIR__ . '/' . $__m . '.php';
     if (is_file($__p)) require_once $__p;
     else error_log('[shop-bot] ماژولِ ' . $__m . '.php روی سرور نیست — آن بخش خاموش می‌ماند.');
@@ -933,6 +933,32 @@ function defaultConfig() {
             'expire'    => 30,
             'min'       => 50000,
             'custom_url'=> '',
+            'mode'      => 'address',
+            'underpaid' => 1,
+        ],
+
+        'irpay' => [
+            'on' => false, 'provider' => 'zarinpal', 'merchant' => '', 'sandbox' => false,
+            'min' => 10000, 'max' => 0, 'kyc' => true, 'kyc_limit' => 500000, 'kyc_mode' => 'auto', 'ir_only' => true,
+            'oauth_id' => '', 'oauth_secret' => '', 'otp_ch' => 'sms',
+            'card_check' => false, 'desc' => 'شارژ کیف پول',
+        ],
+        'topup_card' => true,
+        'topup_btns' => [
+            // ایموجیِ پریمیوم (همان‌هایی که بخشِ قیمت‌ها هم استفاده می‌کند) به‌جای ایموجیِ معمولی
+            'crypto' => ['emoji' => '', 'text' => 'پرداخت با ارز دیجیتال', 'color' => 'success', 'icon' => '5271878966347601947'],
+            'iran'   => ['emoji' => '', 'text' => 'درگاه پرداخت ایرانی',   'color' => 'primary', 'icon' => '5343902037438391058'],
+            'card'   => ['emoji' => '', 'text' => 'کارت به کارت',          'color' => 'primary', 'icon' => '5445353829304387411'],
+            'phone'  => ['emoji' => '📱', 'text' => 'ارسال شماره‌ی من',       'color' => 'success', 'icon' => ''],
+            'open'   => ['emoji' => '🌐', 'text' => 'باز کردن درگاه پرداخت', 'color' => 'success', 'icon' => ''],
+            'copy'   => ['emoji' => '📋', 'text' => 'کپی آدرس ولت',          'color' => 'primary', 'icon' => ''],
+            'check'  => ['emoji' => '🔄', 'text' => 'بررسی پرداخت',          'color' => 'primary', 'icon' => ''],
+            'pay'    => ['emoji' => '💳', 'text' => 'پرداخت آنلاین',          'color' => 'success', 'icon' => ''],
+            'kyc'    => ['emoji' => '🪪', 'text' => 'احراز هویت',            'color' => 'primary', 'icon' => ''],
+            'less'   => ['emoji' => '✏️', 'text' => 'مبلغ دیگر',             'color' => 'primary', 'icon' => ''],
+            'back'   => ['emoji' => '◀️', 'text' => 'روش دیگر',              'color' => 'primary', 'icon' => ''],
+            'resend' => ['emoji' => '🔁', 'text' => 'ارسال دوباره‌ی کد',     'color' => 'primary', 'icon' => ''],
+            'cancel' => ['emoji' => '❌', 'text' => 'انصراف',                'color' => 'danger',  'icon' => ''],
         ],
 
         'join' => [
@@ -964,13 +990,12 @@ function defaultConfig() {
             'my_orders' => '📊 شماره‌های من',
             'open_app'  => '☎️ شماره مجازی تلگرام',
             'open'      => '🔗 باز کردن',
-            'shop_orders' => '📦 مشاهده‌ی سفارش‌های ثبت‌شده',
             'open_tgs'  => '✈️ خدمات تلگرام',
             'open_igs'  => '📸 خدمات اینستاگرام',
         ],
 
         'ui_icons' => [],
-        'ui_colors' => ['shop_orders' => 'primary', 'open_tgs' => 'primary', 'open_igs' => 'danger'],
+        'ui_colors' => ['open_tgs' => 'primary', 'open_igs' => 'danger'],
 
         'glass_colors' => [
             'buy'     => 'success',
@@ -1000,7 +1025,7 @@ function defaultConfig() {
             'referral_hist_none' => "هنوز پورسانتی ثبت نشده است.",
             'topup'        => "➕ <b>افزایش موجودی</b>\n\nمبلغ مورد نظر را به تومان وارد کنید (فقط عدد):",
             'topup_ok'     => "✅ <b>حساب شما شارژ شد</b>\n\n<blockquote>➕ مبلغ: <b>{amount}</b> تومان\n💰 موجودی: <b>{balance}</b> تومان</blockquote>",
-            'shop'         => "🛍 <b>ثبت سفارش</b>\n\nبخشِ موردنظرتان را از دکمه‌های زیر باز کنید؛ سفارش‌های قبلی را هم با دکمه‌ی بالا ببینید.\n\n💰 موجودی شما: <b>{balance}</b> تومان",
+            'shop'         => "🛍 <b>ثبت سفارش</b>\n\nبخشِ موردنظرتان را از دکمه‌های زیر باز کنید.\n\n💰 موجودی شما: <b>{balance}</b> تومان",
             'shop_closed'  => "🔒 فروش موقتا بسته است — کمی بعد دوباره سر بزنید.",
             'receipt_ask'  => "🧾 لطفا رسید پرداخت را بفرستید.\n\nمی‌توانید <b>عکس رسید</b> یا <b>کد تراکنش</b> ارسال کنید.",
             'receipt_ok'   => "✅ رسید شما ثبت شد.\n\n⏳ پس از تایید ادمین اطلاع داده می‌شود.",
@@ -1011,6 +1036,30 @@ function defaultConfig() {
             'sup_ticket'   => "💬 <b>ارتباط غیر مستقیم</b>\n\nپیام خود را ارسال کنید، ادمین بررسی می‌کند.",
             'sup_sent'     => "✅ پیام شما برای پشتیبانی ارسال شد.\nبه زودی پاسخ داده می‌شود.",
             'orders_item'  => "{status}\n   {title}\n   ☎️ <code>{phone}</code>{code_line}\n   💰 {amount} تومان\n   🧾 <code>{id}</code>\n   📅 {date}\n",
+
+            'topup_choose'         => "💳 <b>افزایش موجودی</b>\n\n<blockquote>💰 موجودیِ فعلی: <b>{balance}</b> تومان</blockquote>\nروشِ پرداخت را انتخاب کنید 👇",
+            'topup_crypto_amount'  => "<tg-emoji emoji-id=\"5271878966347601947\">💎</tg-emoji> <b>پرداخت با ارز دیجیتال</b>\n\nمبلغِ شارژ را به <b>تومان</b> بفرستید یا یکی از دکمه‌ها را بزنید.\n\n🔻 حداقل: <b>{min}</b> تومان\n⚡ بعد از واریز، حساب <b>خودکار</b> شارژ می‌شود.",
+            'topup_crypto_invoice' => "<tg-emoji emoji-id=\"5271878966347601947\">💎</tg-emoji> <b>فاکتورِ ارز دیجیتال</b>\n\n<blockquote>💰 مبلغ: <b>{amount}</b> تومان\n🪙 مقدارِ واریز: {crypto} <b>{coin}</b>\n🔗 شبکه: <b>{network}</b></blockquote>\n📥 <b>آدرسِ ولت</b> (برای کپی لمس کنید):\n{address}\n\n⏳ مهلت: <b>{expire}</b> دقیقه · 🧾 {id}\n\n✅ بعد از واریز، حسابتان <b>خودکار</b> شارژ می‌شود؛ رسید لازم نیست.",
+            'topup_gw_down'        => "⚠️ درگاهِ ارز دیجیتال الان جواب نمی‌دهد.\nچند دقیقه‌ی دیگر دوباره امتحان کنید یا روشِ دیگری را بزنید.",
+            'topup_ir_phone'       => "<tg-emoji emoji-id=\"5343902037438391058\">🏦</tg-emoji> <b>درگاه پرداخت ایرانی</b>\n\nبرای پرداخت، اول شماره‌ی موبایلِ خودتان را با دکمه‌ی پایین بفرستید 👇\n\n<blockquote>📱 شماره باید به نامِ صاحبِ کارتِ بانکی باشد.</blockquote>",
+            'topup_ir_phone_ok'    => "✅ شماره‌ی <b>{phone}</b> ثبت شد.",
+            'topup_ir_phone_bad'   => "⚠️ فقط شماره‌ی موبایلِ ایرانیِ <b>خودتان</b> را با دکمه‌ی «📱 ارسال شماره» بفرستید.",
+            'topup_ir_amount'      => "<tg-emoji emoji-id=\"5343902037438391058\">🏦</tg-emoji> <b>درگاه پرداخت ایرانی</b>\n\n📱 شماره: <b>{phone}</b>\nمبلغِ شارژ را به <b>تومان</b> بفرستید یا یکی از دکمه‌ها را بزنید.\n\n🔻 حداقل: <b>{min}</b> تومان",
+            'topup_ir_kyc_need'    => "🪪 <b>احراز هویت لازم است</b>\n\nبرای پرداختِ بیش از <b>{limit}</b> تومان، یک‌بار احراز هویت کنید — فقط با <b>شماره‌ی موبایلِ</b> خودتان؛ اسم و فامیل لازم نیست.\n\nیا مبلغِ کمتری وارد کنید.",
+            'kyc_otp_ask'          => "🪪 <b>احراز هویت با شماره‌ی موبایل</b>\n\nکدِ تاییدِ یک‌بارمصرفِ <b>زرین‌پال</b> برای <b>{phone}</b> فرستاده شد ({channel}).\n{ussd}\n👇 کد را همین‌جا بفرستید:",
+            'kyc_otp_bad'          => "⚠️ {error}\nکد را دوباره بفرستید یا کدِ تازه بگیرید.",
+            'kyc_otp_fail'         => "⚠️ کدِ تایید فرستاده نشد.\n<code>{error}</code>\nکمی بعد دوباره امتحان کنید.",
+            'kyc_phone_confirm'    => "🪪 <b>احراز هویت</b>\n\nاحراز هویت فقط با شماره‌ی موبایلِ شما انجام می‌شود؛ اسم و فامیل و مدرک لازم نیست.\n\n<blockquote>📱 شماره: <b>{phone}</b></blockquote>\n\n👇 برای ارسال به بررسی، دکمه‌ی زیر را بزنید.",
+            'topup_ir_confirm'     => "🧾 <b>تاییدِ پرداخت</b>\n\n<blockquote>💰 مبلغ: <b>{amount}</b> تومان\n📱 شماره: {phone}\n🧾 کدِ پیگیری: {id}</blockquote>\n\n👇 با دکمه‌ی زیر وارد درگاه شوید؛ بعد از پرداخت، حسابتان <b>خودکار</b> شارژ می‌شود.",
+            'topup_ir_down'        => "⚠️ درگاهِ پرداختِ ایرانی الان جواب نمی‌دهد.\nچند دقیقه‌ی دیگر دوباره امتحان کنید یا روشِ دیگری را بزنید.",
+            'topup_paid'           => "✅ <b>پرداخت انجام شد</b>\n\n<blockquote>➕ مبلغ: <b>{amount}</b> تومان\n💰 موجودی: <b>{balance}</b> تومان\n🧾 {id}</blockquote>",
+            'kyc_code_ask'         => "🪪 <b>احراز هویت — مرحله‌ی ۱ از ۲</b>\n\nکدِ ملیِ ۱۰ رقمیِ خودتان را بفرستید:",
+            'kyc_code_bad'         => "⚠️ این کدِ ملی درست نیست؛ ۱۰ رقم را دوباره بفرستید.",
+            'kyc_photo_ask'        => "🪪 <b>احراز هویت — مرحله‌ی ۲ از ۲</b>\n\nیک عکسِ واضح از <b>کارتِ ملی</b>ِ خودتان بفرستید:",
+            'kyc_sent'             => "✅ درخواستِ احراز هویتِ شما ثبت شد.\n⏳ بعد از بررسی، همین‌جا خبر می‌دهیم.",
+            'kyc_pending'          => "⏳ احراز هویتِ شما در حالِ بررسی است؛ تا تایید، مبلغِ کمتر از <b>{limit}</b> تومان را پرداخت کنید.",
+            'kyc_ok'               => "✅ <b>احراز هویتِ شما تایید شد</b>\n\nحالا می‌توانید هر مبلغی را با درگاهِ ایرانی پرداخت کنید.",
+            'kyc_no'               => "❌ احراز هویتِ شما تایید نشد.\n{note}\nمی‌توانید دوباره مدارک بفرستید.",
         ],
 
         'support_main' => [
@@ -2278,6 +2327,7 @@ function topupRulesGate($uid, $chatId) {
 
 function startTopup($uid, $chatId, $replyTo = null) {
     if (!topupRulesGate($uid, $chatId)) return;
+    if (function_exists('tuStart')) { tuStart($uid, $chatId, $replyTo); return; }
     setState($uid, 'topup_amount');
     panelShow($uid, $chatId, 'wallet', T('topup'), inlineKb([[btnUI('cancel', 'cancel', 'cancel')]]), $replyTo);
 }
@@ -2291,17 +2341,19 @@ function topupAmountError($amt) {
 
 function gwOn() {
     $g = cfg()['gateway'] ?? [];
-    return !empty($g['on']) && trim((string)$g['api_key']) !== '' && trim((string)$g['base_url']) !== '';
+    return !empty($g['on']) && trim((string)$g['api_key']) !== '' && gwCallbackUrl() !== '';
 }
 
 function gwCallbackUrl() {
     $g = cfg()['gateway'] ?? [];
     $b = rtrim(trim((string)$g['base_url']), '/');
-    if ($b === '') return '';
+    if ($b === '' && function_exists('maBaseUrl')) $b = rtrim(maBaseUrl(), '/');
+    if ($b === '' || !preg_match('#^https://#i', $b)) return '';
     return $b . (str_contains($b, '?') ? '&' : '?') . 'ipn=1';
 }
 
 function gwHttp($url, $headers = [], $body = null, $timeout = 20) {
+    if (function_exists('__payHook')) { $hk = __payHook($url, $headers, $body); if ($hk !== null) return $hk; }
     $ch = curl_init($url);
     $opt = [
         CURLOPT_RETURNTRANSFER => true,
@@ -2319,21 +2371,47 @@ function gwHttp($url, $headers = [], $body = null, $timeout = 20) {
     return ['ok' => true, 'data' => is_array($j) ? $j : [], 'raw' => $res];
 }
 
+// مبلغِ ارزی: اگر نرخِ ثابت گذاشته شده با همان، وگرنه با قیمتِ لحظه‌ایِ تتر — [مقدار, واحد]
 function gwCryptoAmount($toman) {
     $g = cfg()['gateway'] ?? [];
+    $coin = strtoupper(trim((string)($g['coin'] ?? 'USDT'))) ?: 'USDT';
     $rate = (float)($g['rate'] ?? 0);
-    if ($rate <= 0) return null;
-    return round($toman / $rate, 6);
+    if ($rate > 0) return [ceil($toman / $rate * 1000000) / 1000000, $coin];
+    $live = function_exists('pxUsdtToman') ? (float)pxUsdtToman() : 0;
+    if ($live <= 0) return [null, 'USDT'];
+    return [ceil($toman / $live * 100) / 100, 'USDT'];
+}
+
+function gwNowCur($coin, $net) {
+    $coin = strtolower($coin); $net = strtoupper($net);
+    if ($coin === 'usdt') {
+        $m = ['TRC20' => 'usdttrc20', 'TRON' => 'usdttrc20', 'BEP20' => 'usdtbsc', 'BSC' => 'usdtbsc', 'ERC20' => 'usdterc20',
+              'TON' => 'usdtton', 'POLYGON' => 'usdtmatic', 'SOL' => 'usdtsol', 'SOLANA' => 'usdtsol'];
+        return $m[$net] ?? 'usdttrc20';
+    }
+    return $coin;
+}
+
+// پاسخِ OxaPay (نسخه‌ی v1: {"data":{…},"status":200} — نسخه‌ی قدیم: {"result":100,…})
+function gwOxa($r) {
+    if (empty($r['ok'])) return [null, (string)($r['error'] ?? 'خطای شبکه')];
+    $j = (array)$r['data'];
+    if (isset($j['data']) && is_array($j['data']) && (int)($j['status'] ?? 200) === 200) return [$j['data'], ''];
+    if ((string)($j['result'] ?? '') === '100') return [$j, ''];
+    $e = $j['error']['message'] ?? $j['message'] ?? '';
+    if (is_array($e)) $e = json_encode($e, JSON_UNESCAPED_UNICODE);
+    return [null, 'OxaPay: ' . ((string)$e ?: ('کد ' . ($j['status'] ?? $j['result'] ?? '?')))];
 }
 
 function gwCreateInvoice($orderId, $toman) {
     $g   = cfg()['gateway'] ?? [];
     $cb  = gwCallbackUrl();
     $exp = max(5, (int)($g['expire'] ?? 30));
-    $amt = gwCryptoAmount($toman);
-    $coin = strtoupper(trim((string)($g['coin'] ?? 'USDT')));
+    [$amt, $cur] = gwCryptoAmount($toman);
+    $coin = strtoupper(trim((string)($g['coin'] ?? 'USDT'))) ?: 'USDT';
     $net  = strtoupper(trim((string)($g['network'] ?? '')));
     $prov = strtolower(trim((string)($g['provider'] ?? 'oxapay')));
+    $key  = trim((string)($g['api_key'] ?? ''));
 
     if ($prov === 'custom') {
         $u = strtr((string)($g['custom_url'] ?? ''), [
@@ -2342,51 +2420,68 @@ function gwCreateInvoice($orderId, $toman) {
             '{callback}' => rawurlencode($cb),
         ]);
         if (trim($u) === '') return [false, null, 'آدرس درگاه دلخواه تنظیم نشده'];
-        return [true, ['url' => $u, 'address' => '', 'amount' => $amt, 'coin' => $coin,
+        return [true, ['url' => $u, 'address' => '', 'amount' => $amt, 'coin' => $coin, 'network' => $net,
                        'expires_at' => time() + $exp * 60, 'invoice' => $orderId], ''];
     }
+    if ($amt === null) return [false, null, 'نرخِ تتر معلوم نیست — در تنظیمِ درگاه «نرخ تومان» را بگذارید'];
 
     if ($prov === 'nowpayments') {
-        $body = [
-            'price_amount'      => $amt !== null ? $amt : ($toman / 100000),
-            'price_currency'    => $amt !== null ? strtolower($coin) : 'usd',
-            'pay_currency'      => strtolower($coin . ($net === 'TRC20' ? 'trc20' : '')),
-            'order_id'          => $orderId,
-            'order_description' => 'Wallet top-up',
-            'ipn_callback_url'  => $cb,
-            'is_fixed_rate'     => true,
-        ];
-        $r = gwHttp('https://api.nowpayments.io/v1/invoice',
-                    ['x-api-key: ' . trim((string)$g['api_key'])], $body);
-        if (empty($r['ok'])) return [false, null, $r['error']];
-        $d = $r['data'];
-        if (empty($d['invoice_url'])) return [false, null, $d['message'] ?? 'پاسخ نامعتبر درگاه'];
-        return [true, ['url' => $d['invoice_url'], 'address' => $d['pay_address'] ?? '',
-                       'amount' => $d['pay_amount'] ?? $amt, 'coin' => $coin,
-                       'expires_at' => time() + $exp * 60,
-                       'invoice' => (string)($d['id'] ?? $orderId)], ''];
+        $h = ['x-api-key: ' . $key];
+        $body = ['price_amount' => $amt, 'price_currency' => $cur === 'USDT' ? 'usd' : strtolower($cur),
+                 'pay_currency' => gwNowCur($coin, $net), 'order_id' => $orderId, 'order_description' => 'Wallet top-up',
+                 'ipn_callback_url' => $cb, 'is_fixed_rate' => true];
+        if (($g['mode'] ?? 'address') !== 'page') {
+            $r = gwHttp('https://api.nowpayments.io/v1/payment', $h, $body);
+            $d = (array)($r['data'] ?? []);
+            if (!empty($r['ok']) && !empty($d['pay_address']) && !empty($d['payment_id']))
+                return [true, ['url' => '', 'address' => (string)$d['pay_address'], 'amount' => $d['pay_amount'] ?? $amt,
+                               'coin' => $coin,
+                               'network' => $net, 'expires_at' => time() + $exp * 60,
+                               'invoice' => (string)$d['payment_id'], 'kind' => 'payment'], ''];
+        }
+        $r = gwHttp('https://api.nowpayments.io/v1/invoice', $h, $body);
+        if (empty($r['ok'])) return [false, null, (string)$r['error']];
+        $d = (array)$r['data'];
+        if (empty($d['invoice_url'])) return [false, null, (string)($d['message'] ?? 'پاسخ نامعتبر درگاه')];
+        return [true, ['url' => (string)$d['invoice_url'], 'address' => '', 'amount' => $amt, 'coin' => $coin, 'network' => $net,
+                       'expires_at' => time() + $exp * 60, 'invoice' => (string)($d['id'] ?? $orderId), 'kind' => 'invoice'], ''];
     }
 
-    $body = [
-        'merchant'    => trim((string)$g['api_key']),
-        'amount'      => $amt !== null ? $amt : $toman,
-        'currency'    => $amt !== null ? $coin : 'IRT',
-        'lifeTime'    => $exp,
-        'feePaidByPayer' => 1,
-        'orderId'     => $orderId,
-        'description' => 'Wallet top-up',
-        'callbackUrl' => $cb,
-    ];
-    if ($net !== '') $body['network'] = $net;
-    $r = gwHttp('https://api.oxapay.com/merchants/request', [], $body);
-    if (empty($r['ok'])) return [false, null, $r['error']];
-    $d = $r['data'];
-    if ((string)($d['result'] ?? '') !== '100' || empty($d['payLink']))
-        return [false, null, $d['message'] ?? 'پاسخ نامعتبر درگاه'];
-    return [true, ['url' => $d['payLink'], 'address' => $d['address'] ?? '',
-                   'amount' => $amt, 'coin' => $coin,
-                   'expires_at' => time() + $exp * 60,
-                   'invoice' => (string)($d['trackId'] ?? $orderId)], ''];
+    // OxaPay — API نسخه‌ی v1 (هدرِ merchant_api_key)
+    $h = ['merchant_api_key: ' . $key];
+    $base = ['amount' => $amt, 'currency' => $cur, 'lifetime' => $exp, 'fee_paid_by_payer' => 1,
+             'under_paid_coverage' => max(0, min(60, (float)($g['underpaid'] ?? 1))),
+             'callback_url' => $cb, 'order_id' => $orderId, 'description' => 'Wallet top-up'];
+    $err = '';
+    if (($g['mode'] ?? 'address') !== 'page') {
+        $wl = $base + ['pay_currency' => $coin];
+        if ($net !== '') $wl['network'] = $net;
+        [$d, $err] = gwOxa(gwHttp('https://api.oxapay.com/v1/payment/white-label', $h, $wl));
+        if (!$d && $net !== '' && stripos($err, 'network') !== false) {
+            unset($wl['network']);
+            [$d, $err] = gwOxa(gwHttp('https://api.oxapay.com/v1/payment/white-label', $h, $wl));
+        }
+        if ($d && !empty($d['address'])) {
+            return [true, ['url' => '', 'address' => (string)$d['address'],
+                           'amount' => $d['pay_amount'] ?? $d['payAmount'] ?? $amt,
+                           'coin' => strtoupper((string)($d['pay_currency'] ?? $d['payCurrency'] ?? $coin)),
+                           'network' => (string)($d['network'] ?? $net),
+                           'expires_at' => (int)($d['expired_at'] ?? $d['expiredAt'] ?? 0) ?: time() + $exp * 60,
+                           'invoice' => (string)($d['track_id'] ?? $d['trackId'] ?? $orderId), 'kind' => 'white_label'], ''];
+        }
+    }
+    $iv = $base + ['to_currency' => $coin === 'USDT' ? 'USDT' : $coin, 'mixed_payment' => true, 'sandbox' => false];
+    if (($ru = (function_exists('botUsername') && botUsername() !== '') ? 'https://t.me/' . botUsername() : '') !== '') $iv['return_url'] = $ru;
+    [$d, $e2] = gwOxa(gwHttp('https://api.oxapay.com/v1/payment/invoice', $h, $iv));
+    if (!$d || empty($d['payment_url'] ?? $d['payLink'] ?? ''))
+        return [false, null, trim($err . ($err !== '' && $e2 !== '' && $e2 !== $err ? ' · ' : '') . ($e2 !== $err ? $e2 : '')) ?: 'پاسخ نامعتبر درگاه'];
+    return [true, ['url' => (string)($d['payment_url'] ?? $d['payLink']), 'address' => '', 'amount' => $amt, 'coin' => $coin,
+                   'network' => $net, 'expires_at' => (int)($d['expired_at'] ?? $d['expiredAt'] ?? 0) ?: time() + $exp * 60,
+                   'invoice' => (string)($d['track_id'] ?? $d['trackId'] ?? $orderId), 'kind' => 'invoice'], ''];
+}
+
+function gwPaidStatus($st) {
+    return in_array(strtolower(trim((string)$st)), ['paid', 'manual_accept', 'finished', 'confirmed'], true);
 }
 
 function gwCheck($order) {
@@ -2396,21 +2491,21 @@ function gwCheck($order) {
     $prov = strtolower(trim((string)($g['provider'] ?? 'oxapay')));
 
     if ($prov === 'nowpayments') {
+        if (($gw['kind'] ?? '') === 'invoice')
+            return [false, 'منتظرِ خبرِ درگاه (IPN)'];
         $r = gwHttp('https://api.nowpayments.io/v1/payment/' . rawurlencode($gw['invoice']),
                     ['x-api-key: ' . trim((string)$g['api_key'])]);
         if (empty($r['ok'])) return [false, $r['error']];
         $st = strtolower((string)($r['data']['payment_status'] ?? ''));
-        return [in_array($st, ['finished', 'confirmed'], true), $st ?: 'نامشخص'];
+        return [gwPaidStatus($st), $st ?: 'نامشخص'];
     }
     if ($prov === 'custom') return [false, 'در حالت دلخواه، تایید فقط با IPN انجام می‌شود'];
 
-    $r = gwHttp('https://api.oxapay.com/merchants/inquiry', [], [
-        'merchant' => trim((string)$g['api_key']),
-        'trackId'  => $gw['invoice'],
-    ]);
-    if (empty($r['ok'])) return [false, $r['error']];
-    $st = strtolower((string)($r['data']['status'] ?? ''));
-    return [in_array($st, ['paid', 'confirming'], true) && $st === 'paid', $st ?: 'نامشخص'];
+    [$d, $err] = gwOxa(gwHttp('https://api.oxapay.com/v1/payment/' . rawurlencode((string)$gw['invoice']),
+                              ['merchant_api_key: ' . trim((string)$g['api_key'])]));
+    if (!$d) return [false, $err];
+    $st = strtolower((string)($d['status'] ?? ''));
+    return [gwPaidStatus($st), $st ?: 'نامشخص'];
 }
 
 function gwSettle($orderId, $note = 'پرداخت خودکار درگاه') {
@@ -2422,7 +2517,9 @@ function gwSettle($orderId, $note = 'پرداخت خودکار درگاه') {
     [$ok, ] = Order::approve($orderId, ADMIN_ID);
     if (!$ok) return false;
 
-    completeApprovedOrder(Order::get($orderId));
+    $fresh = Order::get($orderId);
+    completeApprovedOrder($fresh);
+    if (function_exists('payAfterSettle')) payAfterSettle($fresh);
     return true;
 }
 
@@ -2442,13 +2539,17 @@ function handleIpn() {
                           trim((string)$g['ipn_secret']));
         if (!$sig || !hash_equals($calc, $sig)) { http_response_code(403); echo 'sig'; return; }
         $orderId = (string)($d['order_id'] ?? '');
-        $paid = in_array(strtolower((string)($d['payment_status'] ?? '')), ['finished', 'confirmed'], true);
+        $paid = gwPaidStatus($d['payment_status'] ?? '');
     } else {
         $sig = $_SERVER['HTTP_HMAC'] ?? '';
         $calc = hash_hmac('sha512', $raw, trim((string)$g['api_key']));
         if (!$sig || !hash_equals($calc, $sig)) { http_response_code(403); echo 'sig'; return; }
-        $orderId = (string)($d['orderId'] ?? '');
-        $paid = strtolower((string)($d['status'] ?? '')) === 'paid';
+        $orderId = (string)($d['order_id'] ?? $d['orderId'] ?? '');
+        $paid = gwPaidStatus($d['status'] ?? '');
+        if ($orderId !== '' && ($o0 = Order::get($orderId))) {
+            $tid = (string)($d['track_id'] ?? $d['trackId'] ?? '');
+            if ($tid !== '' && (string)($o0['gw']['invoice'] ?? '') !== '' && $tid !== (string)$o0['gw']['invoice']) $paid = false;
+        }
     }
 
     if ($orderId === '') { http_response_code(400); echo 'no order'; return; }
@@ -2457,10 +2558,10 @@ function handleIpn() {
     echo 'ok';
 }
 
-function createOrderAndAsk($uid, $chatId, $username, $amount) {
+function createOrderAndAsk($uid, $chatId, $username, $amount, $method = 'auto') {
     $g = cfg()['gateway'] ?? [];
 
-    if (gwOn() && $amount >= (float)($g['min'] ?? 0)) {
+    if ($method !== 'card' && gwOn() && $amount >= (float)($g['min'] ?? 0)) {
         $oid = Order::create($uid, $username, $amount);
         [$ok, $inv, $err] = gwCreateInvoice($oid, $amount);
         if ($ok) {
@@ -2756,9 +2857,11 @@ function admLeakTestText() {
 
 function admGroups() {
     return [
-        'pay' => ['💳 <b>پرداخت</b>', 'مقصد پول و درگاه خودکار.', [
-            [['💳 مقصد پرداخت — شماره کارت', 'adm_pay']],
-            [['💠 درگاه پرداخت', 'adm_gw']],
+        'pay' => ['💳 <b>پرداخت و شارژِ حساب</b>', 'روش‌های شارژ: ارز دیجیتال، درگاه ایرانی و کارت به کارت.', [
+            [['💳 شارژِ حساب — وضعیتِ همه', 'payx_home']],
+            [['💠 ارز دیجیتال', 'adm_gw'], ['🏦 درگاه ایرانی', 'payx_ir']],
+            [['💳 کارت به کارت', 'adm_pay'], ['🪪 احراز هویت‌ها', 'payx_kyc']],
+            [['✏️ متن و دکمه‌های شارژ', 'payx_ed']],
         ]],
         'look' => ['🎨 <b>ظاهر و متن‌ها</b>', 'هرچه کاربر می‌بیند: دکمه‌ها، متن‌ها، رنگ‌ها.', [
             [['🎨 دکمه‌ها', 'ebuttons'], ['📝 متن‌ها', 'etexts']],
@@ -2823,25 +2926,25 @@ function admGateway($chatId, $msgId) {
     $text .= "درگاه: <b>{$prov}</b>\n";
     $text .= "کلید API: " . (trim((string)$g['api_key']) !== ''
              ? '✅ ثبت شده (' . mb_substr($g['api_key'], 0, 4) . '…)' : '<b>خالی</b>') . "\n";
-    $text .= "آدرس بازگشت: " . (trim((string)$g['base_url']) !== ''
-             ? '<code>' . h(gwCallbackUrl()) . '</code>' : '<b>خالی</b>') . "\n";
+    $text .= "آدرس بازگشت (Callback): " . (gwCallbackUrl() !== ''
+             ? '<code>' . h(gwCallbackUrl()) . '</code> — خودکار فرستاده می‌شود' : '<b>آدرسِ عمومیِ ربات (https) معلوم نیست</b>') . "\n";
+    $text .= "نمایش به مشتری: <b>" . (($g['mode'] ?? 'address') === 'page' ? 'صفحه‌ی درگاه' : 'آدرسِ ولت + کیوآر داخلِ ربات') . "</b>\n";
     $text .= "ارز: <b>" . h($g['coin'] ?? '—') . "</b>" .
              (!empty($g['network']) ? ' · ' . h($g['network']) : '') . "\n";
     $text .= "نرخ: " . ((float)($g['rate'] ?? 0) > 0
              ? fmtNum($g['rate']) . ' تومان به ازای هر ۱ ' . h($g['coin'] ?? '')
-             : 'تبدیل با خود درگاه') . "\n";
+             : 'قیمتِ لحظه‌ایِ تتر') . "\n";
     $text .= "مهلت هر فاکتور: <b>" . (int)($g['expire'] ?? 30) . "</b> دقیقه\n";
     $text .= "حداقل شارژ با درگاه: <b>" . fmtNum($g['min'] ?? 0) . "</b> تومان\n\n";
 
     if (!gwOn()) {
         $text .= "برای راه‌اندازی:\n";
         $text .= "۱) در OxaPay یا NOWPayments حساب بسازید و آدرس ولت خودتان را آنجا ثبت کنید\n";
-        $text .= "۲) کلید API (Merchant Key) را بگیرید و اینجا بگذارید\n";
-        $text .= "۳) آدرس عمومی همین فایل ربات را بگذارید\n";
-        $text .= "۴) در پنل درگاه، آدرس بازگشت (Callback/IPN) را همان چیزی بگذارید که اینجا نشان داده می‌شود\n\n";
+        $text .= "۲) کلید API (Merchant API Key) را بگیرید و اینجا بگذارید\n";
+        $text .= "۳) درگاه را روشن کنید — آدرسِ بازگشت خودکار با هر فاکتور فرستاده می‌شود\n\n";
         $text .= "بعد از آن، پول مستقیم به ولت خودتان می‌رود و کیف پول مشتری خودکار شارژ می‌شود.";
     } else {
-        $text .= "✅ مشتری «افزایش موجودی» بزند، لینک پرداخت و آدرس ولت می‌گیرد.\n";
+        $text .= "✅ مشتری «افزایش موجودی» ← «ارز دیجیتال» بزند، آدرسِ ولت و مقدارِ دقیق را می‌گیرد.\n";
         $text .= "به‌محض واریز، کیف پولش خودکار شارژ می‌شود.";
     }
 
@@ -2855,8 +2958,9 @@ function admGateway($chatId, $msgId) {
     ];
     if (($g['provider'] ?? '') === 'nowpayments') $rows[] = [btnCb('🔐 کلید IPN', 'gws', 'admin')];
     if (($g['provider'] ?? '') === 'custom')      $rows[] = [btnCb('🔗 آدرس دلخواه', 'gwcu', 'admin')];
+    $rows[] = [btnCb((($g['mode'] ?? 'address') === 'page' ? '🪟 نمایش: صفحه‌ی درگاه' : '📥 نمایش: آدرسِ ولت در ربات'), 'payx_gm', 'admin')];
     $rows[] = [btnCb('🧪 تست ساخت فاکتور', 'gwtest', 'confirm')];
-    $rows[] = [btnUI('back', 'adm_home', 'nav')];
+    $rows[] = [btnUI('back', 'payx_home', 'nav')];
     editMsg(BOT_TOKEN, $chatId, $msgId, $text, inlineKb($rows));
 }
 
@@ -2930,7 +3034,7 @@ function textLabels() {
         'rejected' => '❌ رد درخواست شارژ', 'no_balance' => '❌ موجودی کم',
         'banned' => '🚫 کاربر مسدود', 'topup_ok' => '✅ متن شارژ شدن حساب',
         'sup_ticket' => '💬 پیام ارتباط غیر مستقیم', 'sup_sent' => '✅ پیام ارسال شد',
-    ];
+    ] + (function_exists('payTextLabels') ? payTextLabels() : []);
 }
 
 function uiTextLabels() {
@@ -2940,9 +3044,8 @@ function uiTextLabels() {
         'receipt' => 'ارسال رسید', 'topup' => 'افزایش موجودی',
         'my_orders' => 'شماره‌های من', 'open_app' => 'شماره مجازی (پایینِ ثبت سفارش)',
         'open' => 'باز کردن',
-        'shop_orders' => 'مشاهده‌ی سفارش‌ها (بالای ثبت سفارش)',
-        'open_tgs' => 'خدمات تلگرام (وسطِ ثبت سفارش)',
-        'open_igs' => 'خدمات اینستاگرام (وسطِ ثبت سفارش)',
+        'open_tgs' => 'خدمات تلگرام (بالای ثبت سفارش)',
+        'open_igs' => 'خدمات اینستاگرام (بالای ثبت سفارش)',
     ];
 }
 
@@ -3190,7 +3293,7 @@ function textVars($key) {
         'shop'         => '{balance}',
         'no_balance'   => '{balance}',
         'orders_item'  => '{status} {title} {phone} {code_line} {amount} {id} {date}',
-    ][$key] ?? '';
+    ][$key] ?? ((function_exists('payTextVars') ? payTextVars() : [])[$key] ?? '');
 }
 
 function edText($chatId, $msgId, $key) {
@@ -3241,12 +3344,12 @@ function edUiTexts($chatId, $msgId, $page = 0) {
 }
 
 function shopBtnKeys() {
-    return ['shop_orders' => 'بالا', 'open_tgs' => 'وسط (تلگرام)', 'open_igs' => 'وسط (اینستاگرام)', 'open_app' => 'پایین'];
+    return ['open_tgs' => 'بالا (تلگرام)', 'open_igs' => 'بالا (اینستاگرام)', 'open_app' => 'پایین'];
 }
 
 function edShop($chatId, $msgId) {
     $text = "🛍 <b>پیام و دکمه‌های «ثبت سفارش»</b>\n\n" .
-        "چیدمان: یک دکمه بالا (سفارش‌های ثبت‌شده)، دو دکمه وسط (خدمات تلگرام و اینستاگرام) و یک دکمه پایین (شماره مجازی).\n" .
+        "چیدمان: دو دکمه بالا (خدمات تلگرام و اینستاگرام) و یک دکمه پایین (شماره مجازی).\n" .
         "دکمه‌ی هر مینی‌اپی که بسته یا بی‌سرویس باشد، خودکار پنهان می‌شود.\n\n" .
         "<b>پیش‌نمایش پیام:</b>\n" . T('shop', ['balance' => fmtNum(0)]) . "\n\n";
     foreach (shopBtnKeys() as $k => $pos) {
@@ -3568,7 +3671,9 @@ function masterHandle($update) {
             return;
         }
 
-        $adminPrefixes = ['aok_', 'ano_', 'adm_', 'ag_', 'eb', 'et', 'eg', 'eu', 'eref', 'esup',
+        if (function_exists('payUserCallback') && payUserCallback($data, $uid, $chatId, $msgId, $cbId, $uname)) return;
+
+        $adminPrefixes = ['aok_', 'ano_', 'akyc_', 'adm_', 'ag_', 'eb', 'et', 'eg', 'eu', 'eref', 'esup',
                           'jn', 'gw', 'pay', 'px', 'dm', 'ch', 'gma', 'gm_', 'num', 'reply_', 'bk', 'mn',
                           'qz_home', 'qza', 'qzb',
                           'fnt_', 'fntv_',
@@ -3680,6 +3785,7 @@ function masterHandle($update) {
         if (tlAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if (function_exists('fntCallback') && fntCallback($data, $chatId, $msgId, $cbId)) return;
         if (function_exists('tpAdminCallback') && tpAdminCallback($data, $chatId, $msgId, $cbId)) return;
+        if (function_exists('payAdminCallback') && payAdminCallback($data, $chatId, $msgId, $cbId)) return;
         if ($data === 'adm_gw')      { answerCb(BOT_TOKEN, $cbId); admGateway($chatId, $msgId); return; }
         if ($data === 'adm_pay')     { answerCb(BOT_TOKEN, $cbId); admPay($chatId, $msgId); return; }
         foreach ([['payc', 'pay_card', "💳 شماره کارت را بفرستید (۱۶ رقم).\n\nخط تیره = پاک کردن"],
@@ -3721,7 +3827,7 @@ function masterHandle($update) {
                   ['gwu', 'gw_url',  "🌐 آدرس عمومی همین فایل ربات را بفرستید.\n\nمثال: <code>https://site.com/bot.php</code>"],
                   ['gwc', 'gw_coin', "🪙 نماد ارز را بفرستید. مثال: <code>USDT</code> یا <code>TRX</code>"],
                   ['gwn', 'gw_net',  "🔗 شبکه را بفرستید. مثال: <code>TRC20</code> (خط تیره = بدون شبکه)"],
-                  ['gwr', 'gw_rate', "💱 هر ۱ واحد ارز چند تومان است؟ (۰ = تبدیل با خود درگاه)"],
+                  ['gwr', 'gw_rate', "💱 هر ۱ واحد ارز چند تومان است؟ (۰ = قیمتِ لحظه‌ایِ تتر)"],
                   ['gwe', 'gw_exp',  "⏳ مهلت هر فاکتور به دقیقه:"],
                   ['gwm', 'gw_min',  "🔢 حداقل مبلغ شارژ با درگاه (تومان):"],
                   ['gwcu','gw_curl', "🔗 آدرس درگاه دلخواه.\n\nمتغیرها: <code>{amount}</code> <code>{order}</code> <code>{callback}</code>"]] as [$d0, $act, $ask]) {
@@ -4150,6 +4256,9 @@ function masterHandle($update) {
         clearState($uid);
         slotClear($uid);
         if ($miss = masterJoinMissing($uid)) { masterJoinGate($uid, $chatId, $miss); return; }
+        if ($arg === 'topup') { startTopup($uid, $chatId); return; }
+        if ($arg === 'kyc' && function_exists('kycStart')) { kycStart($uid, $chatId); return; }
+        if ($arg === 'phone' && function_exists('tuAskPhone')) { tuAskPhone($uid, $chatId); return; }
         if ($arg === 'bank' && function_exists('bkOn') && bkOn() && function_exists('bkShow')) {
             bkShow($uid, $chatId, $fname);
             return;
@@ -4196,6 +4305,8 @@ function masterHandle($update) {
         return;
     }
 
+    if (!empty($msg['contact']) && function_exists('payOnContact') && payOnContact($msg, $uid, $chatId)) return;
+
     $act = findMenuAction($text);
     if ($act) {
         clearState($uid);
@@ -4233,6 +4344,8 @@ function masterHandle($update) {
     if (function_exists('qzStateHandle') && qzStateHandle($action, $msg, $uid, $chatId)) return;
     if (tlStateHandle($action, $msg, $uid, $chatId)) return;
     if (function_exists('tpStateHandle') && tpStateHandle($action, $msg, $uid, $chatId)) return;
+    if (function_exists('payStateHandle') && payStateHandle($action, $msg, $uid, $chatId)) return;
+    if (function_exists('payAdminState') && isAdmin($uid) && payAdminState($action, $msg, $uid, $chatId)) return;
     if (function_exists('fntState') && fntState($action, getState($uid)['data'] ?? [], $msg, $uid, $chatId)) return;
 
     if (str_starts_with($action, 'pay_')) {
@@ -4514,7 +4627,8 @@ function masterHandle($update) {
         $why = topupAmountError($amt);
         if ($why !== '') { sendMsg(BOT_TOKEN, $chatId, '⚠️ ' . $why); return; }
         clearState($uid);
-        createOrderAndAsk($uid, $chatId, $uname, $amt);
+        // وقتی منوی روش‌ها هست، این مرحله فقط برای کارت‌به‌کارت است
+        createOrderAndAsk($uid, $chatId, $uname, $amt, function_exists('tuStart') ? 'card' : 'auto');
         return;
     }
 
@@ -4891,6 +5005,18 @@ if (defined('MEMBERSHIP_LIB_ONLY')) return;
 if (isset($_GET['ipn'])) {
     try { handleIpn(); }
     catch (Throwable $e) { error_log('[ipn] ' . $e->getMessage()); http_response_code(500); echo 'err'; }
+    exit;
+}
+
+// بازگشت از درگاهِ ایرانی و وضعیتِ پرداخت برای صفحه‌ی درگاه
+if (isset($_GET['irpay'])) {
+    try { if (function_exists('irCallback')) irCallback(); else { http_response_code(404); echo 'off'; } }
+    catch (Throwable $e) { error_log('[irpay] ' . $e->getMessage()); http_response_code(500); echo 'err'; }
+    exit;
+}
+if (isset($_GET['paystat'])) {
+    try { if (function_exists('payStatusJson')) payStatusJson(); else { http_response_code(404); echo '{"ok":false}'; } }
+    catch (Throwable $e) { error_log('[paystat] ' . $e->getMessage()); http_response_code(500); echo '{"ok":false}'; }
     exit;
 }
 
@@ -5395,8 +5521,7 @@ function runBackgroundQueues() {
                         "<blockquote><tg-emoji emoji-id=\"5258073068852485953\">✈️</tg-emoji>    خدمات تلگرام: ممبر، بازدید، ری‌اکشن و بوست</blockquote>\n" .
                         "<blockquote>📸    خدمات اینستاگرام: فالوور، لایک، ویو و کامنت</blockquote>\n" .
                         "<blockquote><tg-emoji emoji-id=\"5319227750970573446\">📱</tg-emoji>    شماره مجازی: تحویل آنی، کد همین‌جا</blockquote>\n" .
-                        "<tg-emoji emoji-id=\"5445353829304387411\">💳</tg-emoji> موجودی شما: <b>{balance}</b> تومان\n\n" .
-                        "<tg-emoji emoji-id=\"5305265301917549162\">📎</tg-emoji> <b>سفارش‌های قبلی را با دکمه‌ی بالا ببینید.</b>";
+                        "<tg-emoji emoji-id=\"5445353829304387411\">💳</tg-emoji> موجودی شما: <b>{balance}</b> تومان";
                 else unset($c['texts']['shop']);
             }
             if (str_contains(str_replace('ـ', '', (string)($c['ui_texts']['open_app'] ?? '')), 'فروشگاه')) {
@@ -5404,8 +5529,7 @@ function runBackgroundQueues() {
                 $c['ui_colors']['open_app'] = 'success';
             }
             if ($kash) {
-                foreach (['shop_orders' => ['سـفـارش هـای ثـبـت شـده', '5444856076954520455'],
-                          'open_tgs'    => ['خـدمـات تـلـگـرام', '5931391527023546946'],
+                foreach (['open_tgs'    => ['خـدمـات تـلـگـرام', '5931391527023546946'],
                           'open_igs'    => ['📸 خـدمـات اینـسـتـاگـرام', ''],
                           'open_app'    => ['شـمـاره مـجـازی', '5766910798030966025']] as $k => [$t, $ic]) {
                     if (isset($c['ui_texts'][$k])) continue;
@@ -5428,6 +5552,18 @@ function runBackgroundQueues() {
             foreach (['word_hack', 'manual_protect', 'shield_after', 'hack_cooldown', 'rng'] as $k) unset($c[$k]);
             foreach (array_keys((array)($c['texts'] ?? [])) as $k)
                 if (preg_match('/^(hack_|risk_|btn_risk_)|^(protected|protect_still)$/', (string)$k)) unset($c['texts'][$k]);
+        });
+    });
+    migrateOnce('v18_shop_noorders', function () {
+        // دکمه‌ی «سفارش‌های ثبت‌شده» از پیامِ «ثبت سفارش» برداشته شد؛ جمله‌ی راهنمای آن هم از متنِ ذخیره‌شده پاک می‌شود
+        cfgSet(function (&$c) {
+            foreach (['ui_texts', 'ui_colors', 'ui_icons'] as $g) unset($c[$g]['shop_orders']);
+            $shop = (string)($c['texts']['shop'] ?? '');
+            if ($shop === '' || !str_contains($shop, 'قبلی')) return;
+            $new = preg_replace('/؛\s*سفارش[^؛.\n]*قبلی[^.\n]*بالا[^.\n]*(?=\.)/u', '', $shop);
+            $new = preg_replace('/^[^\n]*قبلی[^\n]*بالا[^\n]*(?:\n|$)/mu', '', (string)$new);
+            $new = rtrim((string)preg_replace("/\n{3,}/", "\n\n", (string)$new));
+            if ($new !== '' && $new !== $shop) $c['texts']['shop'] = $new;
         });
     });
     migrateOnce('v7_ttl', function () {

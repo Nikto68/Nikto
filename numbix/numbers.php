@@ -1342,9 +1342,12 @@ function numCatalog5() {
         if (!is_array($x)) continue;
         $iso = '';
         if (is_array($x['iso'] ?? null)) { $k = array_keys($x['iso']); $iso = (string)($k[0] ?? ''); }
+        $fl = numFlagIso($iso);
+        // اگر ۵سیم کدِ ISO نداد، پرچم از روی اسمِ کشور پیدا می‌شود (وگرنه 🌍 می‌ماند)
+        if ($fl === '🌍') $fl = numFlagFa((string)($x['text_en'] ?? ''), (string)$slug);
         $meta[(string)$slug] = [
             'fa'   => numCountryFa($slug, (string)($x['text_en'] ?? '')),
-            'flag' => numFlagIso($iso),
+            'flag' => $fl,
         ];
     }
 
@@ -1363,6 +1366,7 @@ function numCatalog5() {
             $ops = (isset($x[$prod]) && is_array($x[$prod])) ? $x[$prod] : $x;
             $cName = $meta[$slug]['fa']   ?? numCountryFa($slug);
             $flag  = $meta[$slug]['flag'] ?? '🌍';
+            if ($flag === '🌍') $flag = numFlagFa($slug, $cName);
             foreach ($ops as $op => $info) {
                 if (!is_array($info) || !isset($info['cost'])) continue;
                 $usd = (float)$info['cost'];
@@ -1570,6 +1574,9 @@ function numFlagMap() {
 
     $en = [
         'RU'=>['russia','russianfederation','rusia'],
+        'GW'=>['guineabissau'], 'CV'=>['capeverde','caboverde'], 'GQ'=>['equatorialguinea'],
+        'LC'=>['saintlucia','stlucia'], 'KN'=>['saintkittsandnevis','saintkitts'], 'VC'=>['saintvincent','saintvincentandthegrenadines'],
+        'ST'=>['saotomeandprincipe','saotome'], 'CF'=>['centralafricanrepublic','car'], 'SS'=>['southsudan'],
         'UA'=>['ukraine'],
         'KZ'=>['kazakhstan','kazakstan'],
         'GB'=>['england','unitedkingdom','uk','greatbritain','britain','scotland','wales'],

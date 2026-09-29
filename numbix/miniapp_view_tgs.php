@@ -3,7 +3,7 @@
 function svTplTg() {
     return <<<'HTML'
 <!doctype html>
-<html lang="fa" dir="rtl" style="--sd:__SPL__s">
+<html lang="fa" dir="rtl" class="spl-on" style="--sd:__SPL__s">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -181,7 +181,7 @@ svg{display:block}
 .hd{display:flex;align-items:center;gap:8px;margin:20px 2px 10px}
 .hd h3{flex:1;font-size:14px;font-weight:900;display:flex;align-items:center;gap:8px}
 .hd h3:before{content:"";width:4px;height:16px;border-radius:4px;background:var(--grad);box-shadow:0 0 10px rgba(139,92,246,.8)}
-.hd button{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;color:var(--sky)}
+.hd button{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;color:var(--sky);min-height:34px;padding:0 6px;margin:-10px -6px}
 .hd button svg{width:15px;height:15px}
 
 .bento{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -394,6 +394,21 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .btn[disabled]:after{display:none}
 .btn.gh{background:var(--glass);color:var(--ink);border:1px solid var(--line2);box-shadow:none}
 .btn.gh:after{display:none}
+/* روش‌های شارژ: ارز دیجیتال و درگاه ایرانی */
+.pms{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.pms:empty{display:none}
+.pm{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;padding:14px 13px 12px;border-radius:21px;text-align:right;
+  border:1px solid var(--line2);background:linear-gradient(160deg,rgba(255,255,255,.11),rgba(255,255,255,.02) 55%),var(--glass);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 18px 30px -22px #000;transition:transform .15s}
+.pm:active{transform:scale(.97)}
+.pm .gi{margin-bottom:6px}
+.gi{display:inline-grid;width:42px;height:42px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}.gi svg{width:100%;height:100%}
+.pm b{font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pm small{font-size:10px;font-weight:700;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pm .pg2{align-self:stretch;display:flex;align-items:center;justify-content:center;height:36px;margin-top:9px;border-radius:12px;font-size:12px;font-weight:900;color:#fff;background:var(--grad);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 10px 20px -12px rgba(0,0,0,.9)}
+.pms .pm:only-child{grid-column:1/-1}
+
 .note{margin-top:12px;padding:11px 12px;border-radius:14px;background:rgba(124,58,237,.08);border:1px solid var(--line);font-size:11px;color:var(--dim);line-height:1.9}
 
 .links{display:grid;gap:9px;margin-top:14px}
@@ -482,6 +497,10 @@ html.shon .sky *,html.shon .tick .tr,html.shon .app *:before,html.shon .app *:af
     var(--dots) 0 0/300px 300px repeat,#07051A;
   transition:opacity .5s ease .1s,visibility .5s ease .1s}
 .spl.out{opacity:0;visibility:hidden}
+/* تا لودینگ روی صفحه است، زیرش نقاشی نمی‌شود — همه‌ی انیمیشن‌های لودینگ روی GPU (فقط transform/opacity) */
+.spl-on .app,.spl-on .tabs{visibility:hidden}.spl-on .sky{display:none}
+.spl{will-change:opacity}
+.orb>i,.orb .lg{will-change:transform}
 .spl .spc{display:flex;flex-direction:column;align-items:center;animation:spIn .8s cubic-bezier(.2,.85,.25,1) both;
   transition:transform .5s cubic-bezier(.5,0,.75,0),opacity .3s ease}
 .spl.out .spc{transform:scale(1.18);opacity:0}
@@ -510,8 +529,11 @@ html.shon .sky *,html.shon .tick .tr,html.shon .app *:before,html.shon .app *:af
 .spl .pc b{font-size:24px;font-weight:900;line-height:1;min-width:62px;text-align:left;background:linear-gradient(90deg,#C4B5FD,#22D3EE);-webkit-background-clip:text;background-clip:text;color:transparent}
 .trk{position:relative;height:5px;border-radius:5px;background:rgba(167,161,204,.16)}
 .trk .fl{position:absolute;inset:0;border-radius:5px;background:var(--grad);box-shadow:0 0 12px rgba(139,92,246,.8);transform-origin:right center;transform:scaleX(0);
-  transition:transform .16s linear;will-change:transform}
-.trk b{position:absolute;top:50%;right:0;width:22px;height:22px;margin:-11px -11px 0 0;color:#fff;transition:transform .16s linear;will-change:transform}
+  will-change:transform}
+.trk .pw{position:absolute;inset:0;will-change:transform}
+@keyframes spb{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes spw{from{transform:translate3d(0,0,0)}to{transform:translate3d(-100%,0,0)}}
+.trk b{position:absolute;top:50%;right:0;width:22px;height:22px;margin:-11px -11px 0 0;color:#fff}
 .trk b svg{width:100%;height:100%;transform:rotate(-135deg);filter:drop-shadow(0 0 6px rgba(139,92,246,.95))}
 .spl .stg{display:flex;justify-content:center;gap:6px;margin-top:14px}
 .spl .stg i{width:22px;height:4px;border-radius:4px;background:rgba(167,161,204,.22);transition:background .3s,box-shadow .3s,width .3s}
@@ -571,7 +593,7 @@ html.shon .sky *,html.shon .tick .tr,html.shon .app *:before,html.shon .app *:af
     <p>__TAG__</p>
   </div>
   <div class="ld"><div class="pc"><span id="spMsg">در حال اتصالِ امن…</span><b id="spPct">0%</b></div>
-    <div class="trk" id="spTrk"><i class="fl" id="spBar"></i><b id="spPl"><svg><use href="#i-plane"/></svg></b></div>
+    <div class="trk" id="spTrk"><i class="fl" id="spBar"></i><i class="pw" id="spPl"><b><svg><use href="#i-plane"/></svg></b></i></div>
     <div class="stg" id="spStg"><i></i><i></i><i></i><i></i><i></i></div><small id="spTip"></small></div>
 </div>
 
@@ -630,9 +652,10 @@ html.shon .sky *,html.shon .tick .tr,html.shon .app *:before,html.shon .app *:af
     </div>
     <div class="fld"><label>مبلغِ شارژ (تومان)</label><input id="tAmt" inputmode="numeric" placeholder="مثلا ۱۰۰٬۰۰۰"></div>
     <div class="qa" id="qa"></div>
+    <div class="pms" id="pms"></div>
     <div id="payInfo"></div>
-    <button class="btn" id="tGo"><svg><use href="#i-wallet"/></svg>درخواستِ شارژ</button>
-    <div class="note" id="tNote">فاکتور و مقصدِ پرداخت داخلِ ربات برایتان فرستاده می‌شود؛ بعد از واریز، «ارسال رسید» را بزنید.</div>
+    <button class="btn gh" id="tGo"><svg><use href="#i-wallet"/></svg>کارت به کارت — درخواستِ شارژ</button>
+    <div class="note" id="tNote">فاکتورِ کارت‌به‌کارت داخلِ ربات برایتان فرستاده می‌شود؛ بعد از واریز، «ارسال رسید» را بزنید.</div>
   </section>
 </div>
 
@@ -720,8 +743,8 @@ function splStep(){
   var el = Date.now() - SPL.t0, p = SPL.min ? Math.min(1, el / SPL.min) : 1;
   var pc = $('spPct'), bar = $('spBar'), pl = $('spPl'), tr = $('spTrk'), m = $('spMsg'), g = $('spStg'), t = $('spTip');
   if (pc) pc.textContent = Math.floor(p * 100) + '%';
-  if (bar) bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
-  if (pl && tr) pl.style.transform = 'translate3d(' + (-p * tr.clientWidth).toFixed(1) + 'px,0,0)';
+  // نوار و هواپیما با انیمیشنِ CSS روی GPU جلو می‌روند (با کارِ سنگین هم گیر نمی‌کنند)؛ این فقط برای حالتِ بی‌انیمیشن است
+  if (RM || !SPL.anim) { if (bar) bar.style.transform = 'scaleX(' + p.toFixed(4) + ')'; if (pl) pl.style.transform = 'translate3d(' + (-p * 100).toFixed(2) + '%,0,0)'; }
   var mi = Math.min(SPM.length - 1, Math.floor(p * (SPM.length - 1) + (p >= 1 ? 1 : 0)));
   if (m && SPL.mi !== mi) { SPL.mi = mi; m.textContent = SPM[mi]; }
   if (g) [].forEach.call(g.children, function(x, k){ x.classList.toggle('on', p * g.children.length >= k + 1 - 0.001); });
@@ -729,6 +752,12 @@ function splStep(){
   if (t && SPL.ti !== ti) { SPL.ti = ti; t.style.opacity = 0; setTimeout(function(){ t.textContent = SPT[ti]; t.style.opacity = 1; }, 170); }
   return true;
 }
+(function(){
+  var bar = $('spBar'), pl = $('spPl'), el = Date.now() - SPL.t0;
+  if (!bar || !pl || RM || SPL.min <= el) return;
+  bar.style.animation = 'spb ' + SPL.min + 'ms linear ' + (-el) + 'ms both';
+  pl.style.animation = 'spw ' + SPL.min + 'ms linear ' + (-el) + 'ms both'; SPL.anim = true;
+})();
 splStep();
 SPL.iv = setInterval(function(){ if (!splStep()) clearInterval(SPL.iv); }, 100);
 function hideSplash(now){
@@ -737,9 +766,13 @@ function hideSplash(now){
   var wait = now ? 0 : Math.max(0, SPL.min - (Date.now() - SPL.t0));
   setTimeout(function(){
     if (SPL.gone) return;
+    SPL.anim = false; var bar = $('spBar'), pl = $('spPl'); if (bar) bar.style.animation = 'none'; if (pl) pl.style.animation = 'none';
     splStep(); SPL.gone = true; clearInterval(SPL.iv);
-    var sp = $('spl'); if (!sp) return; sp.classList.add('out');
-    setTimeout(function(){ if (sp.parentNode) sp.parentNode.removeChild(sp); }, 700); }, wait);
+    H.classList.remove('spl-on');
+    var sp = $('spl'); if (!sp) return;
+    // اول صفحه‌ی زیرین (هنوز زیرِ لودینگِ مات) نقاشی شود، بعد محو شدن شروع شود — بی‌پرش
+    setTimeout(function(){ sp.classList.add('out');
+      setTimeout(function(){ if (sp.parentNode) sp.parentNode.removeChild(sp); }, 700); }, 90); }, wait);
 }
 setTimeout(function(){ hideSplash(false); }, Math.max(3000, SPL.min + 2500 - (Date.now() - SPL.t0)));
 var API = (function(){ try { if (/^https?:$/.test(location.protocol)) return location.origin + location.pathname + '?mapi=1'; } catch(e){} return ''; })();
@@ -1074,7 +1107,35 @@ $('oRef').onclick = function(){ tap(); loadOrders(); };
 
 var WAL = { pre: 0, busy: false };
 function tMin(){ return Math.max(1000, Number((B.topup || {}).min) || 0); }
-function payOk(){ var t = B.topup || {}; return !!(t.on || t.gw); }
+function payOk(){ var t = B.topup || {}; return !!(t.card_on != null ? t.card_on : t.on); }
+function stripEm(s){ return String(s || '').replace(/^[^؀-ۿA-Za-z0-9]+/, '').trim(); }
+var GI = {
+  crypto: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34D399"/><stop offset=".55" stop-color="#10B981"/><stop offset="1" stop-color="#047857"/></linearGradient></defs>' +
+    '<circle cx="24" cy="24" r="22" fill="url(#giC)"/><circle cx="24" cy="24" r="18.5" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>' +
+    '<path d="M13.5 14.5h21v4.6h-8.2v17.4h-4.6V19.1h-8.2z" fill="#fff"/><ellipse cx="24" cy="23.4" rx="10.6" ry="3.3" fill="none" stroke="#fff" stroke-width="2.2"/>' +
+    '<path d="M9 16a17 17 0 0 1 8-8" stroke="rgba(255,255,255,.55)" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>',
+  iran: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giI" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818CF8"/><stop offset=".55" stop-color="#6366F1"/><stop offset="1" stop-color="#1D4ED8"/></linearGradient></defs>' +
+    '<rect x="2" y="2" width="44" height="44" rx="14" fill="url(#giI)"/><rect x="9" y="14" width="30" height="20" rx="3.6" fill="none" stroke="#fff" stroke-width="2.4"/>' +
+    '<path d="M9 20.5h30" stroke="#fff" stroke-width="3"/><rect x="13" y="25.5" width="7" height="4.4" rx="1.2" fill="#FCD34D"/><path d="M24 28h10" stroke="rgba(255,255,255,.8)" stroke-width="2.2" stroke-linecap="round"/>' +
+    '<path d="M8 10a14 14 0 0 1 7-4" stroke="rgba(255,255,255,.5)" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>'
+};
+function drawPms(){
+  var t = B.topup || {}, l = t.lbl || {}, ms = [];
+  if (t.gw) ms.push(['crypto', GI.crypto, stripEm(l.crypto) || 'ارز دیجیتال', (t.gwcoin || 'USDT') + ' · شارژِ خودکار']);
+  if (t.ir) ms.push(['iran', GI.iran, stripEm(l.iran) || 'درگاه ایرانی', 'کارت‌های بانکی · آنی']);
+  $('pms').innerHTML = ms.map(function(m){ return '<button class="pm" data-pm="' + m[0] + '"><span class="gi">' + m[1] + '</span><b>' + esc(m[2]) + '</b><small>' + esc(m[3]) + '</small><span class="pg2">پرداخت</span></button>'; }).join('');
+  return ms.length;
+}
+function openPay(m){
+  var t = B.topup || {};
+  if (!t.pay) { toast('درگاه هنوز آماده نیست.'); return; }
+  var a = parseInt(digits($('tAmt').value), 10) || 0, d = initData(), h = '';
+  if (d) h = '#tgWebAppData=' + encodeURIComponent(d) + '&tgWebAppVersion=' + encodeURIComponent((TG && TG.version) || '7.0') + '&tgWebAppPlatform=' + encodeURIComponent((TG && TG.platform) || 'unknown');
+  tap('medium');
+  location.href = t.pay + '&m=' + m + '&th=tgs&back=tgs' + (a ? '&a=' + a : '') + h;
+}
+$('pms').addEventListener('click', function(ev){ var b = ev.target.closest('[data-pm]'); if (b) openPay(b.getAttribute('data-pm')); });
+
 function drawWallet(){
   setBal(S.bal);
   var t = B.topup || {}, min = tMin();
@@ -1083,13 +1144,13 @@ function drawWallet(){
   if (WAL.pre) { $('tAmt').value = fa(Math.max(min, Math.ceil(WAL.pre / 1000) * 1000)); WAL.pre = 0; }
   markQa();
   var h = '';
-  if (t.on) h += '<div class="r"><span>کارت به کارت</span><button class="cpy" id="cardCp">' + ico('copy') + '<span class="ltr">' + esc(t.card) + '</span></button></div>' +
+  var nm = drawPms();
+  if (payOk()) h += '<div class="r"><span>کارت به کارت</span><button class="cpy" id="cardCp">' + ico('copy') + '<span class="ltr">' + esc(t.card) + '</span></button></div>' +
     (t.name ? '<div class="r"><span>به نامِ</span><b>' + esc(t.name) + '</b></div>' : '');
-  if (t.gw) h += '<div class="r"><span>پرداختِ آنلاین (' + esc(t.gwcoin || 'USDT') + ')</span><b class="g">فعال' + (t.gwmin > 0 ? ' — از ' + fa(t.gwmin) + ' تومان' : '') + '</b></div>';
   $('payInfo').innerHTML = h ? '<div class="pay">' + h + '</div>'
-    : '<div class="warn">' + ico('alert') + '<span>روشِ پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>';
+    : (nm ? '' : '<div class="warn">' + ico('alert') + '<span>روشِ پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>');
   var cc = $('cardCp'); if (cc) cc.onclick = function(){ tap(); copy(digits(t.card), 'شماره کارت'); };
-  $('tGo').disabled = !payOk();
+  $('tGo').classList.toggle('hid', !payOk());
   $('tNote').classList.toggle('hid', !payOk());
 }
 function markQa(){ var v = parseInt(digits($('tAmt').value), 10) || 0; [].forEach.call($('qa').children, function(b){ b.classList.toggle('on', +b.getAttribute('data-v') === v); }); }

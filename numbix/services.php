@@ -1641,59 +1641,18 @@ function svApiAction($action, array $body, $uid, $uname, $initData) {
 
 
 function svShopKb($uid) {
-    $rows = [[btnCb(UT('shop_orders'), 'shop_orders', 'info', UC('shop_orders'))]];
-    $mid = [];
-    foreach (['tg', 'ig'] as $a) if ($b = svOpenBtn($a)) $mid[] = $b;
-    if ($mid) $rows[] = $mid;
+    $rows = [];
+    $top = [];
+    foreach (['tg', 'ig'] as $a) if ($b = svOpenBtn($a)) $top[] = $b;
+    if ($top) $rows[] = $top;
     $num = maReady() ? maOpenKb() : null;
     if ($num) $rows[] = $num['inline_keyboard'][0];
-    if (count($rows) === 1) return null;
-    $ic = (string)UI('shop_orders');
-    if ($ic !== '') $rows[0][0]['icon_custom_emoji_id'] = $ic;
-    return inlineKb($rows);
-}
-
-function svOrdersText($uid) {
-    $all = [];
-    foreach (MaOrder::forUser($uid, 8) as $o) {
-        $act = function_exists('numGet') ? numGet((string)$o['id']) : null;
-        $all[] = [strtotime((string)($o['created_at'] ?? '')) ?: 0,
-                  '☎️ <b>' . h((string)($o['item_name'] ?? '')) . '</b>' .
-                  (!empty($act['phone']) ? "\n   <code>" . h((string)$act['phone']) . '</code>' : '') .
-                  (!empty($act['code']) ? ' · کد: <code>' . h((string)$act['code']) . '</code>' : '') .
-                  "\n   " . MaOrder::statusLabel((string)($o['status'] ?? '')) . ' · ' . fmtNum((float)($o['total'] ?? 0)) . ' تومان'];
-    }
-    foreach (svOrdersFor($uid, '', 8) as $o) {
-        $r = svRow($o);
-        $all[] = [(int)$o['created'],
-                  (svApps()[$o['app']]['emoji'] ?? '🧩') . ' <b>' . h((string)$o['name']) . '</b>' .
-                  "\n   🔢 " . fmtNum((int)$o['qty']) . ' · ' . h($r['sx']) .
-                  ($r['st'] === 'run' && $r['rm'] >= 0 ? ' (' . fmtNum($r['pc']) . '٪)' : '') .
-                  ' · ' . fmtNum((float)$o['total']) . ' تومان'];
-    }
-    if (!$all) return "📦 <b>سفارش‌های ثبت‌شده</b>\n\nهنوز سفارشی ثبت نکرده‌اید.";
-    usort($all, fn($a, $b) => $b[0] <=> $a[0]);
-    $t = "📦 <b>سفارش‌های ثبت‌شده</b>\n";
-    foreach (array_slice($all, 0, 10) as [$at, $line]) $t .= "\n" . $line . "\n";
-    return mb_substr($t, 0, 3900);
+    return $rows ? inlineKb($rows) : null;
 }
 
 function svCallback($data, $uid, $chatId, $msgId, $cbId, $isAdmin) {
-    if ($data === 'shop_orders') {
-        answerCb(BOT_TOKEN, $cbId);
-        $rows = [];
-        if (maReady() && ($b = maWebAppBtn(UT('my_orders'), 'orders', 'link'))) $rows[] = [$b];
-        $line = [];
-        foreach (['tg', 'ig'] as $a)
-            if ($b = svOpenBtn($a, 'orders', svApps()[$a]['emoji'] . ' سفارش‌های ' . svApps()[$a]['short'])) $line[] = $b;
-        if ($line) $rows[] = $line;
-        $rows[] = [btnUI('back', 'shop_back', 'nav')];
-        $t = svOrdersText($uid);
-        if ($msgId) editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
-        else sendMsg(BOT_TOKEN, $chatId, $t, inlineKb($rows));
-        return true;
-    }
-    if ($data === 'shop_back') {
+    // «shop_orders» فقط روی پیام‌های قدیمی مانده (لیستِ سفارش‌ها برداشته شد) → همان پیامِ ثبت سفارش
+    if ($data === 'shop_back' || $data === 'shop_orders') {
         answerCb(BOT_TOKEN, $cbId);
         showShop($uid, $chatId);
         return true;

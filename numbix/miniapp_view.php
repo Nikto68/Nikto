@@ -150,6 +150,7 @@ html.in .pg.on>:nth-child(n+7){transition-delay:.3s}
 .sec h3{font-size:13.5px;font-weight:900;flex:1;display:flex;align-items:center;gap:7px}
 .sec h3 svg{width:17px;height:17px;color:var(--blue2)}
 .sec a,.sec button{font-size:11px;font-weight:700;color:var(--blue2)}
+.sec>button,.sec>a{display:inline-flex;align-items:center;min-height:34px;padding:0 6px;margin:-10px -6px}
 
 .card{position:relative;border-radius:var(--r);border:1px solid var(--line);background:var(--card);padding:14px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.045)}
@@ -193,6 +194,21 @@ html.in .pg.on>:nth-child(n+7){transition-delay:.3s}
 .btn svg{width:18px;height:18px}
 .btn[disabled]{opacity:.55;pointer-events:none}
 .btn.gh{background:rgba(255,255,255,.055);border:1px solid var(--line2);box-shadow:none;color:var(--ink)}
+/* روش‌های شارژ: ارز دیجیتال و درگاه ایرانی */
+.pms{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.pms:empty{display:none}
+.pm{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;padding:14px 13px 12px;border-radius:21px;text-align:right;
+  border:1px solid rgba(147,197,253,.24);background:linear-gradient(160deg,rgba(255,255,255,.11),rgba(255,255,255,.02) 55%),var(--gl);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 18px 30px -22px #000;transition:transform .15s}
+.pm:active{transform:scale(.97)}
+.pm .gi{margin-bottom:6px}
+.gi{display:inline-grid;width:42px;height:42px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}.gi svg{width:100%;height:100%}
+.pm b{font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pm small{font-size:10px;font-weight:700;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pm .pg2{align-self:stretch;display:flex;align-items:center;justify-content:center;height:36px;margin-top:9px;border-radius:12px;font-size:12px;font-weight:900;color:#fff;background:var(--grad);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 10px 20px -12px rgba(0,0,0,.9)}
+.pms .pm:only-child{grid-column:1/-1}
+
 .btn.bl{background:linear-gradient(135deg,#2563EB,#3B82F6)}
 .btn.rd{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:#FCA5A5;box-shadow:none}
 .btn.sm{padding:9px 12px;font-size:12px;border-radius:12px;width:auto}
@@ -270,19 +286,47 @@ html.in .pg.on>:nth-child(n+7){transition-delay:.3s}
 .prods button.on.whatsapp{background:linear-gradient(145deg,rgba(37,211,102,.32),rgba(37,211,102,.08));box-shadow:0 10px 22px -14px #25D366,inset 0 0 0 1px rgba(74,222,128,.5)}
 .prods button.telegram i{background:rgba(42,171,238,.16)}.prods button.instagram i{background:rgba(221,42,123,.16)}.prods button.whatsapp i{background:rgba(37,211,102,.16)}
 .prods button small b{color:var(--ink)}
-.clist{display:grid;gap:8px;margin-top:8px}
-.crow{display:flex;align-items:center;gap:11px;border-radius:16px;border:1px solid var(--line);background:var(--card);padding:10px 12px;
-  content-visibility:auto;contain-intrinsic-size:auto 62px;transition:transform .12s}
-.crow .fl{width:42px;height:42px;font-size:24px}
-.crow .mid{flex:1;min-width:0}
-.crow b{display:block;font-size:13px;font-weight:800}
-.crow small{font-size:10.5px;color:var(--dim)}
-.crow .pr{text-align:left}
-.crow .pr b{font-size:13px;color:var(--green2);font-weight:900}
-.crow .pr small{display:block;font-size:9.5px}
+/* کشورها دوتا دوتا کنارِ هم */
+.clist{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.clist>.more,.clist>.empty{grid-column:1/-1}
+.ctl{position:relative;overflow:hidden;isolation:isolate;display:flex;flex-direction:column;align-items:center;min-width:0;width:100%;text-align:center;
+  padding:14px 10px 10px;border-radius:20px;border:1px solid transparent;transition:transform .12s;
+  background:radial-gradient(120% 70% at 50% 0%,rgba(59,130,246,.2),transparent 62%) padding-box,linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0) 50%) padding-box,
+    linear-gradient(var(--gl),var(--gl)) padding-box,linear-gradient(155deg,rgba(255,255,255,.24),rgba(255,255,255,.05) 35%,rgba(74,222,128,.3)) border-box;
+  box-shadow:0 14px 26px -20px rgba(0,0,0,.95)}
+.ctl:active{transform:scale(.97)}
+.ctl.h{background:radial-gradient(120% 70% at 50% 0%,rgba(245,158,11,.2),transparent 62%) padding-box,linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0) 50%) padding-box,
+    linear-gradient(var(--gl),var(--gl)) padding-box,linear-gradient(155deg,rgba(252,211,77,.5),rgba(255,255,255,.05) 40%,rgba(74,222,128,.3)) border-box}
+.ctl .bd{position:absolute;top:8px;inset-inline-start:8px;font-size:9px;font-weight:900;padding:2px 7px;border-radius:8px;background:rgba(34,197,94,.16);color:var(--green3);border:1px solid rgba(74,222,128,.3)}
+.ctl.h .bd{background:rgba(245,158,11,.16);color:#FCD34D;border-color:rgba(252,211,77,.35)}
+.ctl .fl{width:52px;height:52px;font-size:30px}
+.ctl .tx{display:block;min-width:0;max-width:100%;margin-top:7px}
+.ctl .tx b{display:block;font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctl .tx small{display:block;font-size:10px;color:var(--dim);white-space:nowrap}
+.ctl .pz{display:flex;align-items:baseline;justify-content:center;gap:4px;margin-top:7px;white-space:nowrap}
+.ctl .pz small{font-size:10px;color:var(--dim);font-weight:700}
+.ctl .pz b{font-size:18px;font-weight:900;background:linear-gradient(90deg,#fff 10%,#4ADE80);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ctl .go{display:flex;align-items:center;justify-content:center;gap:3px;width:100%;height:36px;margin-top:9px;border-radius:12px;background:var(--grad);color:#fff;
+  font-size:12px;font-weight:900;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.18),0 8px 18px -10px rgba(59,130,246,.9)}
+.ctl .go svg{width:14px;height:14px}
+.ctl.w{grid-column:1/-1;flex-direction:row;text-align:right;gap:11px;padding:12px}
+.ctl.w .bd{top:6px}
+.ctl.w .fl{width:46px;height:46px;font-size:26px}
+.ctl.w .tx{flex:1;margin-top:0}
+.ctl.w .pz{flex-direction:column;align-items:flex-end;gap:0;margin-top:0}
+.ctl.w .go{width:auto;padding:0 14px;margin-top:0}
 .chev{width:16px;height:16px;color:var(--dim2)}
 
 .co{display:flex;align-items:center;gap:11px;border-radius:16px;border:1px solid var(--line);background:var(--card2);padding:11px 12px;margin-bottom:8px;transition:transform .12s}
+/* اپراتورها هم دوتا دوتا */
+.opg{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.opg .co{flex-direction:column;align-items:stretch;gap:8px;margin:0;padding:12px 11px 11px;text-align:center}
+.opg .co .mid b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opg .co .mid .bdg{display:inline-block;margin:4px 0 0}
+.opg .co .pbtn{display:block;text-align:center;padding:9px 8px}
+.opg .co.w{grid-column:1/-1;flex-direction:row;align-items:center;text-align:right}
+.opg .co.w .mid b{display:inline-block;max-width:68%;vertical-align:middle}
+.opg .co.w .mid .bdg{margin:0;margin-inline-start:6px;vertical-align:middle}
 .co .mid{flex:1;min-width:0}
 .co b{font-size:13px;font-weight:800}
 .co small{display:block;font-size:10px;color:var(--dim)}
@@ -589,7 +633,8 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
 .splash .ld .pc span{font-size:11px;font-weight:800;color:var(--ink);opacity:.9;text-align:right;transition:opacity .2s}
 .splash .ld .pc b{font-size:24px;font-weight:900;line-height:1;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;min-width:62px;text-align:left}
 .splash .ld .bar{position:relative;height:7px;border-radius:7px;overflow:hidden;overflow:clip;background:rgba(148,163,184,.16);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
-.splash .ld .bar i{position:absolute;inset:0;border-radius:7px;background:var(--grad);transform:translate3d(100%,0,0);transition:transform .16s linear;will-change:transform;
+@keyframes spb{from{transform:translate3d(100%,0,0)}to{transform:translate3d(0,0,0)}}
+.splash .ld .bar i{position:absolute;inset:0;border-radius:7px;background:var(--grad);transform:translate3d(100%,0,0);will-change:transform;
   box-shadow:0 0 14px rgba(59,130,246,.75)}
 .splash .ld .bar i:after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:ldg 1.3s linear infinite}
 @keyframes ldg{from{transform:translate3d(-100%,0,0)}to{transform:translate3d(260%,0,0)}}
@@ -985,9 +1030,10 @@ html.shon .sky *,html.shon .app *:before,html.shon .app *:after{animation-play-s
     <div class="sec"><h3><svg><use href="#i-plus"/></svg>افزایش موجودی</h3></div>
     <div class="qa" id="qa"></div>
     <div class="fld"><label>مبلغ دلخواه</label><div class="inw"><input class="inp" id="tAmt" inputmode="numeric" placeholder="مثلا ۱۰۰٬۰۰۰"><span class="sf">تومان</span></div></div>
+    <div class="pms" id="pms"></div>
     <div class="card mt" id="payInfo"></div>
-    <button class="btn mt" id="topBtn"><svg><use href="#i-wallet"/></svg>ثبت درخواست شارژ</button>
-    <div class="note bl mt"><svg><use href="#i-alert"/></svg><span>بعد از ثبت، فاکتور و مقصد پرداخت داخل ربات برایتان می‌آید؛ واریز کنید و «ارسال رسید» را بزنید. بعد از تایید، موجودی خودکار شارژ می‌شود.</span></div>
+    <button class="btn gh mt" id="topBtn"><svg><use href="#i-wallet"/></svg>کارت به کارت — ثبت درخواست شارژ</button>
+    <div class="note bl mt" id="topNote"><svg><use href="#i-alert"/></svg><span>بعد از ثبت، فاکتورِ کارت‌به‌کارت داخل ربات برایتان می‌آید؛ واریز کنید و «ارسال رسید» را بزنید. بعد از تایید، موجودی خودکار شارژ می‌شود.</span></div>
   </section>
 
   <section class="pg" id="pg-notes"><div id="nlist"></div></section>
@@ -1037,6 +1083,7 @@ var B = __BOOT__;
 var TG = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
 var $ = function(id){ return document.getElementById(id); };
 var D = document, H = D.documentElement;
+var RM = false; try { RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch(e){}
 
 var HASH_INIT = (function(){
   try {
@@ -1218,7 +1265,8 @@ function splStep(){
   var el = Date.now() - SPL.t0, p = SPL.min ? Math.min(1, el / SPL.min) : 1;
   var pc = $('spPct'), bar = $('spBar'), m = $('spMsg'), g = $('spStg'), t = $('spTip');
   if (pc) pc.textContent = Math.floor(p * 100) + '%';
-  if (bar) bar.style.transform = 'translate3d(' + ((1 - p) * 100).toFixed(2) + '%,0,0)';
+  // نوار با انیمیشنِ CSS روی GPU جلو می‌رود (با کارِ سنگین هم گیر نمی‌کند)؛ این فقط برای حالتِ بی‌انیمیشن است
+  if (bar && (RM || !SPL.anim)) bar.style.transform = 'translate3d(' + ((1 - p) * 100).toFixed(2) + '%,0,0)';
   var mi = Math.min(SPM.length - 1, Math.floor(p * (SPM.length - 1) + (p >= 1 ? 1 : 0)));
   if (m && SPL.mi !== mi) { SPL.mi = mi; m.textContent = SPM[mi]; }
   if (g) [].forEach.call(g.children, function(x, k){ x.classList.toggle('on', p * g.children.length >= k + 1 - 0.001); });
@@ -1226,6 +1274,11 @@ function splStep(){
   if (t && SPL.ti !== ti) { SPL.ti = ti; t.style.opacity = 0; setTimeout(function(){ t.textContent = SPT[ti]; t.style.opacity = 1; }, 170); }
   return true;
 }
+(function(){
+  var bar = $('spBar'), el = Date.now() - SPL.t0;
+  if (!bar || RM || SPL.min <= el) return;
+  bar.style.animation = 'spb ' + SPL.min + 'ms linear ' + (-el) + 'ms both'; SPL.anim = true;
+})();
 splStep();
 SPL.iv = setInterval(function(){ if (!splStep()) clearInterval(SPL.iv); }, 100);
 function hideSplash(now){
@@ -1234,6 +1287,7 @@ function hideSplash(now){
   var wait = now ? 0 : Math.max(0, SPL.min - (Date.now() - SPL.t0));
   setTimeout(function(){
     if (SPL.gone) return;
+    SPL.anim = false; var bar = $('spBar'); if (bar) bar.style.animation = 'none';
     splStep();
     SPL.gone = true; clearInterval(SPL.iv);
     var s = $('splash'), done = false;
@@ -1499,11 +1553,14 @@ function drawShop(force){
   var box = $('clist');
   if (!CATS.length) { box.innerHTML = emptyHtml('globe', 'فعلا شماره‌ای برای فروش نیست', 'به‌زودی کشورها اضافه می‌شوند.'); return; }
   if (!list.length) { box.innerHTML = emptyHtml('search', 'کشوری پیدا نشد', 'اسم کشور را فارسی یا انگلیسی بنویسید، مثلا «آمریکا» یا usa.'); return; }
-  box.innerHTML = list.map(function(c){
-    return '<button class="crow" data-cat="' + esc(c.id) + '"><span class="fl">' + flg(c.e) + '</span>' +
-      '<span class="mid"><b>' + esc(c.name) + (c.h ? '<span class="bdg hotb">محبوب</span>' : (c.sold >= 5 ? '<span class="bdg">پرفروش</span>' : '')) + '</b><small>' +
-      fa(c.n) + ' اپراتور' + (c.sold > 0 ? ' — ' + fa(c.sold) + ' تحویل موفق' : '') + '</small></span>' +
-      '<span class="pr"><small>از</small><b>' + fa(c.from) + '</b><small>تومان</small></span>' + ico('chev', 'chev') + '</button>';
+  box.innerHTML = list.map(function(c, ix){
+    var w = ix === list.length - 1 && list.length % 2 === 1;
+    return '<button class="ctl' + (c.h ? ' h' : '') + (w ? ' w' : '') + '" data-cat="' + esc(c.id) + '">' +
+      (c.h ? '<span class="bd">محبوب</span>' : (c.sold >= 5 ? '<span class="bd">پرفروش</span>' : '')) +
+      '<span class="fl">' + flg(c.e) + '</span>' +
+      '<span class="tx"><b>' + esc(c.name) + '</b><small>' + fa(c.n) + ' اپراتور' + (c.sold > 0 ? ' · ' + fa(c.sold) + ' تحویل' : '') + '</small></span>' +
+      '<span class="pz"><small>از</small><b>' + fa(c.from) + '</b><small>تومان</small></span>' +
+      '<span class="go">خرید' + ico('chev') + '</span></button>';
   }).join('') + (more > 0 ? '<button class="more" id="cMore">نمایشِ ' + fa(Math.min(more, 40)) + ' کشورِ دیگر</button>' : '');
 }
 function drawProds(){
@@ -1591,11 +1648,12 @@ function openCountry(cid){
   var ops = catOps(cid, pr).slice().sort(function(a, b){ return a.p - b.p; });
   openSheet('cat',
     '<span class="fl">' + flg(c.e) + '</span><b>' + esc(c.name) + '<small>' + fa(ops.length) + ' اپراتور · شماره‌ی ' + esc(prodFa(pr)) + '</small></b>',
-    ops.map(function(i, ix){
-      return '<button class="co" data-buy="' + esc(i.i) + '" style="width:100%;text-align:right"><span class="mid"><b>' + esc(i.o || 'اپراتور') +
+    '<div class="opg">' + ops.map(function(i, ix){
+      var w = ix === ops.length - 1 && ops.length % 2 === 1;
+      return '<button class="co' + (w ? ' w' : '') + '" data-buy="' + esc(i.i) + '" style="width:100%"><span class="mid"><b>' + esc(i.o || 'اپراتور') + '</b>' +
         (i.b ? '<span class="bdg">' + esc(i.b) + '</span>' : (ix === 0 && ops.length > 1 ? '<span class="bdg b">ارزان‌ترین</span>' : '')) +
-        '</b><small>تحویل آنی · کد در چند ثانیه</small></span><span class="pbtn">' + fa(i.p) + ' تومان</span></button>';
-    }).join('') + (B.note ? '<div class="note mt">' + ico('shield') + '<span>' + esc(B.note) + '</span></div>' : ''));
+        '<small>تحویل آنی · کد در چند ثانیه</small></span><span class="pbtn">' + fa(i.p) + ' تومان</span></button>';
+    }).join('') + '</div>' + (B.note ? '<div class="note mt">' + ico('shield') + '<span>' + esc(B.note) + '</span></div>' : ''));
   $('shBody').onclick = function(ev){
     var b = ev.target.closest('[data-buy]');
     if (b) { tap('medium'); openBuy(b.getAttribute('data-buy')); }
@@ -1615,7 +1673,7 @@ function openBuy(iid){
     '<div class="kvr"><span>مبلغ قابل پرداخت</span><b id="bTot"></b></div>' +
     '<div class="kvr"><span>موجودی شما</span><b id="bBal"></b></div></div>' +
     '<div class="fld"><label>کد تخفیف (اختیاری)</label><div style="display:flex;gap:8px"><input class="inp ltr" id="bCp" maxlength="32" placeholder="CODE" style="text-transform:uppercase">' +
-    '<button class="btn gh sm" id="bCpB">اعمال</button></div></div>' +
+    '<button class="btn gh sm" id="bCpB" style="flex:0 0 auto;min-width:78px">اعمال</button></div></div>' +
     '<div id="bAct" class="mt"></div>' +
     '<div class="stl"><div>' + '<i>۱</i>بعد از پرداخت، شماره فورا نمایش داده می‌شود.</div><div><i>۲</i>شماره را در ' + esc(prodFa(i.pr)) + ' وارد کنید.</div><div><i>۳</i>کد تایید همین‌جا و در ربات برایتان می‌آید.</div></div>' +
     (B.note ? '<div class="note mt2">' + ico('shield') + '<span>' + esc(B.note) + '</span></div>' : ''));
@@ -1889,6 +1947,35 @@ $('ordSeg').addEventListener('click', function(ev){
 
 var WAL = { pre: 0, busy: false };
 function tMin(){ return Math.max(1000, Number((B.topup || {}).min) || 0); }
+function payOk(){ var t = B.topup || {}; return !!(t.card_on != null ? t.card_on : t.on); }
+function stripEm(s){ return String(s || '').replace(/^[^؀-ۿA-Za-z0-9]+/, '').trim(); }
+var GI = {
+  crypto: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34D399"/><stop offset=".55" stop-color="#10B981"/><stop offset="1" stop-color="#047857"/></linearGradient></defs>' +
+    '<circle cx="24" cy="24" r="22" fill="url(#giC)"/><circle cx="24" cy="24" r="18.5" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>' +
+    '<path d="M13.5 14.5h21v4.6h-8.2v17.4h-4.6V19.1h-8.2z" fill="#fff"/><ellipse cx="24" cy="23.4" rx="10.6" ry="3.3" fill="none" stroke="#fff" stroke-width="2.2"/>' +
+    '<path d="M9 16a17 17 0 0 1 8-8" stroke="rgba(255,255,255,.55)" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>',
+  iran: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giI" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818CF8"/><stop offset=".55" stop-color="#6366F1"/><stop offset="1" stop-color="#1D4ED8"/></linearGradient></defs>' +
+    '<rect x="2" y="2" width="44" height="44" rx="14" fill="url(#giI)"/><rect x="9" y="14" width="30" height="20" rx="3.6" fill="none" stroke="#fff" stroke-width="2.4"/>' +
+    '<path d="M9 20.5h30" stroke="#fff" stroke-width="3"/><rect x="13" y="25.5" width="7" height="4.4" rx="1.2" fill="#FCD34D"/><path d="M24 28h10" stroke="rgba(255,255,255,.8)" stroke-width="2.2" stroke-linecap="round"/>' +
+    '<path d="M8 10a14 14 0 0 1 7-4" stroke="rgba(255,255,255,.5)" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>'
+};
+function drawPms(){
+  var t = B.topup || {}, l = t.lbl || {}, ms = [];
+  if (t.gw) ms.push(['crypto', GI.crypto, stripEm(l.crypto) || 'ارز دیجیتال', (t.gwcoin || 'USDT') + ' · شارژِ خودکار']);
+  if (t.ir) ms.push(['iran', GI.iran, stripEm(l.iran) || 'درگاه ایرانی', 'کارت‌های بانکی · آنی']);
+  $('pms').innerHTML = ms.map(function(m){ return '<button class="pm" data-pm="' + m[0] + '"><span class="gi">' + m[1] + '</span><b>' + esc(m[2]) + '</b><small>' + esc(m[3]) + '</small><span class="pg2">پرداخت</span></button>'; }).join('');
+  return ms.length;
+}
+function openPay(m){
+  var t = B.topup || {};
+  if (!t.pay) { toast('درگاه هنوز آماده نیست.'); return; }
+  var a = parseInt(digits($('tAmt').value), 10) || 0, d = initData(), h = '';
+  if (d) h = '#tgWebAppData=' + encodeURIComponent(d) + '&tgWebAppVersion=' + encodeURIComponent((TG && TG.version) || '7.0') + '&tgWebAppPlatform=' + encodeURIComponent((TG && TG.platform) || 'unknown');
+  tap('medium');
+  location.href = t.pay + '&m=' + m + '&th=num&back=num' + (a ? '&a=' + a : '') + h;
+}
+$('pms').addEventListener('click', function(ev){ var b = ev.target.closest('[data-pm]'); if (b) openPay(b.getAttribute('data-pm')); });
+
 function drawWallet(){
   setBal(S.bal);
   var t = B.topup || {}, min = tMin();
@@ -1897,16 +1984,17 @@ function drawWallet(){
   $('qa').innerHTML = qs.map(function(v){ return '<button data-v="' + v + '">' + fa(v) + '</button>'; }).join('');
   if (WAL.pre) { $('tAmt').value = fa(Math.max(min, WAL.pre)); WAL.pre = 0; }
   markQa();
-  var h = '';
-  if (t.on) h += '<div class="kvr"><span>' + ico('card', 'chev') + ' کارت به کارت</span><button class="cpy" id="cardCp">' + ico('copy') + '<span class="ltr">' + esc(t.card) + '</span></button></div>' +
+  var h = '', nm = drawPms(), co = payOk();
+  if (co) h += '<div class="kvr"><span>' + ico('card', 'chev') + ' کارت به کارت</span><button class="cpy" id="cardCp">' + ico('copy') + '<span class="ltr">' + esc(t.card) + '</span></button></div>' +
     (t.name ? '<div class="kvr"><span>به نام</span><b>' + esc(t.name) + '</b></div>' : '');
-  if (t.gw) h += '<div class="kvr"><span>پرداخت آنلاین (' + esc(t.gwcoin || 'USDT') + ')</span><b class="g">فعال' + (t.gwmin > 0 ? ' — از ' + fa(t.gwmin) + ' تومان' : '') + '</b></div>';
-  if (!t.on && !t.gw) h = '<div class="note bl">' + ico('alert') + '<span>روش پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>';
+  if (!co && !nm) h = '<div class="note bl">' + ico('alert') + '<span>روش پرداخت هنوز تنظیم نشده — فعلا شارژ از داخلِ ربات انجام می‌شود.</span></div>';
   $('payInfo').innerHTML = h;
-  $('payInfo').classList.toggle('card', !!(t.on || t.gw));
+  $('payInfo').classList.toggle('card', co);
+  $('payInfo').classList.toggle('hid', !h);
+  $('topNote').classList.toggle('hid', !co);
   var cc = $('cardCp');
   if (cc) cc.onclick = function(){ tap(); copy(digits(t.card), 'شماره کارت'); };
-  $('topBtn').disabled = !(t.on || t.gw);
+  $('topBtn').classList.toggle('hid', !co);
 }
 function markQa(){
   var v = Number(digits($('tAmt').value)) || 0;

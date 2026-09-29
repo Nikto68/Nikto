@@ -117,10 +117,14 @@ function maCatalogPublic() {
         $id = (string)($c['id'] ?? '');
         $pos++;
         if ($id === '' || empty($c['on']) || empty($n[$id])) continue;
+        $em = trim((string)($c['emoji'] ?? ''));
+        // کشورهایی که قبلا بدونِ پرچم وارد شده‌اند، همین‌جا پرچم می‌گیرند
+        if (($em === '' || $em === '🌍') && function_exists('numFlagFa'))
+            $em = numFlagFa((string)($c['code'] ?? ''), (string)($c['name'] ?? ''));
         $cats[] = [
             'id'   => $id,
             'name' => (string)($c['name'] ?? ''),
-            'e'    => (string)($c['emoji'] ?? '🌍'),
+            'e'    => $em !== '' ? $em : '🌍',
             'n'    => (int)$n[$id],
             'from' => (float)$from[$id],
             'sold' => (int)($sold[$id] ?? 0),
@@ -581,6 +585,7 @@ class MaOrder
 }
 
 function maServe($key) {
+    if ($key === 'pay' && function_exists('payServe')) payServe();
     if (function_exists('svServe') && function_exists('svAppOfKey') && svAppOfKey($key) !== '') svServe($key);
     if (!in_array($key, ['num', 'unified', 'tg', 'react', 'shop'], true)) { http_response_code(404); echo 'not found'; exit; }
     if (!maReady()) { http_response_code(200); header('Content-Type: text/html; charset=utf-8'); echo maClosedPage(); exit; }
@@ -935,6 +940,7 @@ function maServeAvatar() {
 
     $p = function_exists('bcAvatar') ? bcAvatar($uid) : null;
     if (!$p || !is_file($p) || filesize($p) < 64) { http_response_code(204); exit; }
+    $p = maAvatarThumb($p, (int)$uid);
 
     header('Content-Type: image/jpeg');
     header('Content-Length: ' . filesize($p));
@@ -942,6 +948,27 @@ function maServeAvatar() {
     header('X-Content-Type-Options: nosniff');
     readfile($p);
     exit;
+}
+
+// عکسِ پروفایلِ تلگرام معمولا ۶۴۰×۶۴۰ است ولی در مینی‌اپ حداکثر ۵۸ پیکسل دیده می‌شود؛
+// نسخه‌ی ۲۵۶ پیکسلی (برای صفحه‌های ۳x هم تیز) یک‌بار ساخته و نگه داشته می‌شود — حدودِ ده برابر سبک‌تر
+function maAvatarThumb($src, $uid) {
+    if (!function_exists('imagecreatefromstring') || !function_exists('imagejpeg')) return $src;
+    $th = dirname($src) . '/' . (int)$uid . '_t.jpg';
+    $mt = (int)@filemtime($src);
+    if (is_file($th) && (int)@filemtime($th) >= $mt && filesize($th) > 64) return $th;
+    $im = @imagecreatefromstring((string)@file_get_contents($src));
+    if (!$im) return $src;
+    $w = imagesx($im); $h = imagesy($im); $sq = min($w, $h);
+    if ($sq <= 256) { imagedestroy($im); return $src; }
+    $dst = imagecreatetruecolor(256, 256);
+    imagecopyresampled($dst, $im, 0, 0, intdiv($w - $sq, 2), intdiv($h - $sq, 2), 256, 256, $sq, $sq);
+    $tmp = $th . '.' . getmypid() . '.tmp';
+    $ok = @imagejpeg($dst, $tmp, 86);
+    imagedestroy($dst); imagedestroy($im);
+    if (!$ok || !@rename($tmp, $th)) { @unlink($tmp); return $src; }
+    @touch($th, max($mt, time()));
+    return $th;
 }
 
 function maGzipOk() {
@@ -1007,6 +1034,11 @@ function maTopupInfo() {
         'gw'   => (function_exists('gwOn') && gwOn()) ? 1 : 0,
         'gwmin'=> (float)($g['min'] ?? 0),
         'gwcoin' => strtoupper(trim((string)($g['coin'] ?? 'USDT'))),
+        'ir'   => (function_exists('irOn') && irOn()) ? 1 : 0,
+        'card_on' => (function_exists('cardOn') ? (cardOn() ? 1 : 0) : ($card !== '' ? 1 : 0)),
+        'pay'  => function_exists('payPageUrl') ? payPageUrl() : '',
+        'mins' => function_exists('tuMin') ? ['crypto' => tuMin('crypto'), 'iran' => tuMin('iran')] : [],
+        'lbl'  => function_exists('tuBtnText') ? ['crypto' => tuBtnText('crypto'), 'iran' => tuBtnText('iran'), 'card' => tuBtnText('card')] : [],
     ];
 }
 
@@ -1697,6 +1729,11 @@ function maApi() {
         maApiOut(['ok' => true, 'live' => maLiveFor($uid), 'balance' => $bal()]);
     }
 
+    if (str_starts_with($action, 'pay_') && function_exists('payApi')) {
+        if (function_exists('maNoNet')) maNoNet(false);
+        payApi($action, $uid, $uname, $body);
+    }
+
     if ($action === 'feed') {
         maApiOut(['ok' => true, 'list' => maFeed(12), 'rev' => maReviews(), 'trust' => maTrust()]);
     }
@@ -1787,13 +1824,13 @@ function maApi() {
             maApiOut(['ok' => false, 'error' => 'rate_limited',
                       'message' => 'درخواست شارژ زیاد شد. چند دقیقه بعد دوباره.'], 429);
         $t = maTopupInfo();
-        if (empty($t['on']) && empty($t['gw']))
+        if (empty($t['card_on']))
             maApiOut(['ok' => false, 'error' => 'no_card',
-                      'message' => 'روش پرداخت هنوز تنظیم نشده است. با پشتیبانی تماس بگیرید.'], 503);
+                      'message' => 'کارت به کارت فعال نیست؛ از «ارز دیجیتال» یا «درگاه ایرانی» شارژ کنید.'], 503);
         $amt = round(maNum($body['amount'] ?? 0));
         $why = topupAmountError($amt);
         if ($why !== '') maApiOut(['ok' => false, 'error' => 'amount', 'message' => $why], 400);
-        $oid = createOrderAndAsk($uid, $uid, $uname, $amt);
+        $oid = createOrderAndAsk($uid, $uid, $uname, $amt, 'card');
         if (!$oid)
             maApiOut(['ok' => false, 'error' => 'failed',
                       'message' => 'ثبت درخواست شارژ انجام نشد. با پشتیبانی تماس بگیرید.'], 500);

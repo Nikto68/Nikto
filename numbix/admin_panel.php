@@ -202,6 +202,19 @@ if (empty($_SESSION['logged_in'])) {
 if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(16));
 $CSRF = $_SESSION['csrf'];
 
+// عکسِ کارتِ ملیِ احراز هویت — فقط برای مدیرِ واردشده
+if (isset($_GET['kycimg']) && function_exists('kycDir')) {
+    $f = kycDir() . '/' . (int)$_GET['kycimg'] . '.img';
+    if (!is_file($f)) { http_response_code(404); exit; }
+    $bin = (string)file_get_contents($f);
+    $mime = str_starts_with($bin, "\x89PNG") ? 'image/png' : (str_starts_with($bin, 'RIFF') ? 'image/webp' : 'image/jpeg');
+    header('Content-Type: ' . $mime);
+    header('Cache-Control: private, no-store');
+    header('X-Content-Type-Options: nosniff');
+    echo $bin;
+    exit;
+}
+
 function checkCsrf() {
     if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) {
         http_response_code(400); exit('درخواست نامعتبر (CSRF).');
@@ -681,8 +694,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c['gateway']['expire']    = max(5, (int)($post['gw_exp'] ?? 30));
             $c['gateway']['min']       = max(0, (float)str_replace(',', '', $post['gw_min'] ?? 0));
             $c['gateway']['custom_url']= trim($post['gw_curl'] ?? '');
+            $c['gateway']['mode']      = ($post['gw_mode'] ?? '') === 'page' ? 'page' : 'address';
+            $c['gateway']['underpaid'] = max(0, min(60, (float)maNum($post['gw_under'] ?? 1)));
         });
         go('درگاه پرداخت ذخیره شد.');
+    }
+    if ($a === 'test_gw') {
+        if (!function_exists('gwCreateInvoice') || !gwOn())
+            go('اول «درگاهِ خودکار روشن باشد» را بزنید، کلیدِ API را بگذارید و ذخیره کنید (آدرسِ عمومیِ ربات هم باید https باشد).', 'err');
+        [$ok, $d, $err] = gwCreateInvoice('or_TEST' . bin2hex(random_bytes(3)), 100000);
+        if (!$ok) go('❌ درگاهِ ارز دیجیتال جواب نداد: ' . mb_substr((string)$err, 0, 300), 'err');
+        go('✅ درگاهِ ارز دیجیتال کار می‌کند — فاکتورِ آزمایشیِ ۱۰۰٬۰۰۰ تومانی ساخته شد: ' .
+           (!empty($d['address']) ? 'آدرس ' . $d['address'] . ' · ' . $d['amount'] . ' ' . $d['coin'] . (!empty($d['network']) ? ' (' . $d['network'] . ')' : '')
+                                  : 'لینک ' . (string)$d['url']) . ' — به آن واریز نکنید، خودش منقضی می‌شود.');
+    }
+    if ($a === 'test_irpay') {
+        if (!function_exists('irCreate') || !irOn())
+            go('اول «درگاهِ ایرانی روشن باشد» را بزنید، مرچنت را بگذارید و ذخیره کنید.', 'err');
+        [$ok, $url, , $err] = irCreate('or_TEST' . bin2hex(random_bytes(3)), max(10000, (float)tuMin('iran')));
+        if (!$ok) go('❌ درگاهِ ایرانی جواب نداد: ' . mb_substr((string)$err, 0, 300), 'err');
+        go('✅ درگاهِ ایرانی کار می‌کند — لینکِ آزمایشی ساخته شد: ' . $url);
+    }
+    if ($a === 'test_zpotp') {
+        $IRc = cfg()['irpay'] ?? [];
+        if (trim((string)($IRc['oauth_id'] ?? '')) === '' || trim((string)($IRc['oauth_secret'] ?? '')) === '')
+            go('اول client_id و client_secret زرین‌پال را بگذارید و ذخیره کنید.', 'err');
+        $ph = function_exists('tuPhoneNorm') ? tuPhoneNorm((string)($_POST['phone'] ?? '')) : '';
+        if (!preg_match('/^09\d{9}$/', (string)$ph)) go('یک شماره‌ی موبایلِ ایرانی (۰۹…) برای تست بنویسید.', 'err');
+        [$d, $err] = zpOauth('initialize', ['username' => $ph, 'channel' => ($IRc['otp_ch'] ?? 'sms') === 'ussd' ? 'ussd' : 'sms']);
+        if (!$d) go('❌ زرین‌پال کد نفرستاد: ' . mb_substr((string)$err, 0, 300), 'err');
+        go('✅ اتصالِ OAuth زرین‌پال درست است — کدِ تایید به ' . $ph . ' فرستاده شد' .
+           (!empty($d['ussd_code']) ? ' (USSD: ' . $d['ussd_code'] . ')' : '') . '.');
+    }
+    if ($a === 'save_irpay') {
+        $post = $_POST;
+        $m = preg_replace('/\s+/', '', (string)($post['ir_merchant'] ?? ''));
+        if ($m !== '' && !preg_match('/^[A-Za-z0-9\-]{4,64}$/', $m)) go('مرچنت فقط حروفِ انگلیسی، عدد و خط تیره است.', 'err');
+        cfgSet(function (&$c) use ($post, $m) {
+            $c['irpay']['on']         = !empty($post['ir_on']);
+            $c['irpay']['provider']   = ($post['ir_prov'] ?? '') === 'zibal' ? 'zibal' : 'zarinpal';
+            if ($m !== '') $c['irpay']['merchant'] = $m;
+            if (!empty($post['ir_merchant_clear'])) $c['irpay']['merchant'] = '';
+            $c['irpay']['sandbox']    = !empty($post['ir_sandbox']);
+            $c['irpay']['min']        = max(1000, (float)maNum($post['ir_min'] ?? 10000));
+            $c['irpay']['max']        = max(0, (float)maNum($post['ir_max'] ?? 0));
+            $c['irpay']['kyc']        = !empty($post['ir_kyc']);
+            $c['irpay']['kyc_limit']  = max(0, (float)maNum($post['ir_kyc_limit'] ?? 0));
+            $c['irpay']['kyc_mode']   = in_array($post['ir_kyc_mode'] ?? '', ['auto', 'phone', 'docs'], true) ? $post['ir_kyc_mode'] : 'auto';
+            $c['irpay']['otp_ch']     = ($post['ir_otp_ch'] ?? '') === 'ussd' ? 'ussd' : 'sms';
+            $oi = preg_replace('/\D/', '', (string)($post['ir_oauth_id'] ?? ''));
+            if ($oi !== '' || !empty($post['ir_oauth_clear'])) $c['irpay']['oauth_id'] = $oi;
+            $os = trim((string)($post['ir_oauth_secret'] ?? ''));
+            if ($os !== '') $c['irpay']['oauth_secret'] = $os;
+            if (!empty($post['ir_oauth_clear'])) { $c['irpay']['oauth_id'] = ''; $c['irpay']['oauth_secret'] = ''; }
+            $c['irpay']['ir_only']    = !empty($post['ir_only']);
+            $c['irpay']['card_check'] = !empty($post['ir_card_check']);
+            $c['irpay']['desc']       = mb_substr(trim((string)($post['ir_desc'] ?? '')), 0, 120) ?: 'شارژ کیف پول';
+            $c['topup_card']          = !empty($post['tu_card']);
+        });
+        go('درگاهِ ایرانی ذخیره شد.');
+    }
+    if ($a === 'kyc_decide') {
+        $kuid = (int)($_POST['uid'] ?? 0);
+        $ok = ($_POST['dec'] ?? '') === 'ok';
+        if ($kuid <= 0 || !function_exists('kycDecide')) go('نامعتبر.', 'err');
+        $done = kycDecide($kuid, $ok, ADMIN_ID, mb_substr(trim((string)($_POST['note'] ?? '')), 0, 200));
+        go($done ? ($ok ? 'احراز هویت تایید شد و به کاربر خبر داده شد.' : 'احراز هویت رد شد و به کاربر خبر داده شد.') : 'این درخواست قبلا بررسی شده بود.');
+    }
+    if ($a === 'save_tu_texts' && function_exists('payTextLabels')) {
+        $post = $_POST;
+        cfgSet(function (&$c) use ($post) {
+            foreach (array_keys(payTextLabels()) as $k) {
+                if (!isset($post['t_' . $k])) continue;
+                $v = trim(str_replace("\r\n", "\n", (string)$post['t_' . $k]));
+                $c['texts'][$k] = $v !== '' ? tgHtmlFix($v) : defaultConfig()['texts'][$k];
+            }
+            foreach (array_keys(tuBtnLabels()) as $k) {
+                if (!isset($post['b_' . $k . '_text'])) continue;
+                $txt = mb_substr(trim((string)$post['b_' . $k . '_text']), 0, 60);
+                $col = (string)($post['b_' . $k . '_color'] ?? 'none');
+                $ic  = preg_replace('/\D/', '', (string)($post['b_' . $k . '_icon'] ?? ''));
+                $c['topup_btns'][$k] = [
+                    'emoji' => mb_substr(trim((string)($post['b_' . $k . '_emoji'] ?? '')), 0, 8),
+                    'text'  => $txt !== '' ? $txt : (string)defaultConfig()['topup_btns'][$k]['text'],
+                    'color' => isStyle($col) ? $col : 'none',
+                    'icon'  => $ic,
+                ];
+            }
+        });
+        go('متن‌ها و دکمه‌های شارژ ذخیره شد.');
     }
     if ($a === 'save_join') {
         $post = $_POST;
@@ -2616,8 +2716,8 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       <a href="https://nowpayments.io" target="_blank" rel="noopener">NOWPayments</a> حساب بسازید،
       کلیدِ API (Merchant Key) را بگیرید و این‌جا بگذارید؛ بعد در پنلِ همان سایت، آدرسِ <b>Callback / IPN</b> را روی آدرسِ زیر بگذارید.
     </div>
-    <?php if (trim((string)($G['base_url'] ?? '')) !== ''): ?>
-      <div class="note" style="margin-top:10px">📡 <b>آدرسِ Callback:</b> <code style="direction:ltr;display:inline-block"><?= h(gwCallbackUrl()) ?></code></div>
+    <?php if (gwCallbackUrl() !== ''): ?>
+      <div class="note" style="margin-top:10px">📡 <b>آدرسِ Callback</b> (خودکار با هر فاکتور فرستاده می‌شود): <code style="direction:ltr;display:inline-block"><?= h(gwCallbackUrl()) ?></code></div>
     <?php endif; ?>
 
     <form method="post" style="margin-top:12px">
@@ -2642,12 +2742,17 @@ tr.grp td{background:var(--surface-2);font-weight:800}
           <input name="gw_base" value="<?= h($G['base_url'] ?? '') ?>" placeholder="https://site.com/bot_master_membership.php" style="direction:ltr"></div>
         <div><label>ارز</label><input name="gw_coin" value="<?= h($G['coin'] ?? 'USDT') ?>" style="direction:ltr"></div>
         <div><label>شبکه</label><input name="gw_net" value="<?= h($G['network'] ?? '') ?>" placeholder="TRC20" style="direction:ltr"></div>
-        <div><label>نرخ: هر ۱ واحد چند تومان؟ (۰ = تبدیل با خودِ درگاه)</label>
+        <div><label>نرخ: هر ۱ واحد چند تومان؟ (۰ = قیمتِ لحظه‌ایِ تتر)</label>
           <input name="gw_rate" value="<?= h((string)(float)($G['rate'] ?? 0)) ?>" style="direction:ltr"></div>
         <div><label>مهلتِ هر فاکتور (دقیقه)</label>
           <input name="gw_exp" type="number" min="5" value="<?= (int)($G['expire'] ?? 30) ?>"></div>
         <div><label>از این مبلغ به بالا با درگاه (تومان)</label>
           <input name="gw_min" value="<?= h((string)(float)($G['min'] ?? 0)) ?>" style="direction:ltr"></div>
+        <div><label>نمایش به مشتری</label><select name="gw_mode">
+          <option value="address" <?= ($G['mode'] ?? 'address') !== 'page' ? 'selected' : '' ?>>آدرسِ ولت + کیوآر داخلِ ربات و مینی‌اپ</option>
+          <option value="page" <?= ($G['mode'] ?? 'address') === 'page' ? 'selected' : '' ?>>صفحه‌ی پرداختِ خودِ درگاه</option></select></div>
+        <div><label>پذیرشِ کم‌واریزی (٪) — برای کارمزدِ صرافی</label>
+          <input name="gw_under" value="<?= h((string)(float)($G['underpaid'] ?? 1)) ?>" style="direction:ltr"></div>
         <div><label>آدرسِ دلخواه (حالتِ custom)</label>
           <input name="gw_curl" value="<?= h($G['custom_url'] ?? '') ?>" placeholder="https://…?amount={amount}&order={order}&cb={callback}" style="direction:ltr"></div>
       </div>
@@ -2656,7 +2761,127 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       </div>
       <div style="margin-top:14px"><button class="btn g">ذخیره‌ی درگاه</button></div>
     </form>
+    <form method="post" style="margin-top:10px">
+      <?= fk('test_gw', []) ?>
+      <button class="btn ghost">🧪 تستِ اتصال (ساختِ فاکتورِ آزمایشی)</button>
+      <span class="hint">بعد از ذخیره‌ی کلید بزنید؛ اگر آدرسِ ولت یا لینک آمد، درگاه وصل است.</span>
+    </form>
   </div></details>
+
+
+  <?php $IR = $C['irpay'] ?? []; $KQ = function_exists('kycQueue') ? kycQueue() : []; arsort($KQ); ?>
+  <details class="card psec" data-s="gw"<?= $secOpen ?>><summary><h2>🏦 درگاه پرداخت ایرانی <?= (function_exists('irOn') && irOn()) ? '<span class="badge green">آماده</span>' : '<span class="badge">خاموش</span>' ?></h2></summary><div class="body">
+    <div class="note">
+      روال: کاربر «درگاه ایرانی» را می‌زند ← <b>شماره‌ی موبایلِ خودش</b> را با دکمه می‌فرستد ← مبلغ ←
+      اگر بیشتر از سقفِ زیر بود <b>احراز هویت فقط با شماره‌ی موبایل</b> (زرین‌پال یک کدِ یک‌بارمصرف به همان شماره می‌فرستد؛ اسم و فامیل گرفته نمی‌شود) ← تایید و <b>لینکِ درگاه</b> با دکمه‌ی شیشه‌ای ←
+      بعد از پرداخت، حساب <b>خودکار</b> شارژ می‌شود. آدرسِ بازگشت خودکار ساخته می‌شود.
+      <br>زرین‌پال: مرچنتِ ۳۶ کاراکتری از <a href="https://next.zarinpal.com" target="_blank" rel="noopener">پنلِ زرین‌پال</a> · زیبال: کدِ مرچنت از <a href="https://zibal.ir" target="_blank" rel="noopener">پنلِ زیبال</a>.
+    </div>
+    <form method="post" style="margin-top:12px">
+      <?= fk('save_irpay', []) ?>
+      <div class="grid2">
+        <label class="chk"><input type="checkbox" name="ir_on" value="1" <?= !empty($IR['on']) ? 'checked' : '' ?>> درگاهِ ایرانی روشن باشد</label>
+        <label class="chk"><input type="checkbox" name="tu_card" value="1" <?= !empty($C['topup_card']) ? 'checked' : '' ?>> «کارت به کارت» هم در منوی شارژ بماند</label>
+        <div><label>درگاه</label><select name="ir_prov">
+          <option value="zarinpal" <?= ($IR['provider'] ?? 'zarinpal') !== 'zibal' ? 'selected' : '' ?>>زرین‌پال</option>
+          <option value="zibal" <?= ($IR['provider'] ?? '') === 'zibal' ? 'selected' : '' ?>>زیبال</option></select></div>
+        <div><label>مرچنت <?= trim((string)($IR['merchant'] ?? '')) !== '' ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></label>
+          <div class="secretin"><input type="password" name="ir_merchant" autocomplete="off" value="" style="direction:ltr"
+            placeholder="<?= trim((string)($IR['merchant'] ?? '')) !== '' ? 'ثبت شده — برای تعویض، مقدارِ تازه بگذارید' : 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' ?>">
+            <button type="button" class="btn ghost sm" onclick="toggleSecret(this)">نمایش</button></div></div>
+        <label class="chk"><input type="checkbox" name="ir_sandbox" value="1" <?= !empty($IR['sandbox']) ? 'checked' : '' ?>> حالتِ آزمایشی (sandbox)</label>
+        <label class="chk"><input type="checkbox" name="ir_merchant_clear" value="1"> پاک کردنِ مرچنت</label>
+        <div><label>حداقلِ هر پرداخت (تومان)</label><input name="ir_min" value="<?= h((string)(float)($IR['min'] ?? 10000)) ?>" style="direction:ltr"></div>
+        <div><label>حداکثرِ هر پرداخت (تومان، ۰ = بی‌سقف)</label><input name="ir_max" value="<?= h((string)(float)($IR['max'] ?? 0)) ?>" style="direction:ltr"></div>
+        <label class="chk"><input type="checkbox" name="ir_kyc" value="1" <?= !empty($IR['kyc']) ? 'checked' : '' ?>> احراز هویت برای مبالغِ بالا</label>
+        <div><label>تا این مبلغ بدونِ احراز هویت (تومان)</label><input name="ir_kyc_limit" value="<?= h((string)(float)($IR['kyc_limit'] ?? 500000)) ?>" style="direction:ltr"></div>
+        <div><label>روشِ احراز هویت (فقط با شماره؛ اسم و فامیل گرفته نمی‌شود)</label><select name="ir_kyc_mode">
+          <option value="auto" <?= !in_array($IR['kyc_mode'] ?? 'auto', ['phone', 'docs'], true) ? 'selected' : '' ?>>کدِ پیامکیِ زرین‌پال (اگر OAuth ثبت شده) — وگرنه تاییدِ مدیر</option>
+          <option value="phone" <?= ($IR['kyc_mode'] ?? '') === 'phone' ? 'selected' : '' ?>>شماره‌ی موبایل + تاییدِ مدیر</option>
+          <option value="docs" <?= ($IR['kyc_mode'] ?? '') === 'docs' ? 'selected' : '' ?>>کدِ ملی + عکسِ کارتِ ملی</option></select></div>
+        <div><label>زرین‌پال OAuth — client_id <?= trim((string)($IR['oauth_id'] ?? '')) !== '' ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></label>
+          <input name="ir_oauth_id" value="<?= h((string)($IR['oauth_id'] ?? '')) ?>" style="direction:ltr" placeholder="100"></div>
+        <div><label>زرین‌پال OAuth — client_secret <?= trim((string)($IR['oauth_secret'] ?? '')) !== '' ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></label>
+          <div class="secretin"><input type="password" name="ir_oauth_secret" autocomplete="off" value="" style="direction:ltr"
+            placeholder="<?= trim((string)($IR['oauth_secret'] ?? '')) !== '' ? 'ثبت شده — برای تعویض، مقدارِ تازه بگذارید' : 'client_secret' ?>">
+            <button type="button" class="btn ghost sm" onclick="toggleSecret(this)">نمایش</button></div></div>
+        <div><label>کدِ تایید با</label><select name="ir_otp_ch">
+          <option value="sms" <?= ($IR['otp_ch'] ?? 'sms') !== 'ussd' ? 'selected' : '' ?>>پیامک (SMS)</option>
+          <option value="ussd" <?= ($IR['otp_ch'] ?? '') === 'ussd' ? 'selected' : '' ?>>کدِ دستوری (USSD)</option></select></div>
+        <label class="chk"><input type="checkbox" name="ir_oauth_clear" value="1"> پاک کردنِ OAuth</label>
+        <label class="chk"><input type="checkbox" name="ir_only" value="1" <?= !empty($IR['ir_only']) ? 'checked' : '' ?>> فقط شماره‌ی موبایلِ ایرانی</label>
+        <label class="chk"><input type="checkbox" name="ir_card_check" value="1" <?= !empty($IR['card_check']) ? 'checked' : '' ?>> زیبال: کارت فقط به نامِ صاحبِ شماره</label>
+        <div><label>توضیحِ تراکنش</label><input name="ir_desc" value="<?= h((string)($IR['desc'] ?? 'شارژ کیف پول')) ?>"></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn g">ذخیره‌ی درگاهِ ایرانی</button></div>
+    </form>
+    <div class="grid2" style="margin-top:10px;align-items:end">
+      <form method="post">
+        <?= fk('test_irpay', []) ?>
+        <button class="btn ghost">🧪 تستِ اتصالِ درگاه (ساختِ لینکِ آزمایشی)</button>
+      </form>
+      <form method="post" style="display:flex;gap:8px;align-items:end">
+        <?= fk('test_zpotp', []) ?>
+        <div style="flex:1"><label>تستِ کدِ پیامکیِ زرین‌پال — شماره</label><input name="phone" inputmode="tel" placeholder="09xxxxxxxxx" style="direction:ltr"></div>
+        <button class="btn ghost">📩 فرستادنِ کد</button>
+      </form>
+    </div>
+  </div></details>
+
+  <details class="card psec" data-s="gw"<?= $secOpen ?>><summary><h2>🪪 احراز هویت <?= $KQ ? '<span class="badge amber">' . count($KQ) . ' منتظر</span>' : '<span class="badge">خالی</span>' ?></h2></summary><div class="body">
+    <?php if (!$KQ): ?><div class="muted">درخواستی منتظرِ بررسی نیست.</div><?php endif; ?>
+    <?php foreach (array_slice(array_keys($KQ), 0, 30) as $ku): $KU = getUser((int)$ku) ?: []; $KK = (array)($KU['kyc'] ?? []); ?>
+      <div class="card" style="margin-top:10px;padding:12px">
+        <div class="grid2" style="align-items:start">
+          <div>
+            <b><?= h((string)($KU['first_name'] ?? $KU['name'] ?? $ku)) ?></b> <?= !empty($KU['username']) ? '<span class="muted">@' . h($KU['username']) . '</span>' : '' ?><br>
+            آیدی: <code><?= (int)$ku ?></code><br>
+            موبایل: <code><?= h((string)($KU['phone'] ?? '—')) ?></code><br>
+            <?php if (trim((string)($KK['code'] ?? '')) !== ''): ?>کدِ ملی: <code><?= h((string)$KK['code']) ?></code><br><?php endif; ?>
+            روش: <?= ($KK['mode'] ?? 'phone') === 'docs' ? 'کدِ ملی + عکس' : 'شماره‌ی موبایل (تاییدِ مدیر)' ?><br>
+            <span class="muted"><?= !empty($KK['at']) ? h(date('Y-m-d H:i', (int)$KK['at'])) : '' ?></span>
+          </div>
+          <div><?php if (is_file(kycDir() . '/' . (int)$ku . '.img')): ?>
+            <a href="?kycimg=<?= (int)$ku ?>" target="_blank" rel="noopener"><img src="?kycimg=<?= (int)$ku ?>" alt="" style="max-width:100%;max-height:220px;border-radius:12px;border:1px solid var(--border)"></a>
+          <?php elseif (($KK['mode'] ?? 'phone') === 'docs'): ?><span class="muted">عکس در ربات برای مدیر فرستاده شده.</span><?php endif; ?></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <form method="post"><?= fk('kyc_decide', ['s' => 'gw']) ?><input type="hidden" name="uid" value="<?= (int)$ku ?>"><input type="hidden" name="dec" value="ok"><button class="btn g sm">✅ تایید</button></form>
+          <form method="post" style="display:flex;gap:6px"><?= fk('kyc_decide', ['s' => 'gw']) ?><input type="hidden" name="uid" value="<?= (int)$ku ?>"><input type="hidden" name="dec" value="no">
+            <input name="note" placeholder="دلیلِ رد (اختیاری)" style="min-width:160px"><button class="btn r sm">❌ رد</button></form>
+        </div>
+      </div>
+    <?php endforeach; ?>
+  </div></details>
+
+  <?php if (function_exists('payTextLabels')): ?>
+  <details class="card psec" data-s="gw"<?= $secOpen ?>><summary><h2>✏️ متن‌ها و دکمه‌های شارژ</h2></summary><div class="body">
+    <div class="note">
+      متن‌ها HTMLِ تلگرام‌اند (<code>&lt;b&gt;</code>، <code>&lt;blockquote&gt;</code> و …). ایموجیِ پریمیوم:
+      <code style="direction:ltr;display:inline-block">&lt;tg-emoji emoji-id="…"&gt;✨&lt;/tg-emoji&gt;</code> — کدش را با فرستادنِ <code>/emoji</code> در ربات بگیرید؛
+      راحت‌تر: از خودِ ربات ← پنل ← 💳 پرداخت ← ✏️ متن و دکمه‌های شارژ، متن را با ایموجیِ پریمیوم بفرستید.
+      <br>هر دکمه: ایموجیِ معمولی، متن، رنگ و کدِ ایموجیِ پریمیوم (اگر پریمیوم گذاشتید، ایموجیِ معمولی را خالی بگذارید).
+    </div>
+    <form method="post" style="margin-top:12px">
+      <?= fk('save_tu_texts', ['s' => 'gw']) ?>
+      <?php foreach (payTextLabels() as $tk => $tl): $vars = payTextVars()[$tk] ?? ''; ?>
+        <div style="margin-top:10px"><label><?= h($tl) ?><?= $vars !== '' ? ' <span class="muted" style="direction:ltr;display:inline-block">' . h($vars) . '</span>' : '' ?></label>
+          <textarea name="t_<?= h($tk) ?>" rows="3"><?= h((string)($C['texts'][$tk] ?? '')) ?></textarea></div>
+      <?php endforeach; ?>
+      <h3 style="margin:18px 0 6px">🔘 دکمه‌ها</h3>
+      <?php foreach (tuBtnLabels() as $bk => $bl): $BB = tuBtnCfg($bk); ?>
+        <div class="grid2" style="margin-top:8px;align-items:end">
+          <div><label><?= h($bl) ?> — ایموجی</label><input name="b_<?= h($bk) ?>_emoji" value="<?= h((string)($BB['emoji'] ?? '')) ?>"></div>
+          <div><label>متن</label><input name="b_<?= h($bk) ?>_text" value="<?= h((string)($BB['text'] ?? '')) ?>"></div>
+          <div><label>رنگ</label><select name="b_<?= h($bk) ?>_color">
+            <?php foreach (styleMap() as $sk => $sl): ?><option value="<?= h($sk) ?>" <?= ($BB['color'] ?? 'none') === $sk ? 'selected' : '' ?>><?= h($sl) ?></option><?php endforeach; ?></select></div>
+          <div><label>کدِ ایموجیِ پریمیوم</label><input name="b_<?= h($bk) ?>_icon" value="<?= h((string)($BB['icon'] ?? '')) ?>" style="direction:ltr" placeholder="5368324170671202286"></div>
+        </div>
+      <?php endforeach; ?>
+      <div style="margin-top:14px"><button class="btn g">ذخیره‌ی متن‌ها و دکمه‌ها</button></div>
+    </form>
+  </div></details>
+  <?php endif; ?>
 
   <details class="card psec" data-s="join"<?= $secOpen ?>><summary><h2>📣 عضویت اجباری <?= !empty($J['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?></h2></summary><div class="body">
     <div class="note">
