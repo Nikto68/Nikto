@@ -193,6 +193,13 @@ function tuBtnCfg($k) {
     return (is_array($m) ? $m : []) + $d;
 }
 
+// دکمه‌هایی که ادمین می‌تواند از فاکتورِ ربات پنهان کند
+function tuBtnHideable() { return ['copy', 'check']; }
+function tuBtnOn($k) {
+    if (!in_array($k, tuBtnHideable(), true)) return true;
+    return !empty(tuBtnCfg($k)['on'] ?? true);
+}
+
 function tuBtnText($k) {
     $m = tuBtnCfg($k);
     return trim(trim((string)($m['emoji'] ?? '')) . ' ' . trim((string)($m['text'] ?? '')));
@@ -331,7 +338,13 @@ function tuCryptoVars($o) {
         'id'      => '<code>' . h((string)$o['id']) . '</code>',
     ];
 }
-function tuCryptoText($o) { return T('topup_crypto_invoice', tuCryptoVars($o)); }
+// درگاه (صفحه‌ی پرداخت یا صفحه‌ی خودِ OxaPay) در دسترس است؟ اگر نه، آدرس داخلِ خودِ پیام می‌آید
+function tuCryptoGate($o) {
+    return payPageUrl((string)$o['id']) !== '' || !empty(((array)($o['gw'] ?? []))['url']);
+}
+function tuCryptoText($o) {
+    return T(tuCryptoGate($o) ? 'topup_crypto_invoice' : 'topup_crypto_invoice_addr', tuCryptoVars($o));
+}
 
 function tuCryptoKb($o) {
     $g = (array)($o['gw'] ?? []);
@@ -340,10 +353,11 @@ function tuCryptoKb($o) {
     $page = payPageUrl((string)$o['id']);
     if ($page !== '')             $rows[] = [tuBtn('open', 'webapp', $page)];
     elseif (!empty($g['url']))    $rows[] = [tuBtn('open', 'url', (string)$g['url'])];
+    $gate = (bool)$rows;
     $r2 = [];
-    if ($addr !== '') $r2[] = tuBtn('copy', 'copy', $addr);
-    $r2[] = tuBtn('check', 'cb', 'tuc_' . $o['id']);
-    $rows[] = $r2;
+    if ($addr !== '' && (!$gate || tuBtnOn('copy'))) $r2[] = tuBtn('copy', 'copy', $addr);
+    if (tuBtnOn('check')) $r2[] = tuBtn('check', 'cb', 'tuc_' . $o['id']);
+    if ($r2) $rows[] = $r2;
     $rows[] = [tuBtn('cancel', 'cb', 'tux_' . $o['id'])];
     return inlineKb($rows);
 }
@@ -924,7 +938,7 @@ function payServe() {
     $oid = (string)($_GET['o'] ?? '');
     $o = null;
     if ($oid !== '' && payTokOk($oid, (string)($_GET['t'] ?? ''))) $o = Order::get($oid);
-    $th = in_array($_GET['th'] ?? '', ['tgs', 'igs', 'num'], true) ? (string)$_GET['th'] : 'num';
+    $th = in_array($_GET['th'] ?? '', ['tgs', 'igs', 'num'], true) ? (string)$_GET['th'] : payPageTheme();
     $bk = in_array($_GET['back'] ?? '', ['tgs', 'igs', 'num'], true) ? (string)$_GET['back'] : '';
     $boot = [
         'api'  => function_exists('maApiUrl') ? maApiUrl() : '',
@@ -937,6 +951,7 @@ function payServe() {
         'info' => payInfo(0),
         'o'    => payView($o),
         'txt'  => ['crypto' => tuBtnText('crypto'), 'iran' => tuBtnText('iran')],
+        'pt'   => (object)payPageOverrides(),
     ];
     $html = payPageHtml($boot);
     if (function_exists('maSecurityHeaders')) maSecurityHeaders();
@@ -1023,8 +1038,9 @@ function payApi($action, $uid, $uname, array $body) {
 
 function payTextLabels() {
     return [
-        'topup_choose' => '💳 انتخابِ روشِ شارژ', 'topup_crypto_amount' => '💎 مبلغِ شارژِ ارزی',
-        'topup_crypto_invoice' => '💎 فاکتورِ ارز دیجیتال (آدرسِ ولت)', 'topup_gw_down' => '💎 درگاهِ ارز جواب نداد',
+        'topup_choose' => '💳 انتخابِ روشِ شارژ', 'topup_crypto_amount' => '🪙 مبلغِ شارژِ ارزی',
+        'topup_crypto_invoice' => '🪙 فاکتور (ورود به درگاه)', 'topup_crypto_invoice_addr' => '🪙 فاکتور بدونِ درگاه (با آدرس)',
+        'topup_gw_down' => '🪙 درگاهِ ارز جواب نداد',
         'topup_ir_phone' => '🏦 درخواستِ شماره', 'topup_ir_phone_ok' => '🏦 شماره ثبت شد',
         'topup_ir_phone_bad' => '🏦 شماره‌ی نامعتبر', 'topup_ir_amount' => '🏦 مبلغِ شارژِ ریالی',
         'topup_ir_kyc_need' => '🏦 نیاز به احراز هویت', 'topup_ir_confirm' => '🏦 تایید و لینکِ درگاه',
@@ -1041,11 +1057,69 @@ function payTextVars() {
     return [
         'topup_choose' => '{balance}', 'topup_crypto_amount' => '{min} {balance}',
         'topup_crypto_invoice' => '{amount} {crypto} {coin} {network} {address} {expire} {id}',
+        'topup_crypto_invoice_addr' => '{amount} {crypto} {coin} {network} {address} {expire} {id}',
         'topup_ir_phone_ok' => '{phone}', 'topup_ir_amount' => '{min} {balance} {phone} {limit}',
         'topup_ir_kyc_need' => '{limit} {amount}', 'topup_ir_confirm' => '{amount} {phone} {id}',
         'topup_paid' => '{amount} {balance} {id}', 'kyc_no' => '{note}', 'kyc_phone_confirm' => '{phone}', 'kyc_pending' => '{limit}',
         'kyc_otp_ask' => '{phone} {channel} {ussd}', 'kyc_otp_bad' => '{error}', 'kyc_otp_fail' => '{error}',
     ];
+}
+
+// متن‌های صفحه‌ی درگاه (پیش‌فرض همان است که در صفحه نوشته شده) — از پنلِ ربات عوض می‌شوند
+function payPageTexts() {
+    return [
+        'title'     => ['درگاه پرداخت', 'عنوانِ بالای صفحه'],
+        'lock'      => ['پرداختِ امن', 'برچسبِ کنارِ عنوان'],
+        'amt'       => ['مبلغِ شارژ', 'برچسبِ مبلغ'],
+        'go'        => ['ادامه و پرداخت', 'دکمه‌ی ساختِ فاکتور'],
+        'wait'      => ['در انتظارِ واریز', 'وضعیتِ فاکتورِ ارزی'],
+        'exact'     => ['مقدارِ دقیقِ واریز', 'برچسبِ مقدارِ واریز'],
+        'copyaddr'  => ['کپیِ آدرسِ ولت', 'دکمه‌ی کپیِ آدرس'],
+        'openpg'    => ['باز کردنِ صفحه‌ی پرداخت', 'دکمه‌ی صفحه‌ی درگاه (حالتِ صفحه)'],
+        'warn'      => ['فقط {coin} روی شبکه‌ی {network} و دقیقا همین مقدار را بفرستید؛ کارمزدِ برداشتِ صرافی را جدا حساب کنید.', 'هشدارِ واریز ({coin} {network})'],
+        'live'      => ['بعد از واریز، خودکار شارژ می‌شود — لازم نیست کاری کنید', 'خطِ «خودکار شارژ می‌شود»'],
+        'check'     => ['بررسی پرداخت', 'دکمه‌ی بررسی'],
+        'cancel'    => ['انصراف', 'دکمه‌ی انصراف'],
+        'ir_title'  => ['تاییدِ پرداخت', 'عنوانِ درگاهِ ایرانی'],
+        'ir_pay'    => ['پرداختِ آنلاین', 'دکمه‌ی پرداختِ ایرانی'],
+        'ir_hint'   => ['درگاه در مرورگر باز می‌شود؛ بعد از پرداخت به همین‌جا برگردید — خودکار شارژ می‌شود.', 'راهنمای درگاهِ ایرانی'],
+        'ph_title'  => ['شماره‌ی موبایل', 'عنوانِ درخواستِ شماره'],
+        'ph_text'   => ["برای پرداخت با درگاهِ ایرانی، شماره‌ی موبایلِ خودتان را یک‌بار بفرستید.\nشماره باید به نامِ صاحبِ کارت باشد.", 'توضیحِ درخواستِ شماره'],
+        'ph_go'     => ['ارسالِ شماره‌ی من', 'دکمه‌ی ارسالِ شماره'],
+        'ok_title'  => ['حسابتان شارژ شد', 'عنوانِ پرداختِ موفق'],
+        'ok_back'   => ['بازگشت', 'دکمه‌ی بازگشت'],
+        'exp_title' => ['مهلتِ این فاکتور تمام شد', 'عنوانِ فاکتورِ منقضی'],
+        'exp_text'  => ['دوباره مبلغ را وارد کنید تا فاکتورِ تازه ساخته شود.', 'توضیحِ فاکتورِ منقضی'],
+        'again'     => ['شارژِ دوباره', 'دکمه‌ی شارژِ دوباره'],
+    ];
+}
+function payPageThemes() { return ['num' => 'آبی و سبز', 'tgs' => 'بنفشِ نئونی', 'igs' => 'صورتیِ اینستاگرامی']; }
+function payPageTheme() {
+    $t = (string)(cfg()['pay_page']['th'] ?? 'num');
+    return isset(payPageThemes()[$t]) ? $t : 'num';
+}
+function payPageOverrides() {
+    $o = [];
+    foreach ((array)(cfg()['pay_page']['t'] ?? []) as $k => $v)
+        if (isset(payPageTexts()[$k]) && is_string($v) && trim($v) !== '') $o[$k] = $v;
+    return $o;
+}
+
+function payAdmPt($chatId, $msgId) {
+    $ov = payPageOverrides();
+    $t  = "🖥 <b>متن‌های صفحه‌ی درگاه</b>\n\n";
+    $t .= "صفحه‌ای که کاربر با دکمه‌ی فاکتور وارد می‌شود. هر مورد را بزنید و متنِ تازه را بفرستید.\n";
+    $t .= "✏️ = عوض شده · بقیه پیش‌فرض.\n\n🎨 رنگِ صفحه: <b>" . h(payPageThemes()[payPageTheme()]) . "</b>";
+    $rows = []; $line = [];
+    foreach (payPageTexts() as $k => [$def, $lbl]) {
+        $line[] = btnCb((isset($ov[$k]) ? '✏️ ' : '') . $lbl, 'payx_pte_' . $k, isset($ov[$k]) ? 'confirm' : 'info');
+        if (count($line) === 2) { $rows[] = $line; $line = []; }
+    }
+    if ($line) $rows[] = $line;
+    $rows[] = [btnCb('🎨 رنگِ صفحه: ' . payPageThemes()[payPageTheme()], 'payx_pth', 'admin')];
+    if ($ov) $rows[] = [btnCb('♻️ همه‌ی متن‌ها پیش‌فرض', 'payx_ptr', 'reject')];
+    $rows[] = [btnUI('back', 'payx_ed', 'nav')];
+    editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
 }
 
 function payAdmHome($chatId, $msgId) {
@@ -1124,6 +1198,7 @@ function payAdmEd($chatId, $msgId) {
         if (count($line) === 2) { $rows[] = $line; $line = []; }
     }
     if ($line) $rows[] = $line;
+    $rows[] = [btnCb('🖥 متن‌ها و رنگِ صفحه‌ی درگاه', 'payx_pt', 'admin')];
     $rows[] = [btnUI('back', 'payx_home', 'nav')];
     editMsg(BOT_TOKEN, $chatId, $msgId, $t, inlineKb($rows));
 }
@@ -1141,6 +1216,9 @@ function payAdmBtn($chatId, $msgId, $k) {
         [tuBtn($k, 'cb', 'trnop')],
         [btnCb('✏️ متن', 'payx_bt_' . $k, 'admin'), btnCb('😀 ایموجی', 'payx_be_' . $k, 'admin')],
         [btnCb('✨ پریمیوم', 'payx_bi_' . $k, 'admin'), btnCb('🎨 رنگ', 'payx_bc_' . $k, 'admin')],
+        in_array($k, tuBtnHideable(), true)
+            ? [btnCb(tuBtnOn($k) ? '👁 در فاکتور نمایش داده می‌شود' : '🙈 در فاکتور پنهان است', 'payx_bv_' . $k, tuBtnOn($k) ? 'confirm' : 'reject')]
+            : [],
         [btnCb('♻️ پیش‌فرض', 'payx_br_' . $k, 'reject')],
         [btnUI('back', 'payx_ed', 'nav')],
     ]));
@@ -1241,6 +1319,39 @@ function payAdminCallback($data, $chatId, $msgId, $cbId) {
         return true;
     }
     if (preg_match('/^payx_b_(\w+)$/', $data, $m)) { answerCb(BOT_TOKEN, $cbId); clearState($admin); payAdmBtn($chatId, $msgId, $m[1]); return true; }
+    if (preg_match('/^payx_bv_(\w+)$/', $data, $m) && in_array($m[1], tuBtnHideable(), true)) {
+        $k = $m[1]; $on = tuBtnOn($k);
+        cfgSet(function (&$c) use ($k, $on) { $c['topup_btns'][$k]['on'] = !$on; });
+        answerCb(BOT_TOKEN, $cbId, $on ? '🙈 پنهان شد' : '👁 نمایش داده می‌شود');
+        payAdmBtn($chatId, $msgId, $k);
+        return true;
+    }
+    if ($data === 'payx_pt') { answerCb(BOT_TOKEN, $cbId); clearState($admin); payAdmPt($chatId, $msgId); return true; }
+    if ($data === 'payx_pth') {
+        $ks = array_keys(payPageThemes()); $i = array_search(payPageTheme(), $ks, true);
+        $nx = $ks[((int)$i + 1) % count($ks)];
+        cfgSet(function (&$c) use ($nx) { $c['pay_page']['th'] = $nx; });
+        answerCb(BOT_TOKEN, $cbId, '🎨 ' . payPageThemes()[$nx]);
+        payAdmPt($chatId, $msgId);
+        return true;
+    }
+    if ($data === 'payx_ptr') {
+        cfgSet(function (&$c) { $c['pay_page']['t'] = []; });
+        answerCb(BOT_TOKEN, $cbId, '♻️');
+        payAdmPt($chatId, $msgId);
+        return true;
+    }
+    if (preg_match('/^payx_pte_(\w+)$/', $data, $m) && isset(payPageTexts()[$m[1]])) {
+        answerCb(BOT_TOKEN, $cbId);
+        [$def, $lbl] = payPageTexts()[$m[1]];
+        $cur = payPageOverrides()[$m[1]] ?? $def;
+        setState($admin, 'tue_pt', ['k' => $m[1]]);
+        sendMsg(BOT_TOKEN, $chatId, "🖥 <b>" . h($lbl) . "</b>\n\nالان:\n<blockquote>" . h($cur) . "</blockquote>\n" .
+            "متنِ تازه را بفرستید (ایموجیِ معمولی هم می‌شود). خط تیره = پیش‌فرض." .
+            (str_contains($def, '{') ? "\n\nمتغیرها: <code>{coin}</code> <code>{network}</code>" : ''),
+            inlineKb([[btnUI('cancel', 'payx_pt', 'cancel')]]));
+        return true;
+    }
     if (preg_match('/^payx_bc_(\w+)$/', $data, $m) && isset(tuBtnLabels()[$m[1]])) {
         $k = $m[1];
         $nx = nextStyle((string)(tuBtnCfg($k)['color'] ?? 'none'));
@@ -1295,6 +1406,21 @@ function payAdminState($action, $msg, $uid, $chatId) {
         }
         clearState($uid);
         sendMsg(BOT_TOKEN, $chatId, '✅ ذخیره شد.', $back);
+        return true;
+    }
+    if ($action === 'tue_pt') {
+        $k = (string)($sd['k'] ?? '');
+        if (!isset(payPageTexts()[$k])) { clearState($uid); return true; }
+        // صفحه‌ی وب متنِ ساده می‌گیرد (نه HTML)؛ ایموجیِ پریمیوم آن‌جا نمایش داده نمی‌شود
+        $v = $blank ? '' : mb_substr(trim(strip_tags(textWithoutCustomEmoji($msg))), 0, 300);
+        if (!$blank && $v === '') { sendMsg(BOT_TOKEN, $chatId, '⚠️ متن خالی است.'); return true; }
+        cfgSet(function (&$c) use ($k, $v) {
+            if (!is_array($c['pay_page']['t'] ?? null)) $c['pay_page']['t'] = [];
+            if ($v === '') unset($c['pay_page']['t'][$k]); else $c['pay_page']['t'][$k] = $v;
+        });
+        clearState($uid);
+        sendMsg(BOT_TOKEN, $chatId, $v === '' ? '♻️ به پیش‌فرض برگشت.' : '✅ ذخیره شد؛ از همین حالا در صفحه‌ی درگاه دیده می‌شود.',
+            inlineKb([[btnCb('🖥 متن‌های صفحه‌ی درگاه', 'payx_pt', 'nav')]]));
         return true;
     }
     if (in_array($action, ['tue_bt', 'tue_be', 'tue_bi'], true)) {
@@ -1667,50 +1793,50 @@ html.fs .wrap{--top:calc((var(--tg-content-safe-area-inset-top,var(--tg-safe-are
 </defs></svg>
 <div class="bgx" aria-hidden="true"></div>
 <main class="wrap">
-  <header class="top"><button class="bk" id="bk" aria-label="بازگشت"><svg><use href="#i-back"/></svg></button><b>درگاه پرداخت</b><span class="lock"><svg><use href="#i-lock"/></svg>پرداختِ امن</span></header>
+  <header class="top"><button class="bk" id="bk" aria-label="بازگشت"><svg><use href="#i-back"/></svg></button><b data-t="title">درگاه پرداخت</b><span class="lock"><svg><use href="#i-lock"/></svg><span data-t="lock">پرداختِ امن</span></span></header>
 
   <section class="v hid" id="v-new">
     <div class="mts" id="mts"></div>
     <div class="gl">
-      <label class="lb" for="amt">مبلغِ شارژ</label>
+      <label class="lb" for="amt" data-t="amt">مبلغِ شارژ</label>
       <div class="amt"><input id="amt" inputmode="numeric" autocomplete="off" placeholder="مثلا ۲۰۰٬۰۰۰"><span>تومان</span></div>
       <div class="qc" id="qc"></div>
       <div class="prev hid" id="prev"><span>معادل تقریبی</span><b class="ltr" id="prevV">—</b></div>
       <div class="hint" id="hint"></div>
     </div>
-    <button class="cta" id="go"><svg><use href="#i-card"/></svg><span id="goT">ادامه و پرداخت</span></button>
+    <button class="cta" id="go"><svg><use href="#i-card"/></svg><span id="goT" data-t="go">ادامه و پرداخت</span></button>
   </section>
 
   <section class="v hid" id="v-c">
     <div class="gl">
-      <div class="hd"><div class="am"><small>مبلغِ شارژ</small><b><span id="cA">—</span> <small style="display:inline">تومان</small></b><div style="margin-top:6px"><span class="chip w" id="cS"><i></i>در انتظارِ واریز</span></div></div>
+      <div class="hd"><div class="am"><small data-t="amt">مبلغِ شارژ</small><b><span id="cA">—</span> <small style="display:inline">تومان</small></b><div style="margin-top:6px"><span class="chip w" id="cS"><i></i><span data-t="wait">در انتظارِ واریز</span></span></div></div>
         <div class="ring"><svg viewBox="0 0 78 78"><circle class="t" cx="39" cy="39" r="33"/><circle class="p" id="cR" cx="39" cy="39" r="33" stroke-dasharray="207.3" stroke-dashoffset="0"/></svg><b id="cT">--:--</b></div></div>
-      <div class="pay" id="cPay"><div class="x"><small>مقدارِ دقیقِ واریز</small><b id="cV">—</b></div><button class="cp" id="cpV"><svg><use href="#i-copy"/></svg>کپی</button></div>
+      <div class="pay" id="cPay"><div class="x"><small data-t="exact">مقدارِ دقیقِ واریز</small><b id="cV">—</b></div><button class="cp" id="cpV"><svg><use href="#i-copy"/></svg>کپی</button></div>
       <div class="net" id="cN"></div>
       <div class="qr hid" id="cQ"></div>
       <div class="addr hid" id="cAd"></div>
-      <button class="cta hid" id="cpA"><svg><use href="#i-copy"/></svg>کپیِ آدرسِ ولت</button>
-      <button class="cta hid" id="cU"><svg><use href="#i-ext"/></svg>باز کردنِ صفحه‌ی پرداخت</button>
+      <button class="cta hid" id="cpA"><svg><use href="#i-copy"/></svg><span data-t="copyaddr">کپیِ آدرسِ ولت</span></button>
+      <button class="cta hid" id="cU"><svg><use href="#i-ext"/></svg><span data-t="openpg">باز کردنِ صفحه‌ی پرداخت</span></button>
       <div class="warn" id="cW"><svg><use href="#i-alert"/></svg><span id="cWt"></span></div>
-      <div class="live" id="cL"><i></i>بعد از واریز، خودکار شارژ می‌شود — لازم نیست کاری کنید</div>
+      <div class="live" id="cL"><i></i><span data-t="live">بعد از واریز، خودکار شارژ می‌شود — لازم نیست کاری کنید</span></div>
     </div>
-    <div class="row2"><button class="gh" id="cChk"><svg><use href="#i-refresh"/></svg>بررسی پرداخت</button><button class="gh" id="cX"><svg><use href="#i-x"/></svg>انصراف</button></div>
+    <div class="row2"><button class="gh" id="cChk"><svg><use href="#i-refresh"/></svg><span data-t="check">بررسی پرداخت</span></button><button class="gh" id="cX"><svg><use href="#i-x"/></svg><span data-t="cancel">انصراف</span></button></div>
   </section>
 
   <section class="v hid" id="v-i">
     <div class="gl">
-      <div class="big" style="padding-bottom:0"><div class="ic"><svg><use href="#i-card"/></svg></div><h2>تاییدِ پرداخت</h2><b class="a"><span id="iA">—</span> <small style="font-size:13px">تومان</small></b></div>
+      <div class="big" style="padding-bottom:0"><div class="ic"><svg><use href="#i-card"/></svg></div><h2 data-t="ir_title">تاییدِ پرداخت</h2><b class="a"><span id="iA">—</span> <small style="font-size:13px">تومان</small></b></div>
       <div class="kv"><div><span>شماره‌ی موبایل</span><b class="ltr" id="iP">—</b></div><div><span>کدِ پیگیری</span><b class="ltr" id="iId">—</b></div><div><span>وضعیت</span><b id="iS">در انتظارِ پرداخت</b></div></div>
-      <button class="cta" id="iGo"><svg><use href="#i-card"/></svg>پرداختِ آنلاین</button>
-      <div class="hint" style="text-align:center">درگاه در مرورگر باز می‌شود؛ بعد از پرداخت به همین‌جا برگردید — خودکار شارژ می‌شود.</div>
+      <button class="cta" id="iGo"><svg><use href="#i-card"/></svg><span data-t="ir_pay">پرداختِ آنلاین</span></button>
+      <div class="hint" style="text-align:center" data-t="ir_hint">درگاه در مرورگر باز می‌شود؛ بعد از پرداخت به همین‌جا برگردید — خودکار شارژ می‌شود.</div>
     </div>
-    <div class="row2"><button class="gh" id="iChk"><svg><use href="#i-refresh"/></svg>بررسی پرداخت</button><button class="gh" id="iX"><svg><use href="#i-x"/></svg>انصراف</button></div>
+    <div class="row2"><button class="gh" id="iChk"><svg><use href="#i-refresh"/></svg><span data-t="check">بررسی پرداخت</span></button><button class="gh" id="iX"><svg><use href="#i-x"/></svg><span data-t="cancel">انصراف</span></button></div>
   </section>
 
   <section class="v hid" id="v-ph">
-    <div class="gl"><div class="big"><div class="ic"><svg><use href="#i-phone"/></svg></div><h2>شماره‌ی موبایل</h2>
-      <p>برای پرداخت با درگاهِ ایرانی، شماره‌ی موبایلِ خودتان را یک‌بار بفرستید.<br>شماره باید به نامِ صاحبِ کارت باشد.</p></div>
-      <button class="cta" id="phGo"><svg><use href="#i-phone"/></svg>ارسالِ شماره‌ی من</button>
+    <div class="gl"><div class="big"><div class="ic"><svg><use href="#i-phone"/></svg></div><h2 data-t="ph_title">شماره‌ی موبایل</h2>
+      <p data-t="ph_text">برای پرداخت با درگاهِ ایرانی، شماره‌ی موبایلِ خودتان را یک‌بار بفرستید.<br>شماره باید به نامِ صاحبِ کارت باشد.</p></div>
+      <button class="cta" id="phGo"><svg><use href="#i-phone"/></svg><span data-t="ph_go">ارسالِ شماره‌ی من</span></button>
       <button class="gh" id="phBot">ارسال از داخلِ ربات</button></div>
   </section>
 
@@ -1727,14 +1853,14 @@ html.fs .wrap{--top:calc((var(--tg-content-safe-area-inset-top,var(--tg-safe-are
   </section>
 
   <section class="v hid" id="v-ok">
-    <div class="gl"><div class="big"><div class="ic"><svg><use href="#i-check"/></svg></div><h2>حسابتان شارژ شد</h2><b class="a"><span id="okA">—</span> <small style="font-size:13px">تومان</small></b>
+    <div class="gl"><div class="big"><div class="ic"><svg><use href="#i-check"/></svg></div><h2 data-t="ok_title">حسابتان شارژ شد</h2><b class="a"><span id="okA">—</span> <small style="font-size:13px">تومان</small></b>
       <p id="okB"></p></div>
-      <button class="cta" id="okGo">بازگشت</button></div>
+      <button class="cta" id="okGo" data-t="ok_back">بازگشت</button></div>
   </section>
 
   <section class="v hid" id="v-er">
-    <div class="gl"><div class="big"><div class="ic w"><svg><use href="#i-alert"/></svg></div><h2 id="erH">این فاکتور منقضی شد</h2><p id="erT">دوباره مبلغ را وارد کنید تا فاکتورِ تازه ساخته شود.</p></div>
-      <button class="cta" id="erGo">شارژِ دوباره</button></div>
+    <div class="gl"><div class="big"><div class="ic w"><svg><use href="#i-alert"/></svg></div><h2 id="erH">این فاکتور منقضی شد</h2><p id="erT" data-t="exp_text">دوباره مبلغ را وارد کنید تا فاکتورِ تازه ساخته شود.</p></div>
+      <button class="cta" id="erGo" data-t="again">شارژِ دوباره</button></div>
   </section>
 </main>
 <div class="toast" id="toast"></div>
@@ -1786,6 +1912,14 @@ var VIEWS = ['v-new', 'v-c', 'v-i', 'v-ph', 'v-k', 'v-ok', 'v-er'];
 function show(id){ VIEWS.forEach(function(v){ $(v).classList.toggle('hid', v !== id); }); window.scrollTo(0, 0); }
 
 var S = { m: '', o: null, poll: 0, tick: 0, info: B.info || {}, pend: null };
+// متن‌هایی که ادمین از پنلِ ربات عوض کرده (متنِ ساده؛ ایمن با esc)
+var PT = (B.pt && typeof B.pt === 'object') ? B.pt : {};
+function pt(k, d){ var v = PT[k]; return (typeof v === 'string' && v.trim()) ? v : d; }
+[].forEach.call(document.querySelectorAll('[data-t]'), function(el){
+  var v = PT[el.getAttribute('data-t')];
+  if (typeof v === 'string' && v.trim()) el.innerHTML = esc(v).replace(/\n/g, '<br>');
+});
+if (PT.title) try { document.title = PT.title; } catch(e){}
 var GI = {
   crypto: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="giC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34D399"/><stop offset=".55" stop-color="#10B981"/><stop offset="1" stop-color="#047857"/></linearGradient></defs>' +
     '<circle cx="24" cy="24" r="22" fill="url(#giC)"/><circle cx="24" cy="24" r="18.5" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>' +
@@ -1834,8 +1968,8 @@ $('amt').addEventListener('input', function(){ var n = parseInt(digits(this.valu
 $('go').onclick = function(){
   var a = amtVal(); if (!S.m) return;
   var b = this; b.disabled = true; $('goT').textContent = 'در حالِ ساختِ فاکتور…'; tap('medium');
-  api('pay_new', { m: S.m, amount: a }, function(j){ b.disabled = false; $('goT').textContent = 'ادامه و پرداخت'; openOrder(j.o); },
-    function(j){ b.disabled = false; $('goT').textContent = 'ادامه و پرداخت';
+  api('pay_new', { m: S.m, amount: a }, function(j){ b.disabled = false; $('goT').textContent = pt('go', 'ادامه و پرداخت'); openOrder(j.o); },
+    function(j){ b.disabled = false; $('goT').textContent = pt('go', 'ادامه و پرداخت');
       if (j.error === 'need_phone') { S.pend = a; show('v-ph'); return; }
       if (j.error === 'need_kyc') { S.kmode = j.mode || 'phone'; kycView(j.kyc, j.limit); return; }
       toast(j.message || 'ثبت نشد — دوباره امتحان کنید.'); });
@@ -1897,7 +2031,7 @@ function openOrder(o){
   stopPoll(); S.o = o;
   if (!o) { show('v-new'); drawNew(); return; }
   if (o.st === 'paid') { paid(o, null); return; }
-  if (o.st === 'expired' || o.st === 'rejected') { $('erH').textContent = o.st === 'expired' ? 'این فاکتور منقضی شد' : 'این پرداخت رد شد'; show('v-er'); return; }
+  if (o.st === 'expired' || o.st === 'rejected') { $('erH').textContent = o.st === 'expired' ? pt('exp_title', 'این فاکتور منقضی شد') : 'این پرداخت رد شد'; show('v-er'); return; }
   if (o.m === 'crypto') drawCrypto(o); else drawIran(o);
   poll(o.m === 'crypto' ? 4000 : 6000);
 }
@@ -1911,14 +2045,15 @@ function drawCrypto(o){
   $('cAd').textContent = c.addr || ''; $('cAd').classList.toggle('hid', !c.addr);
   $('cpA').classList.toggle('hid', !c.addr);
   $('cU').classList.toggle('hid', !!c.addr || !c.url);
-  $('cWt').innerHTML = c.addr ? 'فقط <b>' + esc(c.coin || '') + '</b>' + (c.net ? ' روی شبکه‌ی <b>' + esc(c.net) + '</b>' : '') + ' و دقیقا همین مقدار را بفرستید؛ کارمزدِ برداشتِ صرافی را جدا حساب کنید.'
+  $('cWt').innerHTML = c.addr ? (PT.warn ? esc(PT.warn).replace(/\{coin\}/g, '<b>' + esc(c.coin || '') + '</b>').replace(/\{network\}/g, '<b>' + esc(c.net || '') + '</b>')
+      : 'فقط <b>' + esc(c.coin || '') + '</b>' + (c.net ? ' روی شبکه‌ی <b>' + esc(c.net) + '</b>' : '') + ' و دقیقا همین مقدار را بفرستید؛ کارمزدِ برداشتِ صرافی را جدا حساب کنید.')
     : 'صفحه‌ی پرداخت را باز کنید؛ آدرس و مقدار آنجاست.';
   show('v-c');
   var tot = Math.max(60, (c.exp || 0) - Math.floor(Date.now() / 1000));
   function t(){ var left = Math.max(0, (c.exp || 0) - Math.floor(Date.now() / 1000));
     $('cT').textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
     $('cR').style.strokeDashoffset = (207.3 * (1 - left / tot)).toFixed(1);
-    if (!left && c.exp) { stopPoll(); $('erH').textContent = 'مهلتِ این فاکتور تمام شد'; show('v-er'); } }
+    if (!left && c.exp) { stopPoll(); $('erH').textContent = pt('exp_title', 'مهلتِ این فاکتور تمام شد'); show('v-er'); } }
   t(); S.tick = setInterval(t, 1000);
 }
 function drawIran(o){
@@ -1938,7 +2073,7 @@ function status(force, cb){
   fetch(u, { cache: 'no-store', credentials: 'omit' }).then(function(r){ return r.json(); }).then(function(j){
     if (!j || !j.ok || S.o !== o) { cb && cb(false); return; }
     if (j.st === 'paid') { paid(o, j.bal); cb && cb(true); return; }
-    if (j.st === 'expired') { stopPoll(); $('erH').textContent = 'مهلتِ این فاکتور تمام شد'; show('v-er'); cb && cb(false); return; }
+    if (j.st === 'expired') { stopPoll(); $('erH').textContent = pt('exp_title', 'مهلتِ این فاکتور تمام شد'); show('v-er'); cb && cb(false); return; }
     cb && cb(false, j);
   }).catch(function(){ cb && cb(false); });
 }

@@ -944,15 +944,19 @@ function defaultConfig() {
             'card_check' => false, 'desc' => 'شارژ کیف پول',
         ],
         'topup_card' => true,
+        // صفحه‌ی درگاه (همان که از دکمه‌ی فاکتور باز می‌شود): تمِ رنگ و متن‌های تغییر‌یافته — از پنلِ ربات
+        'pay_page' => ['th' => 'num', 't' => []],
+
         'topup_btns' => [
-            // ایموجیِ پریمیوم (همان‌هایی که بخشِ قیمت‌ها هم استفاده می‌کند) به‌جای ایموجیِ معمولی
-            'crypto' => ['emoji' => '', 'text' => 'پرداخت با ارز دیجیتال', 'color' => 'success', 'icon' => '5271878966347601947'],
-            'iran'   => ['emoji' => '', 'text' => 'درگاه پرداخت ایرانی',   'color' => 'primary', 'icon' => '5343902037438391058'],
+            // ایموجیِ پریمیوم به‌جای ایموجیِ معمولی: 🪙 سکه (ارز دیجیتال)، 🏦 بانک (درگاه ایرانی)، 💳 کارت
+            'crypto' => ['emoji' => '', 'text' => 'پرداخت با ارز دیجیتال', 'color' => 'success', 'icon' => '6044178884339964669'],
+            'iran'   => ['emoji' => '', 'text' => 'درگاه پرداخت ایرانی',   'color' => 'primary', 'icon' => '6302990448206022613'],
             'card'   => ['emoji' => '', 'text' => 'کارت به کارت',          'color' => 'primary', 'icon' => '5445353829304387411'],
             'phone'  => ['emoji' => '📱', 'text' => 'ارسال شماره‌ی من',       'color' => 'success', 'icon' => ''],
-            'open'   => ['emoji' => '🌐', 'text' => 'باز کردن درگاه پرداخت', 'color' => 'success', 'icon' => ''],
-            'copy'   => ['emoji' => '📋', 'text' => 'کپی آدرس ولت',          'color' => 'primary', 'icon' => ''],
-            'check'  => ['emoji' => '🔄', 'text' => 'بررسی پرداخت',          'color' => 'primary', 'icon' => ''],
+            'open'   => ['emoji' => '', 'text' => 'ورود به درگاه پرداخت', 'color' => 'success', 'icon' => '5296369303661067030'],
+            // «on»: نمایش در فاکتورِ ربات (کپیِ آدرس پیش‌فرض پنهان است؛ آدرس داخلِ درگاه است)
+            'copy'   => ['emoji' => '📋', 'text' => 'کپی آدرس ولت',          'color' => 'primary', 'icon' => '', 'on' => false],
+            'check'  => ['emoji' => '🔄', 'text' => 'بررسی پرداخت',          'color' => 'primary', 'icon' => '', 'on' => true],
             'pay'    => ['emoji' => '💳', 'text' => 'پرداخت آنلاین',          'color' => 'success', 'icon' => ''],
             'kyc'    => ['emoji' => '🪪', 'text' => 'احراز هویت',            'color' => 'primary', 'icon' => ''],
             'less'   => ['emoji' => '✏️', 'text' => 'مبلغ دیگر',             'color' => 'primary', 'icon' => ''],
@@ -1038,13 +1042,16 @@ function defaultConfig() {
             'orders_item'  => "{status}\n   {title}\n   ☎️ <code>{phone}</code>{code_line}\n   💰 {amount} تومان\n   🧾 <code>{id}</code>\n   📅 {date}\n",
 
             'topup_choose'         => "💳 <b>افزایش موجودی</b>\n\n<blockquote>💰 موجودیِ فعلی: <b>{balance}</b> تومان</blockquote>\nروشِ پرداخت را انتخاب کنید 👇",
-            'topup_crypto_amount'  => "<tg-emoji emoji-id=\"5271878966347601947\">💎</tg-emoji> <b>پرداخت با ارز دیجیتال</b>\n\nمبلغِ شارژ را به <b>تومان</b> بفرستید یا یکی از دکمه‌ها را بزنید.\n\n🔻 حداقل: <b>{min}</b> تومان\n⚡ بعد از واریز، حساب <b>خودکار</b> شارژ می‌شود.",
-            'topup_crypto_invoice' => "<tg-emoji emoji-id=\"5271878966347601947\">💎</tg-emoji> <b>فاکتورِ ارز دیجیتال</b>\n\n<blockquote>💰 مبلغ: <b>{amount}</b> تومان\n🪙 مقدارِ واریز: {crypto} <b>{coin}</b>\n🔗 شبکه: <b>{network}</b></blockquote>\n📥 <b>آدرسِ ولت</b> (برای کپی لمس کنید):\n{address}\n\n⏳ مهلت: <b>{expire}</b> دقیقه · 🧾 {id}\n\n✅ بعد از واریز، حسابتان <b>خودکار</b> شارژ می‌شود؛ رسید لازم نیست.",
+            'topup_crypto_amount'  => "<tg-emoji emoji-id=\"6044178884339964669\">🪙</tg-emoji> <b>پرداخت با ارز دیجیتال</b>\n\nمبلغِ شارژ را به <b>تومان</b> بفرستید یا یکی از دکمه‌ها را بزنید.\n\n🔻 حداقل: <b>{min}</b> تومان\n⚡ بعد از واریز، حساب <b>خودکار</b> شارژ می‌شود.",
+            // فاکتور در چت فقط خلاصه است؛ آدرس، کیوآر و مقدارِ دقیق داخلِ درگاه (دکمه‌ی پایین)
+            'topup_crypto_invoice' => "<tg-emoji emoji-id=\"6044178884339964669\">🪙</tg-emoji> <b>درگاهِ پرداختِ ارز دیجیتال آماده است</b>\n\n<blockquote><tg-emoji emoji-id=\"5318912792428814144\">💰</tg-emoji> مبلغِ شارژ: <b>{amount}</b> تومان\n<tg-emoji emoji-id=\"5116476703002068797\">⌛</tg-emoji> مهلتِ پرداخت: <b>{expire}</b> دقیقه\n<tg-emoji emoji-id=\"5444856076954520455\">🧾</tg-emoji> کدِ پیگیری: {id}</blockquote>\n\n👇 برای پرداخت، دکمه‌ی پایین را بزنید و وارد درگاه شوید؛ آدرسِ ولت، کیوآر و مقدارِ دقیقِ واریز آن‌جاست.\n\n<tg-emoji emoji-id=\"5118861066981344121\">✅</tg-emoji> بعد از واریز، حسابتان <b>خودکار</b> شارژ می‌شود.",
+            // فقط وقتی صفحه‌ی درگاه در دسترس نیست (آدرسِ https ندارد) — آدرس داخلِ خودِ پیام
+            'topup_crypto_invoice_addr' => "<tg-emoji emoji-id=\"6044178884339964669\">🪙</tg-emoji> <b>فاکتورِ ارز دیجیتال</b>\n\n<blockquote>💰 مبلغ: <b>{amount}</b> تومان\n🪙 مقدارِ واریز: {crypto} <b>{coin}</b>\n🔗 شبکه: <b>{network}</b></blockquote>\n📥 <b>آدرسِ ولت</b> (برای کپی لمس کنید):\n{address}\n\n⏳ مهلت: <b>{expire}</b> دقیقه · 🧾 {id}\n\n✅ بعد از واریز، حسابتان <b>خودکار</b> شارژ می‌شود؛ رسید لازم نیست.",
             'topup_gw_down'        => "⚠️ درگاهِ ارز دیجیتال الان جواب نمی‌دهد.\nچند دقیقه‌ی دیگر دوباره امتحان کنید یا روشِ دیگری را بزنید.",
-            'topup_ir_phone'       => "<tg-emoji emoji-id=\"5343902037438391058\">🏦</tg-emoji> <b>درگاه پرداخت ایرانی</b>\n\nبرای پرداخت، اول شماره‌ی موبایلِ خودتان را با دکمه‌ی پایین بفرستید 👇\n\n<blockquote>📱 شماره باید به نامِ صاحبِ کارتِ بانکی باشد.</blockquote>",
+            'topup_ir_phone'       => "<tg-emoji emoji-id=\"6302990448206022613\">🏦</tg-emoji> <b>درگاه پرداخت ایرانی</b>\n\nبرای پرداخت، اول شماره‌ی موبایلِ خودتان را با دکمه‌ی پایین بفرستید 👇\n\n<blockquote>📱 شماره باید به نامِ صاحبِ کارتِ بانکی باشد.</blockquote>",
             'topup_ir_phone_ok'    => "✅ شماره‌ی <b>{phone}</b> ثبت شد.",
             'topup_ir_phone_bad'   => "⚠️ فقط شماره‌ی موبایلِ ایرانیِ <b>خودتان</b> را با دکمه‌ی «📱 ارسال شماره» بفرستید.",
-            'topup_ir_amount'      => "<tg-emoji emoji-id=\"5343902037438391058\">🏦</tg-emoji> <b>درگاه پرداخت ایرانی</b>\n\n📱 شماره: <b>{phone}</b>\nمبلغِ شارژ را به <b>تومان</b> بفرستید یا یکی از دکمه‌ها را بزنید.\n\n🔻 حداقل: <b>{min}</b> تومان",
+            'topup_ir_amount'      => "<tg-emoji emoji-id=\"6302990448206022613\">🏦</tg-emoji> <b>درگاه پرداخت ایرانی</b>\n\n📱 شماره: <b>{phone}</b>\nمبلغِ شارژ را به <b>تومان</b> بفرستید یا یکی از دکمه‌ها را بزنید.\n\n🔻 حداقل: <b>{min}</b> تومان",
             'topup_ir_kyc_need'    => "🪪 <b>احراز هویت لازم است</b>\n\nبرای پرداختِ بیش از <b>{limit}</b> تومان، یک‌بار احراز هویت کنید — فقط با <b>شماره‌ی موبایلِ</b> خودتان؛ اسم و فامیل لازم نیست.\n\nیا مبلغِ کمتری وارد کنید.",
             'kyc_otp_ask'          => "🪪 <b>احراز هویت با شماره‌ی موبایل</b>\n\nکدِ تاییدِ یک‌بارمصرفِ <b>زرین‌پال</b> برای <b>{phone}</b> فرستاده شد ({channel}).\n{ussd}\n👇 کد را همین‌جا بفرستید:",
             'kyc_otp_bad'          => "⚠️ {error}\nکد را دوباره بفرستید یا کدِ تازه بگیرید.",
@@ -5585,6 +5592,36 @@ function runBackgroundQueues() {
             foreach (['word_hack', 'manual_protect', 'shield_after', 'hack_cooldown', 'rng'] as $k) unset($c[$k]);
             foreach (array_keys((array)($c['texts'] ?? [])) as $k)
                 if (preg_match('/^(hack_|risk_|btn_risk_)|^(protected|protect_still)$/', (string)$k)) unset($c['texts'][$k]);
+        });
+    });
+    migrateOnce('v21_pay_defaults', function () {
+        // ۵۲۷۱… پرچمِ ایران است (سکه‌ی طلای بخشِ قیمت‌ها)، نه ارز دیجیتال — به 🪙 و 🏦ِ خودِ کانفیگ عوض می‌شود.
+        // متن/دکمه‌ای که بی‌تغییر (همان پیش‌فرضِ قبلی) ذخیره شده بود پاک می‌شود تا پیش‌فرضِ تازه
+        // (فاکتورِ کوتاه با «ورود به درگاه پرداخت») بنشیند؛ هرچه واقعا ویرایش شده دست نمی‌خورد.
+        cfgSet(function (&$c) {
+            $map = ['5271878966347601947' => '6044178884339964669', '5343902037438391058' => '6302990448206022613'];
+            $d = defaultConfig();
+            foreach ((array)($c['topup_btns'] ?? []) as $k => $b) {
+                if (!is_array($b)) continue;
+                if (isset($b['icon']) && isset($map[(string)$b['icon']]) && in_array($k, ['crypto', 'iran'], true))
+                    $c['topup_btns'][$k]['icon'] = $b['icon'] = $map[(string)$b['icon']];
+                $same = function ($x) use ($b) {
+                    foreach (['emoji', 'text', 'color', 'icon'] as $f) if ((string)($b[$f] ?? '') !== (string)($x[$f] ?? '')) return false;
+                    return true;
+                };
+                $oldOpen = ['emoji' => '🌐', 'text' => 'باز کردن درگاه پرداخت', 'color' => 'success', 'icon' => ''];
+                if (!isset($b['on']) && (isset($d['topup_btns'][$k]) && $same($d['topup_btns'][$k]) || ($k === 'open' && $same($oldOpen))))
+                    unset($c['topup_btns'][$k]);
+            }
+            foreach ((array)($c['texts'] ?? []) as $k => $v) {
+                if (!is_string($v) || !preg_match('/^(topup_|kyc_)/', (string)$k)) continue;
+                $n = str_replace(['emoji-id="5271878966347601947">💎', 'emoji-id="5343902037438391058">🏦'],
+                                 ['emoji-id="6044178884339964669">🪙', 'emoji-id="6302990448206022613">🏦'], $v);
+                $n = str_replace(array_keys($map), array_values($map), $n);
+                if ($k === 'topup_crypto_invoice' && $n === ($d['texts']['topup_crypto_invoice_addr'] ?? null)) { unset($c['texts'][$k]); continue; }
+                if ($n === ($d['texts'][$k] ?? null)) { unset($c['texts'][$k]); continue; }
+                if ($n !== $v) $c['texts'][$k] = $n;
+            }
         });
     });
     migrateOnce('v18_shop_noorders', function () {
