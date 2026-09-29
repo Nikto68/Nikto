@@ -2341,7 +2341,34 @@ function topupAmountError($amt) {
 
 function gwOn() {
     $g = cfg()['gateway'] ?? [];
-    return !empty($g['on']) && trim((string)$g['api_key']) !== '' && gwCallbackUrl() !== '';
+    return !empty($g['on']) && gwCleanKey($g['api_key'] ?? '') !== '' && gwCallbackUrl() !== '';
+}
+
+// کلیدها لاتین‌اند؛ موقعِ کپی از گوشی/تلگرام نویسه‌های نامرئی (نیم‌فاصله، علامت‌های جهت، BOM)
+// و فاصله می‌چسبد و درگاه کلید را «نامعتبر» می‌داند — همه پاک و رقم‌های فارسی لاتین می‌شوند
+function gwCleanKey($k) {
+    $k = strtr((string)$k, ['۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+                            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+                            '‐' => '-', '‑' => '-', '‒' => '-', '–' => '-', '—' => '-', 'ـ' => '']);
+    $c = preg_replace('/[\p{Cf}\p{Z}\s]+/u', '', $k);
+    return $c === null ? trim($k) : $c;
+}
+
+// لینکِ پرداخت (مثلا pay.oxapay.com/123) به‌جای کلیدِ API — رایج‌ترین اشتباه در راه‌اندازی
+function gwKeyError($k) {
+    $k = gwCleanKey($k);
+    if ($k === '' || $k === '-') return '';
+    if (preg_match('#^(https?://|www\.)|oxapay\.com/|nowpayments\.io/|/#i', $k))
+        return 'این یک لینک است، نه کلیدِ API. لینکی مثلِ pay.oxapay.com/… لینکِ پرداختِ ثابت است و شارژِ خودکار با آن ممکن نیست. ' .
+               'کلید را از داشبوردِ OxaPay ← Merchant Service ← Generate API Key بسازید (یک رشته‌ی حروف و عدد، بدونِ https).';
+    if (ctype_digit($k))
+        return 'این فقط یک عدد است (شماره‌ی لینک یا حساب)، نه کلیدِ API. ' .
+               'کلیدِ مرچنت را از داشبوردِ OxaPay ← Merchant Service ← Generate API Key بسازید و همان را کامل کپی کنید.';
+    if (preg_match('/[^\x21-\x7E]/', $k))
+        return 'کلیدِ API فقط حروف و عددِ انگلیسی است؛ در متنی که فرستادید حرفِ فارسی یا نویسه‌ی دیگری هست.';
+    if (strlen($k) < 6 || strlen($k) > 200)
+        return 'کلیدِ API درست به نظر نمی‌رسد؛ همان کلیدِ Merchant را کامل کپی کنید.';
+    return '';
 }
 
 function gwCallbackUrl() {
@@ -2400,7 +2427,11 @@ function gwOxa($r) {
     if ((string)($j['result'] ?? '') === '100') return [$j, ''];
     $e = $j['error']['message'] ?? $j['message'] ?? '';
     if (is_array($e)) $e = json_encode($e, JSON_UNESCAPED_UNICODE);
-    return [null, 'OxaPay: ' . ((string)$e ?: ('کد ' . ($j['status'] ?? $j['result'] ?? '?')))];
+    $e = 'OxaPay: ' . ((string)$e ?: ('کد ' . ($j['status'] ?? $j['result'] ?? '?')));
+    if (preg_match('/api.?key.*(invalid|not valid|wrong)|invalid.*api.?key/i', $e))
+        $e .= ' — کلیدِ ثبت‌شده را OxaPay قبول نکرد. باید «Merchant API Key» باشد (از داشبورد ← Merchant Service ← Generate API Key)، ' .
+              'نه کلیدِ Payout یا General API، نه لینکِ pay.oxapay.com. کلید را دوباره کامل کپی کنید و در پنل بگذارید.';
+    return [null, $e];
 }
 
 function gwCreateInvoice($orderId, $toman) {
@@ -2411,7 +2442,7 @@ function gwCreateInvoice($orderId, $toman) {
     $coin = strtoupper(trim((string)($g['coin'] ?? 'USDT'))) ?: 'USDT';
     $net  = strtoupper(trim((string)($g['network'] ?? '')));
     $prov = strtolower(trim((string)($g['provider'] ?? 'oxapay')));
-    $key  = trim((string)($g['api_key'] ?? ''));
+    $key  = gwCleanKey($g['api_key'] ?? '');
 
     if ($prov === 'custom') {
         $u = strtr((string)($g['custom_url'] ?? ''), [
@@ -2494,7 +2525,7 @@ function gwCheck($order) {
         if (($gw['kind'] ?? '') === 'invoice')
             return [false, 'منتظرِ خبرِ درگاه (IPN)'];
         $r = gwHttp('https://api.nowpayments.io/v1/payment/' . rawurlencode($gw['invoice']),
-                    ['x-api-key: ' . trim((string)$g['api_key'])]);
+                    ['x-api-key: ' . gwCleanKey($g['api_key'] ?? '')]);
         if (empty($r['ok'])) return [false, $r['error']];
         $st = strtolower((string)($r['data']['payment_status'] ?? ''));
         return [gwPaidStatus($st), $st ?: 'نامشخص'];
@@ -2502,7 +2533,7 @@ function gwCheck($order) {
     if ($prov === 'custom') return [false, 'در حالت دلخواه، تایید فقط با IPN انجام می‌شود'];
 
     [$d, $err] = gwOxa(gwHttp('https://api.oxapay.com/v1/payment/' . rawurlencode((string)$gw['invoice']),
-                              ['merchant_api_key: ' . trim((string)$g['api_key'])]));
+                              ['merchant_api_key: ' . gwCleanKey($g['api_key'] ?? '')]));
     if (!$d) return [false, $err];
     $st = strtolower((string)($d['status'] ?? ''));
     return [gwPaidStatus($st), $st ?: 'نامشخص'];
@@ -2542,7 +2573,7 @@ function handleIpn() {
         $paid = gwPaidStatus($d['payment_status'] ?? '');
     } else {
         $sig = $_SERVER['HTTP_HMAC'] ?? '';
-        $calc = hash_hmac('sha512', $raw, trim((string)$g['api_key']));
+        $calc = hash_hmac('sha512', $raw, gwCleanKey($g['api_key'] ?? ''));
         if (!$sig || !hash_equals($calc, $sig)) { http_response_code(403); echo 'sig'; return; }
         $orderId = (string)($d['order_id'] ?? $d['orderId'] ?? '');
         $paid = gwPaidStatus($d['status'] ?? '');
@@ -4397,6 +4428,8 @@ function masterHandle($update) {
             if ($f === 'base_url' && $v !== '' && !preg_match('#^https://#i', $v)) {
                 sendMsg(BOT_TOKEN, $chatId, "⚠️ آدرس باید با <code>https://</code> شروع شود."); return;
             }
+            if ($f === 'api_key' && ($kErr = gwKeyError($v)) !== '') { sendMsg(BOT_TOKEN, $chatId, '⚠️ ' . h($kErr)); return; }
+            if (in_array($f, ['api_key', 'ipn_secret'], true)) $v = gwCleanKey($v);
             if (in_array($f, ['coin', 'network'], true)) $v = strtoupper($v);
             cfgSet(function (&$c) use ($f, $v) { $c['gateway'][$f] = $v; });
             clearState($uid);

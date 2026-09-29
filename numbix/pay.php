@@ -41,7 +41,7 @@ function irCfg() { return (array)(cfg()['irpay'] ?? []); }
 function irProv() { return (irCfg()['provider'] ?? 'zarinpal') === 'zibal' ? 'zibal' : 'zarinpal'; }
 function irMerchant() {
     $c = irCfg();
-    $m = trim((string)($c['merchant'] ?? ''));
+    $m = function_exists('gwCleanKey') ? gwCleanKey($c['merchant'] ?? '') : trim((string)($c['merchant'] ?? ''));
     if (!empty($c['sandbox']) && irProv() === 'zibal') return 'zibal';
     return $m;
 }
@@ -79,7 +79,7 @@ function kycLimit() { return (float)(irCfg()['kyc_limit'] ?? 0); }
 //  otp   = زرین‌پال یک کدِ یک‌بارمصرف (پیامک/USSD) به همان شماره می‌فرستد و کاربر کد را وارد می‌کند (خودکار)
 //  phone = شماره برای مدیر فرستاده می‌شود و مدیر تایید می‌کند (وقتی کلیدِ OAuth زرین‌پال گذاشته نشده)
 //  docs  = کدِ ملی + عکسِ کارتِ ملی (اختیاری)
-function zpOauthCfg() { $c = irCfg(); return [trim((string)($c['oauth_id'] ?? '')), trim((string)($c['oauth_secret'] ?? ''))]; }
+function zpOauthCfg() { $c = irCfg(); $cl = function_exists('gwCleanKey') ? 'gwCleanKey' : 'trim'; return [$cl((string)($c['oauth_id'] ?? '')), $cl((string)($c['oauth_secret'] ?? ''))]; }
 function kycMode() {
     $m = (string)(irCfg()['kyc_mode'] ?? 'auto');
     if ($m === 'docs' || $m === 'phone') return $m;

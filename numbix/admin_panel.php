@@ -679,12 +679,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $post = $_POST;
         $u = trim($post['gw_base'] ?? '');
         if ($u !== '' && !preg_match('#^https://#i', $u)) go('آدرس ربات باید با https:// شروع شود.', 'err');
+        $kErr = gwKeyError((string)($post['gw_key'] ?? ''));
+        if ($kErr !== '') go($kErr, 'err');
         cfgSet(function (&$c) use ($post, $u) {
             $c['gateway']['on']       = !empty($post['gw_on']);
             $c['gateway']['provider'] = in_array($post['gw_prov'] ?? '', ['oxapay','nowpayments','custom'], true)
                                         ? $post['gw_prov'] : 'oxapay';
-            $gwKey = trim($post['gw_key'] ?? '');
-            $gwIpn = trim($post['gw_ipn'] ?? '');
+            $gwKey = gwCleanKey($post['gw_key'] ?? '');
+            $gwIpn = gwCleanKey($post['gw_ipn'] ?? '');
             if ($gwKey !== '') $c['gateway']['api_key']    = $gwKey;
             if ($gwIpn !== '') $c['gateway']['ipn_secret'] = $gwIpn;
             $c['gateway']['base_url']  = $u;
@@ -728,7 +730,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($a === 'save_irpay') {
         $post = $_POST;
-        $m = preg_replace('/\s+/', '', (string)($post['ir_merchant'] ?? ''));
+        $m = gwCleanKey((string)($post['ir_merchant'] ?? ''));
         if ($m !== '' && !preg_match('/^[A-Za-z0-9\-]{4,64}$/', $m)) go('مرچنت فقط حروفِ انگلیسی، عدد و خط تیره است.', 'err');
         cfgSet(function (&$c) use ($post, $m) {
             $c['irpay']['on']         = !empty($post['ir_on']);
@@ -744,7 +746,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c['irpay']['otp_ch']     = ($post['ir_otp_ch'] ?? '') === 'ussd' ? 'ussd' : 'sms';
             $oi = preg_replace('/\D/', '', (string)($post['ir_oauth_id'] ?? ''));
             if ($oi !== '' || !empty($post['ir_oauth_clear'])) $c['irpay']['oauth_id'] = $oi;
-            $os = trim((string)($post['ir_oauth_secret'] ?? ''));
+            $os = gwCleanKey((string)($post['ir_oauth_secret'] ?? ''));
             if ($os !== '') $c['irpay']['oauth_secret'] = $os;
             if (!empty($post['ir_oauth_clear'])) { $c['irpay']['oauth_id'] = ''; $c['irpay']['oauth_secret'] = ''; }
             $c['irpay']['ir_only']    = !empty($post['ir_only']);
@@ -760,29 +762,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($kuid <= 0 || !function_exists('kycDecide')) go('نامعتبر.', 'err');
         $done = kycDecide($kuid, $ok, ADMIN_ID, mb_substr(trim((string)($_POST['note'] ?? '')), 0, 200));
         go($done ? ($ok ? 'احراز هویت تایید شد و به کاربر خبر داده شد.' : 'احراز هویت رد شد و به کاربر خبر داده شد.') : 'این درخواست قبلا بررسی شده بود.');
-    }
-    if ($a === 'save_tu_texts' && function_exists('payTextLabels')) {
-        $post = $_POST;
-        cfgSet(function (&$c) use ($post) {
-            foreach (array_keys(payTextLabels()) as $k) {
-                if (!isset($post['t_' . $k])) continue;
-                $v = trim(str_replace("\r\n", "\n", (string)$post['t_' . $k]));
-                $c['texts'][$k] = $v !== '' ? tgHtmlFix($v) : defaultConfig()['texts'][$k];
-            }
-            foreach (array_keys(tuBtnLabels()) as $k) {
-                if (!isset($post['b_' . $k . '_text'])) continue;
-                $txt = mb_substr(trim((string)$post['b_' . $k . '_text']), 0, 60);
-                $col = (string)($post['b_' . $k . '_color'] ?? 'none');
-                $ic  = preg_replace('/\D/', '', (string)($post['b_' . $k . '_icon'] ?? ''));
-                $c['topup_btns'][$k] = [
-                    'emoji' => mb_substr(trim((string)($post['b_' . $k . '_emoji'] ?? '')), 0, 8),
-                    'text'  => $txt !== '' ? $txt : (string)defaultConfig()['topup_btns'][$k]['text'],
-                    'color' => isStyle($col) ? $col : 'none',
-                    'icon'  => $ic,
-                ];
-            }
-        });
-        go('متن‌ها و دکمه‌های شارژ ذخیره شد.');
     }
     if ($a === 'save_join') {
         $post = $_POST;
@@ -2712,9 +2691,11 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       کاربر «افزایش موجودی» می‌زند ← ربات از درگاه یک <b>لینکِ پرداخت + آدرسِ ولت + مهلت</b> می‌گیرد ←
       به‌محضِ واریز، درگاه به ربات خبر می‌دهد و کیف پول <b>خودکار</b> شارژ می‌شود.
       پول مستقیم به ولتِ خودتان در پنلِ درگاه می‌رود.<br><br>
-      <b>راه‌اندازی:</b> در <a href="https://oxapay.com" target="_blank" rel="noopener">OxaPay</a> یا
-      <a href="https://nowpayments.io" target="_blank" rel="noopener">NOWPayments</a> حساب بسازید،
-      کلیدِ API (Merchant Key) را بگیرید و این‌جا بگذارید؛ بعد در پنلِ همان سایت، آدرسِ <b>Callback / IPN</b> را روی آدرسِ زیر بگذارید.
+      <b>راه‌اندازیِ OxaPay (فقط یک کلید لازم است):</b> وارد <a href="https://oxapay.com" target="_blank" rel="noopener">oxapay.com</a> شوید ←
+      بخشِ <b>Merchant Service</b> ← <b>Generate API Key</b> (ساختِ کلیدِ مرچنت) ← کلید را کپی کنید و در «کلیدِ API» بگذارید ← ذخیره ← «🧪 تستِ اتصال».
+      کلید یک رشته‌ی حروف و عدد است (بدونِ https). <b>لینکی مثلِ pay.oxapay.com/… کلید نیست</b>؛ آن لینکِ پرداختِ ثابت است و نمی‌گوید چه کسی
+      چقدر واریز کرده، پس شارژِ خودکار با آن ممکن نیست. آدرسِ Callback را هم لازم نیست در OxaPay بنویسید؛ با هر فاکتور خودکار فرستاده می‌شود.<br>
+      <b>NOWPayments:</b> کلیدِ API + IPN Secret، و آدرسِ زیر را در بخشِ IPN همان سایت بگذارید.
     </div>
     <?php if (gwCallbackUrl() !== ''): ?>
       <div class="note" style="margin-top:10px">📡 <b>آدرسِ Callback</b> (خودکار با هر فاکتور فرستاده می‌شود): <code style="direction:ltr;display:inline-block"><?= h(gwCallbackUrl()) ?></code></div>
@@ -2724,7 +2705,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
       <?= fk('save_gateway', []) ?>
       <label class="chk" style="margin-bottom:12px"><input type="checkbox" name="gw_on" value="1" <?= !empty($G['on']) ? 'checked' : '' ?>> درگاهِ خودکار روشن باشد</label>
       <div class="grid2">
-        <div><label>سرویس</label><select name="gw_prov">
+        <div><label>سرویس</label><select name="gw_prov" id="gwProv" onchange="gwProvUi()">
           <?php foreach (['oxapay' => 'OxaPay', 'nowpayments' => 'NOWPayments', 'custom' => 'دلخواه'] as $k2 => $v2): ?>
             <option value="<?= h($k2) ?>" <?= ($G['provider'] ?? 'oxapay') === $k2 ? 'selected' : '' ?>><?= h($v2) ?></option>
           <?php endforeach; ?></select></div>
@@ -2733,12 +2714,12 @@ tr.grp td{background:var(--surface-2);font-weight:800}
           <div class="secretin"><input type="password" name="gw_key" autocomplete="off" value=""
             placeholder="<?= trim((string)($G['api_key'] ?? '')) !== '' ? 'ثبت شده — برای تعویض، کلیدِ تازه بگذارید' : 'کلیدِ Merchant' ?>" style="direction:ltr">
             <button type="button" class="btn ghost sm" onclick="toggleSecret(this)">نمایش</button></div></div>
-        <div><label>کلیدِ IPN Secret (فقط NOWPayments)
+        <div id="gwIpnRow"<?= ($G['provider'] ?? 'oxapay') === 'nowpayments' ? '' : ' style="display:none"' ?>><label>کلیدِ IPN Secret (فقط NOWPayments)
           <?= trim((string)($G['ipn_secret'] ?? '')) !== '' ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></label>
           <div class="secretin"><input type="password" name="gw_ipn" autocomplete="off" value=""
             placeholder="<?= trim((string)($G['ipn_secret'] ?? '')) !== '' ? 'ثبت شده — برای تعویض، مقدارِ تازه بگذارید' : 'IPN Secret' ?>" style="direction:ltr">
             <button type="button" class="btn ghost sm" onclick="toggleSecret(this)">نمایش</button></div></div>
-        <div><label>آدرسِ عمومیِ فایلِ ربات</label>
+        <div><label>آدرسِ عمومیِ فایلِ ربات (اختیاری — خالی بماند، از آدرسِ مینی‌اپ برداشته می‌شود)</label>
           <input name="gw_base" value="<?= h($G['base_url'] ?? '') ?>" placeholder="https://site.com/bot_master_membership.php" style="direction:ltr"></div>
         <div><label>ارز</label><input name="gw_coin" value="<?= h($G['coin'] ?? 'USDT') ?>" style="direction:ltr"></div>
         <div><label>شبکه</label><input name="gw_net" value="<?= h($G['network'] ?? '') ?>" placeholder="TRC20" style="direction:ltr"></div>
@@ -2753,7 +2734,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
           <option value="page" <?= ($G['mode'] ?? 'address') === 'page' ? 'selected' : '' ?>>صفحه‌ی پرداختِ خودِ درگاه</option></select></div>
         <div><label>پذیرشِ کم‌واریزی (٪) — برای کارمزدِ صرافی</label>
           <input name="gw_under" value="<?= h((string)(float)($G['underpaid'] ?? 1)) ?>" style="direction:ltr"></div>
-        <div><label>آدرسِ دلخواه (حالتِ custom)</label>
+        <div id="gwCurlRow"<?= ($G['provider'] ?? 'oxapay') === 'custom' ? '' : ' style="display:none"' ?>><label>آدرسِ دلخواه (حالتِ custom)</label>
           <input name="gw_curl" value="<?= h($G['custom_url'] ?? '') ?>" placeholder="https://…?amount={amount}&order={order}&cb={callback}" style="direction:ltr"></div>
       </div>
       <div class="hint" style="margin-top:8px">
@@ -2855,32 +2836,11 @@ tr.grp td{background:var(--surface-2);font-weight:800}
   </div></details>
 
   <?php if (function_exists('payTextLabels')): ?>
-  <details class="card psec" data-s="gw"<?= $secOpen ?>><summary><h2>✏️ متن‌ها و دکمه‌های شارژ</h2></summary><div class="body">
-    <div class="note">
-      متن‌ها HTMLِ تلگرام‌اند (<code>&lt;b&gt;</code>، <code>&lt;blockquote&gt;</code> و …). ایموجیِ پریمیوم:
-      <code style="direction:ltr;display:inline-block">&lt;tg-emoji emoji-id="…"&gt;✨&lt;/tg-emoji&gt;</code> — کدش را با فرستادنِ <code>/emoji</code> در ربات بگیرید؛
-      راحت‌تر: از خودِ ربات ← پنل ← 💳 پرداخت ← ✏️ متن و دکمه‌های شارژ، متن را با ایموجیِ پریمیوم بفرستید.
-      <br>هر دکمه: ایموجیِ معمولی، متن، رنگ و کدِ ایموجیِ پریمیوم (اگر پریمیوم گذاشتید، ایموجیِ معمولی را خالی بگذارید).
-    </div>
-    <form method="post" style="margin-top:12px">
-      <?= fk('save_tu_texts', ['s' => 'gw']) ?>
-      <?php foreach (payTextLabels() as $tk => $tl): $vars = payTextVars()[$tk] ?? ''; ?>
-        <div style="margin-top:10px"><label><?= h($tl) ?><?= $vars !== '' ? ' <span class="muted" style="direction:ltr;display:inline-block">' . h($vars) . '</span>' : '' ?></label>
-          <textarea name="t_<?= h($tk) ?>" rows="3"><?= h((string)($C['texts'][$tk] ?? '')) ?></textarea></div>
-      <?php endforeach; ?>
-      <h3 style="margin:18px 0 6px">🔘 دکمه‌ها</h3>
-      <?php foreach (tuBtnLabels() as $bk => $bl): $BB = tuBtnCfg($bk); ?>
-        <div class="grid2" style="margin-top:8px;align-items:end">
-          <div><label><?= h($bl) ?> — ایموجی</label><input name="b_<?= h($bk) ?>_emoji" value="<?= h((string)($BB['emoji'] ?? '')) ?>"></div>
-          <div><label>متن</label><input name="b_<?= h($bk) ?>_text" value="<?= h((string)($BB['text'] ?? '')) ?>"></div>
-          <div><label>رنگ</label><select name="b_<?= h($bk) ?>_color">
-            <?php foreach (styleMap() as $sk => $sl): ?><option value="<?= h($sk) ?>" <?= ($BB['color'] ?? 'none') === $sk ? 'selected' : '' ?>><?= h($sl) ?></option><?php endforeach; ?></select></div>
-          <div><label>کدِ ایموجیِ پریمیوم</label><input name="b_<?= h($bk) ?>_icon" value="<?= h((string)($BB['icon'] ?? '')) ?>" style="direction:ltr" placeholder="5368324170671202286"></div>
-        </div>
-      <?php endforeach; ?>
-      <div style="margin-top:14px"><button class="btn g">ذخیره‌ی متن‌ها و دکمه‌ها</button></div>
-    </form>
-  </div></details>
+  <div class="card psec" data-s="gw"><div class="body">
+    <div class="note">✏️ <b>متن‌ها، رنگ، ایموجی و ایموجیِ پریمیومِ پیام‌ها و دکمه‌های شارژ</b> فقط از داخلِ ربات عوض می‌شوند:
+      <code>/panel</code> ← 💳 پرداخت و شارژِ حساب ← ✏️ متن‌ها و دکمه‌های شارژ.
+      آن‌جا ایموجیِ پریمیوم را مستقیم از کیبوردِ تلگرام می‌فرستید و رنگِ هر دکمه را با یک دکمه عوض می‌کنید.</div>
+  </div></div>
   <?php endif; ?>
 
   <details class="card psec" data-s="join"<?= $secOpen ?>><summary><h2>📣 عضویت اجباری <?= !empty($J['on']) ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?></h2></summary><div class="body">
@@ -2953,6 +2913,12 @@ tr.grp td{background:var(--surface-2);font-weight:800}
 </div>
 
 <script>
+function gwProvUi() {
+  var s = document.getElementById('gwProv'); if (!s) return;
+  var a = document.getElementById('gwIpnRow'), b = document.getElementById('gwCurlRow');
+  if (a) a.style.display = s.value === 'nowpayments' ? '' : 'none';
+  if (b) b.style.display = s.value === 'custom' ? '' : 'none';
+}
 function toggleSecret(btn) {
   var inp = btn.previousElementSibling;
   if (!inp) return;
