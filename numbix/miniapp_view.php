@@ -597,7 +597,8 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
   filter:drop-shadow(0 6px 22px rgba(59,130,246,.45))}
 .splash p{font-size:13px;font-weight:800;color:#D6E4FF;opacity:.92;line-height:1.8}
 .splash .ld .pc span{font-size:12.5px;font-weight:900;color:#EAF2FF}
-.splash .ld .pc b{font-size:38px;font-weight:900;letter-spacing:-1px;font-variant-numeric:tabular-nums;filter:drop-shadow(0 4px 16px rgba(59,130,246,.6))}
+@font-face{font-family:'NbxNum';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/NbxNum.woff2') format('woff2')}
+.splash .ld .pc b{font-family:'NbxNum',system-ui,sans-serif;font-size:13px;font-weight:600;letter-spacing:.4px;min-width:0;font-variant-numeric:tabular-nums;filter:none}
 .splash .ld small{font-size:11.5px;font-weight:800;color:#C7D7F5}
 
 .gate{position:fixed;inset:0;z-index:95;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
@@ -818,7 +819,7 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
     <h1>__TITLE__</h1>
     <p>__TAG__</p>
   </div>
-  <div class="ld"><div class="pc"><span id="spMsg">در حال اتصال امن…</span><b id="spPct">۰٪</b></div>
+  <div class="ld"><div class="pc"><span id="spMsg">در حال اتصال امن…</span><b id="spPct">0%</b></div>
     <div class="bar"><i id="spBar"></i></div><div class="stg" id="spStg"><i></i><i></i><i></i><i></i><i></i></div><small id="spTip"></small></div>
 </div>
 
@@ -1185,7 +1186,7 @@ function splStep(){
   if (SPL.gone) return false;
   var el = Date.now() - SPL.t0, p = SPL.min ? Math.min(1, el / SPL.min) : 1;
   var pc = $('spPct'), bar = $('spBar'), m = $('spMsg'), g = $('spStg'), t = $('spTip');
-  if (pc) pc.textContent = faD(Math.floor(p * 100)) + '٪';
+  if (pc) pc.textContent = Math.floor(p * 100) + '%';
   if (bar) bar.style.transform = 'translate3d(' + ((1 - p) * 100).toFixed(2) + '%,0,0)';
   var mi = Math.min(SPM.length - 1, Math.floor(p * (SPM.length - 1) + (p >= 1 ? 1 : 0)));
   if (m && SPL.mi !== mi) { SPL.mi = mi; m.textContent = SPM[mi]; }

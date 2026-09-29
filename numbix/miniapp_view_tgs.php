@@ -473,7 +473,8 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .spl h1{font-size:28px!important;font-weight:900;letter-spacing:-.5px;filter:drop-shadow(0 6px 22px rgba(42,171,238,.5))}
 .spl p{font-size:13px;font-weight:800;color:#D9F0FF;opacity:.92;line-height:1.8}
 .spl .pc span{font-size:12.5px;font-weight:900}
-.spl .pc b{font-size:38px;font-weight:900;letter-spacing:-1px;font-variant-numeric:tabular-nums;filter:drop-shadow(0 4px 16px rgba(56,189,248,.65))}
+@font-face{font-family:'NbxNum';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/NbxNum.woff2') format('woff2')}
+.spl .pc b{font-family:'NbxNum',system-ui,sans-serif;font-size:13px;font-weight:600;letter-spacing:.4px;min-width:0;font-variant-numeric:tabular-nums;filter:none}
 .spl .ld small{font-size:11.5px;font-weight:800;color:#BFE3F7}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 </style>
@@ -522,7 +523,7 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
     <h1>__TITLE__</h1>
     <p>__TAG__</p>
   </div>
-  <div class="ld"><div class="pc"><span id="spMsg">در حال اتصالِ امن…</span><b id="spPct">۰٪</b></div>
+  <div class="ld"><div class="pc"><span id="spMsg">در حال اتصالِ امن…</span><b id="spPct">0%</b></div>
     <div class="trk" id="spTrk"><i class="fl" id="spBar"></i><b id="spPl"><svg><use href="#i-plane"/></svg></b></div>
     <div class="stg" id="spStg"><i></i><i></i><i></i><i></i><i></i></div><small id="spTip"></small></div>
 </div>
@@ -673,7 +674,7 @@ function splStep(){
   if (SPL.gone) return false;
   var el = Date.now() - SPL.t0, p = SPL.min ? Math.min(1, el / SPL.min) : 1;
   var pc = $('spPct'), bar = $('spBar'), pl = $('spPl'), tr = $('spTrk'), m = $('spMsg'), g = $('spStg'), t = $('spTip');
-  if (pc) pc.textContent = faD(Math.floor(p * 100)) + '٪';
+  if (pc) pc.textContent = Math.floor(p * 100) + '%';
   if (bar) bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
   if (pl && tr) pl.style.transform = 'translate3d(' + (-p * tr.clientWidth).toFixed(1) + 'px,0,0)';
   var mi = Math.min(SPM.length - 1, Math.floor(p * (SPM.length - 1) + (p >= 1 ? 1 : 0)));
