@@ -44,9 +44,46 @@ function numKey() {
 }
 
 function numBase() {
-    $own = rtrim(trim((string)numVal('api.base', '')), '/');
+    $own = numBaseNorm((string)numVal('api.base', ''), numProv());
     if ($own !== '' && numBaseForeign($own, numProv())) $own = '';
     return $own !== '' ? $own : rtrim(numProvInfo()['base'], '/');
+}
+
+// آدرسی که ادمین می‌نویسد گاهی آدرسِ یک صفحه است (مثلا https://5sim.net/v1/user/profile)؛
+// ریشه‌ی API از آن درآورده می‌شود وگرنه همه‌ی درخواست‌ها به مسیرِ اشتباه می‌رفت و «هیچ شماره‌ای» وارد نمی‌شد.
+function numBaseNorm($url, $prov) {
+    $u = rtrim(trim((string)$url), '/');
+    if ($u === '') return '';
+    $h = strtolower((string)parse_url($u, PHP_URL_HOST));
+    if ($h === '') return '';
+    if ($prov === '5sim') {
+        if ($h === '5sim.net' || str_ends_with($h, '.5sim.net')) return 'https://5sim.net/v1';
+        return preg_replace('#(/v1)(/.*)?$#i', '$1', $u);
+    }
+    if ($prov === 'numberland') return rtrim(preg_replace('#/v2\.php.*$#i', '', $u), '/');
+    return $u;
+}
+
+function numProducts() {
+    return [
+        'telegram'  => ['fa' => 'تلگرام',     'e' => '✈️', 'nl' => 'nl_svc',    'rx' => '/telegram|تلگرام/iu'],
+        'instagram' => ['fa' => 'اینستاگرام', 'e' => '📸', 'nl' => 'nl_svc_ig', 'rx' => '/instagram|insta|اینستا/iu'],
+        'whatsapp'  => ['fa' => 'واتساپ',     'e' => '💬', 'nl' => 'nl_svc_wa', 'rx' => '/whats\s*app|واتس/iu'],
+    ];
+}
+
+function numProdsOn() {
+    $on = (array)numVal('prods', array_keys(numProducts()));
+    $out = [];
+    foreach (array_keys(numProducts()) as $k) if (in_array($k, $on, true)) $out[] = $k;
+    return $out ?: ['telegram'];
+}
+
+// شناسه‌ی ردیف: تلگرام «کشور|اپراتور» (مثلِ قبل)، بقیه «محصول~کشور|اپراتور»
+function numProdOfSid($sid) {
+    $sid = (string)$sid;
+    if (str_contains($sid, '~')) { $p = strstr($sid, '~', true); if (isset(numProducts()[$p])) return $p; }
+    return 'telegram';
 }
 
 function numBaseForeign($url, $prov) {
@@ -83,11 +120,17 @@ function numDefaults() {
         'poll'   => 6,
         'markup' => 0,
         'sync_price' => true,
+        'prods'  => ['telegram', 'instagram', 'whatsapp'],
+        'pick'   => true,
+        'pick_n' => 12,
+        'pick_ops' => 1,
         'api'   => [
             'on'      => false,
             'token'   => '',
             'nl_key'  => '',
             'nl_svc'  => '1',
+            'nl_svc_ig' => '',
+            'nl_svc_wa' => '',
             'base'    => '',
             'timeout' => 15,
             'rate'    => 0,
@@ -102,10 +145,11 @@ function numCfg() {
     if (!is_array($c)) return $d;
 
     $out = array_replace($d, array_intersect_key($c,
-        ['wait' => 1, 'poll' => 1, 'markup' => 1, 'sync_price' => 1, 'provider' => 1]));
+        ['wait' => 1, 'poll' => 1, 'markup' => 1, 'sync_price' => 1, 'provider' => 1,
+         'prods' => 1, 'pick' => 1, 'pick_n' => 1, 'pick_ops' => 1]));
     $out['api'] = array_replace($d['api'],
         array_intersect_key(is_array($c['api'] ?? null) ? $c['api'] : [],
-                            ['on'=>1,'token'=>1,'nl_key'=>1,'nl_svc'=>1,
+                            ['on'=>1,'token'=>1,'nl_key'=>1,'nl_svc'=>1,'nl_svc_ig'=>1,'nl_svc_wa'=>1,
                              'base'=>1,'timeout'=>1,'rate'=>1,'max'=>1]));
     return $out;
 }
@@ -281,8 +325,9 @@ function numCall($op, array $vars = []) {
             $co  = trim((string)($vars['country'] ?? ''));
             $opr = trim((string)($vars['operator'] ?? '')) ?: 'any';
             if ($co === '') return [null, 'کشور مشخص نیست'];
+            $prod = trim((string)($vars['product'] ?? '')) ?: NUM5_PRODUCT;
             $p = '/user/buy/activation/' . rawurlencode($co) . '/' . rawurlencode($opr) .
-                 '/' . rawurlencode(NUM5_PRODUCT);
+                 '/' . rawurlencode($prod);
             $max = (float)numVal('api.max', 0);
             if ($max > 0) $p .= '?maxPrice=' . rawurlencode((string)$max);
             return num5Get($p);
@@ -337,7 +382,8 @@ function numBuyDo(array $meta) {
     $nl = numProv() === 'numberland';
     [$r, $e] = numCall('buy', $nl
         ? ['sid' => $meta['sid'] ?? '']
-        : ['country' => $meta['country'] ?? '', 'operator' => ($meta['operator'] ?? '') ?: 'any']);
+        : ['country' => $meta['country'] ?? '', 'operator' => ($meta['operator'] ?? '') ?: 'any',
+           'product' => $meta['product'] ?? NUM5_PRODUCT]);
 
     if (!is_array($r)) return ['err' => $e ?: 'پاسخی نیامد'];
 
@@ -767,13 +813,15 @@ function numItemMeta($itemId) {
     if (!$i) return null;
 
     $sid = (string)($i['svc'] ?? '');
+    $prod = (string)($i['pr'] ?? '') ?: numProdOfSid($sid);
+    $raw = str_contains($sid, '~') ? substr($sid, strpos($sid, '~') + 1) : $sid;
     $co  = $op = '';
-    if (str_contains($sid, '|')) [$co, $op] = explode('|', $sid, 2);
-    else                          $op = $sid;
+    if (str_contains($raw, '|')) [$co, $op] = explode('|', $raw, 2);
+    else                          $op = $raw;
 
     $c = maFindCat((string)($i['cat'] ?? ''));
     if ($c && trim((string)($c['code'] ?? '')) !== '') $co = trim((string)$c['code']);
-    return ['operator' => $op, 'country' => $co, 'sid' => $sid,
+    return ['operator' => $op, 'country' => $co, 'sid' => $sid, 'product' => $prod,
             'prov' => (string)($i['prov'] ?? ''), 'item' => $i];
 }
 
@@ -1267,7 +1315,7 @@ function numCountryFa($slug, $en = '') {
 function numOperFa($op) {
     $op = strtolower(trim((string)$op));
     if ($op === '' || $op === 'any' || $op === '0') return 'خودکار';
-    if (preg_match('/^virtual(\d+)$/', $op, $m)) return 'مجازی ' . $m[1];
+    if (preg_match('/^virtual(\d+)$/', $op, $m)) return 'مجازی ' . strtr($m[1], ['0'=>'۰','1'=>'۱','2'=>'۲','3'=>'۳','4'=>'۴','5'=>'۵','6'=>'۶','7'=>'۷','8'=>'۸','9'=>'۹']);
     if (preg_match('/^\d+$/', $op))
         return 'اپراتور ' . strtr($op, ['0'=>'۰','1'=>'۱','2'=>'۲','3'=>'۳','4'=>'۴',
                                         '5'=>'۵','6'=>'۶','7'=>'۷','8'=>'۸','9'=>'۹']);
@@ -1287,9 +1335,6 @@ function numCatalog5() {
     if ($rate <= 0)
         return [[], [], 'نرخِ تبدیل معلوم نیست — یا در همین صفحه نرخ را بگذارید، یا بخش قیمت‌گیری را روشن کنید'];
 
-    [$px, $err] = num5Get('/guest/prices?product=' . rawurlencode(NUM5_PRODUCT), 30);
-    if (!is_array($px)) return [[], [], $err ?: 'فهرست قیمت‌ها نیامد'];
-
     $meta = [];
     [$co] = num5Get('/guest/countries', 30);
     foreach ((array)$co as $slug => $x) {
@@ -1302,58 +1347,109 @@ function numCatalog5() {
         ];
     }
 
-    $countries = $out = [];
-    foreach ($px as $slug => $byProduct) {
-        $slug = (string)$slug;
-        if (!is_array($byProduct)) continue;
-        $ops = $byProduct[NUM5_PRODUCT] ?? null;
-        if (!is_array($ops)) continue;
-
-        $cName = $meta[$slug]['fa']   ?? numCountryFa($slug);
-        $flag  = $meta[$slug]['flag'] ?? '🌍';
-        $rows  = [];
-
-        foreach ($ops as $op => $info) {
-            if (!is_array($info)) continue;
-            $usd = (float)($info['cost']  ?? 0);
-            $cnt = (int)  ($info['count'] ?? 0);
-            if ($usd <= 0) continue;
-            $rows[] = [
-                'sid'      => $slug . '|' . $op,
-                'country'  => $slug,
-                'operator' => (string)$op,
-                'flag'     => $flag,
-                'cname'    => $cName,
-                'rank'     => numRank($slug),
-                'name'     => numOperFa($op),
-                'usd'      => $usd,
-                'price'    => numToman($usd, 0, false),
-                'count'    => $cnt,
-                'rate'     => (float)($info['rate'] ?? 0),
-                'on'       => $cnt > 0,
-            ];
+    $countries = $out = $errs = [];
+    foreach (numProdsOn() as $prod) {
+        $pi = numProducts()[$prod];
+        [$px, $err] = num5Get('/guest/prices?product=' . rawurlencode($prod), 30);
+        if (!is_array($px)) { $errs[] = $pi['fa'] . ': ' . ($err ?: 'فهرست قیمت‌ها نیامد'); continue; }
+        // ۵سیم برای «قیمت بر اساسِ محصول» اول محصول و بعد کشور را می‌دهد: {"telegram":{"england":{"virtual4":{…}}}}
+        // نسخه‌ی کشور-اول ({"england":{"telegram":{…}}}) هم پذیرفته می‌شود.
+        $byCountry = (isset($px[$prod]) && is_array($px[$prod])) ? $px[$prod] : $px;
+        $rows = [];
+        foreach ($byCountry as $slug => $x) {
+            $slug = (string)$slug;
+            if (!is_array($x)) continue;
+            $ops = (isset($x[$prod]) && is_array($x[$prod])) ? $x[$prod] : $x;
+            $cName = $meta[$slug]['fa']   ?? numCountryFa($slug);
+            $flag  = $meta[$slug]['flag'] ?? '🌍';
+            foreach ($ops as $op => $info) {
+                if (!is_array($info) || !isset($info['cost'])) continue;
+                $usd = (float)$info['cost'];
+                $cnt = (int)($info['count'] ?? 0);
+                if ($usd <= 0) continue;
+                $rows[] = [
+                    'sid'      => ($prod === 'telegram' ? '' : $prod . '~') . $slug . '|' . $op,
+                    'prod'     => $prod,
+                    'country'  => $slug,
+                    'operator' => (string)$op,
+                    'flag'     => $flag,
+                    'cname'    => $cName,
+                    'rank'     => numRank($slug),
+                    'name'     => ($prod === 'telegram' ? '' : $pi['fa'] . ' · ') . numOperFa($op),
+                    'usd'      => $usd,
+                    'price'    => numToman($usd, 0, false),
+                    'count'    => $cnt,
+                    'rate'     => (float)($info['rate'] ?? 0),
+                    'on'       => $cnt > 0,
+                ];
+            }
         }
-        if (!$rows) continue;
-        $countries[$slug] = ['name' => $cName, 'flag' => $flag];
-        foreach ($rows as $r) $out[] = $r;
+        if (!$rows) { $errs[] = $pi['fa'] . ': شماره‌ای در پاسخ نبود'; continue; }
+        if (!empty(numVal('pick', true))) $rows = numPick($rows, (int)numVal('pick_n', 12), (int)numVal('pick_ops', 1));
+        foreach ($rows as $r) {
+            $countries[$r['country']] = ['name' => $r['cname'], 'flag' => $r['flag']];
+            $out[] = $r;
+        }
     }
 
-    if (!$out) return [[], [], 'هیچ شماره‌ی تلگرامی در پاسخِ ۵سیم نبود'];
+    if (!$out) return [[], [], $errs ? implode(' · ', $errs) : 'هیچ شماره‌ای در پاسخِ ۵سیم نبود'];
 
-    usort($out, fn($x, $y) => [$x['rank'], $x['cname'], $x['usd']]
-                          <=> [$y['rank'], $y['cname'], $y['usd']]);
+    usort($out, fn($x, $y) => [$x['rank'], $x['cname'], $x['prod'], $x['usd']]
+                          <=> [$y['rank'], $y['cname'], $y['prod'], $y['usd']]);
     return [$countries, $out, ''];
 }
 
-function numCatalogNl() {
-    $svc = trim((string)numVal('api.nl_svc', '1')) ?: '1';
-
-    [$rows, $err] = num5Get('/v2.php/?method=getinfo&operator=any&service=' . rawurlencode($svc), 30);
-    if (!is_array($rows)) return [[], [], $err ?: 'فهرست شماره‌ها نیامد'];
-    if ($rows !== array_values($rows)) {
-        $d = trim((string)($rows['DESCRIPTION'] ?? ''));
-        return [[], [], $d !== '' ? $d : 'پاسخ نامبرلند فهرست نبود'];
+// گلچین: برای هر محصول چند کشورِ خوب (موجودی دارد، نرخِ موفقیتِ بالا، قیمتِ مناسب) و در هر کشور بهترین اپراتور
+function numPick(array $rows, $n = 12, $perCountry = 1) {
+    $n = max(1, min(60, (int)$n));
+    $perCountry = max(1, min(5, (int)$perCountry));
+    $by = [];
+    foreach ($rows as $r) if (!empty($r['on'])) $by[$r['country']][] = $r;
+    $best = [];
+    foreach ($by as $co => $list) {
+        $maxRate = max(array_map(fn($r) => (float)$r['rate'], $list));
+        $good = array_values(array_filter($list, fn($r) => (float)$r['rate'] >= $maxRate - 10));
+        usort($good, fn($x, $y) => [(float)$x['usd'], -(float)$x['rate']] <=> [(float)$y['usd'], -(float)$y['rate']]);
+        $pick = array_slice($good, 0, $perCountry);
+        $top = $pick[0];
+        $best[$co] = ['rows' => $pick, 'rate' => $maxRate, 'usd' => (float)$top['usd'], 'rank' => (int)$top['rank'], 'cnt' => (int)$top['count']];
     }
+    // کشورهایی که نرخِ موفقیتشان خیلی پایین است کنار می‌روند (اگر نرخ گزارش شده باشد)
+    $withRate = array_filter($best, fn($b) => $b['rate'] > 0);
+    if (count($withRate) >= $n) $best = array_filter($best, fn($b) => $b['rate'] <= 0 || $b['rate'] >= 40);
+    uasort($best, function ($x, $y) {
+        $sx = ($x['rank'] < 500 ? 30 : 0) + min(100, $x['rate']) + min(20, $x['cnt'] / 50);
+        $sy = ($y['rank'] < 500 ? 30 : 0) + min(100, $y['rate']) + min(20, $y['cnt'] / 50);
+        return [$sy, $x['usd']] <=> [$sx, $y['usd']];
+    });
+    $out = [];
+    foreach (array_slice($best, 0, $n, true) as $b) foreach ($b['rows'] as $r) $out[] = $r;
+    return $out;
+}
+
+function numNlServices() {
+    [$l] = num5Get('/v2.php/?method=getservice', 20);
+    $out = [];
+    foreach ((array)$l as $x) {
+        if (!is_array($x) || !isset($x['id'])) continue;
+        $out[(string)$x['id']] = trim((string)($x['name'] ?? '') . ' ' . (string)($x['name_en'] ?? '') . ' ' . (string)($x['title'] ?? ''));
+    }
+    return $out;
+}
+
+function numCatalogNl() {
+    $svcs = [];
+    $list = null;
+    foreach (numProdsOn() as $prod) {
+        $pi = numProducts()[$prod];
+        $id = trim((string)numVal('api.' . $pi['nl'], $prod === 'telegram' ? '1' : ''));
+        if ($id === '' ) {
+            if ($list === null) $list = numNlServices();
+            foreach ($list as $sid => $nm) if (preg_match($pi['rx'], $nm)) { $id = (string)$sid; break; }
+        }
+        if ($id !== '') $svcs[$prod] = $id;
+    }
+    if (!$svcs) return [[], [], 'شناسه‌ی سرویس‌های نامبرلند معلوم نیست'];
 
     $fa = $en = [];
     [$ct] = num5Get('/v2.php/?method=getcountry', 30);
@@ -1363,41 +1459,52 @@ function numCatalogNl() {
         $en[(string)$x['id']] = trim((string)($x['name_en'] ?? ''));
     }
 
-    $countries = $out = [];
-    foreach ($rows as $r) {
-        if (!is_array($r) || !isset($r['id'])) continue;
-        $cc = (string)($r['country'] ?? '');
-        $ss = (string)($r['service'] ?? '');
-        if ($cc === '' || $ss !== $svc) continue;
-
-        $cName = $fa[$cc] ?? ('کشور ' . $cc);
-        $flag  = numFlagFa($en[$cc] ?? '', $cName);
-        $countries[$cc] = ['name' => $cName, 'flag' => $flag];
-
-        $op    = trim((string)($r['operator'] ?? ''));
-        $price = (float)($r['amount'] ?? 0);
-        $cnt   = (int)($r['count'] ?? 0);
-        $out[] = [
-            'sid'      => (string)$r['id'],
-            'country'  => $cc,
-            'operator' => $op,
-            'flag'     => $flag,
-            'cname'    => $cName,
-            'rank'     => numRank($en[$cc] ?? ''),
-            'name'     => numOperFa($op),
-            'usd'      => 0.0,
-            'price'    => $price,
-            'count'    => $cnt,
-            'rate'     => 0.0,
-            'ttl'      => numParseTtl($r['time'] ?? ''),
-            'on'       => (string)($r['active'] ?? '1') !== '0' && $cnt > 0,
-        ];
+    $countries = $out = $errs = [];
+    foreach ($svcs as $prod => $svc) {
+        $pi = numProducts()[$prod];
+        [$rows, $err] = num5Get('/v2.php/?method=getinfo&operator=any&service=' . rawurlencode($svc), 30);
+        if (!is_array($rows)) { $errs[] = $pi['fa'] . ': ' . ($err ?: 'فهرست نیامد'); continue; }
+        if ($rows !== array_values($rows)) {
+            $d = trim((string)($rows['DESCRIPTION'] ?? ''));
+            $errs[] = $pi['fa'] . ': ' . ($d !== '' ? $d : 'پاسخ فهرست نبود');
+            continue;
+        }
+        $mine = [];
+        foreach ($rows as $r) {
+            if (!is_array($r) || !isset($r['id'])) continue;
+            $cc = (string)($r['country'] ?? '');
+            $ss = (string)($r['service'] ?? '');
+            if ($cc === '' || $ss !== $svc) continue;
+            $cName = $fa[$cc] ?? ('کشور ' . $cc);
+            $flag  = numFlagFa($en[$cc] ?? '', $cName);
+            $op    = trim((string)($r['operator'] ?? ''));
+            $price = (float)($r['amount'] ?? 0);
+            $cnt   = (int)($r['count'] ?? 0);
+            $mine[] = [
+                'sid'      => (string)$r['id'],
+                'prod'     => $prod,
+                'country'  => $cc,
+                'operator' => $op,
+                'flag'     => $flag,
+                'cname'    => $cName,
+                'rank'     => numRank($en[$cc] ?? ''),
+                'name'     => ($prod === 'telegram' ? '' : $pi['fa'] . ' · ') . numOperFa($op),
+                'usd'      => $price,
+                'price'    => $price,
+                'count'    => $cnt,
+                'rate'     => 0.0,
+                'ttl'      => numParseTtl($r['time'] ?? ''),
+                'on'       => (string)($r['active'] ?? '1') !== '0' && $cnt > 0,
+            ];
+        }
+        if (!empty(numVal('pick', true))) $mine = numPick($mine, (int)numVal('pick_n', 12), (int)numVal('pick_ops', 1));
+        foreach ($mine as $r) { $countries[$r['country']] = ['name' => $r['cname'], 'flag' => $r['flag']]; $out[] = $r; }
     }
 
-    if (!$out) return [[], [], 'هیچ شماره‌ای در پاسخِ نامبرلند نبود'];
+    if (!$out) return [[], [], $errs ? implode(' · ', $errs) : 'هیچ شماره‌ای در پاسخِ نامبرلند نبود'];
 
-    usort($out, fn($x, $y) => [$x['rank'], $x['cname'], $x['price']]
-                          <=> [$y['rank'], $y['cname'], $y['price']]);
+    usort($out, fn($x, $y) => [$x['rank'], $x['cname'], $x['prod'], $x['price']]
+                          <=> [$y['rank'], $y['cname'], $y['prod'], $y['price']]);
     return [$countries, $out, ''];
 }
 
@@ -1757,6 +1864,7 @@ function numImport(array $countries, array $rows, $markup = 0, $syncPrice = null
                 $a['items'][$k]['on'] = (bool)$r['on'];
                 if ($catId !== '') $a['items'][$k]['cat'] = $catId;
                 $a['items'][$k]['prov'] = numProv();
+                $a['items'][$k]['pr'] = (string)($r['prod'] ?? 'telegram');
                 $ne = trim((string)($a['items'][$k]['emoji'] ?? ''));
                 if (($ne === '' || $ne === '🌍' || $ne === '☎️') && (string)($r['flag'] ?? '🌍') !== '🌍')
                     $a['items'][$k]['emoji'] = (string)$r['flag'];
@@ -1768,7 +1876,7 @@ function numImport(array $countries, array $rows, $markup = 0, $syncPrice = null
 
             $a['items'][] = [
                 'id' => 'i' . bin2hex(random_bytes(3)), 'cat' => $catId, 'svc' => $r['sid'],
-                'prov' => numProv(),
+                'prov' => numProv(), 'pr' => (string)($r['prod'] ?? 'telegram'),
                 'emoji' => (string)($r['flag'] ?? '☎️'),
                 'name' => $r['name'],
                 'price' => numRound100($r['price'] * $mul), 'badge' => '',

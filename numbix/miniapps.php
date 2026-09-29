@@ -106,6 +106,7 @@ function maCatalogPublic() {
             'p' => $p,
             'b' => (string)($i['badge'] ?? ''),
             'r' => (int)($i['order'] ?? 999),
+            'pr' => (string)($i['pr'] ?? '') ?: (function_exists('numProdOfSid') ? numProdOfSid((string)($i['svc'] ?? '')) : 'telegram'),
         ];
     }
 

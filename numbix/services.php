@@ -59,6 +59,8 @@ function svDefaults() {
         'markup'  => 30,
         'timeout' => 20,
         'auto_on' => 1,
+        'pick'    => 1,
+        'slots'   => [],
         'apps'    => [
             'tg' => ['on' => 1, 'title' => 'خدمات تلگرام',
                      'tagline' => 'ممبر، بازدید و ری‌اکشن — شروعِ خودکار در چند دقیقه'],
@@ -248,6 +250,7 @@ function svKind($type) {
     $t = strtolower(trim((string)$type));
     if ($t === '' || $t === 'default') return 'default';
     if ($t === 'poll') return 'poll';
+    if ($t === 'custom comments') return 'cc';
     return '';
 }
 
@@ -566,6 +569,7 @@ function svCount($app) {
 }
 
 function svPublic($app) {
+    if (function_exists('spOn') && spOn()) return spPublic($app);
     $cats = svCats($app);
     $items = [];
     $n = $from = [];
@@ -582,6 +586,7 @@ function svPublic($app) {
             'r' => $s['refill'] ? 1 : 0,
         ];
         if (svKind($s['type']) === 'poll') $it['y'] = 'poll';
+        if (svKind($s['type']) === 'cc')   $it['y'] = 'cc';
         $items[] = $it;
     }
     $outC = [];
@@ -1157,7 +1162,7 @@ function svRefillSync($limit = 30) {
     return $n;
 }
 
-function svOrderCreate($uid, $uname, $app, array $s, $link, $qty, $unit, $total) {
+function svOrderCreate($uid, $uname, $app, array $s, $link, $qty, $unit, $total, $name = '') {
     $db = svDb();
     if (!$db) return '';
     $id = 'sv_' . base_convert((string)time(), 10, 36) . bin2hex(random_bytes(3));
@@ -1168,7 +1173,7 @@ function svOrderCreate($uid, $uname, $app, array $s, $link, $qty, $unit, $total)
     $st->bindValue(':un', (string)$uname, SQLITE3_TEXT);
     $st->bindValue(':a', (string)$app, SQLITE3_TEXT);
     $st->bindValue(':s', (string)$s['id'], SQLITE3_TEXT);
-    $st->bindValue(':n', $s['name'] !== '' ? $s['name'] : svCleanName($s['pname']), SQLITE3_TEXT);
+    $st->bindValue(':n', $name !== '' ? $name : ($s['name'] !== '' ? $s['name'] : svCleanName($s['pname'])), SQLITE3_TEXT);
     $st->bindValue(':c', (string)$s['cat'], SQLITE3_TEXT);
     $st->bindValue(':l', (string)$link, SQLITE3_TEXT);
     $st->bindValue(':q', (int)$qty, SQLITE3_INTEGER);
@@ -1211,12 +1216,32 @@ function svRefund($id, $amount, $note, $tell = true) {
 }
 
 
-function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0, $ans = 0) {
+function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0, $ans = 0, array $ext = []) {
     if (!svAppOn($app)) return [false, 'closed', 'این بخش موقتا بسته است — کمی بعد دوباره امتحان کنید.', []];
-    $s = svService($sid);
+    $dispName = '';
+    $slotPrice = 0.0;
+    if (str_starts_with((string)$sid, 'k:') && function_exists('spServiceFor')) {
+        [$s, $why, $slot] = spServiceFor($app, (string)$sid, (string)($ext['emoji'] ?? ''));
+        if (!$s) return [false, 'bad_item', $why, []];
+        $s = svService($s['id']);
+        $dispName = (string)$slot['title'];
+        $slotPrice = (float)$slot['price'];
+    } else {
+        $s = svService($sid);
+    }
     if (!$s || $s['app'] !== $app || !$s['active'] || $s['gone'] || !svTypeOk($s['type']))
         return [false, 'bad_item', 'این سرویس دیگر فعال نیست — صفحه را دوباره باز کنید.', []];
     $poll = svKind($s['type']) === 'poll';
+    $cc   = svKind($s['type']) === 'cc';
+    $lines = [];
+    if ($cc) {
+        foreach (preg_split('/\r\n|\r|\n/u', (string)($ext['comments'] ?? '')) as $ln) {
+            $ln = trim(preg_replace('/\s+/u', ' ', $ln));
+            if ($ln !== '') $lines[] = mb_substr($ln, 0, 300);
+        }
+        if (!$lines) return [false, 'bad_comments', 'متنِ کامنت‌ها را بنویسید — هر خط یک کامنت.', []];
+        $qty = count($lines);
+    }
     $ans  = (int)$ans;
     if ($poll && ($ans < 1 || $ans > 20))
         return [false, 'bad_answer', 'شماره‌ی گزینه‌ی نظرسنجی را بنویسید (گزینه‌ی اول = ۱).', []];
@@ -1225,12 +1250,12 @@ function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0, $ans = 0) {
     $mn  = max(1, $s['min']);
     $mx  = max($mn, $s['max']);
     if ($qty < $mn || $qty > $mx)
-        return [false, 'bad_qty', 'تعداد باید بین ' . fmtNum($mn) . ' و ' . fmtNum($mx) . ' باشد.', []];
+        return [false, 'bad_qty', ($cc ? 'تعدادِ کامنت‌ها (خط‌ها)' : 'تعداد') . ' باید بین ' . fmtNum($mn) . ' و ' . fmtNum($mx) . ' باشد.', []];
 
     [$link, $lerr] = svLink($app, $link);
     if ($lerr !== '') return [false, 'bad_link', $lerr, []];
 
-    $p1k = svPrice1k($s);
+    $p1k = $slotPrice > 0 ? svRound($slotPrice) : svPrice1k($s);
     if ($p1k <= 0) return [false, 'bad_price', 'قیمتِ این سرویس هنوز تنظیم نشده است.', []];
     $total = svTotal($p1k, $qty);
     if ($seen > 0 && abs($seen - $total) > max(1.0, $total * 0.005))
@@ -1239,7 +1264,7 @@ function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0, $ans = 0) {
 
     if (svOpenCount($uid) >= SV_OPEN_MAX)
         return [false, 'too_many', 'الان ' . SV_OPEN_MAX . ' سفارشِ در حالِ انجام دارید؛ کمی صبر کنید تا تمام شوند.', []];
-    if (maDuplicateOrder($uid, 'sv_' . $app, (string)$sid, $qty, $link . ($poll ? '#' . $ans : ''), 30))
+    if (maDuplicateOrder($uid, 'sv_' . $app, (string)$s['id'], $qty, $link . ($poll ? '#' . $ans : '') . ($cc ? '#' . md5(implode("\n", $lines)) : ''), 30))
         return [false, 'duplicate', 'همین سفارش چند لحظه پیش ثبت شد — در «سفارش‌ها» ببینید.', []];
 
     $bal = (float)(getUser($uid)['balance'] ?? 0);
@@ -1247,7 +1272,7 @@ function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0, $ans = 0) {
         return [false, 'no_balance', 'موجودی کافی نیست. ' . fmtNum(maMoney($total - $bal)) . ' تومان کم دارید.',
                 ['balance' => $bal, 'need' => maMoney($total - $bal), 'total' => $total]];
 
-    $id = svOrderCreate($uid, $uname, $app, $s, $link, $qty, $p1k, $total);
+    $id = svOrderCreate($uid, $uname, $app, $s, $link, $qty, $p1k, $total, $dispName);
     if ($id === '') return [false, 'failed', 'ثبتِ سفارش انجام نشد — دوباره امتحان کنید.', []];
     if (!maDebit($uid, $total)) {
         svOrderDrop($id);
@@ -1255,8 +1280,9 @@ function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0, $ans = 0) {
         return [false, 'no_balance', 'موجودی کافی نیست.', ['balance' => $bal, 'need' => maMoney($total - $bal), 'total' => $total]];
     }
 
-    $params = ['action' => 'add', 'service' => (string)$sid, 'link' => $link, 'quantity' => $qty];
+    $params = ['action' => 'add', 'service' => (string)$s['id'], 'link' => $link, 'quantity' => $qty];
     if ($poll) { $params['answer_number'] = $ans; svOrderSet($id, ['ans' => $ans]); }
+    if ($cc)   { unset($params['quantity']); $params['comments'] = implode("\n", $lines); }
     [$j, $err, $kind] = svHttp($params);
     $balNow = fn() => (float)(getUser($uid)['balance'] ?? 0);
 
@@ -1264,7 +1290,7 @@ function svBuy($uid, $uname, $app, $sid, $link, $qty, $seen = 0.0, $ans = 0) {
         svOrderSet($id, ['status' => 'run', 'pst' => 'pending', 'pid' => (string)$j['order'], 'checked' => time()]);
         maNoteAdd($uid,
             "🧾 <b>سفارش ثبت شد</b>\n\n" .
-            '📦 ' . h((string)$s['name']) . "\n" .
+            '📦 ' . h($dispName !== '' ? $dispName : (string)$s['name']) . "\n" .
             '🔢 تعداد: ' . fmtNum($qty) . "\n" .
             '💰 ' . fmtNum($total) . " تومان\n" .
             '🧾 <code>' . h($id) . '</code>');
@@ -1574,7 +1600,8 @@ function svApiAction($action, array $body, $uid, $uname, $initData) {
                       'message' => "برای سفارش، اول در کانال‌های زیر عضو شوید:\n" . implode('، ', $names)], 403);
         }
         [$ok, $err, $msg, $data] = svBuy($uid, $uname, $app, (string)($body['sid'] ?? ''), (string)($body['link'] ?? ''),
-                                         (int)maNum($body['qty'] ?? 0), maNum($body['seen'] ?? 0), (int)maNum($body['ans'] ?? 0));
+                                         (int)maNum($body['qty'] ?? 0), maNum($body['seen'] ?? 0), (int)maNum($body['ans'] ?? 0),
+                                         ['emoji' => mb_substr((string)($body['emoji'] ?? ''), 0, 16), 'comments' => mb_substr((string)($body['comments'] ?? ''), 0, 30000)]);
         if (!$ok) {
             $code = ['no_balance' => 402, 'price_changed' => 409, 'duplicate' => 409, 'too_many' => 409, 'closed' => 503][$err] ?? 400;
             maApiOut(['ok' => false, 'error' => $err, 'message' => $msg] + $data, $code);
@@ -1713,5 +1740,6 @@ function svAdmHome($chatId, $msgId = null) {
     else sendMsg(BOT_TOKEN, $chatId, $t, inlineKb($rows));
 }
 
+require_once __DIR__ . '/services_pick.php';
 require_once __DIR__ . '/miniapp_view_tgs.php';
 require_once __DIR__ . '/miniapp_view_igs.php';

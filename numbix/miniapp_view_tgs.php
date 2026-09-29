@@ -246,9 +246,33 @@ svg{display:block}
 .prd .ic svg{width:22px;height:22px}
 .prd .tt{flex:1;min-width:0}
 .prd .tt b{display:block;font-size:13.5px;font-weight:900;line-height:1.5;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.prd .tt .tier{margin-top:5px}
 .prd .tt small{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-top:3px;font-size:10.5px;font-weight:700;color:var(--dim)}
 .prd .lv{position:relative;width:7px;height:7px;border-radius:50%;background:var(--ok);flex:0 0 auto;box-shadow:0 0 8px rgba(52,211,153,.8)}
 .prd:nth-child(-n+5) .lv:after{content:"";position:absolute;inset:0;border-radius:50%;background:inherit;animation:ping 1.8s ease-out infinite}
+.tier{display:inline-flex;align-items:center;gap:3px;vertical-align:middle;font-size:9.5px;font-weight:900;padding:2px 8px;border-radius:8px;white-space:nowrap;
+  color:#BAE6FD;background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.3)}
+.tier.cheap{color:#86EFAC;background:rgba(34,197,94,.13);border-color:rgba(74,222,128,.32)}
+.tier.mid{color:#BAE6FD;background:rgba(56,189,248,.13);border-color:rgba(56,189,248,.32)}
+.tier.high{color:#FDE68A;background:rgba(245,158,11,.14);border-color:rgba(252,211,77,.4)}
+.tier.fake{color:#CBD5E1;background:rgba(148,163,184,.13);border-color:rgba(148,163,184,.3)}
+.tier.iran{color:#BBF7D0;background:linear-gradient(90deg,rgba(34,197,94,.18),rgba(255,255,255,.06),rgba(239,68,68,.18));border-color:rgba(255,255,255,.22)}
+.tier.ru{color:#E0E7FF;background:linear-gradient(90deg,rgba(255,255,255,.1),rgba(59,130,246,.2),rgba(239,68,68,.2));border-color:rgba(147,197,253,.3)}
+.tier.ref{color:#99F6E4;background:rgba(20,184,166,.14);border-color:rgba(45,212,191,.35)}
+.sech{display:flex;align-items:center;gap:10px;margin:14px 2px 2px}
+.sech:first-child{margin-top:2px}
+.sech .ic{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto;color:#fff;background:var(--grad);box-shadow:0 8px 16px -10px rgba(0,0,0,.8)}
+.sech .ic svg{width:18px;height:18px}
+.sech b{display:block;font-size:14px;font-weight:900}
+.sech small{display:block;font-size:10.5px;font-weight:700;color:var(--dim)}
+.more{width:100%;height:46px;border-radius:15px;border:1px dashed var(--line2);background:var(--glass);color:var(--ink);font-size:12.5px;font-weight:900}
+.emrow{display:flex;flex-direction:column;gap:9px}
+.emi{font-size:28px!important;text-align:center;height:60px!important;letter-spacing:4px}
+.qchips.ems button{font-size:19px;height:40px;min-width:46px;padding:0 8px}
+.fld small.okk{color:var(--ok)}
+.fld textarea{width:100%;min-height:118px;padding:12px 14px;border-radius:15px;background:rgba(3,12,26,.6);border:1px solid var(--line2);color:var(--ink);
+  font-family:inherit;font-size:13.5px;font-weight:600;line-height:1.9;outline:0;resize:vertical}
+
 .fcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
 .fc{display:inline-flex;align-items:center;gap:4px;height:25px;padding:0 9px;border-radius:9px;font-size:10.5px;font-weight:800;white-space:nowrap;
   color:var(--sky);background:rgba(56,189,248,.09);border:1px solid rgba(56,189,248,.2)}
@@ -446,6 +470,11 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .spl .stg i{width:22px;height:4px;border-radius:4px;background:rgba(143,169,199,.22);transition:background .3s,box-shadow .3s,width .3s}
 .spl .stg i.on{width:30px;background:var(--cy);box-shadow:0 0 8px rgba(94,234,212,.85)}
 .spl .ld small{display:block;margin-top:10px;min-height:18px;color:var(--dim);font-size:10.5px;font-weight:700;transition:opacity .18s}
+.spl h1{font-size:28px!important;font-weight:900;letter-spacing:-.5px;filter:drop-shadow(0 6px 22px rgba(42,171,238,.5))}
+.spl p{font-size:13px;font-weight:800;color:#D9F0FF;opacity:.92;line-height:1.8}
+.spl .pc span{font-size:12.5px;font-weight:900}
+.spl .pc b{font-size:38px;font-weight:900;letter-spacing:-1px;font-variant-numeric:tabular-nums;filter:drop-shadow(0 4px 16px rgba(56,189,248,.65))}
+.spl .ld small{font-size:11.5px;font-weight:800;color:#BFE3F7}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -704,7 +733,7 @@ ITEMS.forEach(function(i){ ITEM[i.i] = i; i.k = String(i.n || '').toLowerCase();
 var HINT = { members: ['لینک یا آیدیِ کانال/گروه', 't.me/mychannel'], views: ['لینکِ پست', 't.me/mychannel/125'],
   reactions: ['لینکِ پست', 't.me/mychannel/125'], votes: ['لینکِ پستِ نظرسنجی', 't.me/mychannel/125'],
   comments: ['لینکِ پست', 't.me/mychannel/125'], premium: ['لینکِ کانال', 't.me/mychannel'], other: ['لینک', 't.me/…'] };
-var S = { page: '', stack: [], bal: 0, cat: '', q: '', orders: null, cur: null, sheet: false, poll: null, ava: '' };
+var S = { lim: 60, page: '', stack: [], bal: 0, cat: '', q: '', orders: null, cur: null, sheet: false, poll: null, ava: '' };
 var U = tgUser() || {};
 
 function setBal(v){ if (v == null || isNaN(Number(v))) return; S.bal = Number(v); $('bal').textContent = fa(S.bal); $('wBal').textContent = fa(S.bal); }
@@ -758,11 +787,13 @@ D.addEventListener('click', function(ev){
 });
 
 function nm(n){ n = String(n || ''); var k = n.indexOf(' — '); return { t: k > 0 ? n.slice(0, k) : n, f: k > 0 ? n.slice(k + 3).split(' · ').filter(Boolean) : [] }; }
+function ttl(i){ return i.f ? i.n : nm(i.n).t; }
+function emN(s){ return String(s || '').replace(/[\uFE0E\uFE0F]/g, '').replace(/\uD83C[\uDFFB-\uDFFF]/g, '').trim(); }
 function faS(n){ n = Number(n) || 0; if (n >= 1e6) return faD(String(Math.round(n / 1e5) / 10)).replace('.', '٫') + ' میلیون'; if (n >= 1e4) return fa(Math.round(n / 1000)) + ' هزار'; return fa(n); }
 var FT = [[/^بدونِ ضمانت/, 'shield', 'no'], [/ضمانت|ریزش/, 'shield', 'ok'], [/^شروع/, 'bolt', 'hot'], [/^سقف/, 'chart', ''],
           [/^سرعت/, 'gauge', ''], [/پست/, 'list', ''], [/(روزه|دقیقه)$/, 'clock', '']];
 function feats(i, max){
-  var f = nm(i.n).f, out = [];
+  var f = (i.f ? i.f.slice() : nm(i.n).f), out = [];
   if (i.r && !f.some(function(x){ return /ضمانت/.test(x); })) f = ['ضمانت‌دار'].concat(f);
   f.slice(0, max || 9).forEach(function(x){
     var m = null; for (var k = 0; k < FT.length; k++) if (FT[k][0].test(x)) { m = FT[k]; break; }
@@ -774,7 +805,7 @@ function feats(i, max){
 function priceRow(i, k){
   var c = CAT[i.c] || {}, t = nm(i.n);
   return '<button class="prd" style="--i:' + Math.min(k || 0, 14) + '" data-sv="' + esc(i.i) + '">' +
-    '<span class="pt"><span class="ic">' + ico(c.ic || 'spark') + '</span><span class="tt"><b dir="auto">' + esc(t.t) + '</b>' +
+    '<span class="pt"><span class="ic">' + ico(c.ic || 'spark') + '</span><span class="tt"><b dir="auto">' + esc(ttl(i)) + '</b>' + (i.b ? '<span class="tier ' + esc(i.t || '') + '">' + esc(i.b) + '</span>' : '') +
       '<small><i class="lv"></i>' + esc(c.n || 'فعال') + ' · ' + faS(i.mn) + ' تا ' + faS(i.mx) + '</small></span></span>' +
     '<span class="fcs">' + feats(i, 4) + '</span>' +
     '<span class="pb"><span class="pr"><b>' + fa(i.p) + '<i>تومان</i></b><small>برای هر ۱۰۰۰ تا</small></span>' +
@@ -790,9 +821,9 @@ function drawHome(){
   if (min) countUp($('kF'), min); else $('kF').textContent = '—';
   $('bento').innerHTML = CATS.length ? CATS.map(function(c, k){
     return '<button class="bt" style="--i:' + k + '" data-go="list" data-cat="' + esc(c.id) + '"><span class="ic">' + ico(c.ic) + '</span>' +
-      '<span><b>' + esc(c.n) + '</b><small>' + fa(c.c) + ' سرویس</small><span class="pr">از ' + fa(c.f) + ' تومان</span></span></button>';
+      '<span><b>' + esc(c.n) + '</b><small>' + fa(c.c) + ' محصول</small><span class="pr">از ' + fa(c.f) + ' تومان</span></span></button>';
   }).join('') : '<div class="emp" style="grid-column:1/-1">' + ico('spark') + '<b>به‌زودی</b>سرویس‌ها به‌زودی اضافه می‌شوند.</div>';
-  var pop = ITEMS.slice().sort(function(a, b){ return a.p - b.p; }).slice(0, 4);
+  var pop = []; CATS.forEach(function(c){ var f = ITEMS.filter(function(i){ return i.c === c.id; })[0]; if (f && pop.length < 4) pop.push(f); });
   $('pop').innerHTML = pop.map(priceRow).join('');
   $('popH').classList.toggle('hid', !pop.length);
   var xl = '';
@@ -802,17 +833,35 @@ function drawHome(){
 }
 $('xl').addEventListener('click', function(ev){ var b = ev.target.closest('[data-open]'); if (b) { tap(); openApp(B.links[b.getAttribute('data-open')]); } });
 
+function listHtml(l, row){
+  var more = l.length > S.lim ? l.length - S.lim : 0;
+  l = l.slice(0, S.lim);
+  var out = '', k = 0;
+  if (S.q.trim()) out = l.map(function(i){ return row(i, k++); }).join('');
+  else {
+    CATS.forEach(function(c){
+      var g = l.filter(function(i){ return i.c === c.id; }); if (!g.length) return;
+      out += '<div class="sech"><span class="ic">' + ico(c.ic) + '</span><span><b>' + esc(c.n) + '</b><small>' + fa(g.length) + ' محصول · از ' + fa(c.f) + ' تومان</small></span></div>' +
+        g.map(function(i){ return row(i, k++); }).join('');
+    });
+    out += l.filter(function(i){ return !CAT[i.c]; }).map(function(i){ return row(i, k++); }).join('');
+  }
+  if (more) out += '<button class="more" id="lMore">نمایشِ ' + fa(Math.min(more, 60)) + ' محصولِ دیگر</button>';
+  return out;
+}
+D.addEventListener('click', function(ev){ var b = ev.target.closest ? ev.target.closest('#lMore') : null; if (!b) return; tap(); S.lim += 60; drawList(true); });
 var LK = '';
 function drawList(force){
   var key = S.cat + '|' + S.q;
   if (!force && key === LK && $('slist').children.length) return;
+  if (key !== LK) S.lim = 60;
   LK = key;
   $('cchips').innerHTML = '<button data-c="" class="' + (S.cat === '' ? 'on' : '') + '">همه</button>' + CATS.map(function(c){
     return '<button data-c="' + esc(c.id) + '" class="' + (S.cat === c.id ? 'on' : '') + '">' + ico(c.ic) + esc(c.n) + '</button>';
   }).join('');
   var q = S.q.trim().toLowerCase();
   var l = ITEMS.filter(function(i){ return (!S.cat || i.c === S.cat) && (!q || i.k.indexOf(q) >= 0); });
-  $('slist').innerHTML = l.length ? l.map(priceRow).join('') : (ITEMS.length
+  $('slist').innerHTML = l.length ? listHtml(l, priceRow) : (ITEMS.length
     ? '<div class="emp">' + ico('search') + '<b>چیزی پیدا نشد</b>دسته یا کلمه‌ی دیگری امتحان کنید.</div>'
     : '<div class="emp">' + ico('spark') + '<b>به‌زودی</b>سرویس‌ها به‌زودی اضافه می‌شوند.</div>');
 }
@@ -831,26 +880,33 @@ function openSheet(){ S.sheet = true; $('ov').classList.add('on'); $('sh').class
 function closeSheet(){ S.sheet = false; $('ov').classList.remove('on'); $('sh').classList.remove('on'); backBtn(); }
 $('ov').onclick = closeSheet;
 function openOrder(id){
-  var i = ITEM[id]; if (!i) return;
+  var i0 = ITEM[id]; if (!i0) return;
+  var i = {}; for (var kk in i0) i[kk] = i0[kk];
   var c = CAT[i.c] || {}, h = HINT[i.c] || HINT.other;
   S.cur = i;
   var chips = [i.mn, 1000, 5000, 10000, 50000, i.mx].filter(function(v, k, a){ return v >= i.mn && v <= i.mx && a.indexOf(v) === k; })
     .sort(function(a, b){ return a - b; }).slice(0, 5);
   $('shB').innerHTML =
-    '<div class="st"><span class="ic">' + ico(c.ic || 'spark') + '</span><div style="flex:1;min-width:0"><b dir="auto">' + esc(nm(i.n).t) + '</b><small>' +
+    '<div class="st"><span class="ic">' + ico(c.ic || 'spark') + '</span><div style="flex:1;min-width:0"><b dir="auto">' + esc(ttl(i)) + (i.b ? ' <span class="tier ' + esc(i.t || '') + '">' + esc(i.b) + '</span>' : '') + '</b><small id="oHd">' +
       fa(i.p) + ' تومان برای هر ۱۰۰۰ تا · حداقل ' + fa(i.mn) + ' · حداکثر ' + fa(i.mx) + '</small></div><button class="x" id="shX">' + ico('x') + '</button></div>' +
     (feats(i) ? '<div class="fcs" style="margin-top:10px">' + feats(i) + '</div>' : '') +
     '<div class="fld"><label>' + esc(h[0]) + '</label><input id="oLink" class="ltr" placeholder="' + esc(h[1]) + '" autocomplete="off" autocapitalize="off" spellcheck="false"><small id="oLinkH">کانال یا گروه باید عمومی باشد؛ رمز لازم نیست.</small></div>' +
     (i.y === 'poll' ? '<div class="fld"><label>رای به کدام گزینه برود؟</label><div class="qchips" id="aC">' +
       [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function(v){ return '<button data-a="' + v + '">گزینه‌ی ' + fa(v) + '</button>'; }).join('') +
       '</div><small>از بالا بشمارید — گزینه‌ی اول = ۱</small></div>' : '') +
-    '<div class="fld"><label>تعداد</label><div class="qrow"><button id="qM" aria-label="کم">−</button><input id="oQty" inputmode="numeric"><button id="qP" aria-label="زیاد">+</button></div>' +
+    (i.y === 'emoji' ? '<div class="fld"><label>ایموجیِ ری‌اکشن</label><div class="emrow"><input id="oEmo" class="emi" maxlength="12" placeholder="👍" autocomplete="off"><div class="qchips ems" id="eC">' +
+      (i.em || []).map(function(x){ return '<button data-e="' + esc(x.k) + '">' + esc(x.e) + '</button>'; }).join('') +
+      '</div></div><small id="oEmoH">ایموجی را از کیبوردتان بزنید یا یکی از بالا انتخاب کنید.</small></div>' : '') +
+    (i.y === 'cc' ? '<div class="fld"><label>متنِ کامنت‌ها — هر خط یک کامنت</label><textarea id="oCm" rows="5" placeholder="عالی بود 👌&#10;چه پستِ خوبی!"></textarea>' +
+      '<small id="oCmH">حداقل ' + fa(i.mn) + ' · حداکثر ' + fa(i.mx) + ' کامنت</small></div>' : '') +
+    '<div class="fld"' + (i.y === 'cc' ? ' style="display:none"' : '') + '><label>تعداد</label><div class="qrow"><button id="qM" aria-label="کم">−</button><input id="oQty" inputmode="numeric"><button id="qP" aria-label="زیاد">+</button></div>' +
     '<div class="qchips" id="qC">' + chips.map(function(v){ return '<button data-q="' + v + '">' + fa(v) + '</button>'; }).join('') + '</div></div>' +
-    '<div class="sum"><div><span>قیمتِ هر ۱۰۰۰ تا</span><b>' + fa(i.p) + ' تومان</b></div><div><span>موجودیِ شما</span><b id="oBal">' + fa(S.bal) + ' تومان</b></div>' +
+    '<div class="sum"><div><span>قیمتِ هر ۱۰۰۰ تا</span><b id="oP1">' + fa(i.p) + ' تومان</b></div><div><span>موجودیِ شما</span><b id="oBal">' + fa(S.bal) + ' تومان</b></div>' +
     '<div class="t"><span>مبلغِ کل</span><b id="oTot">—</b></div></div>' +
     '<button class="btn" id="oGo">' + ico('plane') + '<span id="oGoT">پرداخت و ثبتِ سفارش</span></button>';
   var qi = $('oQty'); qi.value = fa(niceQty(i));
-  function q(){ return parseInt(digits(qi.value), 10) || 0; }
+  function ccLines(){ var e = $('oCm'); return e ? e.value.split(/\r?\n/).map(function(x){ return x.trim(); }).filter(Boolean) : []; }
+  function q(){ if (i.y === 'cc') return ccLines().length; return parseInt(digits(qi.value), 10) || 0; }
   function upd(){
     var n = q(), ok = n >= i.mn && n <= i.mx, t = ok ? total(i, n) : 0;
     $('oTot').textContent = ok ? fa(t) + ' تومان' : 'تعداد بین ' + fa(i.mn) + ' تا ' + fa(i.mx);
@@ -866,7 +922,25 @@ function openOrder(id){
   $('qP').onclick = function(){ tap(); setQ(q() + step()); };
   $('qC').onclick = function(ev){ var b = ev.target.closest('[data-q]'); if (b) { tap(); setQ(+b.getAttribute('data-q')); } };
   qi.oninput = function(){ var n = q(); qi.value = n ? fa(n) : ''; upd(); };
-  var ans = 0;
+  var ans = 0, emo = null;
+  if ($('oCm')) $('oCm').oninput = function(){ $('oCmH').textContent = fa(ccLines().length) + ' کامنت · حداقل ' + fa(i.mn) + ' · حداکثر ' + fa(i.mx); upd(); };
+  function setEmo(v){
+    var k = emN(v), hit = null;
+    (i.em || []).forEach(function(x){ if (!hit && k && (k === x.k || k.indexOf(x.k) === 0)) hit = x; });
+    emo = hit;
+    [].forEach.call($('eC').children, function(b){ b.classList.toggle('on', !!hit && b.getAttribute('data-e') === hit.k); });
+    var hs = $('oEmoH');
+    if (hit) { i.p = hit.p; i.mn = hit.mn; i.mx = hit.mx; hs.textContent = 'ری‌اکشنِ ' + hit.e + ' — ' + fa(hit.p) + ' تومان برای هر ۱۰۰۰ تا'; hs.className = 'okk'; }
+    else { hs.textContent = k ? 'این ایموجی در فهرست نیست — یکی از ایموجی‌های بالا را بزنید.' : 'ایموجی را از کیبوردتان بزنید یا یکی از بالا انتخاب کنید.'; hs.className = k ? 'er' : ''; }
+    $('oHd').textContent = fa(i.p) + ' تومان برای هر ۱۰۰۰ تا · حداقل ' + fa(i.mn) + ' · حداکثر ' + fa(i.mx);
+    $('oP1').textContent = fa(i.p) + ' تومان';
+    var n = q(); if (hit && (n < i.mn || n > i.mx)) setQ(niceQty(i)); else upd();
+  }
+  if ($('oEmo')) {
+    $('oEmo').oninput = function(){ setEmo(this.value); };
+    $('eC').onclick = function(ev){ var b = ev.target.closest('[data-e]'); if (!b) return; tap();
+      var x = (i.em || []).filter(function(y){ return y.k === b.getAttribute('data-e'); })[0]; $('oEmo').value = x ? x.e : ''; setEmo($('oEmo').value); };
+  }
   if ($('aC')) $('aC').onclick = function(ev){ var b = ev.target.closest('[data-a]'); if (!b) return; tap(); ans = +b.getAttribute('data-a');
     [].forEach.call(this.children, function(x){ x.classList.toggle('on', x === b); }); };
   $('oLink').oninput = function(){ var v = this.value.trim(); var hs = $('oLinkH');
@@ -875,12 +949,13 @@ function openOrder(id){
   $('shX').onclick = function(){ tap(); closeSheet(); };
   $('oGo').onclick = function(){
     var n = q(), t = upd(), link = $('oLink').value.trim();
-    if (n < i.mn || n > i.mx) { toast('تعداد باید بین ' + fa(i.mn) + ' و ' + fa(i.mx) + ' باشد.'); return; }
+    if (n < i.mn || n > i.mx) { toast((i.y === 'cc' ? 'تعدادِ کامنت‌ها' : 'تعداد') + ' باید بین ' + fa(i.mn) + ' و ' + fa(i.mx) + ' باشد.'); return; }
     if (t > S.bal) { closeSheet(); WAL.pre = t - S.bal; go('wallet'); return; }
     if (!linkOk(link)) { toast('لینکِ درست وارد کنید.'); $('oLink').focus(); return; }
     if (i.y === 'poll' && !ans) { toast('گزینه‌ای را که رای بگیرد انتخاب کنید.'); return; }
+    if (i.y === 'emoji' && !emo) { toast('ایموجیِ ری‌اکشن را بزنید.'); if ($('oEmo')) $('oEmo').focus(); return; }
     var b = $('oGo'); b.disabled = true; $('oGoT').textContent = 'در حال ثبت…';
-    api('sv_buy', { app: B.app, sid: i.i, link: link, qty: n, seen: t, ans: ans }, function(j){
+    api('sv_buy', { app: B.app, sid: i.i, link: link, qty: n, seen: t, ans: ans, emoji: emo ? emo.k : '', comments: i.y === 'cc' ? ccLines().join('\n') : '' }, function(j){
       b.disabled = false; setBal(j.balance); closeSheet(); S.orders = null; buzz('success');
       toast(j.warn || 'سفارش ثبت شد و به‌زودی شروع می‌شود.', true);
       go('orders');

@@ -114,7 +114,7 @@ function renderLogin($error) { ?>
 <meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" media="print" onload="this.media='all'"
-      href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;800&display=swap">
+      href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;800;900&display=swap">
 <link rel="icon" href="data:,">
 <title>ورود — پنل مدیریت</title><style>
 <?= panelFontCss() ?>
@@ -131,15 +131,16 @@ background:
 background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
 backdrop-filter:blur(24px) saturate(170%);-webkit-backdrop-filter:blur(24px) saturate(170%);
 box-shadow:0 24px 70px -20px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.12)}
-h1{font-size:22px;margin-bottom:6px;font-weight:800}
-p.sub{color:#9aa7bd;font-size:13px;margin-bottom:24px}
-input{width:100%;padding:14px 16px;border:1px solid rgba(255,255,255,.14);border-radius:12px;font-size:15px;
+h1{font-size:27px;margin-bottom:6px;font-weight:900;letter-spacing:-.4px;background:linear-gradient(90deg,#fff,#BFDBFE 55%,#A7F3D0);
+-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 6px 20px rgba(59,130,246,.4))}
+p.sub{color:#b6c3d8;font-size:14px;font-weight:800;margin-bottom:24px}
+input{width:100%;padding:14px 16px;border:1px solid rgba(255,255,255,.14);border-radius:12px;font-size:16px;font-weight:800;letter-spacing:.5px;
 font-family:inherit;margin-bottom:14px;text-align:center;color:#eef2f8;background:rgba(255,255,255,.06);
 backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 input::placeholder{color:#7c8aa3}
 input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.18)}
 button{width:100%;padding:14px;border:1px solid rgba(59,130,246,.9);border-radius:12px;
-background:linear-gradient(180deg,#3b82f6,#1d4ed8);color:#fff;font-size:16px;font-weight:800;
+background:linear-gradient(180deg,#3b82f6,#1d4ed8);color:#fff;font-size:17px;font-weight:900;
 cursor:pointer;font-family:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
 button:hover{filter:brightness(1.1)}
 button.eye{width:auto;padding:0 4px 14px;border:0;background:none;box-shadow:none;color:#9aa7bd;font-size:13px;font-weight:600}
@@ -614,7 +615,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $n['sync_price'] = !empty($p['sync_price']);
             if (!is_array($n['api'] ?? null)) $n['api'] = [];
             $n['api']['on']      = !empty($p['on']);
-            $n['api']['base']    = rtrim(trim((string)($p['base'] ?? '')), '/');
+            $n['api']['base']    = numBaseNorm((string)($p['base'] ?? ''), $n['provider']);
+            $pr = array_values(array_intersect(array_keys(numProducts()), (array)($p['prods'] ?? [])));
+            $n['prods']    = $pr ?: ['telegram'];
+            $n['pick']     = !empty($p['pick']);
+            $n['pick_n']   = max(1, min(60, (int)($p['pick_n'] ?? 12)));
+            $n['pick_ops'] = max(1, min(5, (int)($p['pick_ops'] ?? 1)));
+            $n['api']['nl_svc_ig'] = trim((string)($p['nl_svc_ig'] ?? ''));
+            $n['api']['nl_svc_wa'] = trim((string)($p['nl_svc_wa'] ?? ''));
             if (numBaseForeign($n['api']['base'], $n['provider'])) $n['api']['base'] = '';
             $n['api']['nl_svc']  = trim((string)($p['nl_svc'] ?? '1'));
             $n['api']['timeout'] = max(3, min(60, (int)($p['timeout'] ?? 15)));
@@ -848,6 +856,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $n   = svServiceBulk($ids, $on);
         go(fmtNum($n) . ' سرویس ' . ($on ? 'روشن' : 'خاموش') . ' شد.');
+    }
+    if ($a === 'sp_save') {
+        $in = is_array($_POST['slot'] ?? null) ? $_POST['slot'] : [];
+        $on = !empty($_POST['pick']);
+        svSet(function (&$c) use ($in, $on) {
+            $c['pick'] = $on ? 1 : 0;
+            if (!is_array($c['slots'] ?? null)) $c['slots'] = [];
+            foreach ($in as $id => $f) {
+                $id = preg_replace('/[^a-z0-9.]/', '', (string)$id);
+                if ($id === '' || !is_array($f)) continue;
+                $row = ['off' => empty($f['on']) ? 1 : 0,
+                        'sid' => mb_substr(preg_replace('/[^\w\-]/u', '', (string)($f['sid'] ?? '')), 0, 40),
+                        'title' => mb_substr(trim((string)($f['title'] ?? '')), 0, 60),
+                        'price' => max(0.0, maNum($f['price'] ?? 0))];
+                if (!$row['off'] && $row['sid'] === '' && $row['title'] === '' && $row['price'] <= 0) unset($c['slots'][$id]);
+                else $c['slots'][$id] = $row;
+            }
+        });
+        go('گلچینِ محصولات ذخیره شد' . ($on ? '.' : ' — خاموش شد؛ مینی‌اپ‌ها همه‌ی سرویس‌های روشن را نشان می‌دهند.'));
     }
     if ($a === 'sv_fa') {
         $all = ($_POST['all'] ?? '') === '1';
@@ -2122,12 +2149,31 @@ tr.grp td{background:var(--surface-2);font-weight:800}
           <input name="wait" type="number" min="60" value="<?= (int)$NUM['wait'] ?>">
           <div class="hint">اگر تا این مدت کدی نرسد، شماره بسته و پولِ کاربر برگردانده می‌شود.</div></div>
       </div>
+      <hr>
+      <label>شماره‌ی کدام برنامه‌ها فروخته شود؟</label>
+      <div class="row" style="gap:16px;margin:6px 0 10px">
+        <?php $prOn = numProdsOn(); foreach (numProducts() as $pk => $pinf): ?>
+          <label class="chk"><input type="checkbox" name="prods[]" value="<?= h($pk) ?>" <?= in_array($pk, $prOn, true) ? 'checked' : '' ?>> <?= h($pinf['e'] . ' ' . $pinf['fa']) ?></label>
+        <?php endforeach; ?>
+      </div>
+      <div class="grid2">
+        <div><label class="chk" style="margin-top:4px"><input type="checkbox" name="pick" value="1" <?= !empty($NUM['pick']) ? 'checked' : '' ?>>
+          🎯 گلچین — فقط بهترین کشورها (موجودی، نرخِ موفقیت و قیمت)</label>
+          <div class="hint">خاموش = همه‌ی کشورها و اپراتورها وارد می‌شوند.</div></div>
+        <div class="grid2" style="gap:8px">
+          <div><label>کشور برای هر برنامه</label><input name="pick_n" type="number" min="1" max="60" value="<?= (int)$NUM['pick_n'] ?>"></div>
+          <div><label>اپراتور در هر کشور</label><input name="pick_ops" type="number" min="1" max="5" value="<?= (int)$NUM['pick_ops'] ?>"></div>
+        </div>
+      </div>
       <details style="margin-top:12px"><summary class="muted" style="cursor:pointer;font-size:12.5px;font-weight:700">⚙️ تنظیماتِ پیشرفته (معمولا لازم نیست)</summary>
         <div class="grid2" style="margin-top:10px">
           <div><label>آدرسِ پایه <small class="muted">(خالی = آدرسِ رسمیِ فروشنده)</small></label>
-            <input name="base" value="<?= h((string)$NUM['api']['base']) ?>" style="direction:ltr"></div>
+            <input name="base" value="<?= h(numBaseNorm((string)$NUM['api']['base'], $prov)) ?>" style="direction:ltr"></div>
           <div data-prov="numberland"><label>کدِ سرویسِ تلگرام نزدِ نامبرلند</label>
             <input name="nl_svc" value="<?= h((string)$NUM['api']['nl_svc']) ?>" style="direction:ltr"></div>
+          <div data-prov="numberland"><label>کدِ سرویسِ اینستاگرام / واتساپ <small class="muted">(خالی = خودکار از فهرستِ نامبرلند)</small></label>
+            <div class="grid2" style="gap:8px"><input name="nl_svc_ig" value="<?= h((string)($NUM['api']['nl_svc_ig'] ?? '')) ?>" placeholder="اینستاگرام" style="direction:ltr">
+              <input name="nl_svc_wa" value="<?= h((string)($NUM['api']['nl_svc_wa'] ?? '')) ?>" placeholder="واتساپ" style="direction:ltr"></div></div>
           <div data-prov="5sim"><label>سقفِ قیمتِ هر خرید، به دلار <small class="muted">(۰ = بی‌سقف)</small></label>
             <input name="max" value="<?= h((string)$NUM['api']['max']) ?>" inputmode="decimal" style="direction:ltr"></div>
           <div><label>فاصله‌ی دو پرسش از فروشنده (ثانیه)</label>
@@ -2252,6 +2298,49 @@ tr.grp td{background:var(--surface-2);font-weight:800}
     <div class="stat"><div class="n"><?= h(fmtNum($mk)) ?>٪</div><div class="l">📈 سود روی قیمتِ پنل</div></div>
     <div class="stat<?= $fx > 0 ? '' : ' warn' ?>"><div class="n sm"><?= $fx > 0 ? h(fmtNum($fx)) : '—' ?></div><div class="l">💱 هر واحدِ پنل به تومان</div></div>
   </div>
+  <?php $spOn = spOn(); $spApp = isset(svApps()[$f]) ? $f : 'ig'; $spRows = spAdminRows($spApp); ?>
+  <div class="card" id="picks"><h2>🎯 گلچینِ محصولات — <?= h(svApps()[$spApp]['emoji'] . ' ' . svApps()[$spApp]['short']) ?>
+      <?= $spOn ? '<span class="badge green">روشن</span>' : '<span class="badge">خاموش</span>' ?></h2><div class="body">
+    <div class="note">مینی‌اپ فقط همین محصولاتِ منتخب را نشان می‌دهد (کف قیمت، متوسط، ویژه با ضمانت، فیک، ایرانی، روسی و …)، نه صدها سرویسِ پنل.
+      هر محصول <b>خودکار</b> مناسب‌ترین سرویسِ روشنِ پنل را برمی‌دارد؛ اگر خواستید سرویسِ دیگری انتخاب کنید، اسم یا قیمتش را عوض کنید یا خاموشش کنید.
+      محصولی که سرویسِ مناسبی برایش پیدا نشود نشان داده نمی‌شود. «قیمتِ دستی» برای هر ۱۰۰۰ تاست (۰ = خودکار).</div>
+    <div class="row" style="margin:6px 0 10px">
+      <?php foreach (svApps() as $ak => $ai): ?><a class="btn <?= $spApp === $ak ? '' : 'ghost' ?> sm" href="?tab=svc&amp;f=<?= h($ak) ?>#picks"><?= h($ai['emoji'] . ' ' . $ai['short']) ?></a><?php endforeach; ?>
+    </div>
+    <form method="post">
+      <?= fk('sp_save', ['f' => $spApp]) ?>
+      <label class="chk" style="margin-bottom:10px"><input type="checkbox" name="pick" value="1" <?= $spOn ? 'checked' : '' ?>> گلچین روشن باشد (پیشنهادی)</label>
+      <div class="tw"><table class="its" style="min-width:900px">
+        <thead><tr><th>نمایش</th><th>محصول</th><th>سرویسِ پنل (خودکار یا انتخابی)</th><th>قیمتِ فروش</th><th>نامِ دلخواه</th><th>قیمتِ دستی</th></tr></thead><tbody>
+        <?php $dcs = spCats($spApp); $lastDc = ''; foreach ($spRows as $rw): $d = $rw['def']; $pk = $rw['pick']; $sv = $pk['svc'] ?? null; $sid = h($rw['id']);
+              if ($d['dc'] !== $lastDc): $lastDc = $d['dc']; ?>
+          <tr><td colspan="6" style="background:var(--surface-2);font-weight:800"><?= h($dcs[$d['dc']][0] ?? $d['dc']) ?></td></tr>
+        <?php endif; ?>
+          <tr>
+            <td><input type="checkbox" name="slot[<?= $sid ?>][on]" value="1" <?= empty($rw['cfg']['off']) ? 'checked' : '' ?>></td>
+            <td style="min-width:170px"><b><?= h($d['title']) ?></b><div class="hint"><?= h($d['badge']) ?></div></td>
+            <td style="min-width:330px">
+              <?php if ($d['tier'] === 'emoji'): $em = spEmojiMap(); ?>
+                <?= $em ? h(implode(' ', array_map(fn($x) => $x['_e'], $em))) . '<div class="hint">' . h(fmtNum(count($em))) . ' ایموجی از سرویس‌های ری‌اکشنی که فقط یک ایموجی دارند؛ ارزان‌ترینِ هر ایموجی.</div>' : '<span class="muted">سرویسِ ری‌اکشنِ تک‌ایموجی پیدا نشد</span>' ?>
+              <?php else: ?>
+                <select name="slot[<?= $sid ?>][sid]" style="width:100%">
+                  <option value="">🤖 خودکار<?= $sv && empty($rw['cfg']['sid']) ? ' — #' . h($sv['id']) . ' ' . h(mb_substr($sv['pname'], 0, 60)) : ($sv ? '' : ' — (پیدا نشد)') ?></option>
+                  <?php foreach ($rw['cand'] as $c): ?>
+                    <option value="<?= h($c['id']) ?>" <?= (string)($rw['cfg']['sid'] ?? '') === (string)$c['id'] ? 'selected' : '' ?>>#<?= h($c['id']) ?> · <?= h(fmtNum($c['_p'])) ?> ت · <?= h(mb_substr($c['pname'], 0, 70)) ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <?php if ($sv): ?><div class="hint">#<?= h($sv['id']) ?> · <?= h(mb_substr($sv['pname'], 0, 80)) ?> · <span class="ltr"><?= h(rtrim(rtrim(number_format($sv['rate'], 4, '.', ','), '0'), '.')) ?></span></div><?php endif; ?>
+              <?php endif; ?>
+            </td>
+            <td class="num"><?= $sv ? '<b>' . h(fmtNum((float)($rw['cfg']['price'] ?? 0) > 0 ? svRound((float)$rw['cfg']['price']) : $sv['_p'])) . '</b>' : ($d['tier'] === 'emoji' ? '—' : '<span class="muted">نمایش داده نمی‌شود</span>') ?></td>
+            <td><input name="slot[<?= $sid ?>][title]" value="<?= h((string)($rw['cfg']['title'] ?? '')) ?>" placeholder="<?= h($d['title']) ?>" maxlength="60"></td>
+            <td><input name="slot[<?= $sid ?>][price]" value="<?= (float)($rw['cfg']['price'] ?? 0) > 0 ? h(fmtNum($rw['cfg']['price'])) : '0' ?>" inputmode="numeric" style="direction:ltr;max-width:110px"></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody></table></div>
+      <div style="margin-top:12px"><button class="btn g">ذخیره‌ی گلچین</button></div>
+    </form>
+  </div></div>
   <div class="card"><h2>🔎 وضعیتِ نمایش در مینی‌اپ‌ها</h2><div class="body"><div class="grid2">
     <?php foreach (svApps() as $dA => $dI): $dg = svDiag($dA); ?>
       <div class="note <?= $dg['shown'] > 0 ? 'ok' : 'warn' ?>" style="margin:0">

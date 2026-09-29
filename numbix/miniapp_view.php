@@ -255,6 +255,17 @@ html.in .pg.on>:nth-child(n+7){transition-delay:.3s}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:0 0 auto;padding:7px 13px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:11.5px;font-weight:800;color:var(--dim)}
 .chip.on{color:#fff;border-color:transparent;background:var(--grad)}
+.prods{display:grid;grid-template-columns:repeat(var(--n,3),1fr);gap:8px;margin-bottom:10px}
+.prods button{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 6px 10px;border-radius:17px;border:1px solid var(--line);
+  background:var(--card);color:var(--dim);font-size:12px;font-weight:900;transition:transform .15s,border-color .2s,color .2s}
+.prods button i{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;font-style:normal;font-size:19px;background:rgba(255,255,255,.06)}
+.prods button small{font-size:9.5px;font-weight:700;color:var(--dim2)}
+.prods button.on{color:#fff;border-color:transparent;transform:translateY(-1px)}
+.prods button.on.telegram{background:linear-gradient(145deg,rgba(42,171,238,.34),rgba(42,171,238,.1));box-shadow:0 10px 22px -14px #2AABEE,inset 0 0 0 1px rgba(125,211,252,.5)}
+.prods button.on.instagram{background:linear-gradient(145deg,rgba(221,42,123,.34),rgba(129,52,175,.16));box-shadow:0 10px 22px -14px #DD2A7B,inset 0 0 0 1px rgba(255,95,162,.5)}
+.prods button.on.whatsapp{background:linear-gradient(145deg,rgba(37,211,102,.32),rgba(37,211,102,.08));box-shadow:0 10px 22px -14px #25D366,inset 0 0 0 1px rgba(74,222,128,.5)}
+.prods button.telegram i{background:rgba(42,171,238,.16)}.prods button.instagram i{background:rgba(221,42,123,.16)}.prods button.whatsapp i{background:rgba(37,211,102,.16)}
+.prods button small b{color:var(--ink)}
 .clist{display:grid;gap:8px;margin-top:8px}
 .crow{display:flex;align-items:center;gap:11px;border-radius:16px;border:1px solid var(--line);background:var(--card);padding:10px 12px;
   content-visibility:auto;contain-intrinsic-size:auto 62px;transition:transform .12s}
@@ -582,6 +593,12 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
 .splash .ld .stg i{width:22px;height:4px;border-radius:4px;background:rgba(148,163,184,.22);transition:background .3s,box-shadow .3s,width .3s}
 .splash .ld .stg i.on{width:30px;background:var(--green);box-shadow:0 0 8px rgba(74,222,128,.8)}
 .splash .ld small{display:block;margin-top:10px;min-height:18px;color:var(--dim);font-size:10.5px;font-weight:700;transition:opacity .18s}
+.splash h1{font-size:28px;font-weight:900;letter-spacing:-.5px;background:linear-gradient(90deg,#fff,#BFDBFE 55%,#86EFAC);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 6px 22px rgba(59,130,246,.45))}
+.splash p{font-size:13px;font-weight:800;color:#D6E4FF;opacity:.92;line-height:1.8}
+.splash .ld .pc span{font-size:12.5px;font-weight:900;color:#EAF2FF}
+.splash .ld .pc b{font-size:38px;font-weight:900;letter-spacing:-1px;font-variant-numeric:tabular-nums;filter:drop-shadow(0 4px 16px rgba(59,130,246,.6))}
+.splash .ld small{font-size:11.5px;font-weight:800;color:#C7D7F5}
 
 .gate{position:fixed;inset:0;z-index:95;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
 .gate svg{width:70px;height:70px;color:var(--blue2);margin-bottom:14px}
@@ -885,6 +902,7 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
   </section>
 
   <section class="pg" id="pg-shop">
+    <div class="prods hid" id="prodTabs"></div>
     <div class="srch"><svg><use href="#i-search"/></svg><input id="q" type="search" placeholder="جست‌وجوی کشور…" autocomplete="off"></div>
     <div class="chips" id="sortChips">
       <button class="chip on" data-s="r">پیشنهادی</button>
@@ -1204,10 +1222,15 @@ setTimeout(function(){ hideSplash(false); }, Math.max(3000, SPL.min + 2500 - (Da
 var CATS = B.cats || [], ITEMS = B.items || [];
 var CAT = {}, ITEM = {}, BYCAT = {};
 CATS.forEach(function(c){ CAT[c.id] = c; c.k = norm(c.name); });
-ITEMS.forEach(function(i){ ITEM[i.i] = i; (BYCAT[i.c] = BYCAT[i.c] || []).push(i); });
+ITEMS.forEach(function(i){ ITEM[i.i] = i; i.pr = i.pr || 'telegram'; (BYCAT[i.c] = BYCAT[i.c] || []).push(i); });
+var PRODS = { telegram: { fa: 'تلگرام', e: '✈️' }, instagram: { fa: 'اینستاگرام', e: '📸' }, whatsapp: { fa: 'واتساپ', e: '💬' } };
+var PLIST = Object.keys(PRODS).filter(function(k){ return ITEMS.some(function(i){ return i.pr === k; }); });
+function catOps(cid, pr){ return (BYCAT[cid] || []).filter(function(i){ return !pr || i.pr === pr; }); }
+function prodFa(pr){ return (PRODS[pr] || PRODS.telegram).fa; }
 
 var S = { page: '', stack: [], bal: 0, me: null, live: {}, orders: null, of: 'all', sort: 'r', q: '',
           sheet: '', cur: '', uid: 0, notes: 0, ends: {}, polls: {}, feed: [], fi: 0 };
+S.prod = PLIST[0] || 'telegram';
 var U = tgUser() || {};
 S.uid = U.id || 0;
 
@@ -1420,11 +1443,16 @@ function feedNext(){
 
 var SHOPK = '';
 function drawShop(force){
-  var key = S.q + '|' + S.sort;
+  var key = S.q + '|' + S.sort + '|' + S.prod;
   if (!force && key === SHOPK) return;
   SHOPK = key;
+  drawProds();
   var q = norm(S.q);
-  var list = CATS.filter(function(c){ return !q || c.k.indexOf(q) >= 0; });
+  var pr = PLIST.length > 1 ? S.prod : '';
+  var list = CATS.filter(function(c){ return (!q || c.k.indexOf(q) >= 0) && catOps(c.id, pr).length; }).map(function(c){
+    var ops = catOps(c.id, pr), f = 0; ops.forEach(function(i){ if (!f || i.p < f) f = i.p; });
+    return { id: c.id, name: c.name, e: c.e, sold: c.sold, r: c.r, n: ops.length, from: f };
+  });
   var s = S.sort;
   list.sort(function(a, b){
     if (s === 'sold') return (b.sold - a.sold) || (a.r - b.r);
@@ -1442,6 +1470,22 @@ function drawShop(force){
       '<span class="pr"><small>از</small><b>' + fa(c.from) + '</b><small>تومان</small></span>' + ico('chev', 'chev') + '</button>';
   }).join('');
 }
+function drawProds(){
+  var box = $('prodTabs');
+  box.classList.toggle('hid', PLIST.length < 2);
+  if (PLIST.length < 2) return;
+  box.style.setProperty('--n', PLIST.length);
+  box.innerHTML = PLIST.map(function(k){
+    var n = 0; CATS.forEach(function(c){ if (catOps(c.id, k).length) n++; });
+    return '<button class="' + k + (S.prod === k ? ' on' : '') + '" data-pr="' + k + '"><i>' + PRODS[k].e + '</i>' + esc(PRODS[k].fa) +
+      '<small><b>' + fa(n) + '</b> کشور</small></button>';
+  }).join('');
+}
+$('prodTabs').addEventListener('click', function(ev){
+  var b = ev.target.closest('[data-pr]');
+  if (!b || b.getAttribute('data-pr') === S.prod) return;
+  tap(); S.prod = b.getAttribute('data-pr'); drawShop(true);
+});
 function emptyHtml(ic, t, s){ return '<div class="empty">' + ico(ic) + '<b>' + esc(t) + '</b><span>' + esc(s || '') + '</span></div>'; }
 $('clist').addEventListener('click', function(ev){
   var b = ev.target.closest('[data-cat]');
@@ -1504,9 +1548,10 @@ $('ov').onclick = function(){ closeSheet(); };
 function openCountry(cid){
   var c = CAT[cid];
   if (!c) return;
-  var ops = (BYCAT[cid] || []).slice().sort(function(a, b){ return a.p - b.p; });
+  var pr = catOps(cid, S.prod).length ? S.prod : ((BYCAT[cid] || [])[0] || {}).pr || 'telegram';
+  var ops = catOps(cid, pr).slice().sort(function(a, b){ return a.p - b.p; });
   openSheet('cat',
-    '<span class="fl">' + flg(c.e) + '</span><b>' + esc(c.name) + '<small>' + fa(ops.length) + ' اپراتور · شماره‌ی تلگرام</small></b>',
+    '<span class="fl">' + flg(c.e) + '</span><b>' + esc(c.name) + '<small>' + fa(ops.length) + ' اپراتور · شماره‌ی ' + esc(prodFa(pr)) + '</small></b>',
     ops.map(function(i, ix){
       return '<button class="co" data-buy="' + esc(i.i) + '" style="width:100%;text-align:right"><span class="mid"><b>' + esc(i.o || 'اپراتور') +
         (i.b ? '<span class="bdg">' + esc(i.b) + '</span>' : (ix === 0 && ops.length > 1 ? '<span class="bdg b">ارزان‌ترین</span>' : '')) +
@@ -1525,7 +1570,7 @@ function openBuy(iid){
   var c = CAT[i.c] || { e: '', name: '' };
   BUY.item = iid; BUY.coupon = ''; BUY.disc = 0; BUY.busy = false;
   openSheet('buy',
-    '<span class="fl">' + flg(c.e) + '</span><b>' + esc(c.name) + '<small>' + esc(i.o || 'اپراتور') + ' · شماره‌ی مجازی تلگرام</small></b>',
+    '<span class="fl">' + flg(c.e) + '</span><b>' + esc(c.name) + '<small>' + esc(i.o || 'اپراتور') + ' · شماره‌ی مجازی ' + esc(prodFa(i.pr)) + '</small></b>',
     '<div class="card"><div class="kvr"><span>قیمت شماره</span><b>' + fa(i.p) + ' تومان</b></div>' +
     '<div class="kvr" id="bDiscR" style="display:none"><span>تخفیف</span><b class="g" id="bDisc"></b></div>' +
     '<div class="kvr"><span>مبلغ قابل پرداخت</span><b id="bTot"></b></div>' +
@@ -1533,7 +1578,7 @@ function openBuy(iid){
     '<div class="fld"><label>کد تخفیف (اختیاری)</label><div style="display:flex;gap:8px"><input class="inp ltr" id="bCp" maxlength="32" placeholder="CODE" style="text-transform:uppercase">' +
     '<button class="btn gh sm" id="bCpB">اعمال</button></div></div>' +
     '<div id="bAct" class="mt"></div>' +
-    '<div class="stl"><div>' + '<i>۱</i>بعد از پرداخت، شماره فورا نمایش داده می‌شود.</div><div><i>۲</i>شماره را در تلگرام وارد کنید.</div><div><i>۳</i>کد تایید همین‌جا و در ربات برایتان می‌آید.</div></div>' +
+    '<div class="stl"><div>' + '<i>۱</i>بعد از پرداخت، شماره فورا نمایش داده می‌شود.</div><div><i>۲</i>شماره را در ' + esc(prodFa(i.pr)) + ' وارد کنید.</div><div><i>۳</i>کد تایید همین‌جا و در ربات برایتان می‌آید.</div></div>' +
     (B.note ? '<div class="note mt2">' + ico('shield') + '<span>' + esc(B.note) + '</span></div>' : ''));
   $('bCpB').onclick = applyCoupon;
   drawBuy();
