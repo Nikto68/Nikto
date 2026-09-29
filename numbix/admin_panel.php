@@ -2711,7 +2711,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
     <div class="note">
       روال: کاربر «درگاه ایرانی» را می‌زند ← <b>شماره‌ی موبایلِ خودش</b> را با دکمه می‌فرستد ← مبلغ ←
       تا سقفِ زیر همین شماره کافی است؛ بیشتر از سقف یک‌بار <b>احراز هویت</b>: ربات عکسِ راهنما می‌فرستد و کاربر
-      <b>۱) عکسِ کارتِ ملی</b> و <b>۲) عکسِ دست‌نوشته‌ی خرید + کارتِ بانکیِ پرداخت + امضا</b> را می‌فرستد؛ شما این‌جا یا در ربات تایید می‌کنید ←
+      <b>یک عکس</b> می‌فرستد: متنِ خرید در دفتر + امضا + <b>کارتِ ملی</b> و <b>کارتِ بانکیِ پرداخت</b> کنارِ هم؛ شما این‌جا یا در ربات تایید می‌کنید (فقط یک‌بار؛ بعد از تایید دیگر خواسته نمی‌شود) ←
       تایید و <b>لینکِ درگاه</b> با دکمه‌ی شیشه‌ای ←
       بعد از پرداخت، حساب <b>خودکار</b> شارژ می‌شود. آدرسِ بازگشت خودکار ساخته می‌شود.
       <br>زرین‌پال: مرچنتِ ۳۶ کاراکتری از <a href="https://next.zarinpal.com" target="_blank" rel="noopener">پنلِ زرین‌پال</a> · زیبال: کدِ مرچنت از <a href="https://zibal.ir" target="_blank" rel="noopener">پنلِ زیبال</a>.
@@ -2735,7 +2735,7 @@ tr.grp td{background:var(--surface-2);font-weight:800}
         <label class="chk"><input type="checkbox" name="ir_kyc" value="1" <?= !empty($IR['kyc']) ? 'checked' : '' ?>> احراز هویت برای مبالغِ بالا</label>
         <div><label>تا این مبلغ بدونِ احراز هویت (تومان)</label><input name="ir_kyc_limit" value="<?= h((string)(float)($IR['kyc_limit'] ?? 500000)) ?>" style="direction:ltr"></div>
         <div><label>احراز هویت برای بالای سقف (تا سقف فقط شماره‌ی موبایل)</label><select name="ir_kyc_mode">
-          <option value="docs" <?= ($IR['kyc_mode'] ?? 'docs') === 'docs' ? 'selected' : '' ?>>عکسِ کارتِ ملی + دست‌نوشته‌ی خرید با کارتِ بانکی و امضا (با عکسِ راهنما)</option>
+          <option value="docs" <?= ($IR['kyc_mode'] ?? 'docs') === 'docs' ? 'selected' : '' ?>>یک عکس: دست‌نوشته در دفتر + امضا + کارتِ ملی و کارتِ بانکی کنارِ هم (با عکسِ راهنما)</option>
           <option value="phone" <?= ($IR['kyc_mode'] ?? '') === 'phone' ? 'selected' : '' ?>>فقط شماره‌ی موبایل + تاییدِ مدیر</option>
           <option value="auto" <?= ($IR['kyc_mode'] ?? '') === 'auto' ? 'selected' : '' ?>>کدِ پیامکیِ زرین‌پال (اگر OAuth ثبت شده) — وگرنه تاییدِ مدیر</option></select></div>
         <div><label>زرین‌پال OAuth — client_id <?= trim((string)($IR['oauth_id'] ?? '')) !== '' ? '<span class="badge green">ثبت شده</span>' : '<span class="badge">ثبت نشده</span>' ?></label>
@@ -2777,17 +2777,17 @@ tr.grp td{background:var(--surface-2);font-weight:800}
             آیدی: <code><?= (int)$ku ?></code><br>
             موبایل: <code><?= h((string)($KU['phone'] ?? '—')) ?></code><br>
             <?php if (trim((string)($KK['code'] ?? '')) !== ''): ?>کدِ ملی: <code><?= h((string)$KK['code']) ?></code><br><?php endif; ?>
-            روش: <?= ($KK['mode'] ?? 'phone') === 'docs' ? (!empty($KK['photo2']) ? 'کارتِ ملی + دست‌نوشته با کارتِ بانکی و امضا' : 'کدِ ملی + عکس') : 'شماره‌ی موبایل (تاییدِ مدیر)' ?><br>
+            روش: <?= ($KK['mode'] ?? 'phone') === 'docs' ? (!empty($KK['photo2']) ? 'کارتِ ملی + دست‌نوشته با کارتِ بانکی و امضا (دو عکس)' : (trim((string)($KK['code'] ?? '')) !== '' ? 'کدِ ملی + عکس' : 'یک عکس: دست‌نوشته + امضا + کارتِ ملی و کارتِ بانکی')) : 'شماره‌ی موبایل (تاییدِ مدیر)' ?><br>
             <?php if ((float)($KK['amt'] ?? 0) > 0): ?>مبلغِ درخواستی: <b><?= h(fmtNum((float)$KK['amt'])) ?></b> تومان<br><?php endif; ?>
             <span class="muted"><?= !empty($KK['at']) ? h(date('Y-m-d H:i', (int)$KK['at'])) : '' ?></span>
           </div>
           <div><?php $kHas1 = kycImgPath((int)$ku) !== ''; $kHas2 = kycImgPath((int)$ku, 'img2') !== ''; ?>
             <?php if ($kHas1 || $kHas2): ?><div style="display:flex;gap:8px;flex-wrap:wrap">
-              <?php foreach ([[$kHas1, '', '۱) کارتِ ملی'], [$kHas2, '&amp;n=2', '۲) دست‌نوشته + کارتِ بانکی + امضا']] as [$kOn, $kQ, $kL]): if (!$kOn) continue; ?>
+              <?php foreach ([[$kHas1, '', $kHas2 ? '۱) کارتِ ملی' : (trim((string)($KK['code'] ?? '')) !== '' ? 'کارتِ ملی' : 'دست‌نوشته + امضا + کارتِ ملی و کارتِ بانکی')], [$kHas2, '&amp;n=2', '۲) دست‌نوشته + کارتِ بانکی + امضا']] as [$kOn, $kQ, $kL]): if (!$kOn) continue; ?>
                 <figure style="margin:0;flex:1;min-width:140px"><a href="?kycimg=<?= (int)$ku ?><?= $kQ ?>" target="_blank" rel="noopener"><img src="?kycimg=<?= (int)$ku ?><?= $kQ ?>" alt="" style="width:100%;max-height:220px;object-fit:contain;border-radius:12px;border:1px solid var(--border)"></a>
                   <figcaption class="muted" style="font-size:12px;margin-top:4px"><?= $kL ?></figcaption></figure>
               <?php endforeach; ?></div>
-            <?php elseif (($KK['mode'] ?? 'phone') === 'docs'): ?><span class="muted">عکس‌ها در ربات برای مدیر فرستاده شده.</span><?php endif; ?></div>
+            <?php elseif (($KK['mode'] ?? 'phone') === 'docs'): ?><span class="muted">عکس در ربات برای مدیر فرستاده شده.</span><?php endif; ?></div>
         </div>
         <div class="row" style="margin-top:10px">
           <form method="post"><?= fk('kyc_decide', ['s' => 'gw']) ?><input type="hidden" name="uid" value="<?= (int)$ku ?>"><input type="hidden" name="dec" value="ok"><button class="btn g sm">✅ تایید</button></form>

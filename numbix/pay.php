@@ -78,7 +78,7 @@ function kycLimit() { return (float)(irCfg()['kyc_limit'] ?? 0); }
 // احراز هویت فقط با شماره‌ی موبایل (بدونِ اسم و فامیل):
 //  otp   = زرین‌پال یک کدِ یک‌بارمصرف (پیامک/USSD) به همان شماره می‌فرستد و کاربر کد را وارد می‌کند (خودکار)
 //  phone = شماره برای مدیر فرستاده می‌شود و مدیر تایید می‌کند (وقتی کلیدِ OAuth زرین‌پال گذاشته نشده)
-//  docs  = (پیش‌فرض) بالای سقف: عکسِ کارتِ ملی + عکسِ دست‌نوشته‌ی خرید با کارتِ بانکیِ پرداخت و امضا — تاییدِ مدیر
+//  docs  = (پیش‌فرض) بالای سقف، فقط یک‌بار: یک عکس — دست‌نوشته‌ی خرید در دفتر + امضا + کارتِ ملی و کارتِ بانکیِ پرداخت کنارِ هم — تاییدِ مدیر
 function zpOauthCfg() { $c = irCfg(); $cl = function_exists('gwCleanKey') ? 'gwCleanKey' : 'trim'; return [$cl((string)($c['oauth_id'] ?? '')), $cl((string)($c['oauth_secret'] ?? ''))]; }
 function kycMode() {
     $m = (string)(irCfg()['kyc_mode'] ?? 'auto');
@@ -651,12 +651,12 @@ function kycStart($uid, $chatId, $msgId = null) {
     kycDocsStart($uid, $chatId, $msgId);
 }
 
-// احراز با مدارک: عکسِ راهنما، بعد مرحله‌ی ۱ (کارتِ ملی) و ۲ (دست‌نوشته + کارتِ بانکی + امضا)
+// احراز با مدارک (فقط یک‌بار): عکسِ راهنما، بعد «یک عکس» — دست‌نوشته در دفتر + امضا + کارتِ ملی و کارتِ بانکی کنارِ هم
 function kycDocsStart($uid, $chatId, $msgId = null) {
     if ($msgId) { delMsg(BOT_TOKEN, $chatId, $msgId); slotClear($uid, 'wallet'); }
     kycGuideSend($chatId);
-    setState($uid, 'kyc_card');
-    sendMsg(BOT_TOKEN, $chatId, T('kyc_card_ask'), inlineKb([[tuBtn('cancel', 'cb', 'tux')]]));
+    setState($uid, 'kyc_note');
+    sendMsg(BOT_TOKEN, $chatId, T('kyc_note_ask', kycNoteVars($uid)), inlineKb([[tuBtn('cancel', 'cb', 'tux')]]));
 }
 
 function kycGuideFile() { return __DIR__ . '/img/kyc_guide.jpg'; }
@@ -702,7 +702,7 @@ function kycDir() {
     }
     return $d;
 }
-// نامِ فایلِ عکسِ کارتِ ملی تصادفی است (نه آیدیِ کاربر) تا حدس‌زدنی نباشد؛ فایل‌های قدیمیِ «آیدی.img» هم خوانده می‌شوند
+// نامِ فایلِ عکسِ مدارک تصادفی است (نه آیدیِ کاربر) تا حدس‌زدنی نباشد؛ فایل‌های قدیمیِ «آیدی.img» هم خوانده می‌شوند
 function kycImgPath($uid, $slot = 'img') {
     $slot = $slot === 'img2' ? 'img2' : 'img';
     $n = (string)((getUser((int)$uid) ?: [])['kyc'][$slot] ?? '');
@@ -748,20 +748,38 @@ function kycSubmit($uid, $uname, $fname, $code, $fileId, $isDoc) {
     kycNotify($uid, $uname, $fname);
 }
 
-// احراز با مدارک: ۱) کارتِ ملی ۲) دست‌نوشته‌ی خرید + کارتِ بانکی + امضا
-function kycSubmitDocs($uid, $uname, $fname, array $card, array $note) {
-    mutateUser($uid, function (&$u) use ($card, $note) {
+// احراز با مدارک: یک عکس (دست‌نوشته‌ی خرید + امضا + کارتِ ملی و کارتِ بانکی کنارِ هم).
+// $card فقط برای کاربری است که وسطِ روشِ قدیمیِ دومرحله‌ای بوده (عکسِ کارتِ ملی را جدا فرستاده).
+// اگر درخواست در حالِ بررسی یا تاییدشده باشد، عکسِ دوباره (مثلا آلبوم) نادیده گرفته می‌شود → false
+function kycSubmitDocs($uid, $uname, $fname, array $note, array $card = []) {
+    // عکس‌های درخواستِ ردشده‌ی قبلی: پاک می‌شوند تا اگر دانلودِ عکسِ تازه نگرفت، عکسِ کهنه جای آن دیده نشود
+    $old = [kycImgPath($uid, 'img'), kycImgPath($uid, 'img2')];
+    $fresh = false;
+    mutateUser($uid, function (&$u) use ($card, $note, &$fresh) {
         if ($u === null) return;
-        $u['kyc'] = ['st' => 'pending', 'mode' => 'docs', 'code' => '',
-                     'photo' => (string)$card['fid'], 'doc' => !empty($card['doc']) ? 1 : 0,
-                     'photo2' => (string)$note['fid'], 'doc2' => !empty($note['doc']) ? 1 : 0,
-                     'phone' => (string)($u['phone'] ?? ''), 'amt' => (float)($u['kyc_amt'] ?? 0), 'at' => time(),
-                     'img' => (string)($u['kyc']['img'] ?? ''), 'img2' => (string)($u['kyc']['img2'] ?? '')];
+        $st = (string)($u['kyc']['st'] ?? '');
+        if ($st === 'pending' || $st === 'ok') return;
+        $k = ['st' => 'pending', 'mode' => 'docs', 'code' => '',
+              'photo' => (string)$note['fid'], 'doc' => !empty($note['doc']) ? 1 : 0,
+              'phone' => (string)($u['phone'] ?? ''), 'amt' => (float)($u['kyc_amt'] ?? 0), 'at' => time()];
+        if (!empty($card['fid'])) {
+            $k['photo'] = (string)$card['fid']; $k['doc'] = !empty($card['doc']) ? 1 : 0;
+            $k['photo2'] = (string)$note['fid']; $k['doc2'] = !empty($note['doc']) ? 1 : 0;
+        }
+        $u['kyc'] = $k;
+        $fresh = true;
     });
+    if (!$fresh) return false;
+    foreach ($old as $f) if ($f !== '') @unlink($f);
     kycQueue(function (&$q) use ($uid) { $q[(string)$uid] = time(); });
-    kycSavePhoto($uid, (string)$card['fid'], 'img');
-    kycSavePhoto($uid, (string)$note['fid'], 'img2');
+    if (!empty($card['fid'])) {
+        kycSavePhoto($uid, (string)$card['fid'], 'img');
+        kycSavePhoto($uid, (string)$note['fid'], 'img2');
+    } else {
+        kycSavePhoto($uid, (string)$note['fid'], 'img');
+    }
     kycNotify($uid, $uname, $fname);
+    return true;
 }
 
 // احراز هویت فقط با شماره‌ی موبایل: شماره همان است که کاربر با دکمه‌ی «ارسال شماره» فرستاده (تلگرام تاییدش کرده)
@@ -784,7 +802,8 @@ function kycCaption($uid) {
            ((float)($k['amt'] ?? 0) > 0 ? "\n💰 مبلغِ درخواستی: <b>" . fmtNum((float)$k['amt']) . "</b> تومان" : '') .
            "\n\n" . (($k['mode'] ?? 'phone') === 'docs'
                ? (!empty($k['photo2']) ? "📎 مدارک: ۱) کارتِ ملی ۲) دست‌نوشته‌ی خرید + کارتِ بانکی + امضا\n\n☑️ بررسی کنید: نام روی کارتِ ملی = نامِ دست‌نوشته = نامِ صاحبِ کارتِ بانکی؛ امضا و مبلغ درست باشد."
-                                         : '📎 مدارک: عکسِ کارتِ ملی')
+                 : (trim((string)($k['code'] ?? '')) !== '' ? '📎 مدارک: عکسِ کارتِ ملی'
+                 : "📎 مدارک (یک عکس): دست‌نوشته در دفتر + امضا + کارتِ ملی و کارتِ بانکی کنارِ هم\n\n☑️ بررسی کنید: نام روی کارتِ ملی = نامِ دست‌نوشته = نامِ صاحبِ کارتِ بانکی؛ امضا، تاریخ و مبلغ درست باشد."))
                : '☑️ احراز با شماره‌ی موبایل (تاییدشده توسطِ تلگرام)');
 }
 
@@ -792,7 +811,7 @@ function kycKb($uid) {
     return inlineKb([[btnCb('✅ تایید', 'akyc_ok_' . (int)$uid, 'confirm'), btnCb('❌ رد', 'akyc_no_' . (int)$uid, 'reject')]]);
 }
 
-// عکسِ اولِ مدارک (کارتِ ملی) بدونِ دکمه، عکسِ دوم با کپشنِ کامل و دکمه‌های تایید/رد
+// فقط درخواست‌های روشِ قدیمیِ دوعکسی: عکسِ اول (کارتِ ملی) بدونِ دکمه، عکسِ دوم با کپشنِ کامل و دکمه‌های تایید/رد
 function kycSendDocs($aid, $uid) {
     $k = (array)((getUser($uid) ?: [])['kyc'] ?? []);
     if (empty($k['photo2'])) return false;
@@ -985,27 +1004,33 @@ function payStateHandle($action, $msg, $uid, $chatId) {
         return true;
     }
     if ($action === 'kyc_card' || $action === 'kyc_note') {
+        $cancel = inlineKb([[tuBtn('cancel', 'cb', 'tux')]]);
+        $kst = kycSt($uid);
+        if ($kst === 'pending' || $kst === 'ok') {   // یک‌بار کافی است؛ عکسِ اضافه (آلبوم) دوباره ثبت نمی‌شود
+            clearState($uid);
+            if ($kst === 'ok') sendMsg(BOT_TOKEN, $chatId, T('kyc_ok'), inlineKb([[tuBtn('iran', 'cb', 'tum_iran')]]));
+            return true;
+        }
+        if ($action === 'kyc_card') {
+            // کاربری که هنگامِ به‌روزرسانی وسطِ روشِ قدیمیِ دومرحله‌ای بوده: حالا همه در یک عکس
+            setState($uid, 'kyc_note');
+            sendMsg(BOT_TOKEN, $chatId, T('kyc_note_ask', kycNoteVars($uid)), $cancel);
+            return true;
+        }
         $fid = ''; $doc = false;
         if (!empty($msg['photo'])) { $p = $msg['photo']; $fid = (string)($p[count($p) - 1]['file_id'] ?? ''); }
         elseif (!empty($msg['document']) && str_starts_with((string)($msg['document']['mime_type'] ?? ''), 'image/')) {
             $fid = (string)($msg['document']['file_id'] ?? ''); $doc = true;
         }
-        $cancel = inlineKb([[tuBtn('cancel', 'cb', 'tux')]]);
         if ($fid === '') {
             sendMsg(BOT_TOKEN, $chatId, T('kyc_photo_bad'), $cancel);
-            sendMsg(BOT_TOKEN, $chatId, $action === 'kyc_card' ? T('kyc_card_ask') : T('kyc_note_ask', kycNoteVars($uid)), $cancel);
-            return true;
-        }
-        if ($action === 'kyc_card') {
-            setState($uid, 'kyc_note', ['card' => $fid, 'cdoc' => $doc ? 1 : 0]);
             sendMsg(BOT_TOKEN, $chatId, T('kyc_note_ask', kycNoteVars($uid)), $cancel);
             return true;
         }
-        $card = (string)($sd['card'] ?? '');
-        if ($card === '') { setState($uid, 'kyc_card'); sendMsg(BOT_TOKEN, $chatId, T('kyc_card_ask'), $cancel); return true; }
         clearState($uid);
-        kycSubmitDocs($uid, $uname, $fname, ['fid' => $card, 'doc' => !empty($sd['cdoc'])], ['fid' => $fid, 'doc' => $doc]);
-        sendMsg(BOT_TOKEN, $chatId, T('kyc_sent'), tuRestoreKb());
+        $card = (string)($sd['card'] ?? '');   // فقط روشِ قدیمی
+        if (kycSubmitDocs($uid, $uname, $fname, ['fid' => $fid, 'doc' => $doc], $card !== '' ? ['fid' => $card, 'doc' => !empty($sd['cdoc'])] : []))
+            sendMsg(BOT_TOKEN, $chatId, T('kyc_sent'), tuRestoreKb());
         return true;
     }
     if ($action === 'kyc_code') {
@@ -1189,13 +1214,13 @@ function payTextLabels() {
         'topup_gw_down' => '🪙 درگاهِ ارز جواب نداد',
         'topup_ir_phone' => '🏦 درخواستِ شماره', 'topup_ir_phone_ok' => '🏦 شماره ثبت شد',
         'topup_ir_phone_bad' => '🏦 شماره‌ی نامعتبر', 'topup_ir_amount' => '🏦 مبلغِ شارژِ ریالی',
-        'topup_ir_kyc_need' => '🏦 نیاز به احراز (کارتِ ملی + دست‌نوشته)', 'topup_ir_kyc_need_phone' => '🏦 نیاز به احراز (فقط شماره)',
+        'topup_ir_kyc_need' => '🏦 نیاز به احراز (یک عکس: دفتر + دو کارت)', 'topup_ir_kyc_need_phone' => '🏦 نیاز به احراز (فقط شماره)',
         'topup_ir_confirm' => '🏦 تایید و لینکِ درگاه',
         'topup_ir_down' => '🏦 درگاهِ ایرانی جواب نداد', 'topup_paid' => '✅ فاکتورِ پرداخت‌شده',
         'kyc_otp_ask' => '🪪 درخواستِ کدِ تایید (زرین‌پال)', 'kyc_otp_bad' => '🪪 کدِ تاییدِ اشتباه', 'kyc_otp_fail' => '🪪 کد فرستاده نشد',
         'kyc_phone_confirm' => '🪪 احراز با شماره (تایید و ارسال)',
-        'kyc_guide' => '🪪 متنِ زیرِ عکسِ راهنما', 'kyc_card_ask' => '🪪 مرحله‌ی ۱: عکسِ کارتِ ملی',
-        'kyc_note_ask' => '🪪 مرحله‌ی ۲: دست‌نوشته + کارتِ بانکی + امضا', 'kyc_photo_bad' => '🪪 عکس نفرستاد',
+        'kyc_guide' => '🪪 متنِ زیرِ عکسِ راهنما',
+        'kyc_note_ask' => '🪪 درخواستِ عکس (دست‌نوشته + امضا + کارتِ ملی و بانکی)', 'kyc_photo_bad' => '🪪 عکس نفرستاد',
         'kyc_sent' => '🪪 مدارک ثبت شد',
         'kyc_pending' => '🪪 در حالِ بررسی', 'kyc_ok' => '🪪 احراز هویت تایید شد', 'kyc_no' => '🪪 احراز هویت رد شد',
     ];
@@ -1299,7 +1324,7 @@ function payAdmIr($chatId, $msgId) {
     $t .= "مرچنت: " . ($m !== '' ? '✅ ' . h(mb_substr($m, 0, 6)) . '…' : '<b>خالی</b>') . "\n";
     $t .= "حداقل: <b>" . fmtNum(tuMin('iran')) . "</b> · حداکثر: <b>" . ((float)($c['max'] ?? 0) > 0 ? fmtNum($c['max']) : 'بی‌سقف') . "</b> تومان\n";
     $t .= "احراز هویت: " . (!empty($c['kyc']) ? '✅ بالای <b>' . fmtNum(kycLimit()) . '</b> تومان — ' .
-          ['otp' => 'کدِ یک‌بارمصرفِ زرین‌پال به شماره‌ی موبایل', 'phone' => 'شماره‌ی موبایل + تاییدِ مدیر', 'docs' => 'عکسِ کارتِ ملی + دست‌نوشته‌ی خرید با کارتِ بانکی و امضا (تاییدِ مدیر)'][kycMode()] : '❌ خاموش') . "\n";
+          ['otp' => 'کدِ یک‌بارمصرفِ زرین‌پال به شماره‌ی موبایل', 'phone' => 'شماره‌ی موبایل + تاییدِ مدیر', 'docs' => 'یک عکس: دست‌نوشته در دفتر + امضا + کارتِ ملی و کارتِ بانکی کنارِ هم (تاییدِ مدیر، فقط یک‌بار)'][kycMode()] : '❌ خاموش') . "\n";
     [$oid0, $osc0] = zpOauthCfg();
     $t .= "OAuthِ زرین‌پال (برای کدِ پیامکی): " . ($oid0 !== '' && $osc0 !== '' ? '✅ ثبت شده' : '— ثبت نشده (client_id و client_secret را از پشتیبانیِ زرین‌پال بگیرید)') . "\n";
     $t .= "فقط شماره‌ی ایرانی: " . (!empty($c['ir_only']) ? '✅' : '❌') . "\n";
@@ -1311,7 +1336,7 @@ function payAdmIr($chatId, $msgId) {
         [btnCb('🔻 حداقل', 'payx_ir_min', 'admin'), btnCb('🔺 حداکثر', 'payx_ir_max', 'admin')],
         [btnCb((!empty($c['kyc']) ? '🪪 احراز: روشن' : '🪪 احراز: خاموش'), 'payx_ir_k', 'admin'), btnCb('📏 سقفِ بدونِ احراز', 'payx_ir_kl', 'admin')],
         [btnCb((!empty($c['ir_only']) ? '🇮🇷 فقط ایرانی: روشن' : '🇮🇷 فقط ایرانی: خاموش'), 'payx_ir_io', 'admin'),
-         btnCb(['otp' => '📩 احراز: کدِ پیامکیِ زرین‌پال', 'phone' => '📱 احراز: شماره + تاییدِ مدیر', 'docs' => '📎 احراز: کارتِ ملی + دست‌نوشته'][kycMode()], 'payx_ir_km', 'admin')],
+         btnCb(['otp' => '📩 احراز: کدِ پیامکیِ زرین‌پال', 'phone' => '📱 احراز: شماره + تاییدِ مدیر', 'docs' => '📎 احراز: یک عکس (دفتر + دو کارت)'][kycMode()], 'payx_ir_km', 'admin')],
         [btnCb('🖼 عکسِ راهنمای احراز' . (trim((string)($c['kyc_guide'] ?? '')) !== '' ? ' (عکسِ خودتان)' : ' (پیش‌فرض)'), 'payx_kg', 'admin')],
         [btnCb('🔐 OAuth: client_id', 'payx_ir_ci', 'admin'), btnCb('🔐 OAuth: client_secret', 'payx_ir_cs', 'admin')],
         [btnCb(((irCfg()['otp_ch'] ?? 'sms') === 'ussd' ? '📞 کد با USSD' : '💬 کد با پیامک'), 'payx_ir_ch', 'admin')],
@@ -2159,8 +2184,8 @@ $('phBot').onclick = function(){ tap(); openBot('phone'); };
 function kycView(st, lim){
   var ph = S.kmode !== 'docs';
   $('kT').innerHTML = st === 'pending' ? 'درخواستِ احراز هویتِ شما در حالِ بررسی است؛ تا تایید، مبلغِ کمتر از <b>' + fa(lim) + '</b> تومان را پرداخت کنید.'
-    : 'برای پرداختِ بیش از <b>' + fa(lim) + '</b> تومان، یک‌بار احراز هویت لازم است' + (ph ? ' — فقط با <b>شماره‌ی موبایلِ</b> خودتان؛ اسم و مدرک لازم نیست.'
-      : ': <b>۱)</b> عکسِ کارتِ ملی <b>۲)</b> دست‌نوشته‌ی خرید + کارتِ بانکی‌ای که با آن پرداخت می‌کنید + امضا — داخلِ ربات، با راهنمای تصویری.');
+    : 'برای پرداخت با درگاهِ ایرانی بیش از <b>' + fa(lim) + '</b> تومان، یک‌بار احراز هویت لازم است' + (ph ? ' — فقط با <b>شماره‌ی موبایلِ</b> خودتان؛ اسم و مدرک لازم نیست.'
+      : ' — با <b>یک عکس</b>: متنِ خرید در دفترتان + امضا + <b>کارتِ ملی</b> و <b>کارتِ بانکی</b>‌ای که با آن پرداخت می‌کنید کنارِ هم. داخلِ ربات، با راهنمای تصویری؛ بعد از تایید دیگر لازم نیست.');
   if (S.kmode === 'otp') $('kT').innerHTML = 'برای پرداختِ بیش از <b>' + fa(lim) + '</b> تومان، یک‌بار شماره‌ی موبایلتان را با <b>کدِ تاییدِ زرین‌پال</b> تایید کنید؛ اسم و مدرک لازم نیست.';
   $('kGoT').textContent = S.kmode === 'otp' ? 'دریافتِ کدِ تایید' : (ph ? 'ارسالِ شماره برای احراز هویت' : 'احراز هویت در ربات');
   $('kGo').classList.toggle('hid', st === 'pending');
