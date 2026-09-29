@@ -81,10 +81,10 @@ svg{display:block}
 .hd0{position:sticky;top:calc(var(--top) + 6px);z-index:30;margin-bottom:10px}
 .hd0:before{content:"";position:fixed;left:0;right:0;top:0;height:calc(var(--top) + 6px);z-index:-1;pointer-events:none;
   background:var(--dots) 0 0/300px 300px repeat,
-    radial-gradient(circle 47vw at 12vw 17vw,rgba(245,133,41,.34),transparent) 0 0/100vw 100vh no-repeat,
-    radial-gradient(circle 52vw at 92vw calc(8vh + 52vw),rgba(221,42,123,.34),transparent) 0 0/100vw 100vh no-repeat,
-    radial-gradient(120vw 70vh at 50% -18%,#2B0D30 0%,transparent 70%) 0 0/100vw 100vh no-repeat,
-    linear-gradient(180deg,#0A0510 0%,#130619 55%,#0A0510 100%) 0 0/100vw 100vh no-repeat}
+    radial-gradient(circle 47vw at 12vw 17vw,rgba(245,133,41,.34),transparent) 0 0/calc(100vw / .9) calc(100vh / .9) no-repeat,
+    radial-gradient(circle 52vw at 92vw calc(8vh + 52vw),rgba(221,42,123,.34),transparent) 0 0/calc(100vw / .9) calc(100vh / .9) no-repeat,
+    radial-gradient(120vw 70vh at 50% -18%,#2B0D30 0%,transparent 70%) 0 0/calc(100vw / .9) calc(100vh / .9) no-repeat,
+    linear-gradient(180deg,#0A0510 0%,#130619 55%,#0A0510 100%) 0 0/calc(100vw / .9) calc(100vh / .9) no-repeat}
 .hdr{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:22px;
   background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.015)),#18091E;
   box-shadow:0 18px 40px -22px #000,inset 0 1px 0 rgba(255,255,255,.08)}
@@ -223,36 +223,53 @@ svg{display:block}
 .tile .fcs{margin-top:7px}
 .tile .fc{height:22px;padding:0 8px;font-size:9.5px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .list{display:grid;gap:11px}
-.prd{position:relative;overflow:hidden;overflow:clip;isolation:isolate;display:block;width:100%;text-align:right;padding:13px 13px 12px;border-radius:24px;
-  border:1px solid transparent;
-  background:linear-gradient(160deg,rgba(58,20,62,.82) 0%,rgba(30,10,36,.86) 55%,rgba(24,10,40,.86) 100%) padding-box,
-             linear-gradient(135deg,rgba(254,218,117,.6),rgba(221,42,123,.5) 35%,rgba(129,52,175,.4) 65%,rgba(81,91,212,.55)) border-box;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 34px -26px rgba(221,42,123,.95);
-  animation:up .5s cubic-bezier(.2,.85,.25,1) backwards;animation-delay:calc(var(--i,0) * 45ms);transition:transform .15s}
-.prd:before{content:"";position:absolute;z-index:-1;right:-50px;top:-70px;width:180px;height:180px;border-radius:50%;
-  background:radial-gradient(closest-side,rgba(221,42,123,.28),transparent)}
-.prd.c1:before{background:radial-gradient(closest-side,rgba(245,133,41,.26),transparent)}
-.prd.c3:before{background:radial-gradient(closest-side,rgba(81,91,212,.32),transparent)}
-.prd.c4:before{background:radial-gradient(closest-side,rgba(254,218,117,.2),transparent)}
-.prd:after{content:"";position:absolute;z-index:2;top:-20%;bottom:-20%;left:0;width:32%;pointer-events:none;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);transform:translate3d(-130%,0,0) skewX(-20deg);
-  animation:shine 7s ease-in-out infinite;animation-delay:calc(var(--i,0) * .8s)}
-.prd:nth-child(n+4):after{display:none}
-.prd:active{transform:scale(.985)}
-.prd .pt{display:flex;align-items:center;gap:11px}
-.prd .ic{flex:0 0 auto;width:48px;height:48px;border-radius:17px;display:grid;place-items:center;color:#fff;background:var(--grad);
-  box-shadow:0 10px 20px -10px rgba(221,42,123,.9),inset 0 1px 0 rgba(255,255,255,.35)}
-.prd .ic svg{width:23px;height:23px}
-.prd.c1 .ic{background:linear-gradient(135deg,#F58529,#DD2A7B)}
-.prd.c2 .ic{background:linear-gradient(135deg,#DD2A7B,#8134AF)}
-.prd.c3 .ic{background:linear-gradient(135deg,#8134AF,#515BD4)}
-.prd.c4 .ic{background:linear-gradient(135deg,#FEDA75,#F58529);color:#3A1500}
-.prd .tt{flex:1;min-width:0}
-.prd .tt b{display:block;font-size:13.5px;font-weight:900;line-height:1.5;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.prd .tt .tier{margin-top:5px}
-.prd .tt small{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-top:3px;font-size:10.5px;font-weight:700;color:var(--dim)}
-.prd .lv{position:relative;width:7px;height:7px;border-radius:50%;background:var(--ok);flex:0 0 auto;box-shadow:0 0 8px rgba(74,222,128,.8)}
-.prd:nth-child(-n+5) .lv:after{content:"";position:absolute;inset:0;border-radius:50%;background:inherit;animation:ping 1.8s ease-out infinite}
+/* کاشی‌های محصول — دو ستونه، رنگِ هر سطح جدا */
+.pgr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cd{--tc:255,95,162;position:relative;overflow:hidden;overflow:clip;isolation:isolate;display:flex;flex-direction:column;min-width:0;width:100%;text-align:right;
+  padding:11px;border-radius:24px;border:1px solid rgba(var(--tc),.3);
+  background:radial-gradient(130% 60% at 100% 0%,rgba(var(--tc),.22),transparent 64%),linear-gradient(172deg,rgba(255,255,255,.075),rgba(255,255,255,.012) 58%),var(--glass);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 18px 30px -24px rgba(var(--tc),.85);
+  animation:up .5s cubic-bezier(.2,.85,.25,1) backwards;animation-delay:calc(var(--i,0) * 40ms);transition:transform .15s,border-color .2s}
+.cd:before{content:"";position:absolute;top:0;left:16%;right:16%;height:2px;border-radius:0 0 3px 3px;background:linear-gradient(90deg,transparent,rgb(var(--tc)),transparent)}
+.cd:active{transform:scale(.97);border-color:rgba(var(--tc),.65)}
+.cd.t-cheap,.cd.t-iran{--tc:74,222,128}
+.cd.t-high{--tc:251,191,36}
+.cd.t-fake{--tc:161,161,190}
+.cd.t-ru{--tc:96,165,250}
+.cd.t-ref{--tc:45,212,191}
+.cd .tp{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+.cd .rb{display:inline-flex;align-items:center;gap:3px;min-width:0;height:23px;padding:0 9px;border-radius:12px;font-size:9.5px;font-weight:900;white-space:nowrap;overflow:hidden;
+  color:rgb(var(--tc));background:rgba(var(--tc),.14);border:1px solid rgba(var(--tc),.34)}
+.cd .rb svg{width:11px;height:11px;flex:0 0 auto}
+.cd.t-iran .rb{color:#DCFCE7;background:linear-gradient(90deg,rgba(34,197,94,.26),rgba(255,255,255,.1),rgba(239,68,68,.26));border-color:rgba(255,255,255,.22)}
+.cd.t-ru .rb{color:#E0E7FF;background:linear-gradient(90deg,rgba(255,255,255,.12),rgba(59,130,246,.26),rgba(239,68,68,.26));border-color:rgba(147,197,253,.3)}
+.cd .ic{flex:0 0 auto;width:34px;height:34px;border-radius:12px;display:grid;place-items:center;color:#fff;
+  background:linear-gradient(140deg,rgba(var(--tc),.95),rgba(var(--tc),.4));box-shadow:0 8px 16px -8px rgba(var(--tc),.95),inset 0 1px 0 rgba(255,255,255,.4)}
+.cd .ic svg{width:18px;height:18px}
+.cd.t-high .ic,.cd.t-cheap .ic,.cd.t-iran .ic,.cd.t-fake .ic{color:#1A0716}
+.cd .nm{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:9px;font-size:13.5px;font-weight:900;line-height:1.55;color:var(--ink)}
+.cd .mt{display:flex;align-items:center;gap:5px;margin-top:2px;font-size:10px;font-weight:700;color:var(--dim);white-space:nowrap}
+.cd .lv{width:6px;height:6px;flex:0 0 auto;border-radius:50%;background:var(--ok);box-shadow:0 0 8px rgba(74,222,128,.8)}
+.cd .fcs{gap:5px;margin-top:8px}
+.cd .fc{max-width:100%;height:23px;padding:0 8px;font-size:9.8px;overflow:hidden}
+.cd .fc.em{height:28px;font-size:15px;letter-spacing:1.5px}
+.cd .ft{margin-top:auto;padding-top:10px}
+.cd .pz{display:block;margin-top:10px;padding-top:9px;border-top:1px dashed rgba(var(--tc),.26);white-space:nowrap}
+.cd .pz b{font-size:20px;font-weight:900;line-height:1.2;background:linear-gradient(90deg,#fff 10%,rgb(var(--tc)));-webkit-background-clip:text;background-clip:text;color:transparent}
+.cd .pz i{font-style:normal;font-size:10.5px;font-weight:800;margin-right:4px;color:var(--dim)}
+.cd .pz small{display:block;font-size:9.5px;font-weight:700;color:var(--dim2)}
+.cd .ordb{display:flex;align-items:center;justify-content:center;gap:3px;height:38px;margin-top:9px;border-radius:19px;
+  background:var(--grad);color:#fff;font-size:12.5px;font-weight:900;box-shadow:0 10px 20px -12px rgba(221,42,123,.95),inset 0 1px 0 rgba(255,255,255,.32)}
+.cd .ordb svg{width:15px;height:15px}
+.cd.t-high{border-color:rgba(251,191,36,.45);background:radial-gradient(130% 60% at 100% 0%,rgba(251,191,36,.2),transparent 64%),radial-gradient(90% 60% at 0% 100%,rgba(221,42,123,.24),transparent 70%),linear-gradient(172deg,rgba(255,255,255,.08),rgba(255,255,255,.012) 58%),var(--glass)}
+.cd.t-high .ordb{background:linear-gradient(120deg,#FEDA75,#FA7E1E 60%,#F58529);color:#3A1500;box-shadow:0 10px 20px -12px rgba(250,126,30,.95),inset 0 1px 0 rgba(255,255,255,.5)}
+.cd.t-high:after{content:"";position:absolute;z-index:2;top:0;bottom:0;left:0;width:34%;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(254,218,117,.16),transparent);transform:translate3d(-130%,0,0) skewX(-20deg);animation:shine 6.5s ease-in-out infinite}
+.cd.w{grid-column:1/-1}
+.cd.w .ft{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.cd.w .pz{flex:1;min-width:0}
+.cd.w .ordb{flex:0 0 46%;margin-top:0}
+.cd.w .nm{font-size:14.5px}
 .tier{display:inline-flex;align-items:center;gap:3px;vertical-align:middle;font-size:9.5px;font-weight:900;padding:2px 8px;border-radius:8px;white-space:nowrap;
   color:#BAE6FD;background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.3)}
 .tier.cheap{color:#86EFAC;background:rgba(34,197,94,.13);border-color:rgba(74,222,128,.32)}
@@ -284,14 +301,6 @@ svg{display:block}
 .fc.no{color:var(--dim);background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
 .fc.hot{color:var(--y);background:rgba(254,218,117,.09);border-color:rgba(254,218,117,.25)}
 .fc.em{font-size:16px;letter-spacing:2px;height:30px}
-.prd .pb{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08)}
-.prd .pr{min-width:0}
-.prd .pr b{font-size:19px;font-weight:900;line-height:1.2;background:linear-gradient(90deg,#FEDA75,#FF5FA2 55%,#B58CFF);-webkit-background-clip:text;background-clip:text;color:transparent}
-.prd .pr b i{font-style:normal;font-size:11px;font-weight:800;margin-right:3px;color:var(--dim);-webkit-text-fill-color:var(--dim)}
-.prd .pr small{display:block;margin-top:2px;font-size:9.5px;font-weight:700;color:var(--dim2)}
-.prd .go{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;height:40px;padding:0 17px 0 12px;border-radius:20px;background:var(--grad);color:#fff;
-  font-size:12.5px;font-weight:900;box-shadow:0 12px 22px -12px rgba(221,42,123,.95),inset 0 1px 0 rgba(255,255,255,.3)}
-.prd .go svg{width:15px;height:15px}
 
 .srch{display:flex;align-items:center;gap:8px;height:46px;margin-top:2px;padding:0 14px;border-radius:23px;
   background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.015)),var(--glass);border:1px solid var(--line2)}
@@ -403,32 +412,58 @@ b[dir=auto]{text-align:right;unicode-bidi:plaintext}
 .nav .bd{position:absolute;top:7px;left:calc(50% - 22px);min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#FEDA75;color:#3A1500;font-size:9.5px;font-weight:900;display:none;place-items:center}
 .nav .bd.on{display:grid}
 
-.ov{position:fixed;inset:0;z-index:40;background:rgba(6,2,10,.6);opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s}
+.ov{position:fixed;inset:0;z-index:40;background:radial-gradient(120% 60% at 50% 100%,rgba(221,42,123,.28),transparent 70%),rgba(10,3,14,.5);
+  opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s}
 .ov.on{opacity:1;visibility:visible}
-.sh{position:fixed;left:0;right:0;bottom:0;z-index:41;max-width:480px;margin:0 auto;max-height:92vh;overflow:auto;
-  border-radius:28px 28px 0 0;padding:8px 16px calc(18px + var(--safe));border-top:1px solid var(--line2);
-  background:linear-gradient(180deg,rgba(44,16,52,.97),rgba(16,6,22,.99));box-shadow:0 -20px 50px -20px rgba(221,42,123,.35);
-  transform:translate3d(0,105%,0);transition:transform .34s cubic-bezier(.2,.85,.25,1)}
+/* برگه‌ی تکمیلِ سفارش — شیشه‌ای */
+.sh{position:fixed;left:0;right:0;bottom:0;z-index:41;max-width:480px;margin:0 auto;max-height:92vh;overflow:auto;overscroll-behavior:contain;
+  border-radius:30px 30px 0 0;padding:8px 16px calc(18px + var(--safe));border:1px solid rgba(255,190,222,.24);border-bottom:0;
+  background:linear-gradient(180deg,rgba(255,255,255,.11) 0%,rgba(255,255,255,.035) 18%,rgba(255,255,255,.012) 100%),
+    radial-gradient(110% 38% at 100% 0%,rgba(221,42,123,.4),transparent 62%),radial-gradient(80% 30% at 0% 6%,rgba(245,133,41,.2),transparent 62%),
+    radial-gradient(90% 40% at 50% 100%,rgba(129,52,175,.24),transparent 70%),rgba(42,12,48,.66);
+  -webkit-backdrop-filter:blur(24px) saturate(170%);backdrop-filter:blur(24px) saturate(170%);
+  box-shadow:0 -26px 60px -22px rgba(221,42,123,.55),inset 0 1px 0 rgba(255,255,255,.24);
+  transform:translate3d(0,105%,0);transition:transform .36s cubic-bezier(.2,.85,.25,1)}
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.sh{background-color:rgba(42,12,48,.97)}}
+.sh:before{content:"";position:absolute;top:0;left:14%;right:14%;height:1.5px;border-radius:2px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#FEDA75,#FF5FA2 50%,#B58CFF,transparent)}
 .sh.on{transform:none}
-.grab{width:42px;height:4px;border-radius:4px;background:rgba(255,255,255,.2);margin:0 auto 10px}
-.sh .st{display:flex;align-items:flex-start;gap:12px}
-.sh .st .ic{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:var(--grad);color:#fff;flex:0 0 auto;box-shadow:0 10px 22px -10px rgba(221,42,123,.9)}
+.grab{width:46px;height:5px;border-radius:5px;margin:2px auto 12px;background:linear-gradient(90deg,rgba(254,218,117,.6),rgba(255,95,162,.6),rgba(181,140,255,.6));box-shadow:0 0 12px rgba(255,95,162,.45)}
+.sh .st{display:flex;align-items:flex-start;gap:12px;padding:12px;border-radius:22px;
+  background:linear-gradient(135deg,rgba(255,255,255,.1),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+.sh .st .ic{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:var(--grad);color:#fff;flex:0 0 auto;
+  box-shadow:0 10px 22px -8px rgba(221,42,123,.95),inset 0 1px 0 rgba(255,255,255,.35)}
 .sh .st .ic svg{width:24px;height:24px}
 .sh .st b{display:block;font-size:13.5px;font-weight:900;line-height:1.55}
 .sh .st small{font-size:10.5px;color:var(--dim)}
-.sh .x{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.07);flex:0 0 auto}
+.sh .x{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
 .sh .x svg{width:16px;height:16px}
+.sh .fld label{color:#F1D3E6}
+.sh .fld input,.sh .fld textarea{background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02));border:1px solid rgba(255,190,222,.24);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09),inset 0 -12px 22px -20px rgba(221,42,123,.8);transition:border-color .2s,box-shadow .2s}
+.sh .fld input:focus,.sh .fld textarea:focus{border-color:var(--pk);box-shadow:0 0 0 3px rgba(255,95,162,.22),inset 0 1px 0 rgba(255,255,255,.12)}
 .qrow{display:flex;gap:8px;align-items:center}
 .qrow input{flex:1;text-align:center;direction:ltr}
-.qrow button{width:50px;height:50px;border-radius:50%;background:var(--glass);border:1px solid var(--line2);font-size:20px;font-weight:900;color:var(--pk)}
+.qrow button{width:50px;height:50px;flex:0 0 auto;border-radius:50%;font-size:22px;font-weight:900;color:#FFC2DD;transition:transform .12s;
+  background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.03));border:1px solid rgba(255,190,222,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.15)}
+.qrow button:active{transform:scale(.92)}
 .qchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.qchips button{height:30px;padding:0 12px;border-radius:15px;background:var(--glass);border:1px solid var(--line);font-size:11px;font-weight:800;color:var(--dim)}
-.qchips button.on{background:var(--grad);color:#fff;border-color:transparent}
-.sum{margin-top:14px;border-radius:18px;padding:12px 14px;background:linear-gradient(120deg,rgba(221,42,123,.16),rgba(129,52,175,.1));border:1px solid var(--line2)}
+.qchips button{height:32px;padding:0 13px;border-radius:16px;font-size:11px;font-weight:800;color:var(--dim);transition:background .2s,color .2s,box-shadow .2s;
+  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.11)}
+.qchips button.on{color:#fff;border-color:transparent;background:var(--grad);box-shadow:0 8px 18px -10px rgba(221,42,123,.95),inset 0 1px 0 rgba(255,255,255,.3)}
+.sum{position:relative;margin-top:14px;border-radius:20px;padding:12px 14px;border:1px solid transparent;
+  background:linear-gradient(135deg,rgba(74,22,80,.62),rgba(26,8,32,.5)) padding-box,
+    linear-gradient(135deg,rgba(254,218,117,.6),rgba(221,42,123,.35) 40%,rgba(129,52,175,.3) 70%,rgba(81,91,212,.6)) border-box;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 16px 30px -22px rgba(221,42,123,.95)}
 .sum div{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--dim);padding:3px 0}
 .sum div b{color:var(--ink);font-size:12.5px}
-.sum div.t b{font-size:19px;font-weight:900;background:linear-gradient(90deg,#FEDA75,#FF5FA2);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sum div.t{margin-top:6px;padding-top:9px;border-top:1px dashed rgba(255,190,222,.24)}
+.sum div.t b{font-size:21px;font-weight:900;background:linear-gradient(90deg,#FEDA75,#FF5FA2 55%,#B58CFF);-webkit-background-clip:text;background-clip:text;color:transparent}
 .sum div.lo b{color:var(--red)}
+.sh .cta{height:54px;border-radius:27px;box-shadow:0 18px 34px -14px rgba(221,42,123,.95),inset 0 1px 0 rgba(255,255,255,.35)}
+.sh .cta.gh{background:rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
+/* وقتی برگه باز است پس‌زمینه‌ی متحرک می‌ایستد تا شیشه روان بماند */
+html.shon .mesh *,html.shon .app *:before,html.shon .app *:after{animation-play-state:paused!important}
 .res{text-align:center;padding:6px 0 4px}
 .res .rc{position:relative;width:66px;height:66px;margin:4px auto 10px;border-radius:50%;display:grid;place-items:center;background:var(--grad);color:#fff}
 .res .rc:after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid rgba(255,95,162,.6);animation:rpl 1.8s ease-out infinite}
@@ -838,14 +873,23 @@ function tile(i, k){
     (f ? '<span class="fcs">' + f + '</span>' : '') +
     '<span class="ft"><span><b>' + fa(i.p) + '</b> تومان<br>هر ۱۰۰۰ تا</span><i>' + ico('plus') + '</i></span></button>';
 }
-function card(i, k){
-  var c = CAT[i.c] || {}, t = nm(i.n);
-  return '<button class="prd ' + (c.tone || 'c1') + '" style="--i:' + Math.min(k || 0, 14) + '" data-sv="' + esc(i.i) + '">' +
-    '<span class="pt"><span class="ic">' + ico(c.ic || 'spark') + '</span><span class="tt"><b dir="auto">' + esc(ttl(i)) + '</b>' + (i.b ? '<span class="tier ' + esc(i.t || '') + '">' + esc(i.b) + '</span>' : '') +
-      '<small><i class="lv"></i>' + esc(c.n || 'فعال') + ' · ' + faS(i.mn) + ' تا ' + faS(i.mx) + '</small></span></span>' +
-    '<span class="fcs">' + feats(i, 4) + '</span>' +
-    '<span class="pb"><span class="pr"><b>' + fa(i.p) + '<i>تومان</i></b><small>برای هر ۱۰۰۰ تا</small></span>' +
-      '<span class="go">سفارش' + ico('chev') + '</span></span></button>';
+function pcard(i, k, w){
+  var c = CAT[i.c] || {}, t = String(i.t || ''), f = feats(i, w ? 6 : 2);
+  return '<button class="cd' + (t ? ' t-' + esc(t) : '') + (w ? ' w' : '') + '" style="--i:' + Math.min(k || 0, 14) + '" data-sv="' + esc(i.i) + '">' +
+    '<span class="tp"><span class="rb">' + (t === 'high' ? ico('star') : '') + esc(i.b || c.n || 'فعال') + '</span><span class="ic">' + ico(c.ic || 'spark') + '</span></span>' +
+    '<b class="nm" dir="auto">' + esc(ttl(i)) + '</b><small class="mt"><i class="lv"></i>' + faS(i.mn) + ' تا ' + faS(i.mx) + '</small>' + (f ? '<span class="fcs">' + f + '</span>' : '') +
+    '<span class="ft"><span class="pz"><b>' + fa(i.p) + '</b><i>تومان</i><small>' + (i.y === 'emoji' ? 'شروع از · ' : '') + 'هر ۱۰۰۰ تا</small></span>' +
+    '<span class="ordb">سفارش' + ico('chev') + '</span></span></button>';
+}
+// چیدمانِ دو ستونه بدونِ جای خالی: کاشیِ پهن و آخرینِ تک‌مانده تمام‌عرض می‌شوند
+function pgrid(g, k0){
+  var w = g.map(function(i){ return i.y === 'emoji'; }), col = 0;
+  for (var j = 0; j < g.length; j++) {
+    if (w[j]) { if (col === 1) w[j - 1] = true; col = 0; }
+    else col ^= 1;
+  }
+  if (col === 1) w[g.length - 1] = true;
+  return '<div class="pgr">' + g.map(function(i, j){ return pcard(i, k0 + j, w[j]); }).join('') + '</div>';
 }
 function drawHome(){
   $('stH').innerHTML = stories(null);
@@ -865,18 +909,18 @@ function drawHome(){
 }
 $('xl').addEventListener('click', function(ev){ var b = ev.target.closest('[data-open]'); if (b) { tap(); openApp(B.links[b.getAttribute('data-open')]); } });
 
-function listHtml(l, row){
+function listHtml(l){
   var more = l.length > S.lim ? l.length - S.lim : 0;
   l = l.slice(0, S.lim);
   var out = '', k = 0;
-  if (S.q.trim()) out = l.map(function(i){ return row(i, k++); }).join('');
+  if (S.q.trim()) out = pgrid(l, 0);
   else {
     CATS.forEach(function(c){
       var g = l.filter(function(i){ return i.c === c.id; }); if (!g.length) return;
-      out += '<div class="sech"><span class="ic">' + ico(c.ic) + '</span><span><b>' + esc(c.n) + '</b><small>' + fa(g.length) + ' محصول · از ' + fa(c.f) + ' تومان</small></span></div>' +
-        g.map(function(i){ return row(i, k++); }).join('');
+      out += '<div class="sech"><span class="ic">' + ico(c.ic) + '</span><span><b>' + esc(c.n) + '</b><small>' + fa(g.length) + ' محصول · از ' + fa(c.f) + ' تومان</small></span></div>' + pgrid(g, k);
+      k += g.length;
     });
-    out += l.filter(function(i){ return !CAT[i.c]; }).map(function(i){ return row(i, k++); }).join('');
+    var r = l.filter(function(i){ return !CAT[i.c]; }); if (r.length) out += pgrid(r, k);
   }
   if (more) out += '<button class="more" id="lMore">نمایشِ ' + fa(Math.min(more, 60)) + ' محصولِ دیگر</button>';
   return out;
@@ -891,7 +935,7 @@ function drawList(force){
   $('stL').innerHTML = stories(S.cat);
   var q = S.q.trim().toLowerCase();
   var l = ITEMS.filter(function(i){ return (!S.cat || i.c === S.cat) && (!q || i.k.indexOf(q) >= 0); });
-  $('slist').innerHTML = l.length ? listHtml(l, card) : (ITEMS.length
+  $('slist').innerHTML = l.length ? listHtml(l) : (ITEMS.length
     ? '<div class="emp" style="grid-column:1/-1">' + ico('search') + '<b>چیزی پیدا نشد</b>دسته یا کلمه‌ی دیگری امتحان کنید.</div>'
     : '<div class="emp" style="grid-column:1/-1">' + ico('spark') + '<b>به‌زودی</b>سرویس‌ها به‌زودی اضافه می‌شوند.</div>');
 }
@@ -902,8 +946,8 @@ D.addEventListener('click', function(ev){ var b = ev.target.closest ? ev.target.
 function total(i, q){ return Math.max(1, Math.ceil(i.p * q / 1000 - 1e-9)); }
 function niceQty(i){ var c = [1000, 500, 100, 5000, 10000]; for (var k = 0; k < c.length; k++) if (c[k] >= i.mn && c[k] <= i.mx) return c[k]; return i.mn; }
 function linkOk(v){ v = v.trim(); return /^@?[A-Za-z0-9._]{1,30}$/.test(v) || /^(https?:\/\/)?(www\.|m\.)?(instagram\.com|instagr\.am)\/\S+$/i.test(v); }
-function openSheet(){ S.sheet = true; $('ov').classList.add('on'); $('sh').classList.add('on'); $('sh').scrollTop = 0; backBtn(); }
-function closeSheet(){ S.sheet = false; $('ov').classList.remove('on'); $('sh').classList.remove('on'); backBtn(); }
+function openSheet(){ S.sheet = true; H.classList.add('shon'); $('ov').classList.add('on'); $('sh').classList.add('on'); $('sh').scrollTop = 0; backBtn(); }
+function closeSheet(){ S.sheet = false; H.classList.remove('shon'); $('ov').classList.remove('on'); $('sh').classList.remove('on'); backBtn(); }
 $('ov').onclick = closeSheet;
 function openOrder(id){
   var i0 = ITEM[id]; if (!i0) return;

@@ -696,6 +696,33 @@ html.chaton .dock,html.chaton .fab,html.chaton .hdr{visibility:hidden}
 .axg button .t3{margin-bottom:2px}
 .wal{box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 20px 36px -22px rgba(37,99,235,.9)}
 
+/* برگه‌ی تکمیلِ خرید — شیشه‌ای */
+.ov{background:radial-gradient(120% 60% at 50% 100%,rgba(37,99,235,.26),transparent 70%),rgba(0,0,0,.5)}
+.sh{border-radius:30px 30px 0 0;border:1px solid rgba(147,197,253,.22);border-bottom:0;
+  background:linear-gradient(180deg,rgba(255,255,255,.1) 0%,rgba(255,255,255,.03) 18%,rgba(255,255,255,.01) 100%),
+    radial-gradient(110% 38% at 100% 0%,rgba(59,130,246,.34),transparent 62%),radial-gradient(80% 30% at 0% 6%,rgba(34,197,94,.18),transparent 62%),
+    radial-gradient(90% 40% at 50% 100%,rgba(37,99,235,.16),transparent 70%),rgba(10,14,24,.66);
+  -webkit-backdrop-filter:blur(24px) saturate(170%);backdrop-filter:blur(24px) saturate(170%);
+  box-shadow:0 -26px 60px -22px rgba(37,99,235,.55),inset 0 1px 0 rgba(255,255,255,.22)}
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.sh{background-color:rgba(10,14,24,.97)}}
+.sh:before{content:"";position:absolute;top:0;left:14%;right:14%;height:1.5px;border-radius:2px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#93C5FD,#4ADE80,transparent)}
+.sh .grab{width:46px;height:5px;border-radius:5px;background:linear-gradient(90deg,rgba(147,197,253,.6),rgba(74,222,128,.6));box-shadow:0 0 12px rgba(59,130,246,.45)}
+.sh .shd{margin:4px 16px 8px;padding:10px 12px;border-radius:22px;
+  background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.11);box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
+.sh .x{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
+.sh .card{border-color:transparent;
+  background:linear-gradient(135deg,rgba(30,58,138,.38),rgba(8,12,22,.35)) padding-box,linear-gradient(135deg,rgba(147,197,253,.55),rgba(255,255,255,.08) 45%,rgba(74,222,128,.5)) border-box;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 16px 30px -22px rgba(37,99,235,.9)}
+.sh .co{background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.02)) padding-box,
+    linear-gradient(155deg,rgba(255,255,255,.26),rgba(255,255,255,.05) 35%,rgba(96,165,250,.35)) border-box}
+.sh .inp{background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02));border-color:rgba(147,197,253,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.09)}
+.sh .inp:focus{border-color:rgba(96,165,250,.7);box-shadow:0 0 0 3px rgba(59,130,246,.22),inset 0 1px 0 rgba(255,255,255,.1)}
+.sh .btn:not(.gh):not(.rd){min-height:52px;border-radius:17px;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -3px 0 rgba(0,0,0,.2),0 18px 34px -14px rgba(59,130,246,.95)}
+.sh .btn.gh{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14)}
+.sh #bTot{font-size:17px;background:var(--grad2);-webkit-background-clip:text;background-clip:text;color:transparent}
+/* وقتی برگه باز است پس‌زمینه‌ی متحرک می‌ایستد تا شیشه روان بماند */
+html.shon .sky *,html.shon .app *:before,html.shon .app *:after{animation-play-state:paused!important}
 
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 .trust{overflow:hidden;contain:paint;direction:ltr;margin:12px -12px 0;padding:2px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
@@ -1522,6 +1549,7 @@ function openSheet(kind, head, body){
   $('shBody').innerHTML = body;
   $('shBody').onclick = null;
   $('shBody').scrollTop = 0;
+  H.classList.add('shon');
   $('ov').classList.add('on');
   $('sh').classList.add('on');
   $('shX').onclick = function(){ tap(); closeSheet(); };
@@ -1530,6 +1558,7 @@ function openSheet(kind, head, body){
 function closeSheet(){
   var was = S.sheet;
   S.sheet = '';
+  H.classList.remove('shon');
   $('ov').classList.remove('on');
   $('sh').classList.remove('on');
   if (was === 'live') { stopPoll(); S.cur = ''; }
